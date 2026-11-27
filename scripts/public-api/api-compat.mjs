@@ -1,0 +1,551 @@
+#!/usr/bin/env node
+// Usage: node scripts/public-api/api-compat.mjs [--jobs <n>] [--only <package>,…]
+//
+// Reports the breaks in each published package since the last release (release.mjs says which
+// that is). The design and its reasons are in docs/architecture docs/adrs, "CI finds breaking and
+// accidental API changes against the last release"; docs/Public API Compatibility.md is the guide.
+//
+// The last release is installed beside the current build, with a second copy of its declarations,
+// its twin (compat-install.mjs). For each export a package declares on one of its import paths, a
+// generated test asks TypeScript whether the current build's type is assignable to the release's
+// (compat.mjs), on declarations rewritten so that two copies of one package compare
+// (compat-declarations.mjs). A name a path forwards from another of our packages is compared in
+// the package that declares it, and here only checked to exist.
+//
+// A test that fails is a break when it passes between the release and its twin. When it fails
+// there too, TypeScript cannot relate the two copies, and the comparison falls back to the
+// structural mapping (compat-structural.ts) and then to one test per member. What is still not
+// settled is reported as undecided, with where it stopped: native, structural, member or shared
+// marker. The guide says what each means.
+//
+// A break fails the run unless it is recorded, or the export's name starts with a maturity level
+// (ea_, preview_, rc_, capitalised on a type or class) and the release does not also export the
+// same thing under a name without one. Such a break is only reported. A break that is meant is
+// recorded in the package's api-breaks.json, and a deleted package in
+// packages/9-public/removed-packages.json (records.mjs).
+//
+// Needs `pnpm build` and network access to origin and to the registry.
+
+import { fork } from 'node:child_process';
+import { appendFileSync, existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { availableParallelism } from 'node:os';
+import { dirname, join, relative, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { parseArgs } from 'node:util';
+import { publishedPackageDirs } from './api.mjs';
+import { compareCodeUnits } from './api-lines.mjs';
+import {
+  aliasOf,
+  installRelease,
+  peerDependencies,
+  supplyChainSettings,
+  thirdPartyVersions,
+} from './compat-install.mjs';
+import {
+  BREAKS_FILE,
+  byLastRelease,
+  exportLabel,
+  REMOVED_FILE,
+  RecordsError,
+  readRecords as readRecordFile,
+} from './records.mjs';
+import {
+  fetchReleaseTag,
+  isReleased,
+  LastReleaseError,
+  lastRelease,
+  packagesAtTag,
+} from './release.mjs';
+import { withinBytes } from './summary.mjs';
+
+const here = dirname(fileURLToPath(import.meta.url));
+export const INSTALL_FOLDER = '.api-compat';
+export const readRecords = (packageDir, root) =>
+  readRecordFile(
+    join(packageDir, BREAKS_FILE),
+    'breaks',
+    relative(root, join(packageDir, BREAKS_FILE)),
+  );
+
+export const readRemovedRecords = (root) =>
+  readRecordFile(join(root, REMOVED_FILE), 'removed', REMOVED_FILE);
+
+// A released package the repository no longer has is a break, which a record in
+// removed-packages.json covers.
+export function removedPackageResults({ removed, version, records }) {
+  const results = [];
+  const sorted = byLastRelease(records, version, (record) => record.package);
+  const problems = [...sorted.problems];
+  const removable = sorted.removable;
+  const covering = new Map();
+  for (const record of sorted.current) {
+    if (!removed.includes(record.package)) {
+      problems.push(
+        `${record.package}: the record is for a package the repository still has, or that was not released. Remove it.`,
+      );
+    } else covering.set(record.package, record);
+  }
+  for (const name of removed) {
+    const record = covering.get(name);
+    const failure = {
+      path: '*',
+      name: '*',
+      test: 'package',
+      message: `the release v${version} has this package, but the repository no longer does`,
+    };
+    results.push({
+      name,
+      removed: true,
+      breaks: record
+        ? []
+        : [
+            {
+              ...failure,
+              failsRun: true,
+              record: { package: name, lastRelease: version, reason: '…' },
+            },
+          ],
+      recorded: record ? [{ ...failure, kind: 'break', reason: record.reason }] : [],
+      undecided: [],
+      notCompared: [],
+      removable: [],
+      problems: [],
+    });
+  }
+  return { results, problems, removable };
+}
+
+function declarationBytes(dir) {
+  if (!existsSync(dir)) return 0;
+  return readdirSync(dir, { withFileTypes: true }).reduce((total, entry) => {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) return total + declarationBytes(path);
+    return /\.d\.[cm]?ts$/.test(entry.name) ? total + statSync(path).size : total;
+  }, 0);
+}
+
+// The size of the declarations a package's comparison reads, its own and those of our packages it
+// depends on, directly or not, which is what its time and memory grow with. The costliest start
+// first, so that none of them starts last.
+export function comparisonCost(name, dirsByName, seen = new Set()) {
+  const dir = dirsByName.get(name);
+  if (dir === undefined || seen.has(name)) return 0;
+  seen.add(name);
+  const manifest = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'));
+  return Object.keys({ ...manifest.dependencies, ...manifest.peerDependencies }).reduce(
+    (total, dependency) => total + comparisonCost(dependency, dirsByName, seen),
+    declarationBytes(join(dir, 'dist')),
+  );
+}
+
+export class PackageSelectionError extends Error {}
+
+export function selectPackages(packages, only) {
+  if (only === undefined) return packages;
+  const names = only.split(',').map((name) => (name.startsWith('@') ? name : `@prisma/${name}`));
+  const unknown = names.filter((name) => !packages.some((each) => each.name === name));
+  if (unknown.length > 0) {
+    throw new PackageSelectionError(`--only names no published package: ${unknown.join(', ')}`);
+  }
+  return packages.filter(({ name }) => names.includes(name));
+}
+
+// Which packages to check: those the release's tag has. A package only in the repository has not
+// been released. One the tag has that the repository no longer has is removed, which is a break;
+// one the registry lacks cannot be checked, which fails the run, so that a registry that lags is
+// never skipped quietly.
+export function planPackages({ version, atTag, inRepository, onRegistry }) {
+  const tagged = new Set(atTag);
+  const problems = [];
+  const removed = atTag.filter((name) => !inRepository.some((each) => each.name === name));
+  const check = [];
+  const notReleased = [];
+  for (const each of inRepository) {
+    if (!tagged.has(each.name)) notReleased.push(each.name);
+    else if (onRegistry.has(each.name)) check.push(each);
+    else {
+      problems.push({
+        name: each.name,
+        problems: [
+          `the release v${version} has this package, but the registry has no version ${version} of it; if it was published moments ago, the registry may not show it yet`,
+        ],
+      });
+    }
+  }
+  return {
+    check,
+    notReleased,
+    removed,
+    problems: problems.sort((a, b) => compareCodeUnits(a.name, b.name)),
+  };
+}
+
+function runWorker(job) {
+  return new Promise((resolveResult) => {
+    const child = fork(join(here, 'compat-worker.mjs'), [JSON.stringify(job)], {
+      stdio: ['ignore', 'inherit', 'inherit', 'ipc'],
+    });
+    let reply;
+    let settled = false;
+    const settle = (result) => {
+      if (settled) return;
+      settled = true;
+      resolveResult(result);
+    };
+    child.on('message', (message) => {
+      reply = message;
+    });
+    child.on('error', (error) => {
+      settle({ name: job.name, problems: [`the worker could not run: ${error.message}`] });
+    });
+    child.on('exit', (code, signal) => {
+      if (reply?.result) settle(reply.result);
+      else {
+        const how = signal ? `on signal ${signal}` : `with exit code ${code}`;
+        settle({
+          name: job.name,
+          problems: [reply?.error ?? `the worker stopped ${how} before it reported`],
+        });
+      }
+    });
+  });
+}
+
+async function runAll(jobs, workers) {
+  const queue = [...jobs];
+  const results = [];
+  const run = async () => {
+    for (let job = queue.shift(); job; job = queue.shift()) results.push(await runWorker(job));
+  };
+  await Promise.all(Array.from({ length: workers }, run));
+  return results.sort((a, b) => compareCodeUnits(a.name, b.name));
+}
+
+export const failsRun = (result) =>
+  (result.problems?.length ?? 0) > 0 || (result.breaks ?? []).some((each) => each.failsRun);
+
+const labelOf = (packageName, { path, name }) => {
+  if (path !== '*') return exportLabel(packageName, path, name);
+  return name === '*' ? packageName : `${packageName}: ${name}`;
+};
+const describeFailure = (packageName, each, message = each.message) =>
+  `${labelOf(packageName, each)} (${each.test}): ${message}`;
+const RECORDED = [
+  { kind: 'break', text: 'recorded break' },
+  { kind: 'allowed', text: 'recorded allowed change' },
+];
+const recordedOfKind = (result, kind) =>
+  (result.recorded ?? []).filter((each) => each.kind === kind);
+
+const FROM_DISK =
+  'the fingerprint is taken from the package’s api.txt as it is on disk: run pnpm build and pnpm api:update first, or it will not match';
+
+const breakLabel = (each) => (each.failsRun ? 'break' : 'break (maturity level, does not fail)');
+
+export function reportText({ version, results, notReleased }) {
+  const lines = [`api:compat: last release ${version}; breaks fail unless recorded`];
+  for (const result of results) {
+    const counts = result.counts;
+    const head = counts
+      ? `${result.name}: ${counts.exports} exports on ${counts.paths} paths; ${counts.tests} comparisons, and ${counts.forwarded} forwarded names checked only for existence (they are compared in the package that declares them); breaks ${result.breaks.length}, undecided ${result.undecided.length}, not compared ${result.notCompared.length}, recorded ${result.recorded.length}; ${(result.ms / 1000).toFixed(1)} s, ${result.maxRssMb} MB`
+      : result.removed
+        ? `${result.name}: removed from the repository`
+        : result.recordsFile
+          ? `${result.name}: records of removed packages`
+          : `${result.name}: not checked`;
+    lines.push(`\n${head}${failsRun(result) ? ' — FAILS' : ''}`);
+    const printed = new Set();
+    for (const each of result.breaks ?? []) {
+      lines.push(`  ${breakLabel(each)}  ${describeFailure(result.name, each)}`);
+      if (each.note) lines.push(`    note: ${each.note}`);
+      const record = each.record && JSON.stringify(each.record);
+      if (record && !printed.has(record)) {
+        printed.add(record);
+        if (result.removed) lines.push(`    to record it in ${REMOVED_FILE}: ${record}`);
+        else {
+          lines.push(`    to record it: ${record}`);
+          if (printed.size === 1) lines.push(`    ${FROM_DISK}`);
+        }
+      }
+    }
+    for (const each of result.undecided ?? []) {
+      lines.push(`  undecided (${each.stage})  ${describeFailure(result.name, each)}`);
+    }
+    for (const each of result.decidedByMembers ?? []) {
+      lines.push(`  decided member by member  ${labelOf(result.name, each)} (${each.test})`);
+    }
+    for (const each of result.notCompared ?? []) {
+      lines.push(`  not compared  ${describeFailure(result.name, each, each.reason)}`);
+    }
+    for (const { kind, text } of RECORDED) {
+      for (const each of recordedOfKind(result, kind)) {
+        lines.push(`  ${text}  ${describeFailure(result.name, each, each.reason)}`);
+      }
+    }
+    for (const each of result.removable ?? []) {
+      lines.push(`  removable record  ${removableText(result.name, each)}`);
+    }
+    for (const problem of result.problems ?? []) lines.push(`  problem  ${problem}`);
+  }
+  if (notReleased.length > 0) {
+    lines.push(`\nNot checked, no release ${version}: ${notReleased.join(', ')}`);
+  }
+  return `${lines.join('\n')}\n`;
+}
+
+const removableText = (packageName, each) =>
+  `${labelOf(packageName, { path: each.path ?? '*', name: each.export })} (${each.test ?? 'package'}): for the last release ${each.lastRelease}, earlier than this one`;
+
+// Markdown table cells and list items; `<` and `&` are escaped, so that text such as `<string>`
+// reaches the reader as written.
+const cell = (text) =>
+  String(text)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('|', '\\|')
+    .replaceAll('\n', ' ');
+
+export function reportMarkdown({ version, results, notReleased }, { maxBytes } = {}) {
+  const lines = [
+    `## Breaks since the last release, ${version}`,
+    '',
+    'A break fails the job unless it is recorded in the package’s `api-breaks.json`.',
+    '',
+    '| Package | Comparisons | Forwarded names | Breaks | Undecided | Not compared | Recorded breaks | Recorded allowed | Problems |',
+    '| --- | --- | --- | --- | --- | --- | --- | --- | --- |',
+    ...results.map(
+      (result) =>
+        `| ${result.name} | ${result.counts?.tests ?? '–'} | ${result.counts?.forwarded ?? '–'} | ${result.breaks?.length ?? '–'} | ${result.undecided?.length ?? '–'} | ${result.notCompared?.length ?? '–'} | ${recordedOfKind(result, 'break').length} | ${recordedOfKind(result, 'allowed').length} | ${result.problems.length} |`,
+    ),
+    '',
+  ];
+  for (const result of results) {
+    const items = [
+      ...(result.breaks ?? []).map(
+        (each) =>
+          `- ${breakLabel(each)}: ${cell(describeFailure(result.name, each))}${each.note ? ` (${cell(each.note)})` : ''}`,
+      ),
+      ...(result.undecided ?? []).map(
+        (each) => `- undecided (${each.stage}): ${cell(describeFailure(result.name, each))}`,
+      ),
+      ...(result.decidedByMembers ?? []).map(
+        (each) =>
+          `- decided member by member: ${cell(`${labelOf(result.name, each)} (${each.test})`)}`,
+      ),
+      ...(result.notCompared ?? []).map(
+        (each) => `- not compared: ${cell(describeFailure(result.name, each, each.reason))}`,
+      ),
+      ...RECORDED.flatMap(({ kind, text }) =>
+        recordedOfKind(result, kind).map(
+          (each) => `- ${text}: ${cell(describeFailure(result.name, each, each.reason))}`,
+        ),
+      ),
+      ...(result.removable ?? []).map(
+        (each) => `- removable record: ${cell(removableText(result.name, each))}`,
+      ),
+      ...result.problems.map((problem) => `- problem: ${cell(problem)}`),
+    ];
+    const toRecord = [
+      ...new Set(
+        (result.breaks ?? [])
+          .filter((each) => each.record)
+          .map((each) => JSON.stringify(each.record)),
+      ),
+    ];
+    if (toRecord.length > 0) {
+      items.push(
+        '',
+        result.removed
+          ? `To record the removal, add to \`${REMOVED_FILE}\`, with the reason:`
+          : `To record these breaks, add to \`${result.name.replace('@prisma/', 'packages/9-public/@prisma/')}/api-breaks.json\`, with the kind and the reason. The fingerprint is taken from the package’s \`api.txt\` as it is on disk: run \`pnpm build\` and \`pnpm api:update\` first, or it will not match.`,
+        '',
+        '```json',
+        ...toRecord,
+        '```',
+      );
+    }
+    if (items.length > 0) lines.push(`### ${result.name}`, '', ...items, '');
+  }
+  if (notReleased.length > 0) {
+    lines.push(`Not checked, no release ${version}: ${notReleased.join(', ')}`, '');
+  }
+  return withinBytes(lines, maxBytes);
+}
+
+// The steps that reach the network, git or the registry, which a test replaces.
+const steps = {
+  findRelease: (root) => lastRelease({ root }),
+  fetchTag: fetchReleaseTag,
+  packagesAt: packagesAtTag,
+  released: isReleased,
+  install: installRelease,
+  check: runAll,
+  removedRecords: (root) => readRemovedRecords(root),
+};
+
+export async function main({
+  root,
+  args,
+  env = process.env,
+  stdout = process.stdout,
+  stderr = process.stderr,
+  ...replaced
+}) {
+  const {
+    findRelease,
+    fetchTag,
+    packagesAt,
+    released: isPublished,
+    install,
+    check,
+    removedRecords: readRemoved,
+  } = {
+    ...steps,
+    ...replaced,
+  };
+  const { values } = parseArgs({
+    args,
+    options: {
+      jobs: { type: 'string', default: String(Math.min(3, availableParallelism())) },
+      only: { type: 'string' },
+    },
+  });
+  const fail = (message) => {
+    stderr.write(`api:compat: ${message}\n`);
+    return 1;
+  };
+  if (!/^[1-9]\d*$/.test(values.jobs)) {
+    return fail(`--jobs must be a positive whole number, not ${values.jobs}`);
+  }
+  const workers = Number(values.jobs);
+  if (!Number.isSafeInteger(workers)) {
+    return fail(`--jobs must be a positive whole number, not ${values.jobs}`);
+  }
+
+  const inRepository = publishedPackageDirs(root).packageDirs.map((dir) => ({
+    dir,
+    name: JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')).name,
+  }));
+  const ownNames = new Set(inRepository.map(({ name }) => name));
+  const dirsByName = new Map(inRepository.map(({ name, dir }) => [name, dir]));
+  let selected;
+  let version;
+  let plan;
+  try {
+    selected = selectPackages(inRepository, values.only);
+    const release = await findRelease(root);
+    version = release.version;
+    fetchTag(release.tag, root);
+    const selectedNames = new Set(selected.map(({ name }) => name));
+    const atTag = packagesAt(release.tag, root).filter(
+      (name) => values.only === undefined || selectedNames.has(name),
+    );
+    for (const name of atTag) ownNames.add(name);
+    const tagged = selected.filter(({ name }) => atTag.includes(name));
+    const flags = await Promise.all(tagged.map(({ name }) => isPublished(name, version)));
+    const onRegistry = new Set(tagged.filter((_, index) => flags[index]).map(({ name }) => name));
+    plan = planPackages({ version, atTag, inRepository: selected, onRegistry });
+  } catch (error) {
+    if (
+      error instanceof LastReleaseError ||
+      error instanceof PackageSelectionError ||
+      error instanceof RecordsError
+    ) {
+      return fail(error.message);
+    }
+    throw error;
+  }
+  const released = plan.check;
+  const notReleased = plan.notReleased;
+
+  const results = [...plan.problems];
+  // Under --only, the packages removed are not known, so their records are neither read nor
+  // judged.
+  let removedRecords = [];
+  if (values.only === undefined) {
+    try {
+      removedRecords = readRemoved(root);
+    } catch (error) {
+      if (!(error instanceof RecordsError)) throw error;
+      return fail(error.message);
+    }
+  }
+  const removed = removedPackageResults({
+    removed: plan.removed,
+    version,
+    records: removedRecords,
+  });
+  results.push(...removed.results);
+  if (removed.problems.length > 0 || removed.removable.length > 0) {
+    results.push({
+      name: REMOVED_FILE,
+      recordsFile: true,
+      problems: removed.problems,
+      removable: removed.removable.map((record) => ({
+        path: '*',
+        export: record.package,
+        test: 'package',
+        lastRelease: record.lastRelease,
+      })),
+    });
+  }
+  const jobs = [];
+  const installDir = join(root, INSTALL_FOLDER);
+  for (const { dir, name } of released) {
+    try {
+      jobs.push({
+        name,
+        releaseDir: join(installDir, 'node_modules', aliasOf('release', name)),
+        currentDir: dir,
+        releaseSpecifier: aliasOf('release', name),
+        currentSpecifier: aliasOf('current', name),
+        twinSpecifier: aliasOf('twin', name),
+        testFile: join(installDir, 'tests', `${aliasOf('current', name)}.ts`),
+        records: readRecords(dir, root),
+        version,
+        ownNames: [...ownNames],
+        cost: comparisonCost(name, dirsByName),
+      });
+    } catch (error) {
+      results.push({ name, problems: [error.message] });
+    }
+  }
+
+  const { versions, conflicts } = thirdPartyVersions(
+    inRepository.map(({ dir }) => dir),
+    ownNames,
+  );
+  for (const [key, all] of Object.entries(conflicts)) {
+    stderr.write(`api:compat: ${key} is installed at ${all.join(' and ')}, so it is not pinned\n`);
+  }
+  try {
+    install({
+      dir: installDir,
+      packages: released,
+      version,
+      overrides: versions,
+      peers: peerDependencies(
+        inRepository.map(({ dir }) => dir),
+        ownNames,
+        versions,
+      ),
+      ownNames,
+      settings: supplyChainSettings(readFileSync(join(root, 'pnpm-workspace.yaml'), 'utf8')),
+    });
+  } catch (error) {
+    return fail(`installing the last release failed: ${error.message}`);
+  }
+
+  jobs.sort((a, b) => b.cost - a.cost || compareCodeUnits(a.name, b.name));
+  results.push(...(await check(jobs, Math.min(workers, Math.max(jobs.length, 1)))));
+  results.sort((a, b) => compareCodeUnits(a.name, b.name));
+
+  const report = { version, results, notReleased };
+  stdout.write(reportText(report));
+  if (env.GITHUB_STEP_SUMMARY) appendFileSync(env.GITHUB_STEP_SUMMARY, reportMarkdown(report));
+  return results.some(failsRun) ? 1 : 0;
+}
+
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  process.exitCode = await main({ root: resolve(here, '..', '..'), args: process.argv.slice(2) });
+}

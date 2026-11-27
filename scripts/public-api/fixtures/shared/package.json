@@ -1,0 +1,10 @@
+{
+  "name": "fixture-shared",
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./lib/index.mjs",
+    "./extra": "./lib/extra.mjs",
+    "./package.json": "./package.json"
+  }
+}

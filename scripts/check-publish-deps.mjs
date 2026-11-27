@@ -33,6 +33,13 @@
 //      workspace (where pnpm has every dev dependency linked) and fails for
 //      anyone who builds with `skipLibCheck: false`.
 //
+//   4. Sibling-dependency check. No published package may hold another
+//      package this repository publishes under `dependencies` or
+//      `optionalDependencies`; it names it as a peer dependency, so the
+//      application's own list is the only place a copy comes from. Each
+//      such peer's range is the one the release plan gives it for the
+//      root version (`scripts/release-plan-workspace.ts`).
+//
 // Usage:
 //   node scripts/check-publish-deps.mjs           — exit 1 on any violation
 //   node scripts/check-publish-deps.mjs --json    — same, with JSON report
@@ -47,6 +54,9 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
+import { planWorkspace } from './release-plan-workspace.ts';
+
+const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 
 const DEP_FIELDS = /** @type {const} */ ([
   'dependencies',
@@ -139,6 +149,46 @@ export function findPnPinViolations(pkgJson) {
     }
   }
   return violations;
+}
+
+/**
+ * Every published package this repository names that `pkgJson` holds under
+ * `dependencies` or `optionalDependencies`. Each must be a peer dependency
+ * instead, so the application's own list is the only place a copy comes from
+ * (ADR 329). Pure / side-effect-free.
+ *
+ * @param {Record<string, unknown>} pkgJson
+ * @param {ReadonlySet<string>} siblings the names of the packages this repository publishes
+ * @returns {Array<{ field: string; name: string; spec: string }>}
+ */
+export function findSiblingDependencies(pkgJson, siblings) {
+  const violations = [];
+  for (const field of ['dependencies', 'optionalDependencies']) {
+    const deps = pkgJson[field];
+    if (!deps || typeof deps !== 'object') continue;
+    for (const [name, spec] of Object.entries(deps)) {
+      if (siblings.has(name)) violations.push({ field, name, spec: String(spec) });
+    }
+  }
+  return violations;
+}
+
+/**
+ * Every package of ours whose range in `pkgJson.peerDependencies` is not the one the release plan
+ * gives it. `ranges` is the plan's range on each package of ours this package names. Pure.
+ *
+ * @param {Record<string, unknown>} pkgJson
+ * @param {Readonly<Record<string, string>>} ranges
+ * @returns {Array<{ name: string; spec: string | undefined; planned: string }>}
+ */
+export function findPlanMismatches(pkgJson, ranges) {
+  const peers =
+    pkgJson.peerDependencies && typeof pkgJson.peerDependencies === 'object'
+      ? pkgJson.peerDependencies
+      : {};
+  return Object.entries(ranges)
+    .filter(([name, planned]) => peers[name] !== planned)
+    .map(([name, planned]) => ({ name, spec: peers[name], planned }));
 }
 
 const DECLARATION_FILE_RE = /\.d\.(?:m|c)?ts$/;
@@ -441,7 +491,17 @@ const DEFAULT_IO = {
   rm: (path) => rmSync(path, { recursive: true, force: true }),
   stdoutWrite: (s) => process.stdout.write(s),
   stderrWrite: (s) => process.stderr.write(s),
+  planRanges: workspacePlanRanges,
 };
+
+/** The release plan's ranges for one published package, for the root version in this workspace. */
+function workspacePlanRanges(name) {
+  workspacePlanRanges.plan ??= planWorkspace(
+    repoRoot,
+    JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf-8')).version,
+  );
+  return workspacePlanRanges.plan[name]?.ranges;
+}
 
 /**
  * Runs the publish-deps gate. Pure with respect to its `io` seam — the
@@ -471,6 +531,7 @@ export function runCheck({ argv = process.argv.slice(2), io = {} } = {}) {
     rm,
     stdoutWrite,
     stderrWrite,
+    planRanges,
   } = { ...DEFAULT_IO, ...io };
   const args = new Set(argv);
   const json = args.has('--json');
@@ -488,6 +549,7 @@ export function runCheck({ argv = process.argv.slice(2), io = {} } = {}) {
     }
 
     const tarballs = new Set(readDir(dest).filter((f) => f.endsWith('.tgz')));
+    const siblings = new Set(dirs.map((dir) => readPackageJson(dir).name));
     /**
      * @type {Array<{
      *   pkg: string;
@@ -495,6 +557,7 @@ export function runCheck({ argv = process.argv.slice(2), io = {} } = {}) {
      *   leaks: ReturnType<typeof findLeaks>;
      *   pnPinViolations: ReturnType<typeof findPnPinViolations>;
      *   declarationDepViolations: ReturnType<typeof findDeclarationDepViolations>;
+     *   siblingDependencies: ReturnType<typeof findSiblingDependencies>;
      * }>}
      */
     const offenders = [];
@@ -517,13 +580,25 @@ export function runCheck({ argv = process.argv.slice(2), io = {} } = {}) {
         ),
         shipsOwnTypes: (depName) => shipsOwnTypesFrom(dir, depName),
       });
-      if (leaks.length > 0 || pnPinViolations.length > 0 || declarationDepViolations.length > 0) {
+      const siblingDependencies = findSiblingDependencies(packed, siblings);
+      const plannedRanges = planRanges(sourcePkg.name);
+      const planMismatches =
+        plannedRanges === undefined ? [] : findPlanMismatches(packed, plannedRanges);
+      if (
+        leaks.length > 0 ||
+        pnPinViolations.length > 0 ||
+        declarationDepViolations.length > 0 ||
+        siblingDependencies.length > 0 ||
+        planMismatches.length > 0
+      ) {
         offenders.push({
           pkg: sourcePkg.name,
           tarball: tarballName,
           leaks,
           pnPinViolations,
           declarationDepViolations,
+          siblingDependencies,
+          planMismatches,
         });
       }
     }
@@ -532,8 +607,8 @@ export function runCheck({ argv = process.argv.slice(2), io = {} } = {}) {
       stdoutWrite(`${JSON.stringify({ ok: offenders.length === 0, offenders }, null, 2)}\n`);
     } else if (offenders.length === 0) {
       stderrWrite(
-        '\nOK — no workspace:/catalog: leaks, no @internal/* pin violations, and no undeclared\n' +
-          `     declaration dependencies in ${dirs.length} publishable packages.\n`,
+        '\nOK — no workspace:/catalog: leaks, no @internal/* pin violations, no undeclared\n' +
+          `     declaration dependencies and no sibling dependencies in ${dirs.length} publishable packages.\n`,
       );
     } else {
       stderrWrite(
@@ -550,6 +625,14 @@ export function runCheck({ argv = process.argv.slice(2), io = {} } = {}) {
         for (const v of o.declarationDepViolations) {
           stderrWrite(`    [decl]     ${v.file} names "${v.spec}" — declare "${v.needs}"\n`);
         }
+        for (const v of o.planMismatches) {
+          stderrWrite(
+            `    [plan]     peerDependencies.${v.name} = ${v.spec ?? '(missing)'}, the plan says ${v.planned}\n`,
+          );
+        }
+        for (const v of o.siblingDependencies) {
+          stderrWrite(`    [sibling]  ${v.field}.${v.name} = ${v.spec}\n`);
+        }
       }
       stderrWrite(
         '\n  [leak] specs are pnpm-internal (workspace:/catalog:) and break consumer installs.\n' +
@@ -563,7 +646,9 @@ export function runCheck({ argv = process.argv.slice(2), io = {} } = {}) {
           '         dependency (and any `@types/*` companion) out of devDependencies into\n' +
           '         dependencies or peerDependencies. devDependencies are bundled into the\n' +
           '         emitted .d.mts rather than imported from, so a missing one usually shows\n' +
-          '         up as inlined types plus a bare side-effect import.\n',
+          '         up as inlined types plus a bare side-effect import.\n' +
+          '  [sibling] another package this repository publishes must be a peer dependency, never\n' +
+          '         an ordinary or optional one, so the application lists the one copy (ADR 329).\n',
       );
     }
 

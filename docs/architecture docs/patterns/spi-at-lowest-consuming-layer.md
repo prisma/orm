@@ -67,7 +67,7 @@ The SPI module imports only types that exist at its layer or below. The caller i
 
 ## Related rules
 
-- [`.cursor/rules/import-validation.mdc`](../../../.cursor/rules/import-validation.mdc) — `pnpm lint:deps` enforces the layering rule that makes this pattern necessary in the first place. If an SPI's module imports something it shouldn't, `lint:deps` catches the leak.
+- [`.agents/rules/import-validation.mdc`](../../../.agents/rules/import-validation.mdc) — `pnpm lint:deps` enforces the layering rule that makes this pattern necessary in the first place. If an SPI's module imports something it shouldn't, `lint:deps` catches the leak.
 
 ## Cautions / common mistakes
 

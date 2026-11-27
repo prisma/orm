@@ -266,7 +266,7 @@ Codecs are how the contract translates between BSON wire values and TypeScript v
 | Write inputs (insert / set / push) | Yes | `insertOne({...})`, `f.amount.set(123)`, `f.tags.push('x')` go through the contract's encoders ([ADR 184](../architecture%20docs/adrs/ADR%20184%20-%20Codec-owned%20value%20serialization.md)). |
 | `match(...)` filter values | **No** | Filter values are passed through as-is. ObjectId fields, in particular, must be filtered with already-encoded values; passing a string where an ObjectId is expected will not match. |
 
-The filter-side asymmetry is a known limitation; in practice it is mostly visible to users querying ObjectId fields. Until it is closed, build a small wrapper or use a `MongoParamRef` with the appropriate `codecId`. The retail-store example's [`middleware.ts`](../../examples/retail-store/middleware.ts) shows one way to set this up.
+The filter-side asymmetry is a known limitation; in practice it is mostly visible to users querying ObjectId fields. Until it is closed, build a small wrapper or use a `MongoParamRef` with the appropriate `codecId`.
 
 For the codec model see [Subsystem 5 — Adapters & Targets](../architecture%20docs/subsystems/5.%20Adapters%20%26%20Targets.md) and the [Codec authoring guide](./codec-authoring-guide.md).
 

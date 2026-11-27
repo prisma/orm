@@ -8,7 +8,11 @@
     "@prisma/cli-engine": "0.10.4",
     "@prisma/orm-extension-arktype-json": "workspace:8.0.0-rc.25",
     "@prisma/orm-extension-pgvector": "workspace:8.0.0-rc.25",
+    "@prisma/orm-family-sql": "workspace:8.0.0-rc.25",
+    "@prisma/orm-framework": "workspace:8.0.0-rc.25",
     "@prisma/orm-postgres": "workspace:8.0.0-rc.25",
+    "@prisma/orm-target-postgres": "workspace:8.0.0-rc.25",
+    "@prisma/orm-toolchain": "workspace:8.0.0-rc.25",
     "arktype": "catalog:"
   }
 }

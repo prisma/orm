@@ -14,7 +14,15 @@ type FieldLine = readonly [name: string, type: string, attributes?: string | und
 export interface PrintedBlock {
   /** The model's name: as printed for a missing model, as in the contract for an existing one. */
   readonly modelName: string;
+  readonly namespaceId: string;
   readonly existing: boolean;
+  /** Better Auth's physical name of a missing model, which the adapter looks the model up by; `undefined` for an existing model. */
+  readonly physicalName: string | undefined;
+  /** The table a missing model is stored in; `undefined` for an existing model. */
+  readonly table: string | undefined;
+  /** The columns of the scalar fields the block adds to an existing model. */
+  readonly columns: readonly string[];
+  readonly fieldNames: readonly string[];
   readonly fieldLines: readonly string[];
   readonly attributeLines: readonly string[];
 }
@@ -29,6 +37,9 @@ interface PrintedModel {
   readonly name: string;
   readonly namespaceId: string;
   readonly existing: boolean;
+  readonly physicalName: string | undefined;
+  readonly table: string | undefined;
+  readonly columns: string[];
   readonly taken: Set<string>;
   readonly fields: FieldLine[];
   readonly backRelations: FieldLine[];
@@ -51,6 +62,9 @@ function existingPrintedModel(
     name: found.name,
     namespaceId: found.namespaceId,
     existing: true,
+    physicalName: undefined,
+    table: undefined,
+    columns: [],
     taken: new Set([
       ...betterAuthFields,
       ...Object.keys(found.model.fields),
@@ -73,6 +87,9 @@ function printedModelFor(
         name: upperFirst(model.expected.physicalName),
         namespaceId: comparison.namespace ?? comparison.defaultNamespace,
         existing: false,
+        physicalName: model.expected.physicalName,
+        table: model.expected.physicalName,
+        columns: [],
         taken: new Set(betterAuthFields),
         fields: [],
         backRelations: [],
@@ -150,7 +167,10 @@ function blockText(block: PrintedBlock, indent: string): string {
 }
 
 /** PSL text for printed blocks; blocks of missing models go inside a `namespace` block when the adapter's `namespace` option is set. */
-function renderBlocks(blocks: readonly PrintedBlock[], namespace: string | undefined): string {
+export function renderBlocks(
+  blocks: readonly PrintedBlock[],
+  namespace: string | undefined,
+): string {
   const chunks: string[] = [];
   let run: PrintedBlock[] = [];
   const flush = () => {
@@ -194,6 +214,7 @@ export function printPsl(comparison: ContractComparison): PrintedPsl {
         holder.fields.push(
           field === undefined ? idLine(comparison) : scalarLine(field, comparison),
         );
+        holder.columns.push(name);
       }
       continue;
     }
@@ -208,7 +229,7 @@ export function printPsl(comparison: ContractComparison): PrintedPsl {
       let action = reference.onDelete;
       if ((action === 'set null' && !optional) || action === 'set default') {
         notes.push(
-          `${holder.name}.${field.name}: Better Auth asks for onDelete ${action}, which needs ${action === 'set null' ? 'an optional field' : 'a default'}; NoAction is printed instead`,
+          `${holder.name}.${field.name}: Better Auth asks for onDelete ${action}, which needs ${action === 'set null' ? 'an optional field' : 'a default'}; NoAction is used instead`,
         );
         action = 'no action';
       }
@@ -258,7 +279,12 @@ export function printPsl(comparison: ContractComparison): PrintedPsl {
     if (lines.length === 0) continue;
     blocks.push({
       modelName: printed.name,
+      namespaceId: printed.namespaceId,
       existing: printed.existing,
+      physicalName: printed.physicalName,
+      table: printed.table,
+      columns: printed.columns,
+      fieldNames: lines.map(([name]) => name),
       fieldLines: alignedLines(lines),
       attributeLines: printed.attributes,
     });

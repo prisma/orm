@@ -127,6 +127,12 @@ function prisma7Inputs(overrides: Partial<ResolvedInitInputs> = {}): ResolvedIni
     sideBySide: null,
     warnings: [],
     install: false,
+    requiredPeers: {
+      facade: target.packageName,
+      packages: [],
+      unread: [],
+      warnings: [],
+    },
     preinstalled: [],
     writeEnv: false,
     probeDb: false,

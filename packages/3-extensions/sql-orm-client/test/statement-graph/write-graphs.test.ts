@@ -203,12 +203,13 @@ describe('write graphs as they run, on a contract with returning', () => {
     });
   });
 
-  it('delete() finds the row, which is the result, and deletes it', () => {
+  it('delete() finds the row, deletes it, and returns it only if the Delete removed it', () => {
     expect(asRun(deleteFirstGraph(usersOf(context)))).toBe(
       lines(
         "n1 Find users where name = 'Ada' limit 1",
         'n2 Delete users <- FilterData n1 (id->id)',
-        'result: n1',
+        'n3 DeletedRows <- WholeRows n1, Rows n2',
+        'result: n3',
       ),
     );
   });

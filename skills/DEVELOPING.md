@@ -97,7 +97,7 @@ Read the diff if you want a before/after; read the rewrite itself if you want th
 
 ### Show façade-only imports in user-authored code
 
-**The principle: every Prisma ORM import a user types in their own source files comes from the published façade, `@prisma/orm-<target>/<subpath>`, or from an extension's own package, `@prisma/orm-extension-<name>/<subpath>`. The one exception is `definePrismaConfig` in `prisma.config.ts`, which comes from the CLI's `@prisma/cli-engine`. A user's `package.json` lists exactly one façade plus one package per extension, and `@prisma/cli-engine` as a development dependency. They never import the platform packages (`@prisma/orm-framework`, `@prisma/orm-family-*`, `@prisma/orm-target-*`, `@prisma/orm-toolchain`) in a file they own.**
+**The principle: every Prisma ORM import a user types in their own source files comes from the published façade, `@prisma/orm-<target>/<subpath>`, or from an extension's own package, `@prisma/orm-extension-<name>/<subpath>`. The one exception is `definePrismaConfig` in `prisma.config.ts`, which comes from the CLI's `@prisma/cli-engine`. A user's `package.json` lists one façade, the platform packages it names as peer dependencies (`@prisma/orm-framework`, `@prisma/orm-family-*`, `@prisma/orm-target-*`, `@prisma/orm-toolchain`), one package per extension, and `@prisma/cli-engine` as a development dependency. They list the platform packages so the application holds one copy of each (a monorepo whose applications are on different Prisma versions can still get two; see [ADR 329](../docs/architecture%20docs/adrs/ADR%20329%20-%20An%20application%20lists%20the%20platform%20packages%20and%20our%20packages%20name%20each%20other%20as%20peers.md#consequences)), but they never import them in a file they own.**
 
 The façade packages exist for this reason. `@prisma/orm-postgres/config` exposes a `defineConfig({ contract, db, extensions, migrations })` that bakes in `family`/`target`/`adapter`/`driver` and auto-routes `.prisma` vs `.ts` contract paths — so the user writes two imports instead of seven. `@prisma/orm-postgres/contract-builder` re-exports the TS-builder surface. `@prisma/orm-postgres/control` exposes `createPostgresControlClient({ connection, extensions })`. `@prisma/orm-postgres/runtime` does the same for the runtime client. The Vite plugin is the façade's `vite-plugin-contract-emit` entry.
 
@@ -127,9 +127,8 @@ These are well-trodden but worth listing in one place:
 ## Authoring workflow
 
 1. Read [`README.md`](./README.md) for the user-facing scope of the skills.
-2. Read the [`skill-specialist` persona](https://github.com/prisma/ignite/blob/main/skills/.curated/drive-agent-personas/personas/skill-specialist.md) in the Ignite persona library — it's the canonical lens for skill work.
-3. Read [`skills/prisma-8/references/migration-review.md`](./prisma-8/references/migration-review.md) for the worked example of concepts-over-procedures.
-4. Draft the reference file, **verifying each tool-surface claim against the framework source as you write it** (see *Verify the tool surface as you author* above for the ripgrep commands). The shape:
+2. Read [`skills/prisma-8/references/migration-review.md`](./prisma-8/references/migration-review.md) for the worked example of concepts-over-procedures.
+3. Draft the reference file, **verifying each tool-surface claim against the framework source as you write it** (see *Verify the tool surface as you author* above for the ripgrep commands). The shape:
    - A routing-table row in `SKILL.md` as the matcher (CLI flags, error codes, feature names — all verified).
    - Preamble + canonical mental-model headline.
    - *When to Use* / *When Not to Use*.
@@ -139,7 +138,7 @@ These are well-trodden but worth listing in one place:
    - *What Prisma 8 doesn't do yet* — concrete gap + workaround + route to `references/feedback.md`.
    - *Reference Files* (when applicable; the migration-review skill omits this and points at `--help` instead).
    - *Checklist*.
-5. Re-read your workflow sections against the symptoms in *Teach concepts, not procedures*. Procedural? Rewrite as concept + query.
+4. Re-read your workflow sections against the symptoms in *Teach concepts, not procedures*. Procedural? Rewrite as concept + query.
 
 ## Journey tests
 

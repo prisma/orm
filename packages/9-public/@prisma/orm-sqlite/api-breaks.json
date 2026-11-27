@@ -1,0 +1,47 @@
+[
+  {
+    "path": "./runtime",
+    "export": "SqliteQueryMembers",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "5cd69f7de588ba9d",
+    "reason": "A column name that several joined tables share must now name its table (prisma/orm#31150)."
+  },
+  {
+    "path": "./runtime",
+    "export": "SqliteStaticMembers",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "209e18f287e13d46",
+    "reason": "A column name that several joined tables share must now name its table (prisma/orm#31150)."
+  },
+  {
+    "path": "./runtime",
+    "export": "SqliteTransactionContext",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "9b2f7caf3c554743",
+    "reason": "A column name that several joined tables share must now name its table (prisma/orm#31150)."
+  },
+  {
+    "path": "./static",
+    "export": "SqliteStaticContext",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "d32beb7504441c7e",
+    "reason": "A column name that several joined tables share must now name its table (prisma/orm#31150)."
+  },
+  {
+    "path": "./runtime",
+    "export": "SqliteClient",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "3049b7077329f581",
+    "reason": "A column name that several joined tables share must now name its table (prisma/orm#31150)."
+  }
+]

@@ -4,7 +4,8 @@ import type { MigrationEdge } from '../src/graph';
 import { computeMigrationHash } from '../src/hash';
 import { findPath, findPathWithInvariants, reconstructGraph } from '../src/migration-graph';
 import type { OnDiskMigrationPackage } from '../src/package';
-import { createTestMetadata, createTestOps } from './fixtures';
+import { collateAsDanishInEachTest } from './danish-collation';
+import { createSameTimePackage, createTestMetadata, createTestOps } from './fixtures';
 
 let migrationCounter = 0;
 
@@ -403,5 +404,22 @@ describe('findPathWithInvariants — pathological shapes', () => {
     const path = findPathWithInvariants(graph, 'A', 'C', new Set(['X']));
     expect(path).not.toBeNull();
     expect(dirNames(path)).toEqual(['m_AB', 'm_BD', 'm_DB', 'm_BC']);
+  });
+});
+
+describe('findPathWithInvariants tie-break on a machine whose locale reorders hex strings', () => {
+  collateAsDanishInEachTest();
+
+  it('runs data-only migrations on one contract in character-code order', () => {
+    const graph = reconstructGraph([
+      createSameTimePackage(E, 'H1', 'm0', 'sha256:00'),
+      createSameTimePackage('H1', 'H1', 'data_b', 'sha256:b0', ['Y']),
+      createSameTimePackage('H1', 'H1', 'data_aa', 'sha256:aa', ['X']),
+    ]);
+    expect(dirNames(findPathWithInvariants(graph, E, 'H1', new Set(['X', 'Y'])))).toEqual([
+      'm0',
+      'data_aa',
+      'data_b',
+    ]);
   });
 });

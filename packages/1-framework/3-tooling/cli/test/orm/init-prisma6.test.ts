@@ -162,6 +162,105 @@ describe(
       expect(check.requests).toEqual([]);
     });
 
+    it('names the Prisma ORM peer packages of the facade in the install command', async () => {
+      writePrisma6Project();
+      const { prompt } = scriptedPrompt();
+      const asked: string[] = [];
+
+      const error = await rejectionOf(
+        resolveInputs({
+          cwd: projectDir,
+          flags: flags(),
+          prompt,
+          packageManager: 'pnpm',
+          requiredPeersFor: async (packageName) => {
+            asked.push(packageName);
+            return {
+              facade: `${packageName}@8.1.0`,
+              packages: [
+                {
+                  name: '@prisma/orm-framework',
+                  line: '8.1.0',
+                  requirement: '8.1.0',
+                  outcome: 'to-install',
+                },
+              ],
+              unread: [],
+              warnings: [],
+            };
+          },
+        }),
+      );
+
+      expect(asked).toEqual(['@prisma/orm-mongo']);
+      expect(error).toMatchObject({
+        nextActions: expect.arrayContaining([
+          {
+            kind: 'run-command',
+            label: 'Install the Prisma 8 packages',
+            command: 'pnpm add @prisma/orm-mongo@8.1.0 @prisma/orm-framework@8.1.0 dotenv mongodb',
+          },
+        ]),
+      });
+    });
+
+    it('warns that the packages it could not read must be added too', async () => {
+      writePrisma6Project();
+      const { prompt } = scriptedPrompt();
+      const warnings: string[] = [];
+
+      const error = await rejectionOf(
+        resolveInputs({
+          cwd: projectDir,
+          flags: flags(),
+          prompt,
+          packageManager: 'pnpm',
+          warn: (text) => warnings.push(text),
+          requiredPeersFor: async (packageName) => ({
+            facade: packageName,
+            packages: [],
+            unread: [packageName],
+            warnings: [],
+          }),
+        }),
+      );
+
+      expect({ error, warnings }).toMatchObject({
+        error: {
+          nextActions: expect.arrayContaining([
+            expect.objectContaining({ command: 'pnpm add @prisma/orm-mongo dotenv mongodb' }),
+          ]),
+        },
+        warnings: [
+          'init could not read the peer dependencies of @prisma/orm-mongo from the registry, so the install command below leaves out the packages it needs as required peers. After installing @prisma/orm-mongo, add each package its package.json lists under peerDependencies, at the range listed there.',
+        ],
+      });
+    });
+
+    it('prints the warnings the list of required peers carries', async () => {
+      writePrisma6Project();
+      const { prompt } = scriptedPrompt();
+      const warnings: string[] = [];
+
+      await rejectionOf(
+        resolveInputs({
+          cwd: projectDir,
+          flags: flags(),
+          prompt,
+          packageManager: 'pnpm',
+          warn: (text) => warnings.push(text),
+          requiredPeersFor: async (packageName) => ({
+            facade: packageName,
+            packages: [],
+            unread: [],
+            warnings: ['@prisma/orm-framework is installed at 8.0.0'],
+          }),
+        }),
+      );
+
+      expect(warnings).toEqual(['@prisma/orm-framework is installed at 8.0.0']);
+    });
+
     it('finds a Prisma 6 schema that package.json names', async () => {
       writeManifest({ ...PRISMA6_MANIFEST, prisma: { schema: 'db/schema.prisma' } });
       write('db/schema.prisma', PRISMA6_SCHEMA);

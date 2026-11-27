@@ -22,7 +22,11 @@
   },
   "dependencies": {
     "@prisma/orm-extension-postgis": "workspace:8.0.0-rc.25",
+    "@prisma/orm-family-sql": "workspace:8.0.0-rc.25",
+    "@prisma/orm-framework": "workspace:8.0.0-rc.25",
     "@prisma/orm-postgres": "workspace:8.0.0-rc.25",
+    "@prisma/orm-target-postgres": "workspace:8.0.0-rc.25",
+    "@prisma/orm-toolchain": "workspace:8.0.0-rc.25",
     "arktype": "^2.2.9",
     "dotenv": "^17.4.2",
     "leaflet": "^1.9.4",

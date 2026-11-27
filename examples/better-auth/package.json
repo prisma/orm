@@ -2,7 +2,7 @@
   "name": "better-auth-example",
   "private": true,
   "type": "module",
-  "version": "8.0.0-rc.24",
+  "version": "8.0.0-rc.25",
   "engines": {
     "node": ">=24"
   },
@@ -18,8 +18,12 @@
     "lint": "biome check . --error-on-warnings"
   },
   "dependencies": {
-    "@prisma/orm-better-auth": "workspace:8.0.0-rc.24",
-    "@prisma/orm-postgres": "workspace:8.0.0-rc.24",
+    "@prisma/orm-better-auth": "workspace:8.0.0-rc.25",
+    "@prisma/orm-family-sql": "workspace:8.0.0-rc.25",
+    "@prisma/orm-framework": "workspace:8.0.0-rc.25",
+    "@prisma/orm-postgres": "workspace:8.0.0-rc.25",
+    "@prisma/orm-target-postgres": "workspace:8.0.0-rc.25",
+    "@prisma/orm-toolchain": "workspace:8.0.0-rc.25",
     "better-auth": "1.7.27",
     "dotenv": "^17.4.2",
     "next": "^16.4.5",
@@ -30,9 +34,9 @@
   "devDependencies": {
     "@prisma/cli-engine": "0.10.4",
     "@prisma/dev": "catalog:",
-    "@repo/prisma-bin": "workspace:8.0.0-rc.24",
-    "@repo/test-utils": "workspace:8.0.0-rc.24",
-    "@repo/tsconfig": "workspace:8.0.0-rc.24",
+    "@repo/prisma-bin": "workspace:8.0.0-rc.25",
+    "@repo/test-utils": "workspace:8.0.0-rc.25",
+    "@repo/tsconfig": "workspace:8.0.0-rc.25",
     "@types/node": "catalog:",
     "@types/pg": "catalog:",
     "@types/react": "^19.3.0",

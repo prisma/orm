@@ -76,10 +76,10 @@ The mapping is machine-readable in [`architecture.config.json`](../../../archite
 
 ## Related rules
 
-- [`.cursor/rules/import-validation.mdc`](../../../.cursor/rules/import-validation.mdc) — the tactical rule for `pnpm lint:deps`.
-- [`.cursor/rules/no-barrel-files.mdc`](../../../.cursor/rules/no-barrel-files.mdc) — barrel files defeat the layering by hiding what a package consumes.
-- [`.cursor/rules/multi-plane-packages.mdc`](../../../.cursor/rules/multi-plane-packages.mdc) — how a package straddles migration and runtime planes cleanly.
-- [`.cursor/rules/multi-plane-entrypoints.mdc`](../../../.cursor/rules/multi-plane-entrypoints.mdc) — how a multi-plane package exposes its entry points without leaking cross-plane code.
+- [`.agents/rules/import-validation.mdc`](../../../.agents/rules/import-validation.mdc) — the tactical rule for `pnpm lint:deps`.
+- [`.agents/rules/no-barrel-files.mdc`](../../../.agents/rules/no-barrel-files.mdc) — barrel files defeat the layering by hiding what a package consumes.
+- [`.agents/rules/multi-plane-packages.mdc`](../../../.agents/rules/multi-plane-packages.mdc) — how a package straddles migration and runtime planes cleanly.
+- [`.agents/rules/multi-plane-entrypoints.mdc`](../../../.agents/rules/multi-plane-entrypoints.mdc) — how a multi-plane package exposes its entry points without leaking cross-plane code.
 
 ## Cautions / common mistakes
 

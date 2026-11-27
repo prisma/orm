@@ -1,0 +1,9 @@
+{
+  "name": "fixture-marker-dep",
+  "version": "1.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./lib/index.mjs",
+    "./package.json": "./package.json"
+  }
+}

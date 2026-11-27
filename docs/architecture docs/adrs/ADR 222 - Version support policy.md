@@ -1,6 +1,6 @@
 # ADR 222 — Version support policy for Prisma Next
 
-**Status:** Accepted — PostgreSQL floor amended by [ADR 248](ADR%20248%20-%20PostgreSQL%20floor%20lowered%20to%2015.md); the CLI's copy of the server floors removed by [ADR 325](ADR%20325%20-%20init%20gets%20everything%20about%20a%20target%20from%20the%20target%20package.md)
+**Status:** Accepted — PostgreSQL floor amended by [ADR 248](ADR%20248%20-%20PostgreSQL%20floor%20lowered%20to%2015.md); the CLI's copy of the server floors removed by [ADR 325](ADR%20325%20-%20init%20gets%20everything%20about%20a%20database%20from%20its%20facade.md)
 **Date:** 2026-05-31
 **Linear:** TML-1810, TML-1809
 
@@ -76,7 +76,7 @@ The workspace-level source of truth is `MIN_TYPESCRIPT_PEER` in `scripts/validat
 
 Each target package is the authoritative source of truth for its database server floor: a constant in its `src/core/server-version.ts`, exported from its `server-version` entry point (`POSTGRES_MIN_SERVER_VERSION`, `MONGO_MIN_SERVER_VERSION`). A target's `package.json` carries no Prisma configuration or metadata; Prisma 8 reads configuration only from `prisma.config.ts`.
 
-`prisma orm init` takes the floor from the target package too. Since [ADR 325](ADR%20325%20-%20init%20gets%20everything%20about%20a%20target%20from%20the%20target%20package.md), the package's init contribution reads the constant for its `serverRequirement`, and the CLI keeps no copy. There is nothing to drift, so there is no drift test.
+`prisma orm init` takes the floor from the facade too. Since [ADR 325](ADR%20325%20-%20init%20gets%20everything%20about%20a%20database%20from%20its%20facade.md), the package's init contribution reads the constant for its `serverRequirement`, and the CLI keeps no copy. There is nothing to drift, so there is no drift test.
 
 The correct sequence for raising a DB floor:
 

@@ -9,7 +9,6 @@ import { ifDefined } from '@internal/utils/defined';
 import type { Block, Presentations, Span, TreeNode } from '@prisma/cli-engine';
 import { noDataLines } from '@prisma/cli-engine';
 import { notOk, ok } from '@prisma/cli-engine/protocol';
-import { createControlClient } from '../../control-api/client';
 import { errorFromCaught } from '../../control-api/operations/caught-errors';
 import type { CreateControlClient } from '../../control-api/types';
 import { errorDatabaseConnectionRequired, errorDriverRequired } from '../../utils/cli-errors';
@@ -166,5 +165,3 @@ export function createDbSchemaCommand(createClient: CreateControlClient) {
     },
   });
 }
-
-export const dbSchemaCommand = createDbSchemaCommand(createControlClient);

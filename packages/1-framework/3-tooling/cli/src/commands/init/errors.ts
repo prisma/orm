@@ -1,6 +1,8 @@
+import { ifDefined } from '@internal/utils/defined';
 import { docsUrlFor } from '@internal/utils/structured-error';
 import { formatSourceDiagnostic } from '../../control-api/operations/load-contract-source';
 import { CliStructuredError } from '../../utils/cli-errors';
+import { formatAddArgs, formatInstallCommand, type PackageManager } from './detect-package-manager';
 import type { Prisma6SideBySideSetup } from './prisma6-side-by-side';
 import {
   KNOWN_TARGET_PACKAGES,
@@ -91,12 +93,12 @@ export function errorInitInvalidTarget(options: {
       ? {
           summary: 'Invalid value for --target',
           why: `\`--target ${options.value}\` is not one of the short names (${SHORT_NAME_LIST}), and init does not take it as a package name: ${problems}.`,
-          fix: `Pass a short name (${SHORT_NAME_FLAGS}) or the full name of a target package (\`--target ${PACKAGE_NAME_PLACEHOLDER}\`).`,
+          fix: `Pass a short name (${SHORT_NAME_FLAGS}) or the full name of the package for your database (\`--target ${PACKAGE_NAME_PLACEHOLDER}\`).`,
         }
       : {
-          summary: 'Invalid target package name',
-          why: `\`${options.value}\`, typed as the name of the target package, is not taken as a package name: ${problems}. Nothing was changed.`,
-          fix: `Run \`prisma orm init\` again and type the target package's name as it is published, or pass it as \`--target ${PACKAGE_NAME_PLACEHOLDER}\`.`,
+          summary: 'Invalid package name',
+          why: `\`${options.value}\`, typed as the name of the package for your database, is not taken as a package name: ${problems}. Nothing was changed.`,
+          fix: `Run \`prisma orm init\` again and type the package's name as it is published, or pass it as \`--target ${PACKAGE_NAME_PLACEHOLDER}\`.`,
         };
   return new CliStructuredError('CLI.INIT_INVALID_FLAG_VALUE', wording.summary, {
     why: wording.why,
@@ -113,14 +115,14 @@ export function errorInitInvalidTarget(options: {
 }
 
 /**
- * Said first when a value in no list turns out not to be a usable target package, so the user
+ * Said first when a value in no list turns out not to be a usable facade, so the user
  * sees why init looked for a package of that name.
  */
 function takenAsPackageName(packageName: string): string {
   return `\`${packageName}\` is not one of the short names (${SHORT_NAME_LIST}), so init took it as a package name.`;
 }
 
-const LISTED_INSTEAD = `To use a target package from the list instead, pass its short name (${SHORT_NAME_FLAGS}); for any other, pass its full package name.`;
+const LISTED_INSTEAD = `To use a database package from the list instead, pass its short name (${SHORT_NAME_FLAGS}); for any other, pass its full package name.`;
 
 /**
  * `--authoring` and `--schema-path` disagree on file extension (e.g. PSL
@@ -487,7 +489,15 @@ export function errorInitPrisma7ConfigUnreadable(options: {
 }
 
 /**
- * The project does not have the target package: `--skip-install` forbade installing it, or init's
+ * The sentence every advice to add or install a package ends with under `--skip-install`: a
+ * package manager can refuse the add, or leave the copy where it is, when an override, a
+ * resolution or the lockfile pins it, and init cannot see which.
+ */
+export const IF_SOMETHING_PINS_IT =
+  'If an add or an install is refused, or a copy stays at another version, an override, a resolution or the lockfile pins it, so remove that and install again.';
+
+/**
+ * The project does not have the facade: `--skip-install` forbade installing it, or init's
  * install command succeeded and the package still cannot be found from the project. Init takes
  * every file it writes from that package, so it stops before writing any scaffold file.
  */
@@ -498,18 +508,24 @@ export function errorInitTargetPackageNotInstalled(options: {
   readonly ranCommand: string | undefined;
   /** The package is in no list, so the value was taken as a package name. */
   readonly unlisted: boolean;
+  /** The project's package manager; under Yarn the fix says what to do about Plug'n'Play. */
+  readonly packageManager: PackageManager;
 }): CliStructuredError {
   const { packageName, ranCommand } = options;
+  const plugNPlay =
+    options.packageManager === 'yarn'
+      ? " `prisma orm init` does not support Yarn Plug'n'Play: set `nodeLinker: node-modules` in `.yarnrc.yml`, run `yarn install`, then run `prisma orm init` again."
+      : '';
   const why =
     ranCommand !== undefined
       ? `\`${ranCommand}\` succeeded, but ${packageName} cannot be found from the project, so init cannot read its init contribution. No scaffold file was written.`
       : `init writes the project from ${packageName}, and \`--skip-install\` forbids installing it. Nothing was changed.`;
   const fix =
     ranCommand !== undefined
-      ? `Check that \`${options.installCommand}\` makes ${packageName} resolvable from this directory (Yarn Plug'n'Play hides packages from Node), then run \`prisma orm init\` again.`
+      ? `Check that \`${options.installCommand}\` makes ${packageName} resolvable from this directory, then run \`prisma orm init\` again.${plugNPlay}`
       : options.unlisted
-        ? `Run \`prisma orm init\` again without \`--skip-install\`: it checks that ${packageName} lists the keyword \`${PRISMA_ORM_PACKAGE_KEYWORD}\` before installing it.`
-        : `Install it with \`${options.installCommand}\`, then run \`prisma orm init\` again, or run it without \`--skip-install\`.`;
+        ? `Run \`prisma orm init\` again without \`--skip-install\`: it checks that ${packageName} lists the keyword \`${PRISMA_ORM_PACKAGE_KEYWORD}\` before installing it.${plugNPlay}`
+        : `Install it with \`${options.installCommand}\`. ${IF_SOMETHING_PINS_IT} Then run \`prisma orm init\` again, or run it without \`--skip-install\`.${plugNPlay}`;
   return new CliStructuredError(
     'CLI.INIT_TARGET_PACKAGE_NOT_INSTALLED',
     ranCommand !== undefined
@@ -551,7 +567,7 @@ function takenAsPackageNameMeta(unlisted: boolean): { readonly takenAsPackageNam
 }
 
 /**
- * A package in no list does not list the keyword init requires of a target package, or init could
+ * A package in no list does not list the keyword init requires of a facade, or init could
  * not read its keywords. Init checks before installing or loading it, so nothing was changed.
  * `registry` is set when the keywords were to come from the registry rather than the installed
  * package.
@@ -575,7 +591,8 @@ export function errorInitTargetPackageNotVerified(
 ): CliStructuredError {
   const { packageName, installCommand } = options;
   const keyword = `\`${PRISMA_ORM_PACKAGE_KEYWORD}\``;
-  const required = 'init requires that keyword of a target package before it installs or uses one';
+  const required =
+    'init requires that keyword of a database package before it installs or uses one';
   const runAgain = 'run `prisma orm init` again';
   const maintainer = `If you maintain ${packageName}, add ${keyword} to the keywords in its package.json and publish a new version.`;
   const wording = (() => {
@@ -602,7 +619,7 @@ export function errorInitTargetPackageNotVerified(
         const from = options.registry === undefined ? '' : ` from ${options.registry}`;
         return {
           summary: `Could not read the keywords of ${packageName}`,
-          why: `init requires the keyword ${keyword} of a target package before it installs or uses one, and it could not read the keywords of ${packageName}${from}: ${options.cause}. Nothing was changed.`,
+          why: `init requires the keyword ${keyword} of a database package before it installs or uses one, and it could not read the keywords of ${packageName}${from}: ${options.cause}. Nothing was changed.`,
           fix:
             options.registry === undefined
               ? `Check the package name. If it is right, reinstall ${packageName} with \`${installCommand}\` and ${runAgain}.`
@@ -625,7 +642,7 @@ export function errorInitTargetPackageNotVerified(
 }
 
 /**
- * The target package has no `init` entrypoint, its init module cannot be loaded, or its default
+ * The facade has no `init` entrypoint, its init module cannot be loaded, or its default
  * export is not an init contribution. The package is installed and no scaffold file was written.
  */
 export function errorInitContributionUnavailable(options: {
@@ -635,6 +652,10 @@ export function errorInitContributionUnavailable(options: {
   readonly detail: string | undefined;
   /** The package is in no list, so the value was taken as a package name. */
   readonly unlisted: boolean;
+  /** Required peers of the package that are not installed, a likely cause of an `unloadable` module. */
+  readonly missingPeers: readonly string[];
+  /** The command that adds `missingPeers`; `undefined` when there are none. */
+  readonly missingPeersCommand: string | undefined;
 }): CliStructuredError {
   const module = `${options.packageName}/init`;
   const detail = options.detail ?? 'its shape is wrong';
@@ -653,9 +674,11 @@ export function errorInitContributionUnavailable(options: {
       ...explainUnlisted(options.unlisted, options.packageName, {
         why: `${why} ${options.packageName} is installed; no scaffold file was written.`,
         fix:
-          options.reason === 'unloadable'
-            ? `Reinstall ${options.packageName} with your package manager and run \`prisma orm init\` again, or ${byHand.charAt(0).toLowerCase()}${byHand.slice(1)}`
-            : byHand,
+          options.reason === 'unloadable' && options.missingPeersCommand !== undefined
+            ? `${listed(options.missingPeers)}, which ${options.packageName} needs as ${options.missingPeers.length === 1 ? 'a peer, is' : 'peers, are'} not installed: a package manager that installs no peer dependencies leaves them out. Add them with \`${options.missingPeersCommand}\`, then run \`prisma orm init\` again.`
+            : options.reason === 'unloadable'
+              ? `Reinstall ${options.packageName} with your package manager and run \`prisma orm init\` again, or ${byHand.charAt(0).toLowerCase()}${byHand.slice(1)}`
+              : byHand,
       }),
       docsUrl: docsUrlFor('CLI.INIT_CONTRIBUTION_UNAVAILABLE'),
       meta: {
@@ -668,7 +691,146 @@ export function errorInitContributionUnavailable(options: {
   );
 }
 
-/** `--authoring` names a way to write the contract the target package does not offer. */
+/**
+ * Under `--skip-install`, the facade is installed but some of its required peers are not,
+ * as a package manager that installs no peer dependencies leaves them. Init stops before loading
+ * the package's `init` entrypoint, which would fail to resolve them. Nothing was changed. Maps to
+ * exit code `2 = PRECONDITION`.
+ */
+export function errorInitRequiredPeersNotInstalled(options: {
+  readonly packageName: string;
+  readonly missing: readonly string[];
+  /** The command that adds the missing peers `package.json` does not list; `undefined` when it lists them all. */
+  readonly installCommand: string | undefined;
+  /** The missing peers `package.json` already lists, which an install puts in place without rewriting their lines. */
+  readonly listedMissing: readonly string[];
+  /** The package manager's own install command, for `listedMissing`. */
+  readonly restoreCommand: string;
+}): CliStructuredError {
+  const { packageName, missing, listedMissing } = options;
+  const steps: string[] = [];
+  if (listedMissing.length > 0) {
+    steps.push(
+      `Run \`${options.restoreCommand}\` to install ${listed(listedMissing)}, which package.json already lists`,
+    );
+  }
+  if (options.installCommand !== undefined) {
+    steps.push(
+      `${listedMissing.length === 0 ? 'Add them' : 'add the others'} with \`${options.installCommand}\``,
+    );
+  }
+  return new CliStructuredError(
+    'CLI.INIT_REQUIRED_PEERS_NOT_INSTALLED',
+    `${packageName} needs peer dependencies that are not installed`,
+    {
+      why: `${packageName} names ${listed(missing)} as required peer dependencies, and ${missing.length === 1 ? 'it cannot' : 'they cannot'} be found from the project or from where ${packageName} is installed. \`--skip-install\` forbids installing them. Nothing was changed.`,
+      fix: `${steps.join(', and ')}. ${IF_SOMETHING_PINS_IT} Then run \`prisma orm init\` again.`,
+      docsUrl: docsUrlFor('CLI.INIT_REQUIRED_PEERS_NOT_INSTALLED'),
+      meta: {
+        packageName,
+        missing,
+        listedMissing,
+        ...ifDefined('installCommand', options.installCommand),
+        ...(listedMissing.length === 0 ? {} : { restoreCommand: options.restoreCommand }),
+      },
+    },
+  );
+}
+
+/**
+ * What a refused peer needs, decided from its `package.json` line, the requirement and the version
+ * installed: add it, which the project does not list; install, where the line already stands for
+ * the requirement and the copy is outside the line; change an exact line and install; make a line
+ * that points elsewhere (a catalog, a workspace, a path, an alias) resolve to the requirement; or
+ * replace any other line, a range or a dist-tag, with the requirement through `specifier`.
+ */
+export type RefusedPeerCase =
+  | { readonly case: 'add'; readonly specifier: string }
+  | { readonly case: 'install' }
+  | { readonly case: 'change-exact' }
+  | { readonly case: 'resolve' }
+  | { readonly case: 'change-range'; readonly specifier: string };
+
+export interface RequiredPeerAtAnotherVersion {
+  readonly name: string;
+  /** The version of the copy the project resolves. */
+  readonly found: string;
+  /** The version or range the package that names it requires. */
+  readonly required: string;
+  /** The project's `package.json` line for it, when that line has to change. */
+  readonly listed: string | undefined;
+  readonly fix: RefusedPeerCase;
+}
+
+/** Under `--skip-install`, a required peer is installed at a version its requirement does not admit. */
+export function errorInitRequiredPeersAtAnotherVersion(options: {
+  readonly packageName: string;
+  readonly packages: readonly RequiredPeerAtAnotherVersion[];
+  /** Those `package.json` lists at a line that stands for the requirement; reported in `meta`. */
+  readonly listedAtRequired: readonly string[];
+  readonly packageManager: PackageManager;
+}): CliStructuredError {
+  const { packageName, packages, packageManager } = options;
+  const restoreCommand = formatInstallCommand(packageManager);
+  const addCommand = (specifiers: readonly string[]) =>
+    [packageManager, ...formatAddArgs(packageManager, [...specifiers])].join(' ');
+  const steps: string[] = packages.flatMap((pkg) => {
+    switch (pkg.fix.case) {
+      case 'change-exact':
+        return [
+          `Change the line for ${pkg.name} in package.json from ${pkg.listed} to ${pkg.required} and run \`${restoreCommand}\``,
+        ];
+      case 'resolve':
+        return [
+          `Make the line for ${pkg.name} in package.json resolve to ${pkg.required} (it is \`${pkg.listed}\` now, so change the version where it points, such as the catalog entry or the workspace package) and run \`${restoreCommand}\``,
+        ];
+      case 'change-range':
+        return [
+          `package.json lists ${pkg.name} at ${pkg.listed}, which does not keep it within ${pkg.required}, the range ${packageName} requires, and ${pkg.found} is installed: change the line to ${pkg.required} with \`${addCommand([pkg.fix.specifier])}\``,
+        ];
+      default:
+        return [];
+    }
+  });
+  for (const pkg of packages) {
+    if (pkg.fix.case === 'install') {
+      steps.push(
+        `package.json already lists ${pkg.name} at a version ${packageName} accepts, but ${pkg.found} is installed: run \`${restoreCommand}\``,
+      );
+    }
+  }
+  const toAdd = packages.flatMap((pkg) => (pkg.fix.case === 'add' ? [pkg.fix.specifier] : []));
+  const installCommand = toAdd.length === 0 ? undefined : addCommand(toAdd);
+  if (installCommand !== undefined) {
+    steps.push(`${steps.length === 0 ? 'Add them' : 'add the others'} with \`${installCommand}\``);
+  }
+  const found = packages.map(
+    (pkg) => `${pkg.name} at ${pkg.found}, where ${pkg.required} is required`,
+  );
+  return new CliStructuredError(
+    'CLI.INIT_REQUIRED_PEERS_AT_ANOTHER_VERSION',
+    `${packageName} needs peer dependencies at versions that are not installed`,
+    {
+      why: `${packageName} needs its required peer dependencies at the versions it names, and the project has ${listed(found)}. A copy at another version does not stand for the one required, and init cannot tell which peers the required version needs in turn. \`--skip-install\` forbids installing them. Nothing was changed.`,
+      fix: `${steps.join(', and ')}. ${IF_SOMETHING_PINS_IT} Then run \`prisma orm init\` again.`,
+      docsUrl: docsUrlFor('CLI.INIT_REQUIRED_PEERS_AT_ANOTHER_VERSION'),
+      meta: {
+        packageName,
+        packages: packages.map((pkg) => ({
+          name: pkg.name,
+          found: pkg.found,
+          required: pkg.required,
+          ...ifDefined('listed', pkg.listed),
+        })),
+        listedAtRequired: options.listedAtRequired,
+        ...ifDefined('installCommand', installCommand),
+        restoreCommand,
+      },
+    },
+  );
+}
+
+/** `--authoring` names a way to write the contract the facade does not offer. */
 export function errorInitAuthoringUnsupported(options: {
   readonly packageName: string;
   readonly authoring: string;
@@ -735,7 +897,7 @@ export function packagesAddedAction(added: PackagesAdded, reason: InstallReason)
 }
 
 /**
- * The target package init loads to read the Prisma 7 schema cannot be loaded
+ * The facade init loads to read the Prisma 7 schema cannot be loaded
  * from the project, it has no Prisma 7 contract source while
  * `--from-prisma7-schema` asked for one, or it is in no list, and only a
  * listed package can keep a Prisma 7 schema.
@@ -777,8 +939,8 @@ export function errorInitPrisma7SourceUnavailable(
         : options.reason === 'unlisted'
           ? {
               summary: `${packageName} cannot keep a Prisma 7 schema`,
-              why: `${packageName} is not one of the target packages in Prisma's list (${SHORT_NAME_LIST}), and only a package in that list can keep ${schemaPath} as the contract source. Nothing was changed.`,
-              fix: `Run \`prisma orm init\` without \`--from-prisma7-schema\` to start a fresh contract on ${packageName}. To keep ${schemaPath}, name a target package from the list instead.`,
+              why: `${packageName} is not one of the database packages in Prisma's list (${SHORT_NAME_LIST}), and only a package in that list can keep ${schemaPath} as the contract source. Nothing was changed.`,
+              fix: `Run \`prisma orm init\` without \`--from-prisma7-schema\` to start a fresh contract on ${packageName}. To keep ${schemaPath}, name a database package from the list instead.`,
             }
           : {
               summary: 'No Prisma 7 contract source for this database',
@@ -801,7 +963,7 @@ export function errorInitPrisma7SourceUnavailable(
 }
 
 /**
- * The target package's Prisma 7 contract source refused the schema. Nothing but the check's install
+ * The facade's Prisma 7 contract source refused the schema. Nothing but the check's install
  * happened.
  */
 export function errorInitPrisma7SchemaRefused(options: {
