@@ -1,0 +1,20 @@
+[
+  {
+    "path": "./control",
+    "export": "paradedbPackMeta",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "19b1ec42a4182491",
+    "reason": "An extension pack declares no capabilities, because a contract lists the capabilities it requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./pack",
+    "export": "default",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "3d28f7b6d93e8b54",
+    "reason": "An extension pack declares no capabilities, because a contract lists the capabilities it requires (prisma/orm#31218)."
+  }
+]

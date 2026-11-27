@@ -87,7 +87,7 @@ function schemaWithPolicies(policies: PostgresRlsPolicy[]): PostgresDatabaseSche
         },
       }),
     },
-    pgVersion: 'unknown',
+    serverVersionNumber: undefined,
     roles: [],
     existingSchemas: [SCHEMA_NAME],
   });

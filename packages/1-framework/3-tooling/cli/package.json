@@ -31,6 +31,7 @@
     "@internal/migration-tools": "workspace:8.0.0-rc.25",
     "@internal/psl-parser": "workspace:8.0.0-rc.25",
     "@internal/psl-printer": "workspace:8.0.0-rc.25",
+    "@internal/ts-render": "workspace:8.0.0-rc.25",
     "@internal/utils": "workspace:8.0.0-rc.25",
     "arktype": "^2.2.9",
     "ci-info": "^4.3.1",

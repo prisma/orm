@@ -1,19 +1,22 @@
-import { defineContract } from '@internal/postgres/contract-builder';
+import { defineContract, postgres18, postgresDriver } from '@internal/postgres/contract-builder';
 import { describe, expect, it } from 'vitest';
 import { vector } from '../src/exports/column-types';
 import pgvector from '../src/exports/pack';
 
 function buildWithEmbedding(length: number) {
-  return defineContract({ extensions: { pgvector } }, ({ field, model, gen, type }) => ({
-    models: {
-      Doc: model('Doc', {
-        fields: {
-          id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
-          embedding: field.column(vector(length)),
-        },
-      }),
-    },
-  }));
+  return defineContract(
+    { requiredCapabilities: [...postgres18, ...postgresDriver], extensions: { pgvector } },
+    ({ field, model, gen, type }) => ({
+      models: {
+        Doc: model('Doc', {
+          fields: {
+            id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
+            embedding: field.column(vector(length)),
+          },
+        }),
+      },
+    }),
+  );
 }
 
 describe('vector column type parameters', () => {

@@ -129,7 +129,6 @@ Rules below are listed by bare filename; the canonical file is `.agents/rules/<n
 - `control-plane-descriptors.mdc` — Control plane descriptor pattern (Control*Descriptor types, driver requirement)
 - `family-instance-domain-actions.mdc` — Family instance domain actions (inline core logic, import helper functions)
 - `storage-type-hooks.mdc` — Codec-owned storage type hooks (avoid enum fields in shared IR)
-- `capabilities-ownership.mdc` — Capabilities are adapter-reported; contracts declare requirements
 - `tsdown-config-package-source-only.mdc` — Keep `@repo/tsdown` exports source-only (no `.js` workaround files)
 
 ## Git, CI & workflow

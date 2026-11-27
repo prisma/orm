@@ -1,7 +1,15 @@
 import { int4Column, textColumn } from '@internal/adapter-postgres/column-types';
-import { defineContract, field, model, sql } from '@internal/postgres/contract-builder';
+import {
+  defineContract,
+  field,
+  model,
+  postgres18,
+  postgresDriver,
+  sql,
+} from '@internal/postgres/contract-builder';
 
 export const contract = defineContract({
+  requiredCapabilities: [...postgres18, ...postgresDriver],
   models: {
     User: model('User', {
       fields: {

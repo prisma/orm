@@ -281,7 +281,6 @@ export function createMysqlClient<
     const context = createExecutionContext<TContract, TargetId>({
       contract,
       stack,
-      driver: components.driver,
     });
     const {
       sql,

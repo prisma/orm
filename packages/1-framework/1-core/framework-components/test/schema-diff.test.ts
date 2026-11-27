@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type {
   DiffableNode,
-  MismatchExplanation,
+  NodeMismatchExplanation,
   SchemaDiffIssue,
   SchemaNodeRef,
 } from '../src/control/schema-diff';
@@ -440,12 +440,15 @@ describe('SchemaDiff', () => {
 });
 
 describe('diffSchemas mismatch explanations', () => {
-  const refused: MismatchExplanation = {
+  const refused: NodeMismatchExplanation = {
     text: 'the contract text is refused',
     cause: 'differs',
   };
 
-  function explainedNode(body: string, explanation: MismatchExplanation | undefined): DiffableNode {
+  function explainedNode(
+    body: string,
+    explanation: NodeMismatchExplanation | undefined,
+  ): DiffableNode {
     return {
       id: 'default',
       nodeKind: 'widget',

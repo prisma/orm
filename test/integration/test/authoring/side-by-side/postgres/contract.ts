@@ -8,6 +8,8 @@ import {
   defineContract,
   field,
   model,
+  postgres18,
+  postgresDriver,
   rel,
 } from '@internal/postgres/contract-builder';
 
@@ -37,6 +39,7 @@ const User = UserBase.relations({
 }).sql({ table: 'users' });
 
 export const contract = defineContract({
+  requiredCapabilities: [...postgres18, ...postgresDriver],
   models: {
     User,
     Post,

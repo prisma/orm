@@ -10,6 +10,8 @@ import {
   field,
   fullTextIndex,
   model,
+  postgres18,
+  postgresDriver,
   sql,
 } from '../../src/exports/contract-builder';
 
@@ -89,8 +91,11 @@ test('defineContract rejects a model whose sql() stage reuses an index name', ()
       fullTextIndex(text, { language: 'german', name: 'message_search' }),
     ],
   });
-  // @ts-expect-error the sql() stage resolved to never
-  defineContract({ models: { Message: message } });
+  defineContract({
+    requiredCapabilities: [...postgres18, ...postgresDriver],
+    // @ts-expect-error the sql() stage resolved to never
+    models: { Message: message },
+  });
 });
 
 test('where takes a sql value; a string, a number and a boolean are type errors', () => {

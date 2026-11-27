@@ -1,4 +1,3 @@
-import { postgresAdapterCapabilities } from '@internal/adapter-postgres/adapter';
 import { int4Column, textColumn } from '@internal/adapter-postgres/column-types';
 import postgresAdapter from '@internal/adapter-postgres/runtime';
 import {
@@ -19,6 +18,11 @@ import {
 import type { RuntimeMutationDefaultGenerator } from '@internal/framework-components/runtime';
 import { AsyncIterableResult } from '@internal/framework-components/runtime';
 import type { SqlStorage } from '@internal/sql-contract/types';
+import {
+  type CapabilityKey,
+  capabilitiesFromKeys,
+  capabilityKeysOf,
+} from '@internal/sql-contract-ts/contract-builder';
 import type { Codec, SelectAst, SqlStatementStats } from '@internal/sql-relational-core/ast';
 import type { SqlExecutionPlan, SqlQueryPlan } from '@internal/sql-relational-core/plan';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
@@ -33,6 +37,7 @@ import {
   type SqlRuntimeExtensionDescriptor,
 } from '@internal/sql-runtime';
 import postgresTarget, { PostgresContractSerializer } from '@internal/target-postgres/runtime';
+import { postgresCapabilitiesByVersion } from '@internal/target-postgres/server-version';
 import { expect } from 'vitest';
 import { resolveIncludeRelation } from '../src/collection-contract';
 import {
@@ -175,10 +180,13 @@ export function getTestContract(): TestContract {
  * `TCaps`, which the framework `Contract` interface already permits
  * (`capabilities: Record<string, Record<string, boolean>>`).
  */
-export function withCapabilities<TCaps extends Record<string, Record<string, boolean>>>(
-  contract: TestContract,
+export function withCapabilities<
+  TContract extends FrameworkContract<SqlStorage>,
+  TCaps extends Record<string, Record<string, boolean>>,
+>(
+  contract: TContract,
   capabilities: TCaps,
-): Omit<TestContract, 'capabilities'> & { readonly capabilities: TCaps } {
+): Omit<TContract, 'capabilities'> & { readonly capabilities: TCaps } {
   return { ...contract, capabilities };
 }
 
@@ -275,7 +283,6 @@ export function buildTestContextFromContract<TContract extends FrameworkContract
   options?: {
     readonly mutationDefaultGenerators?: ReadonlyArray<RuntimeMutationDefaultGenerator>;
     readonly extensions?: ReadonlyArray<SqlRuntimeExtensionDescriptor<'postgres'>>;
-    readonly adapter?: typeof postgresAdapter;
   },
 ): ExecutionContext<TContract> {
   const generators = options?.mutationDefaultGenerators ?? [];
@@ -302,24 +309,39 @@ export function buildTestContextFromContract<TContract extends FrameworkContract
     contract,
     stack: createSqlExecutionStack({
       target: postgresTarget,
-      adapter: options?.adapter ?? postgresAdapter,
+      adapter: postgresAdapter,
       extensions,
     }),
   });
 }
 
-/** The Postgres adapter, reporting that the database cannot run the one-query include, so includes load with one query per relation. */
-export const perRelationPostgresAdapter: typeof postgresAdapter = {
-  ...postgresAdapter,
-  capabilities: {
-    ...postgresAdapterCapabilities,
-    sql: {
-      ...postgresAdapterCapabilities.sql,
-      outerReferencesInDerivedTables: false,
-      jsonAggWithoutTruncation: false,
-    },
-  },
+/** The capabilities without which the database cannot run the one-query include, so includes load with one query per relation. */
+export const oneQueryIncludeKeys = [
+  'sql.outerReferencesInDerivedTables',
+  'sql.jsonAggWithoutTruncation',
+] as const;
+
+function without<Key extends CapabilityKey, Removed extends Key>(
+  keys: readonly Key[],
+  removed: readonly Removed[],
+): readonly Exclude<Key, Removed>[] {
+  return keys.filter((key): key is Exclude<Key, Removed> => !removed.some((r) => r === key));
+}
+
+// The capabilities a contract gets from `requiredCapabilities: [...postgres18]` with some left out. With `withCapabilities`, a test gives a contract one of these, with a type that matches it.
+const postgres18 = capabilityKeysOf(postgresCapabilitiesByVersion[18]);
+export const statedCapabilities = {
+  perRelation: capabilitiesFromKeys(without(postgres18, oneQueryIncludeKeys)),
+  withoutReturning: capabilitiesFromKeys(without(postgres18, ['sql.returning'])),
+  perRelationWithoutReturning: capabilitiesFromKeys(
+    without(postgres18, [...oneQueryIncludeKeys, 'sql.returning']),
+  ),
 };
+
+/** `contract` with the capabilities of a database that cannot run the one-query include. */
+export function perRelation<TContract extends FrameworkContract<SqlStorage>>(contract: TContract) {
+  return withCapabilities(contract, statedCapabilities.perRelation);
+}
 
 const testContext: ExecutionContext<TestContract> = buildTestContextFromContract(baseTestContract);
 

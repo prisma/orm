@@ -1,12 +1,15 @@
 import 'dotenv/config';
 import { definePrismaConfig } from '@prisma/cli-engine';
 import pgvector from '@prisma/orm-extension-pgvector/control';
-import { defineConfig as ormConfig } from '@prisma/orm-postgres/config';
+import { defineConfig as ormConfig, postgres18, postgresDriver } from '@prisma/orm-postgres/config';
 import { engagementStatsControl } from './src/extensions/engagement-stats';
 
 export default definePrismaConfig({
   orm: ormConfig({
-    contract: './src/prisma/contract.prisma',
+    contract: {
+      path: './src/prisma/contract.prisma',
+      requiredCapabilities: [...postgres18, ...postgresDriver],
+    },
     // `engagementStatsControl` contributes the `stddev` aggregate operation, so
     // the emitted types carry it. Its runtime half is composed in `src/prisma/db.ts`.
     extensions: [pgvector, engagementStatsControl],

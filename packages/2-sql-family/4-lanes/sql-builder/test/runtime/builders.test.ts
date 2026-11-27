@@ -550,7 +550,7 @@ describe('distinct', () => {
       distinctOn(s: string): void;
     };
     expect(() => query.distinctOn('id')).toThrow(
-      'distinctOn() requires capability postgres.distinctOn',
+      '`distinctOn()` is unavailable: your contract declares no dependency on `postgres.distinctOn`',
     );
   });
 });
@@ -601,7 +601,9 @@ describe('lateral joins', () => {
         (lateral: { from(t: unknown): { select(...args: string[]): unknown } }) =>
           lateral.from(d.public.posts).select('id'),
       ),
-    ).toThrow('lateralJoin() requires capability sql.lateral');
+    ).toThrow(
+      '`lateralJoin()` is unavailable: your contract declares no dependency on `sql.lateral`',
+    );
   });
 });
 

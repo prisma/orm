@@ -203,11 +203,6 @@ const paradedbPackMetaBase = {
   familyId: 'sql',
   targetId: 'postgres',
   version: '0.0.1',
-  capabilities: {
-    postgres: {
-      'paradedb/bm25': true,
-    },
-  },
   indexTypes: paradedbIndexTypes,
   types: {
     queryOperationTypes: {

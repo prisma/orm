@@ -1,31 +1,4 @@
-export const postgresAdapterCapabilities = Object.freeze({
-  postgres: {
-    orderBy: true,
-    limit: true,
-    lateral: true,
-    jsonAgg: true,
-    returning: true,
-    distinctOn: true,
-    forNoKeyUpdate: true,
-    forKeyShare: true,
-  },
-  sql: {
-    enums: true,
-    returning: true,
-    defaultInInsert: true,
-    lateral: true,
-    scalarList: true,
-    checkConstraint: true,
-    insertOnConflictSkip: true,
-    insertOnConflictWithoutTarget: true,
-    insertOnConflictTarget: true,
-    forUpdate: true,
-    forShare: true,
-    lockOf: true,
-    lockNowait: true,
-    lockSkipLocked: true,
-    jsonAgg: true,
-    outerReferencesInDerivedTables: true,
-    jsonAggWithoutTruncation: true,
-  },
-} as const);
+/**
+ * PostgreSQL's adapter declares no capabilities: every PostgreSQL flag is a fact about the database, which the target declares by version, or about the connection, which the driver declares.
+ */
+export const postgresAdapterCapabilities = Object.freeze({} as const);

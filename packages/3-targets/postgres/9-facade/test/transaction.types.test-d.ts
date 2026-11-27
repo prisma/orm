@@ -1,12 +1,17 @@
 import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { expectTypeOf, test } from 'vitest';
-import type { PostgresTransactionOptions } from '../src/exports/runtime';
+import type {
+  InteractiveTransactionsCapability,
+  PostgresTransactionOptions,
+} from '../src/exports/runtime';
 import type { PostgresServerlessConnection } from '../src/exports/serverless';
 import type { PostgresClient } from '../src/runtime/postgres';
 import type { PostgresTransactionContext } from '../src/runtime/postgres-members';
 
-type TestContract = Contract<SqlStorage>;
+type TestContract = Contract<SqlStorage> & {
+  readonly capabilities: InteractiveTransactionsCapability;
+};
 
 test('transaction options are target-specific and preserve inference on both transports', () => {
   expectTypeOf<PostgresTransactionOptions>().not.toBeAny();

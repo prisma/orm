@@ -1,7 +1,14 @@
-import { defineContract, field, model } from '@internal/postgres/contract-builder';
+import {
+  defineContract,
+  field,
+  model,
+  postgres18,
+  postgresDriver,
+} from '@internal/postgres/contract-builder';
 import { int4Column, textColumn } from '@repo/test-utils/column-descriptors';
 
 const contractObj = defineContract({
+  requiredCapabilities: [...postgres18, ...postgresDriver],
   models: {
     User: model('User', {
       fields: {

@@ -27,6 +27,7 @@ export default defineConfig({
     'map-names': 'src/exports/map-names.ts',
     provider: 'src/exports/provider.ts',
     resolution: 'src/exports/resolution.ts',
+    'sources-given-no-capabilities': 'src/exports/sources-given-no-capabilities.ts',
     test: 'src/exports/test.ts',
   },
   exports: {

@@ -1,3 +1,4 @@
+import postgresAdapter from '@internal/adapter-postgres/runtime';
 // PSL <-> TS-builder parity for the M:N ORM API.
 //
 // Every other M:N integration file drives the TS-builder fixture
@@ -27,7 +28,7 @@ import postgresTarget, { PostgresContractSerializer } from '@internal/target-pos
 import { describe, expect, it } from 'vitest';
 import type { Contract as MnPslContract } from './fixtures/mn-psl/generated/contract';
 import mnPslContractJson from './fixtures/mn-psl/generated/contract.json' with { type: 'json' };
-import { type IncludeStrategy, includeStrategies, postgresAdapterFor } from './helpers';
+import { type IncludeStrategy, includeStrategies, withIncludeStrategy } from './helpers';
 import {
   expectPerRelationStatements,
   timeouts,
@@ -48,10 +49,10 @@ const mnPslContract = new PostgresContractSerializer().deserializeContract(
 
 function mnPslContext(strategy: IncludeStrategy): ExecutionContext<MnPslContract> {
   return createExecutionContext({
-    contract: mnPslContract,
+    contract: withIncludeStrategy(mnPslContract, strategy),
     stack: createSqlExecutionStack({
       target: postgresTarget,
-      adapter: postgresAdapterFor(strategy),
+      adapter: postgresAdapter,
       extensions: [pgvectorRuntime],
     }),
   });

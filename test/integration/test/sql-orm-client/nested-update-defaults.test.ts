@@ -4,7 +4,15 @@ import {
   timestamptzJsDateColumn,
 } from '@internal/adapter-postgres/column-types';
 import postgresAdapter from '@internal/adapter-postgres/runtime';
-import { defineContract, field, gen, model, rel } from '@internal/postgres/contract-builder';
+import {
+  defineContract,
+  field,
+  gen,
+  model,
+  postgres18,
+  postgresDriver,
+  rel,
+} from '@internal/postgres/contract-builder';
 import { Collection } from '@internal/sql-orm-client';
 import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
 import postgresTarget from '@internal/target-postgres/runtime';
@@ -26,6 +34,7 @@ const Article = model('Article', {
 }).sql({ table: 'ud_articles' });
 
 const contract = defineContract({
+  requiredCapabilities: [...postgres18, ...postgresDriver],
   models: {
     Author: Author.relations({ articles: rel.hasMany(() => Article, { by: 'authorId' }) }).sql({
       table: 'ud_authors',

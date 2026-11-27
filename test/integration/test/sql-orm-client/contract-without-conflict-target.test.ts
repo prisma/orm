@@ -11,7 +11,7 @@ import { timeouts, withCollectionRuntime } from './integration-helpers';
 import type { PgIntegrationRuntime } from './runtime-helpers';
 
 /**
- * A contract emitted before the Postgres adapter reported `sql.insertOnConflictTarget` lacks the key. The execution context adds the adapter's capabilities to the contract, so through the standard stack such a contract upserts and skips conflicts on named columns as before.
+ * A contract whose required capabilities leave out `sql.insertOnConflictTarget`. The runtime keeps the contract's capabilities as listed, so conflict clauses that name columns are unavailable and a conflict clause that names none still works.
  */
 const contract = new PostgresContractSerializer().deserializeContract<Contract>(contractJson);
 const context = createExecutionContext<Contract>({
@@ -23,27 +23,44 @@ function createUsers(runtime: PgIntegrationRuntime) {
   return new Collection({ runtime, context }, 'User', { namespaceId: 'public' });
 }
 
-describe('integration/contract emitted before insertOnConflictTarget', () => {
+function missingConflictTarget(action: string) {
+  return expect.objectContaining({
+    code: 'ORM.CAPABILITY_MISSING',
+    meta: { capability: 'insertOnConflictTarget', action },
+  });
+}
+
+describe('integration/contract that does not require insertOnConflictTarget', () => {
   it(
-    'upserts and skips conflicts on named columns, because the runtime adds the adapter capability',
+    'refuses conflict clauses on named columns and skips conflicts on any key',
     async () => {
       await withCollectionRuntime(async (runtime) => {
         const users = createUsers(runtime);
         await runtime.query('create unique index users_email_unique on users (email)');
+        await runtime.query(
+          "insert into users (id, name, email) values (1, 'Alice', 'alice@example.com')",
+        );
 
-        expect({
-          emitted: Object.hasOwn(contract.capabilities.sql, 'insertOnConflictTarget'),
-          atRuntime: Object.hasOwn(context.contract.capabilities.sql, 'insertOnConflictTarget'),
-          upserted: await users.select('id', 'name').upsert({
-            create: { id: 1, name: 'Alice', email: 'alice@example.com', invitedById: null },
-            update: { name: 'Alice Updated' },
-            conflictOn: { email: 'alice@example.com' },
-          }),
-          updated: await users.select('id', 'name').upsert({
+        await expect(async () =>
+          users.select('id', 'name').upsert({
             create: { id: 2, name: 'Alice', email: 'alice@example.com', invitedById: null },
             update: { name: 'Alice Updated' },
             conflictOn: { email: 'alice@example.com' },
           }),
+        ).rejects.toThrow(missingConflictTarget('upsert()'));
+
+        await expect(async () =>
+          users
+            .select('id')
+            .createAll([{ id: 3, name: 'Clone', email: 'alice@example.com', invitedById: null }], {
+              onConflict: 'skip',
+              conflictOn: ['email'],
+            })
+            .toArray(),
+        ).rejects.toThrow(missingConflictTarget('createAll()'));
+
+        expect({
+          atRuntime: Object.hasOwn(context.contract.capabilities.sql, 'insertOnConflictTarget'),
           skipped: await users
             .select('id')
             .createAll(
@@ -51,15 +68,19 @@ describe('integration/contract emitted before insertOnConflictTarget', () => {
                 { id: 3, name: 'Clone', email: 'alice@example.com', invitedById: null },
                 { id: 4, name: 'Bob', email: 'bob@example.com', invitedById: null },
               ],
-              { onConflict: 'skip', conflictOn: ['email'] },
+              { onConflict: 'skip' },
             )
             .toArray(),
+          rows: await runtime.query<{ id: number; name: string }>(
+            'select id, name from users order by id',
+          ),
         }).toEqual({
-          emitted: false,
-          atRuntime: true,
-          upserted: { id: 1, name: 'Alice' },
-          updated: { id: 1, name: 'Alice Updated' },
+          atRuntime: false,
           skipped: [{ id: 4 }],
+          rows: [
+            { id: 1, name: 'Alice' },
+            { id: 4, name: 'Bob' },
+          ],
         });
       }, contract);
     },

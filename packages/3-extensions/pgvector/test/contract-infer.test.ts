@@ -65,7 +65,7 @@ function inferFrom(extensions: readonly (typeof pgvectorControl)[], typeText = '
     },
     roles: [],
     existingSchemas: ['public'],
-    pgVersion: '',
+    serverVersionNumber: undefined,
   });
   return () => sqlFamilyDescriptor.create(stack).inferPslContract(tree);
 }

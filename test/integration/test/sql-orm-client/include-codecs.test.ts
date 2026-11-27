@@ -4,6 +4,7 @@ import {
   timestampTemporalColumn,
   timestamptzTemporalColumn,
 } from '@internal/adapter-postgres/column-types';
+import postgresAdapter from '@internal/adapter-postgres/runtime';
 import {
   type CodecCallContext,
   CodecDescriptorImpl,
@@ -12,7 +13,14 @@ import {
   type ColumnTypeDescriptor,
   type DataTypeValue,
 } from '@internal/framework-components/codec';
-import { defineContract, field, model, rel } from '@internal/postgres/contract-builder';
+import {
+  defineContract,
+  field,
+  model,
+  postgres18,
+  postgresDriver,
+  rel,
+} from '@internal/postgres/contract-builder';
 import { Collection } from '@internal/sql-orm-client';
 import {
   createExecutionContext,
@@ -24,7 +32,7 @@ import { createPostgresCodecRegistryWithBuiltins } from '@internal/target-postgr
 import { pgText } from '@internal/target-postgres/data-types';
 import postgresTarget from '@internal/target-postgres/runtime';
 import { describe, expect, it } from 'vitest';
-import { type IncludeStrategy, includeStrategies, postgresAdapterFor } from './helpers';
+import { type IncludeStrategy, includeStrategies, withIncludeStrategy } from './helpers';
 import {
   expectPerRelationStatements,
   timeouts,
@@ -125,15 +133,16 @@ const Branch = model('Branch', {
 }).sql({ table: 'codec_branches' });
 
 const contract = defineContract({
+  requiredCapabilities: [...postgres18, ...postgresDriver],
   codecLookup: createPostgresCodecRegistryWithBuiltins([includedTextDescriptor]),
   models: { Project, Branch },
 });
 function contextOf(strategy: IncludeStrategy) {
   return createExecutionContext({
-    contract,
+    contract: withIncludeStrategy(contract, strategy),
     stack: createSqlExecutionStack({
       target: postgresTarget,
-      adapter: postgresAdapterFor(strategy),
+      adapter: postgresAdapter,
       extensions: [includedTextExtension],
     }),
   });

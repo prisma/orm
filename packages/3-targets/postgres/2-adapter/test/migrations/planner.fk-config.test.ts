@@ -101,7 +101,7 @@ const emptySchema = new PostgresDatabaseSchemaNode({
       tables: {},
     }),
   },
-  pgVersion: '',
+  serverVersionNumber: undefined,
   roles: [],
   existingSchemas: [],
 });

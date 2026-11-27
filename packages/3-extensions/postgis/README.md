@@ -29,11 +29,11 @@ A complete five-step example — see [`examples/prisma-8-postgis-demo`](../../..
 **1. Register the extension in `prisma.config.ts`:**
 
 ```typescript
-import { defineConfig } from '@internal/postgres/config';
+import { defineConfig, postgres18, postgresDriver } from '@internal/postgres/config';
 import postgis from '@internal/extension-postgis/control';
 
 export default defineConfig({
-  contract: './prisma/schema.prisma',
+  contract: { path: './prisma/schema.prisma', requiredCapabilities: [...postgres18, ...postgresDriver] },
   extensions: [postgis],
 });
 ```
@@ -246,11 +246,7 @@ For SRID 4326 (WGS84) lng/lat data, `distance` returns **degrees**, which is rar
 
 ## Capabilities
 
-The extension declares a single capability flag:
-
-- `postgis.geometry` — gating signal for the `geometry` codec and the seven operations above.
-
-Features that require it should declare a `requires: ['postgis.geometry']` constraint in their capability gate.
+The extension declares no capabilities. The `geometry` codec and the seven operations are available wherever the contract lists the extension. See [`docs/reference/capabilities.md`](../../../docs/reference/capabilities.md).
 
 ## Types
 

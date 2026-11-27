@@ -56,7 +56,7 @@ If any of these becomes worth emitting, the path is per-server capability gating
 
 ## Enforcement
 
-- Source of truth: `POSTGRES_MIN_SERVER_VERSION = '15'` in `packages/3-targets/postgres/1-target/src/core/server-version.ts`, exported from `@internal/target-postgres/server-version`.
+- Source of truth: `POSTGRES_MIN_SERVER_VERSION = '15'`, the oldest entry in the list of supported versions in `packages/3-targets/postgres/1-target/src/core/server-version-range.ts`, exported from `@internal/target-postgres/server-version-range`.
 - `prisma orm init`: the Postgres facade's init contribution reads the constant for its `serverRequirement` (`packages/3-targets/postgres/9-facade/src/init/`).
 - CI proves the floor: the `postgres:15` service containers in `.github/workflows/ci.yml`. **When bumping the floor, update these image tags** — this replaces ADR 222's step 3, which pointed only at `docker-compose.yaml`.
 - Local dev (`docker-compose.yaml`) also runs the floor version (`postgres:15-alpine`).

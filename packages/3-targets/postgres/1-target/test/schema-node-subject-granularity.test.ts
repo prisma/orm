@@ -57,7 +57,7 @@ describe('Postgres schema nodes carry no role/granularity of their own', () => {
         namespaces: {},
         roles: [],
         existingSchemas: [],
-        pgVersion: '',
+        serverVersionNumber: undefined,
       }),
     ],
     [
