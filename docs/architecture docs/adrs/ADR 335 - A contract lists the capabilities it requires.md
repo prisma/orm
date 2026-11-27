@@ -96,10 +96,10 @@ The client does not read the database's capabilities at connect time. A database
 
 ### A feature the contract declares no dependency on is unavailable
 
-A method or a schema feature that needs a capability the contract does not require is a type error where the type is known, and a refusal otherwise. Every such refusal has one form, which says the feature is unavailable and how to enable it:
+A method or a schema feature that needs a capability the contract does not require is refused. Where the type system can see the need, as with `transaction()`, it is also a type error. Some features need a capability only in some calls and are refused only then: `upsert()` without `sql.insertOnConflictTarget` writes a conflict clause that names no columns, and is refused only when another unique key could collide. Every such refusal has one form, which says the feature is unavailable and how to enable it:
 
 ```text
-`upsert()` is unavailable: your contract declares no dependency on `sql.insertOnConflictTarget`. To enable it, add `sql.insertOnConflictTarget` to your contract's required capabilities.
+`transaction()` is unavailable: your contract declares no dependency on `sql.interactiveTransactions`. To enable it, add `sql.interactiveTransactions` to your contract's required capabilities.
 ```
 
 ## Consequences

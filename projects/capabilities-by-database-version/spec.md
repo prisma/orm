@@ -69,9 +69,9 @@ This replaces the recorded position that capabilities are reported by the adapte
 
   > Your contract requires `sql.interactiveTransactions`, which this client's connection does not provide. Remove it from your contract's required capabilities, or connect with a driver that provides it.
 
-- A feature whose capability the contract does not require is unavailable, at type-check and at run time, and every such refusal has one form:
+- A feature whose capability the contract does not require is unavailable: refused at run time, and a type error where the type system can see the need. Every such refusal has one form:
 
-  > `upsert()` is unavailable: your contract declares no dependency on `sql.insertOnConflictTarget`. To enable it, add `sql.insertOnConflictTarget` to your contract's required capabilities.
+  > `transaction()` is unavailable: your contract declares no dependency on `sql.interactiveTransactions`. To enable it, add `sql.interactiveTransactions` to your contract's required capabilities.
 - The client does not read the database's capabilities at connect time. It compares the signature, as today.
 
 ### 4.5 Targets
