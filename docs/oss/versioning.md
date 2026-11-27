@@ -38,8 +38,9 @@ If your project cannot keep up with breaking changes, stay on Prisma 7 until rel
 A version has three parts: major, minor and patch. In `8.3.1` they are `8`, `3` and `1`.
 
 - **The major and minor are the release.** "Release 8.3" means every package at `8.3`. Two Prisma packages belong together when their first two numbers match.
-- **The patch belongs to each package.** A package that is Generally Available has a plain version, such as `8.3.0`, and a fix raises its patch number, to `8.3.1`.
-- **A package that is not finished has its level and a counter after the version:** `8.3.0-ea.0`, then `8.3.0-ea.1` after a fix. The next section says what the levels are.
+- **The patch belongs to each package.** A package that is Generally Available has a plain version, such as `8.3.0`. A fix published to that package alone would be `8.3.1`.
+- **A package that is not finished has its level and a counter after the version:** `8.3.0-ea.0`. A fix published to it alone would be `8.3.0-ea.1`.
+- **Today no fix is published to one package alone.** A fix ships in the next release, as [Supported versions](#supported-versions) says, so within a release you will normally see only its first version. The next section says what the levels are.
 - **Release 8.0 starts at `8.0.1`.** Its first versions are `8.0.1`, and for example `8.0.1-ea.0`. No package is published as `8.0.0`. The old `8.0.0-rc.N` versions stay on npm for good, and a version such as `8.0.0-ea.0` would sort below them, so package managers would install an old release candidate in its place. From `8.1` on, every release starts at patch 0.
 
 [ADR 330](../architecture%20docs/adrs/ADR%20330%20-%20A%20maturity%20level%20is%20written%20in%20a%20package's%20version%20and%20an%20API's%20name.md) explains each of these rules in full.
