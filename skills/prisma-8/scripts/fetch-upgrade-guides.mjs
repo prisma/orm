@@ -21,6 +21,7 @@ const SKILL_MAJOR = 8;
 const DEFAULT_REGISTRY = 'https://registry.npmjs.org';
 const DEFAULT_FOLDER = '.prisma-upgrade-guides';
 const DEFAULT_TIMEOUT_SECONDS = 60;
+const MAX_TIMEOUT_SECONDS = 3600;
 const DEPRECATION_LIMIT = 10;
 const STALE_MILLIS = 60 * 60 * 1000;
 const PACKAGE_MANAGER = ['n', 'pm'].join('');
@@ -373,7 +374,7 @@ function describeToolFailure({ code, summary }, subcommand, what) {
 }
 
 function commandSource(tool, { packageName, registry, projectDir, timeoutSeconds }) {
-  const childTimeout = (timeoutSeconds * 2 + 2) * 1000;
+  const childTimeout = (timeoutSeconds * 2 + 15) * 1000;
   const common = [
     '--loglevel=error',
     '--update-notifier=false',
@@ -699,6 +700,11 @@ function parseArguments(argv) {
   }
   if (values.timeout !== undefined && !/^[1-9]\d*$/.test(values.timeout)) {
     throw new FetchUpgradeGuidesError(`--timeout "${values.timeout}" is not a number of seconds`);
+  }
+  if (values.timeout !== undefined && Number(values.timeout) > MAX_TIMEOUT_SECONDS) {
+    throw new FetchUpgradeGuidesError(
+      `--timeout ${values.timeout} is too long; give at most ${MAX_TIMEOUT_SECONDS} seconds`,
+    );
   }
   const [packageName] = positionals;
   if (!PACKAGE_NAME.test(packageName)) {

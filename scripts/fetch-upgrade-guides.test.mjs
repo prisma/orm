@@ -566,6 +566,21 @@ describe('fetch-upgrade-guides', () => {
         match(result.stderr, /no integrity/);
       }));
 
+    it('gives up after --timeout on a registry that does not answer', () =>
+      inProject({}, async () => {
+        const started = Date.now();
+        const result = await fetchGuides('built-in download', [
+          '@fake/orm-hang',
+          '--registry',
+          origin,
+          '--timeout',
+          '1',
+        ]);
+        deepStrictEqual({ code: result.code, stdout: result.stdout }, { code: 1, stdout: '' });
+        match(result.stderr, /could not reach .*@fake%2form-hang/);
+        strictEqual(Date.now() - started < 10_000, true);
+      }));
+
     it('says so when the registry does not answer with package metadata', () =>
       inProject({}, async () => {
         const result = await fetchGuides('built-in download', [
@@ -636,7 +651,7 @@ describe('fetch-upgrade-guides', () => {
       inProject({}, async () => {
         const result = await fakeCommand('hang', [PACKAGE, '--timeout', '1']);
         deepStrictEqual({ code: result.code, stdout: result.stdout }, { code: 1, stdout: '' });
-        match(result.stderr, /did not finish within 4 seconds/);
+        match(result.stderr, /did not finish within 17 seconds/);
       }));
 
     it('reports the exit code and the last line it printed when it crashes', () =>
@@ -661,6 +676,7 @@ describe('fetch-upgrade-guides', () => {
       [[PACKAGE, '--major', '', '--registry', DEAD], /--major/],
       [[PACKAGE, '--major', '8x', '--registry', DEAD], /--major/],
       [[PACKAGE, '--timeout', '0', '--registry', DEAD], /--timeout/],
+      [[PACKAGE, '--timeout', '3601', '--registry', DEAD], /--timeout .*at most 3600/],
       [[PACKAGE, '--frobnicate', '--registry', DEAD], /usage/],
       [['--registry', DEAD], /usage/],
       [['--registry', DEAD, '--', '--userconfig=/etc/evil'], /not a package name/],
