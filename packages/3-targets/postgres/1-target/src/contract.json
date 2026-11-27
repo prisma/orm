@@ -4,6 +4,10 @@
   "target": "postgres",
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "roots": {
+    "config": {
+      "model": "Config",
+      "namespace": "_prisma"
+    },
     "contract": {
       "model": "Contract",
       "namespace": "_prisma"
@@ -12,8 +16,8 @@
       "model": "Ledger",
       "namespace": "_prisma"
     },
-    "marker": {
-      "model": "Marker",
+    "signatures": {
+      "model": "Signature",
       "namespace": "_prisma"
     }
   },
@@ -21,6 +25,37 @@
     "namespaces": {
       "_prisma": {
         "models": {
+          "Config": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/bool@1",
+                  "kind": "scalar"
+                }
+              },
+              "policies": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/jsonb@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "policies": {
+                  "column": "policies"
+                }
+              },
+              "namespaceId": "_prisma",
+              "table": "config"
+            }
+          },
           "Contract": {
             "fields": {
               "contractJson": {
@@ -173,29 +208,8 @@
               "table": "ledger"
             }
           },
-          "Marker": {
+          "Signature": {
             "fields": {
-              "appTag": {
-                "nullable": true,
-                "type": {
-                  "codecId": "pg/text@1",
-                  "kind": "scalar"
-                }
-              },
-              "canonicalVersion": {
-                "nullable": true,
-                "type": {
-                  "codecId": "pg/int4@1",
-                  "kind": "scalar"
-                }
-              },
-              "contractJson": {
-                "nullable": true,
-                "type": {
-                  "codecId": "pg/jsonb@1",
-                  "kind": "scalar"
-                }
-              },
               "coreHash": {
                 "nullable": false,
                 "type": {
@@ -213,17 +227,17 @@
                   "kind": "scalar"
                 }
               },
-              "meta": {
-                "nullable": false,
-                "type": {
-                  "codecId": "pg/jsonb@1",
-                  "kind": "scalar"
-                }
-              },
               "profileHash": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "signedAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamptz-string@1",
                   "kind": "scalar"
                 }
               },
@@ -233,48 +247,29 @@
                   "codecId": "pg/text@1",
                   "kind": "scalar"
                 }
-              },
-              "updatedAt": {
-                "nullable": false,
-                "type": {
-                  "codecId": "pg/timestamptz-string@1",
-                  "kind": "scalar"
-                }
               }
             },
             "relations": {},
             "storage": {
               "fields": {
-                "appTag": {
-                  "column": "app_tag"
-                },
-                "canonicalVersion": {
-                  "column": "canonical_version"
-                },
-                "contractJson": {
-                  "column": "contract_json"
-                },
                 "coreHash": {
                   "column": "core_hash"
                 },
                 "invariants": {
                   "column": "invariants"
                 },
-                "meta": {
-                  "column": "meta"
-                },
                 "profileHash": {
                   "column": "profile_hash"
                 },
+                "signedAt": {
+                  "column": "signed_at"
+                },
                 "space": {
                   "column": "space"
-                },
-                "updatedAt": {
-                  "column": "updated_at"
                 }
               },
               "namespaceId": "_prisma",
-              "table": "marker"
+              "table": "signatures"
             }
           }
         }
@@ -286,6 +281,42 @@
       "_prisma": {
         "entries": {
           "table": {
+            "config": {
+              "checks": [
+                {
+                  "expression": "id",
+                  "name": "config_single_row"
+                }
+              ],
+              "columns": {
+                "id": {
+                  "codecId": "pg/bool@1",
+                  "dataType": "pg/bool",
+                  "default": {
+                    "kind": "literal",
+                    "value": true
+                  },
+                  "nullable": false
+                },
+                "policies": {
+                  "codecId": "pg/jsonb@1",
+                  "dataType": "pg/jsonb",
+                  "default": {
+                    "kind": "literal",
+                    "value": {}
+                  },
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
             "contract": {
               "columns": {
                 "contract_json": {
@@ -387,23 +418,8 @@
               },
               "uniques": []
             },
-            "marker": {
+            "signatures": {
               "columns": {
-                "app_tag": {
-                  "codecId": "pg/text@1",
-                  "dataType": "pg/text",
-                  "nullable": true
-                },
-                "canonical_version": {
-                  "codecId": "pg/int4@1",
-                  "dataType": "pg/int4",
-                  "nullable": true
-                },
-                "contract_json": {
-                  "codecId": "pg/jsonb@1",
-                  "dataType": "pg/jsonb",
-                  "nullable": true
-                },
                 "core_hash": {
                   "codecId": "pg/text@1",
                   "dataType": "pg/text",
@@ -421,36 +437,23 @@
                   },
                   "nullable": false
                 },
-                "meta": {
-                  "codecId": "pg/jsonb@1",
-                  "dataType": "pg/jsonb",
-                  "default": {
-                    "kind": "literal",
-                    "value": {}
-                  },
-                  "nullable": false
-                },
                 "profile_hash": {
                   "codecId": "pg/text@1",
                   "dataType": "pg/text",
                   "nullable": false
                 },
-                "space": {
-                  "codecId": "pg/text@1",
-                  "dataType": "pg/text",
-                  "default": {
-                    "kind": "literal",
-                    "value": "app"
-                  },
-                  "nullable": false
-                },
-                "updated_at": {
+                "signed_at": {
                   "codecId": "pg/timestamptz-string@1",
                   "dataType": "pg/timestamptz",
                   "default": {
                     "expression": "now()",
                     "kind": "function"
                   },
+                  "nullable": false
+                },
+                "space": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
                   "nullable": false
                 }
               },
@@ -476,36 +479,11 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "5807887e31e02b4ff9bd120ad0ac274610400ae9d7819564d209b835b763a177"
+    "storageHash": "3e3fe1bcd6f092d5ff575bf3bfe9b2fe5020a50a9c25071879df08299c689ce7"
   },
   "capabilities": {
-    "postgres": {
-      "distinctOn": true,
-      "forKeyShare": true,
-      "forNoKeyUpdate": true,
-      "jsonAgg": true,
-      "lateral": true,
-      "limit": true,
-      "orderBy": true,
-      "returning": true
-    },
     "sql": {
       "checkConstraint": true,
-      "defaultInInsert": true,
-      "enums": true,
-      "forShare": true,
-      "forUpdate": true,
-      "insertOnConflictSkip": true,
-      "insertOnConflictTarget": true,
-      "insertOnConflictWithoutTarget": true,
-      "jsonAgg": true,
-      "jsonAggWithoutTruncation": true,
-      "lateral": true,
-      "lockNowait": true,
-      "lockOf": true,
-      "lockSkipLocked": true,
-      "outerReferencesInDerivedTables": true,
-      "returning": true,
       "scalarList": true
     }
   },

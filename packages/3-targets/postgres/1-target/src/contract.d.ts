@@ -20,7 +20,7 @@ import type {
 import type { QueryOperationTypes as PgTargetQueryOps } from '@internal/target-postgres/operation-types';
 
 export type StorageHash =
-  StorageHashBase<'5807887e31e02b4ff9bd120ad0ac274610400ae9d7819564d209b835b763a177'>;
+  StorageHashBase<'3e3fe1bcd6f092d5ff575bf3bfe9b2fe5020a50a9c25071879df08299c689ce7'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2'>;
@@ -305,6 +305,11 @@ export type StorageColumnInputTypes = ColumnTypesFromStorage<
 >;
 
 export namespace Models {
+  export type _prisma_Config = {
+    id: FieldOutputTypes['_prisma']['Config']['id'];
+    policies: FieldOutputTypes['_prisma']['Config']['policies'];
+    readonly [RelationKeys]?: never;
+  };
   export type _prisma_Contract = {
     contractJson: FieldOutputTypes['_prisma']['Contract']['contractJson'];
     coreHash: FieldOutputTypes['_prisma']['Contract']['coreHash'];
@@ -324,25 +329,22 @@ export namespace Models {
     space: FieldOutputTypes['_prisma']['Ledger']['space'];
     readonly [RelationKeys]?: never;
   };
-  export type _prisma_Marker = {
-    appTag: FieldOutputTypes['_prisma']['Marker']['appTag'];
-    canonicalVersion: FieldOutputTypes['_prisma']['Marker']['canonicalVersion'];
-    contractJson: FieldOutputTypes['_prisma']['Marker']['contractJson'];
-    coreHash: FieldOutputTypes['_prisma']['Marker']['coreHash'];
-    invariants: FieldOutputTypes['_prisma']['Marker']['invariants'];
-    meta: FieldOutputTypes['_prisma']['Marker']['meta'];
-    profileHash: FieldOutputTypes['_prisma']['Marker']['profileHash'];
-    space: FieldOutputTypes['_prisma']['Marker']['space'];
-    updatedAt: FieldOutputTypes['_prisma']['Marker']['updatedAt'];
+  export type _prisma_Signature = {
+    coreHash: FieldOutputTypes['_prisma']['Signature']['coreHash'];
+    invariants: FieldOutputTypes['_prisma']['Signature']['invariants'];
+    profileHash: FieldOutputTypes['_prisma']['Signature']['profileHash'];
+    signedAt: FieldOutputTypes['_prisma']['Signature']['signedAt'];
+    space: FieldOutputTypes['_prisma']['Signature']['space'];
     readonly [RelationKeys]?: never;
   };
 }
 
 export declare const models: {
   _prisma: {
+    Config: Models._prisma_Config;
     Contract: Models._prisma_Contract;
     Ledger: Models._prisma_Ledger;
-    Marker: Models._prisma_Marker;
+    Signature: Models._prisma_Signature;
   };
 };
 
@@ -364,6 +366,34 @@ type ContractBase = Omit<
         readonly kind: 'postgres-schema';
         readonly entries: {
           readonly table: {
+            readonly config: {
+              columns: {
+                readonly id: {
+                  readonly dataType: 'pg/bool';
+                  readonly codecId: 'pg/bool@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'literal';
+                    readonly value: DefaultLiteralValue<'pg/bool@1', true>;
+                  };
+                  readonly many: false;
+                };
+                readonly policies: {
+                  readonly dataType: 'pg/jsonb';
+                  readonly codecId: 'pg/jsonb@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'literal';
+                    readonly value: DefaultLiteralValue<'pg/jsonb@1', {}>;
+                  };
+                  readonly many: false;
+                };
+              };
+              primaryKey: { readonly columns: readonly ['id'] };
+              uniques: readonly [];
+              indexes: readonly [];
+              foreignKeys: readonly [];
+            };
             readonly contract: {
               columns: {
                 readonly contract_json: {
@@ -464,26 +494,8 @@ type ContractBase = Omit<
               indexes: readonly [];
               foreignKeys: readonly [];
             };
-            readonly marker: {
+            readonly signatures: {
               columns: {
-                readonly app_tag: {
-                  readonly dataType: 'pg/text';
-                  readonly codecId: 'pg/text@1';
-                  readonly nullable: true;
-                  readonly many: false;
-                };
-                readonly canonical_version: {
-                  readonly dataType: 'pg/int4';
-                  readonly codecId: 'pg/int4@1';
-                  readonly nullable: true;
-                  readonly many: false;
-                };
-                readonly contract_json: {
-                  readonly dataType: 'pg/jsonb';
-                  readonly codecId: 'pg/jsonb@1';
-                  readonly nullable: true;
-                  readonly many: false;
-                };
                 readonly core_hash: {
                   readonly dataType: 'pg/text';
                   readonly codecId: 'pg/text@1';
@@ -500,37 +512,23 @@ type ContractBase = Omit<
                   };
                   readonly many: { readonly elementNullable: true };
                 };
-                readonly meta: {
-                  readonly dataType: 'pg/jsonb';
-                  readonly codecId: 'pg/jsonb@1';
-                  readonly nullable: false;
-                  readonly default: {
-                    readonly kind: 'literal';
-                    readonly value: DefaultLiteralValue<'pg/jsonb@1', {}>;
-                  };
-                  readonly many: false;
-                };
                 readonly profile_hash: {
                   readonly dataType: 'pg/text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                   readonly many: false;
                 };
-                readonly space: {
-                  readonly dataType: 'pg/text';
-                  readonly codecId: 'pg/text@1';
-                  readonly nullable: false;
-                  readonly default: {
-                    readonly kind: 'literal';
-                    readonly value: DefaultLiteralValue<'pg/text@1', 'app'>;
-                  };
-                  readonly many: false;
-                };
-                readonly updated_at: {
+                readonly signed_at: {
                   readonly dataType: 'pg/timestamptz';
                   readonly codecId: 'pg/timestamptz-string@1';
                   readonly nullable: false;
                   readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
+                  readonly many: false;
+                };
+                readonly space: {
+                  readonly dataType: 'pg/text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
                   readonly many: false;
                 };
               };
@@ -555,14 +553,39 @@ type ContractBase = Omit<
   readonly target: 'postgres';
   readonly targetFamily: 'sql';
   readonly roots: {
+    readonly config: { readonly namespace: '_prisma' & NamespaceId; readonly model: 'Config' };
     readonly contract: { readonly namespace: '_prisma' & NamespaceId; readonly model: 'Contract' };
     readonly ledger: { readonly namespace: '_prisma' & NamespaceId; readonly model: 'Ledger' };
-    readonly marker: { readonly namespace: '_prisma' & NamespaceId; readonly model: 'Marker' };
+    readonly signatures: {
+      readonly namespace: '_prisma' & NamespaceId;
+      readonly model: 'Signature';
+    };
   };
   readonly domain: {
     readonly namespaces: {
       readonly _prisma: {
         readonly models: {
+          readonly Config: {
+            readonly fields: {
+              readonly id: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/bool@1' };
+              };
+              readonly policies: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/jsonb@1' };
+              };
+            };
+            readonly relations: Record<string, never>;
+            readonly storage: {
+              readonly table: 'config';
+              readonly namespaceId: '_prisma';
+              readonly fields: {
+                readonly id: { readonly column: 'id' };
+                readonly policies: { readonly column: 'policies' };
+              };
+            };
+          };
           readonly Contract: {
             readonly fields: {
               readonly contractJson: {
@@ -656,20 +679,8 @@ type ContractBase = Omit<
               };
             };
           };
-          readonly Marker: {
+          readonly Signature: {
             readonly fields: {
-              readonly appTag: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
-              };
-              readonly canonicalVersion: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
-              };
-              readonly contractJson: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/jsonb@1' };
-              };
               readonly coreHash: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
@@ -679,40 +690,32 @@ type ContractBase = Omit<
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
                 readonly many: { readonly elementNullable: true };
               };
-              readonly meta: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/jsonb@1' };
-              };
               readonly profileHash: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
-              readonly space: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
-              };
-              readonly updatedAt: {
+              readonly signedAt: {
                 readonly nullable: false;
                 readonly type: {
                   readonly kind: 'scalar';
                   readonly codecId: 'pg/timestamptz-string@1';
                 };
               };
+              readonly space: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
             };
             readonly relations: Record<string, never>;
             readonly storage: {
-              readonly table: 'marker';
+              readonly table: 'signatures';
               readonly namespaceId: '_prisma';
               readonly fields: {
-                readonly appTag: { readonly column: 'app_tag' };
-                readonly canonicalVersion: { readonly column: 'canonical_version' };
-                readonly contractJson: { readonly column: 'contract_json' };
                 readonly coreHash: { readonly column: 'core_hash' };
                 readonly invariants: { readonly column: 'invariants' };
-                readonly meta: { readonly column: 'meta' };
                 readonly profileHash: { readonly column: 'profile_hash' };
+                readonly signedAt: { readonly column: 'signed_at' };
                 readonly space: { readonly column: 'space' };
-                readonly updatedAt: { readonly column: 'updated_at' };
               };
             };
           };
@@ -721,35 +724,7 @@ type ContractBase = Omit<
     };
   };
   readonly capabilities: {
-    readonly postgres: {
-      readonly distinctOn: true;
-      readonly forKeyShare: true;
-      readonly forNoKeyUpdate: true;
-      readonly jsonAgg: true;
-      readonly lateral: true;
-      readonly limit: true;
-      readonly orderBy: true;
-      readonly returning: true;
-    };
-    readonly sql: {
-      readonly checkConstraint: true;
-      readonly defaultInInsert: true;
-      readonly enums: true;
-      readonly forShare: true;
-      readonly forUpdate: true;
-      readonly insertOnConflictSkip: true;
-      readonly insertOnConflictTarget: true;
-      readonly insertOnConflictWithoutTarget: true;
-      readonly jsonAgg: true;
-      readonly jsonAggWithoutTruncation: true;
-      readonly lateral: true;
-      readonly lockNowait: true;
-      readonly lockOf: true;
-      readonly lockSkipLocked: true;
-      readonly outerReferencesInDerivedTables: true;
-      readonly returning: true;
-      readonly scalarList: true;
-    };
+    readonly sql: { readonly checkConstraint: true; readonly scalarList: true };
   };
   readonly extensions: {};
   readonly meta: {};

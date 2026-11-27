@@ -2,7 +2,7 @@
 /**
  * The first migration of the `_prisma` contract space: Prisma's own tables in the `_prisma` schema.
  *
- * Written by hand, because the planner cannot produce a conditional rename or column checks. Every step is skipped when its result already holds, so it also brings up to date a database a release candidate set up, whose tables are in the schema `prisma_contract`. Each table's columns are checked, in the old schema before the rename and in `_prisma` after it, so a database whose tables are in another form, such as one from before the release candidates, stops here unchanged.
+ * Written by hand, because the planner cannot produce a conditional rename, column checks or moving rows. Every step is skipped when its result already holds, so it also brings up to date a database a release candidate set up, whose tables are in the schema `prisma_contract`: it renames that schema to `_prisma`, then moves the rows of the release candidates' `marker` table into `signatures` and `config` and drops it. Each table's columns are checked, in the old schema before the rename and in `_prisma` after it, so a database whose tables are in another form, such as one from before the release candidates, stops here unchanged.
  *
  * Its names are written out here, not taken from the target's shared constants, so a later change to those cannot change this migration.
  *
@@ -12,10 +12,12 @@ import { Migration, MigrationCLI, rawSql } from '../../src/exports/migration';
 
 const SCHEMA = '_prisma';
 const RELEASE_CANDIDATE_SCHEMA = 'prisma_contract';
+const APPLICATION_SPACE = 'app';
 
-type TableName = 'marker' | 'ledger' | 'contract';
+type TableName = 'signatures' | 'config' | 'ledger' | 'contract';
+type ReleaseCandidateTableName = 'marker' | 'ledger' | 'contract';
 
-function qualified(table: TableName, schema: string = SCHEMA): string {
+function qualified(table: TableName | ReleaseCandidateTableName, schema: string = SCHEMA): string {
   return `"${schema}"."${table}"`;
 }
 
@@ -25,34 +27,80 @@ interface ExpectedColumn {
   readonly notNull: boolean;
 }
 
-const tables: ReadonlyArray<{
-  readonly name: TableName;
-  readonly create: string;
+interface TableForm<Name extends string> {
+  readonly name: Name;
   readonly columns: readonly ExpectedColumn[];
-}> = [
+}
+
+const ledgerColumns: readonly ExpectedColumn[] = [
+  { name: 'id', type: 'bigint', notNull: true },
+  { name: 'created_at', type: 'timestamp with time zone', notNull: true },
+  { name: 'space', type: 'text', notNull: true },
+  { name: 'migration_name', type: 'text', notNull: true },
+  { name: 'migration_hash', type: 'text', notNull: true },
+  { name: 'origin_core_hash', type: 'text', notNull: false },
+  { name: 'origin_profile_hash', type: 'text', notNull: false },
+  { name: 'destination_core_hash', type: 'text', notNull: true },
+  { name: 'destination_profile_hash', type: 'text', notNull: false },
+  { name: 'operations', type: 'jsonb', notNull: true },
+];
+
+const contractColumns: readonly ExpectedColumn[] = [
+  { name: 'core_hash', type: 'text', notNull: true },
+  { name: 'created_at', type: 'timestamp with time zone', notNull: true },
+  { name: 'contract_json', type: 'jsonb', notNull: true },
+];
+
+const releaseCandidateMarker: TableForm<'marker'> = {
+  name: 'marker',
+  columns: [
+    { name: 'space', type: 'text', notNull: true },
+    { name: 'core_hash', type: 'text', notNull: true },
+    { name: 'profile_hash', type: 'text', notNull: true },
+    { name: 'contract_json', type: 'jsonb', notNull: false },
+    { name: 'canonical_version', type: 'integer', notNull: false },
+    { name: 'updated_at', type: 'timestamp with time zone', notNull: true },
+    { name: 'app_tag', type: 'text', notNull: false },
+    { name: 'meta', type: 'jsonb', notNull: true },
+    { name: 'invariants', type: 'text[]', notNull: true },
+  ],
+};
+
+/** The tables the release candidates of Prisma 8 created in `prisma_contract`. */
+const releaseCandidateTables: readonly TableForm<ReleaseCandidateTableName>[] = [
+  releaseCandidateMarker,
+  { name: 'ledger', columns: ledgerColumns },
+  { name: 'contract', columns: contractColumns },
+];
+
+const tables: ReadonlyArray<TableForm<TableName> & { readonly create: string }> = [
   {
-    name: 'marker',
-    create: `CREATE TABLE IF NOT EXISTS ${qualified('marker')} (
-  "space" text DEFAULT 'app' NOT NULL PRIMARY KEY,
+    name: 'signatures',
+    create: `CREATE TABLE IF NOT EXISTS ${qualified('signatures')} (
+  "space" text NOT NULL PRIMARY KEY,
   "core_hash" text NOT NULL,
   "profile_hash" text NOT NULL,
-  "contract_json" jsonb,
-  "canonical_version" int,
-  "updated_at" timestamptz DEFAULT (now()) NOT NULL,
-  "app_tag" text,
-  "meta" jsonb DEFAULT '{}'::jsonb NOT NULL,
-  "invariants" text[] DEFAULT '{}'::text[] NOT NULL
+  "invariants" text[] DEFAULT '{}'::text[] NOT NULL,
+  "signed_at" timestamptz DEFAULT (now()) NOT NULL
 )`,
     columns: [
       { name: 'space', type: 'text', notNull: true },
       { name: 'core_hash', type: 'text', notNull: true },
       { name: 'profile_hash', type: 'text', notNull: true },
-      { name: 'contract_json', type: 'jsonb', notNull: false },
-      { name: 'canonical_version', type: 'integer', notNull: false },
-      { name: 'updated_at', type: 'timestamp with time zone', notNull: true },
-      { name: 'app_tag', type: 'text', notNull: false },
-      { name: 'meta', type: 'jsonb', notNull: true },
       { name: 'invariants', type: 'text[]', notNull: true },
+      { name: 'signed_at', type: 'timestamp with time zone', notNull: true },
+    ],
+  },
+  {
+    name: 'config',
+    create: `CREATE TABLE IF NOT EXISTS ${qualified('config')} (
+  "id" boolean DEFAULT true NOT NULL PRIMARY KEY,
+  "policies" jsonb DEFAULT '{}'::jsonb NOT NULL,
+  CONSTRAINT "config_single_row" CHECK ("id")
+)`,
+    columns: [
+      { name: 'id', type: 'boolean', notNull: true },
+      { name: 'policies', type: 'jsonb', notNull: true },
     ],
   },
   {
@@ -69,18 +117,7 @@ const tables: ReadonlyArray<{
   "destination_profile_hash" text,
   "operations" jsonb NOT NULL
 )`,
-    columns: [
-      { name: 'id', type: 'bigint', notNull: true },
-      { name: 'created_at', type: 'timestamp with time zone', notNull: true },
-      { name: 'space', type: 'text', notNull: true },
-      { name: 'migration_name', type: 'text', notNull: true },
-      { name: 'migration_hash', type: 'text', notNull: true },
-      { name: 'origin_core_hash', type: 'text', notNull: false },
-      { name: 'origin_profile_hash', type: 'text', notNull: false },
-      { name: 'destination_core_hash', type: 'text', notNull: true },
-      { name: 'destination_profile_hash', type: 'text', notNull: false },
-      { name: 'operations', type: 'jsonb', notNull: true },
-    ],
+    columns: ledgerColumns,
   },
   {
     name: 'contract',
@@ -89,11 +126,7 @@ const tables: ReadonlyArray<{
   "created_at" timestamptz DEFAULT (now()) NOT NULL,
   "contract_json" jsonb NOT NULL
 )`,
-    columns: [
-      { name: 'core_hash', type: 'text', notNull: true },
-      { name: 'created_at', type: 'timestamp with time zone', notNull: true },
-      { name: 'contract_json', type: 'jsonb', notNull: true },
-    ],
+    columns: contractColumns,
   },
 ];
 
@@ -105,6 +138,7 @@ const schemaAbsentOrEmpty = `SELECT to_regnamespace($1) IS NULL OR NOT EXISTS (
   WHERE refclassid = 'pg_namespace'::regclass AND refobjid = to_regnamespace($1) AND deptype = 'n'
 ) AS "result"`;
 const tableExists = 'SELECT to_regclass($1) IS NOT NULL AS "result"';
+const tableAbsent = 'SELECT to_regclass($1) IS NULL AS "result"';
 /** Reads only the catalogues, which need no privilege on the schema, so a role that cannot use the schema still gets this check's answer. */
 const absentOrColumnHasForm = `WITH "table" AS (
   SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
@@ -128,7 +162,7 @@ const absentOrHasTableOwnerPrivileges = `SELECT ${isSuperuser} OR NOT EXISTS (
 const mayCreateInDatabase = `SELECT ${isSuperuser}
   OR has_database_privilege(current_database(), 'CREATE') AS "result"`;
 
-const giveToMigratingRole = `Give the schema and its tables to the migrating role with ALTER SCHEMA "${RELEASE_CANDIDATE_SCHEMA}" OWNER TO <migrating role>, then ${tables
+const giveToMigratingRole = `Give the schema and its tables to the migrating role with ALTER SCHEMA "${RELEASE_CANDIDATE_SCHEMA}" OWNER TO <migrating role>, then ${releaseCandidateTables
   .map(
     (table) =>
       `ALTER TABLE ${qualified(table.name, RELEASE_CANDIDATE_SCHEMA)} OWNER TO <migrating role>`,
@@ -140,7 +174,7 @@ function nullability(column: ExpectedColumn): string {
 }
 
 function checkColumns(
-  table: (typeof tables)[number],
+  table: TableForm<TableName | ReleaseCandidateTableName>,
   schema: string,
   id: string,
   origin: string,
@@ -165,13 +199,13 @@ export default class M extends Migration {
   override describe() {
     return {
       from: null,
-      to: '5807887e31e02b4ff9bd120ad0ac274610400ae9d7819564d209b835b763a177',
+      to: '3e3fe1bcd6f092d5ff575bf3bfe9b2fe5020a50a9c25071879df08299c689ce7',
     };
   }
 
   override get operations() {
     return [
-      ...tables.map((table) =>
+      ...releaseCandidateTables.map((table) =>
         checkColumns(
           table,
           RELEASE_CANDIDATE_SCHEMA,
@@ -201,7 +235,7 @@ export default class M extends Migration {
             sql: absentOrHasSchemaOwnerPrivileges,
             params: [RELEASE_CANDIDATE_SCHEMA],
           },
-          ...tables.map((table) => ({
+          ...releaseCandidateTables.map((table) => ({
             description: `The role that runs this command must have the privileges of the role that owns table ${qualified(table.name, RELEASE_CANDIDATE_SCHEMA)}, because a later migration of Prisma's own tables may add a column to it, and that needs those privileges. ${giveToMigratingRole}`,
             sql: absentOrHasTableOwnerPrivileges,
             params: [RELEASE_CANDIDATE_SCHEMA, table.name],
@@ -270,6 +304,13 @@ export default class M extends Migration {
           ],
         }),
       ),
+      checkColumns(
+        releaseCandidateMarker,
+        SCHEMA,
+        '_prisma.check-columns.marker',
+        '',
+        'Prisma moves the rows of this table only in the form the release candidates of Prisma 8 created it in, and leaves a table in another form as it is.',
+      ),
       ...tables.map((table) =>
         checkColumns(
           table,
@@ -279,6 +320,40 @@ export default class M extends Migration {
           'This release of Prisma reads and writes this table only in the form it creates.',
         ),
       ),
+      rawSql({
+        id: '_prisma.move-marker',
+        label: `Move table ${qualified('marker')} into ${qualified('signatures')} and ${qualified('config')}`,
+        operationClass: 'data',
+        target: {
+          id: 'postgres',
+          details: { schema: SCHEMA, objectType: 'table', name: 'marker' },
+        },
+        precheck: [],
+        execute: [
+          {
+            description: `copy each row of ${qualified('marker')} into ${qualified('signatures')}, with its hashes, its invariants and when it was written`,
+            sql: `INSERT INTO ${qualified('signatures')} ("space", "core_hash", "profile_hash", "invariants", "signed_at")
+SELECT "space", "core_hash", "profile_hash", "invariants", "updated_at" FROM ${qualified('marker')}`,
+          },
+          {
+            description: `copy the policies recorded on the application's row of ${qualified('marker')}, when it records them, into ${qualified('config')}`,
+            sql: `INSERT INTO ${qualified('config')} ("policies")
+SELECT "meta" -> 'policies' FROM ${qualified('marker')}
+WHERE "space" = '${APPLICATION_SPACE}' AND "meta" -> 'policies' IS NOT NULL`,
+          },
+          {
+            description: `drop table ${qualified('marker')}`,
+            sql: `DROP TABLE ${qualified('marker')}`,
+          },
+        ],
+        postcheck: [
+          {
+            description: `Table ${qualified('marker')} must no longer exist once its rows are moved into ${qualified('signatures')} and ${qualified('config')}.`,
+            sql: tableAbsent,
+            params: [qualified('marker')],
+          },
+        ],
+      }),
     ];
   }
 }

@@ -1,18 +1,22 @@
 // use prisma-8
 
 namespace _prisma {
-  model Marker {
-    space            String             @id @default("app")
-    coreHash         String             @map("core_hash")
-    profileHash      String             @map("profile_hash")
-    contractJson     Jsonb?             @map("contract_json")
-    canonicalVersion Int4?              @map("canonical_version")
-    updatedAt        TimestamptzString  @default(now()) @map("updated_at")
-    appTag           String?            @map("app_tag")
-    meta             Jsonb              @default(json`{}`)
-    invariants       String?[]          @default([])
+  model Signature {
+    space       String             @id
+    coreHash    String             @map("core_hash")
+    profileHash String             @map("profile_hash")
+    invariants  String?[]          @default([])
+    signedAt    TimestamptzString  @default(now()) @map("signed_at")
 
-    @@map("marker")
+    @@map("signatures")
+  }
+
+  model Config {
+    id       Boolean @id @default(true)
+    policies Jsonb   @default(json`{}`)
+
+    @@check(expression: sql`id`, map: "config_single_row")
+    @@map("config")
   }
 
   model Ledger {

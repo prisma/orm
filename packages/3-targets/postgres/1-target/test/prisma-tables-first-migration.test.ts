@@ -4,7 +4,7 @@ import metadata from '../migrations/20261126T1200_create_prisma_tables/migration
   type: 'json',
 };
 import ops from '../migrations/20261126T1200_create_prisma_tables/ops.json' with { type: 'json' };
-import endContract from '../migrations/snapshots/5807887e31e02b4ff9bd120ad0ac274610400ae9d7819564d209b835b763a177/contract.json' with {
+import endContract from '../migrations/snapshots/3e3fe1bcd6f092d5ff575bf3bfe9b2fe5020a50a9c25071879df08299c689ce7/contract.json' with {
   type: 'json',
 };
 
@@ -14,7 +14,20 @@ interface ContractColumn {
   readonly many?: unknown;
 }
 
-const tableNames = ['marker', 'ledger', 'contract'] as const;
+const tableNames = ['signatures', 'config', 'ledger', 'contract'] as const;
+
+/** What the release candidates of Prisma 8 created as `prisma_contract.marker`, which the first migration moves into `signatures` and `config`. */
+const releaseCandidateMarkerColumns = [
+  { name: 'app_tag', type: 'text', notNull: false },
+  { name: 'canonical_version', type: 'integer', notNull: false },
+  { name: 'contract_json', type: 'jsonb', notNull: false },
+  { name: 'core_hash', type: 'text', notNull: true },
+  { name: 'invariants', type: 'text[]', notNull: true },
+  { name: 'meta', type: 'jsonb', notNull: true },
+  { name: 'profile_hash', type: 'text', notNull: true },
+  { name: 'space', type: 'text', notNull: true },
+  { name: 'updated_at', type: 'timestamp with time zone', notNull: true },
+];
 
 const endTables = (
   endContract.storage.namespaces as unknown as Record<
@@ -32,6 +45,7 @@ const formatTypeOf: Record<string, string> = {
   'pg/jsonb': 'jsonb',
   'pg/int4': 'integer',
   'pg/int8': 'bigint',
+  'pg/bool': 'boolean',
   'pg/timestamptz': 'timestamp with time zone',
 };
 
@@ -67,12 +81,16 @@ describe("the first migration of the Postgres target's _prisma space", () => {
       'Check the columns of table "prisma_contract"."contract"',
       'Rename schema "prisma_contract" to "_prisma"',
       'Create schema "_prisma"',
-      'Create table "_prisma"."marker"',
+      'Create table "_prisma"."signatures"',
+      'Create table "_prisma"."config"',
       'Create table "_prisma"."ledger"',
       'Create table "_prisma"."contract"',
       'Check the columns of table "_prisma"."marker"',
+      'Check the columns of table "_prisma"."signatures"',
+      'Check the columns of table "_prisma"."config"',
       'Check the columns of table "_prisma"."ledger"',
       'Check the columns of table "_prisma"."contract"',
+      'Move table "_prisma"."marker" into "_prisma"."signatures" and "_prisma"."config"',
     ]);
   });
 
@@ -125,15 +143,28 @@ describe("the first migration of the Postgres target's _prisma space", () => {
   });
 
   it.each(tableNames)(
-    'checks the columns of %s, in both schemas, exactly as its end contract describes them',
+    'checks the columns of %s exactly as its end contract describes them',
     (table) => {
-      expect({
-        current: checkedColumns(`_prisma.check-columns.${table}`),
-        releaseCandidate: checkedColumns(`_prisma.check-release-candidate-columns.${table}`),
-      }).toEqual({
-        current: endContractColumns(table),
-        releaseCandidate: endContractColumns(table),
-      });
+      expect(checkedColumns(`_prisma.check-columns.${table}`)).toEqual(endContractColumns(table));
     },
   );
+
+  it.each(['ledger', 'contract'] as const)(
+    "checks the columns of the release candidates' %s exactly as its end contract describes them",
+    (table) => {
+      expect(checkedColumns(`_prisma.check-release-candidate-columns.${table}`)).toEqual(
+        endContractColumns(table),
+      );
+    },
+  );
+
+  it("checks the release candidates' marker in both schemas, before it moves its rows", () => {
+    expect({
+      releaseCandidate: checkedColumns('_prisma.check-release-candidate-columns.marker'),
+      current: checkedColumns('_prisma.check-columns.marker'),
+    }).toEqual({
+      releaseCandidate: releaseCandidateMarkerColumns,
+      current: releaseCandidateMarkerColumns,
+    });
+  });
 });
