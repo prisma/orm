@@ -1,7 +1,9 @@
-import { canonicalizeContractToObject } from '@internal/contract/hashing';
+import { canonicalizeContractToObject, computeStorageHash } from '@internal/contract/hashing';
 import type { Contract } from '@internal/contract/types';
 import type { EmissionSpi } from '@internal/framework-components/emission';
+import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
+import { InternalError } from '@internal/utils/internal-error';
 import { format } from 'prettier';
 import { getEmittedArtifactPaths } from './artifact-paths';
 import type { EmitOptions, EmitResult, EmitStackInput } from './emit-types';
@@ -35,6 +37,7 @@ export async function emit(
     serializeContract: options.serializeContract,
     normalizeStorage: options.normalizeStorage,
   });
+  requireWrittenStorageToHashTo(storageHash, contract, canonicalized, options);
   const contractJsonString = JSON.stringify(
     {
       ...canonicalized,
@@ -84,4 +87,27 @@ export async function emit(
     ...ifDefined('executionHash', executionHash),
     profileHash,
   };
+}
+
+function requireWrittenStorageToHashTo(
+  storageHash: string,
+  contract: Contract,
+  canonicalized: Record<string, unknown>,
+  options: EmitOptions,
+): void {
+  const { storageHash: _stored, ...writtenStorage } = blindCast<
+    Record<string, unknown>,
+    'canonicalizeContractToObject writes the contract storage section as an object'
+  >(canonicalized['storage']);
+  const writtenHash = computeStorageHash({
+    target: contract.target,
+    targetFamily: contract.targetFamily,
+    storage: writtenStorage,
+    normalizeStorage: options.normalizeStorage,
+  });
+  if (writtenHash !== storageHash) {
+    throw new InternalError(
+      `The written storage section hashes to ${writtenHash}, but the contract's storage hash is ${storageHash}. The storage hash was computed with a different normal form of storage from the one the contract is written with.`,
+    );
+  }
 }
