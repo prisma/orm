@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events';
 import postgres from '@internal/postgres/runtime';
 import { contractFromJson } from '@internal/postgres/static';
 import { Client, type Pool, type PoolClient } from 'pg';
@@ -17,13 +18,16 @@ function clientRejectingTransactionStart(error: Error) {
   const transactionClient = new Client();
   vi.spyOn(transactionClient, 'query').mockRejectedValue(error);
   Object.assign(transactionClient, { release: vi.fn() });
-  const pool = {
+  const events = new EventEmitter();
+  const pool = Object.assign(events, {
     totalCount: 0,
     idleCount: 0,
     waitingCount: 0,
-    connect: vi.fn().mockResolvedValue(transactionClient as unknown as PoolClient),
-    on: vi.fn(),
-  } as unknown as Pool;
+    connect: vi.fn(async () => {
+      events.emit('connect', transactionClient);
+      return transactionClient as unknown as PoolClient;
+    }),
+  }) as unknown as Pool;
   return postgres({ contract, pg: pool, verifyMarker: false });
 }
 
