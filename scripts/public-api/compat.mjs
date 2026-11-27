@@ -829,10 +829,10 @@ function currentProgram(dir) {
   };
 }
 
-// Generates and compiles the tests for one package. `strict` is whether a break fails the run;
-// exports whose name starts with a level (ea_, preview_, rc_) do not, unless the release also
-// exports them under a name without one. `twinSpecifier` imports a second copy of the release;
-// `budgetMs` is the time for the whole package.
+// Generates and compiles the tests for one package. A break fails the run, except in an export
+// whose name starts with a level (ea_, preview_, rc_), unless the release also exports it under a
+// name without one. `twinSpecifier` imports a second copy of the release; `budgetMs` is the time
+// for the whole package.
 //
 // Each comparison is first TypeScript's own, on declarations rewritten as compat-declarations.mjs
 // describes; the pipeline is described in api-compat.mjs.
@@ -846,7 +846,6 @@ export function checkPackage({
   testFile,
   records,
   version,
-  strict,
   ownNames,
   mustFail = true,
   budgetMs = 600_000,
@@ -1229,13 +1228,10 @@ export function checkPackage({
   return {
     name,
     version,
-    strict,
     counts: { ...generated.counts, notCompared: allNotCompared.length },
     breaks: unrecorded.map((each) => ({
       ...each,
-      failsRun:
-        strict &&
-        (!isExemptExport(each.name) || generated.heldToGa.has(`${each.path}\0${each.name}`)),
+      failsRun: !isExemptExport(each.name) || generated.heldToGa.has(`${each.path}\0${each.name}`),
     })),
     undecided,
     notCompared: allNotCompared,

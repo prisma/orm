@@ -45,7 +45,7 @@ import {
   RecordsError,
   readRecords as readRecordFile,
 } from './records.mjs';
-import { fetchReleaseTag, isPrerelease, LastReleaseError, lastRelease } from './release.mjs';
+import { fetchReleaseTag, LastReleaseError, lastRelease } from './release.mjs';
 import { withinBytes } from './summary.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -313,7 +313,7 @@ const recordLabel = (record) =>
 
 // Marks each error a record of this release covers. Records of apps that were not checked are
 // left alone; records of earlier releases are listed as removable.
-export function applyRecords({ results, records, version, strict }) {
+export function applyRecords({ results, records, version }) {
   // An app whose check did not complete says nothing about its records.
   const checked = new Map(
     results
@@ -342,7 +342,7 @@ export function applyRecords({ results, records, version, strict }) {
     }
   }
   for (const result of checked.values()) {
-    for (const error of result.errors) error.failsRun = strict && error.recorded === undefined;
+    for (const error of result.errors) error.failsRun = error.recorded === undefined;
   }
   return { removable, problems, recorded };
 }
@@ -402,8 +402,8 @@ const RECORD_KINDS = [
   { kind: 'allowed', heading: 'Recorded allowed changes:' },
 ];
 
-const headline = ({ version, tag, strict }) =>
-  `last release ${version} (tag ${tag}); ${strict ? 'an error fails unless it is recorded' : 'a pre-release, so errors are reported and do not fail'}`;
+const headline = ({ version, tag }) =>
+  `last release ${version} (tag ${tag}); an error fails unless it is recorded`;
 
 const appFails = (result) =>
   (result.problems?.length ?? 0) > 0 || (result.errors ?? []).some((error) => error.failsRun);
@@ -536,14 +536,12 @@ export function reportMarkdown(report, { maxBytes } = {}) {
 
 export async function checkExamples({
   root,
-  ga = false,
   only,
   env = process.env,
   findRelease = () => lastRelease({ root }),
   timeoutMs = TYPECHECK_TIMEOUT_MS,
 }) {
   const { version, tag } = await findRelease();
-  const strict = ga || !isPrerelease(version);
   fetchReleaseTag(tag, root);
   const atTag = appsAtTag(root, tag);
   const current = currentApps(root);
@@ -568,11 +566,10 @@ export async function checkExamples({
   } finally {
     endRunFolder(runDir);
   }
-  const applied = applyRecords({ results, records, version, strict });
+  const applied = applyRecords({ results, records, version });
   return {
     version,
     tag,
-    strict,
     results,
     removable: applied.removable,
     recorded: applied.recorded,
@@ -597,7 +594,7 @@ export async function main({
 }) {
   const { values } = parseArgs({
     args,
-    options: { ga: { type: 'boolean', default: false }, only: { type: 'string' } },
+    options: { only: { type: 'string' } },
   });
   process.on('SIGINT', stopOnSignal);
   process.on('SIGTERM', stopOnSignal);
@@ -605,7 +602,6 @@ export async function main({
   try {
     report = await checkExamples({
       root,
-      ga: values.ga,
       only: values.only?.split(','),
       env,
       findRelease,

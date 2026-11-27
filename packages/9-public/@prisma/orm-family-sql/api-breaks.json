@@ -1,0 +1,56 @@
+[
+  {
+    "path": "./builder",
+    "export": "Db",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "15dd8254326360b5",
+    "reason": "A column name that several joined tables share must now name its table (prisma/orm#31150)."
+  },
+  {
+    "path": "./builder",
+    "export": "TableProxy",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "709fba59855a0acd",
+    "reason": "A column name that several joined tables share must now name its table (prisma/orm#31150)."
+  },
+  {
+    "path": "./builder/runtime",
+    "export": "Db",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "15dd8254326360b5",
+    "reason": "A column name that several joined tables share must now name its table (prisma/orm#31150)."
+  },
+  {
+    "path": "./builder/types",
+    "export": "Db",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "15dd8254326360b5",
+    "reason": "A column name that several joined tables share must now name its table (prisma/orm#31150)."
+  },
+  {
+    "path": "./builder/types",
+    "export": "Namespace",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "709fba59855a0acd",
+    "reason": "A column name that several joined tables share must now name its table (prisma/orm#31150)."
+  },
+  {
+    "path": "./builder/types",
+    "export": "TableProxy",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "709fba59855a0acd",
+    "reason": "A column name that several joined tables share must now name its table (prisma/orm#31150)."
+  }
+]

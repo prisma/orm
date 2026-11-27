@@ -260,7 +260,7 @@ function snapshot(dir) {
 
 describe('checkExamples', () => {
   it("passes an app that compiles against the current build, with the tag's root tsconfig", async () => {
-    const report = await check({ ga: true });
+    const report = await check();
     deepStrictEqual(appResult(report).errors, []);
     deepStrictEqual(appResult(report).problems, []);
     strictEqual(failsRun(report), false);
@@ -269,7 +269,7 @@ describe('checkExamples', () => {
   it('compiles the app as it was at the tag, not as it is now', async () => {
     write(checkout, { 'examples/app/src/extra.ts': "export const broken: number = 'x';\n" });
     try {
-      const report = await check({ ga: true });
+      const report = await check();
       deepStrictEqual(appResult(report).errors, []);
       deepStrictEqual(appResult(report).problems, []);
     } finally {
@@ -286,7 +286,7 @@ describe('checkExamples', () => {
     try {
       const before = snapshot(appDir);
       const status = git(checkout, 'status', '--porcelain', '--ignored');
-      const report = await withLib(OPTIONAL_NAME, () => check({ ga: true }));
+      const report = await withLib(OPTIONAL_NAME, () => check());
       strictEqual(failsRun(report), true);
       deepStrictEqual(snapshot(appDir), before);
       strictEqual(existsSync(join(appDir, 'src', 'tag-only.ts')), false);
@@ -306,22 +306,19 @@ describe('checkExamples', () => {
   });
 
   it('keeps two runs at once apart', async () => {
-    const [plain, ga] = await withLib(OPTIONAL_NAME, () =>
-      Promise.all([
-        check({ findRelease: releaseAs('1.0.0-rc.1') }),
-        check({ ga: true, findRelease: releaseAs('1.0.0-rc.1') }),
-      ]),
+    const [first, second] = await withLib(OPTIONAL_NAME, () =>
+      Promise.all([check(), check({ findRelease: releaseAs('1.0.0-rc.1') })]),
     );
     deepStrictEqual(
-      [plain, ga].map((report) => [appResult(report).errors.length, failsRun(report)]),
+      [first, second].map((report) => [appResult(report).errors.length, failsRun(report)]),
       [
-        [1, false],
+        [1, true],
         [1, true],
       ],
     );
   });
 
-  it('fails on a changed result type once the release is GA', async () => {
+  it('fails on a changed result type', async () => {
     const report = await withLib(OPTIONAL_NAME, () => check());
     deepStrictEqual(locations(appResult(report)), [
       { line: EXACT_LINE, code: 'TS2322', fails: true, recorded: undefined },
@@ -329,14 +326,16 @@ describe('checkExamples', () => {
     strictEqual(failsRun(report), true);
   });
 
-  it('reports a changed result type and passes before GA, and fails when forced to', async () => {
-    await withLib(OPTIONAL_NAME, async () => {
-      const prerelease = await check({ findRelease: releaseAs('1.0.0-rc.1') });
-      strictEqual(appResult(prerelease).errors.length, 1);
-      strictEqual(failsRun(prerelease), false);
-      const forced = await check({ ga: true, findRelease: releaseAs('1.0.0-rc.1') });
-      strictEqual(failsRun(forced), true);
-    });
+  it('fails on a changed result type against a pre-release too, saying so in its headline', async () => {
+    const report = await withLib(OPTIONAL_NAME, () =>
+      check({ findRelease: releaseAs('1.0.0-rc.1') }),
+    );
+    strictEqual(appResult(report).errors.length, 1);
+    strictEqual(failsRun(report), true);
+    match(
+      reportText(report),
+      /^api:compat:examples: last release 1\.0\.0-rc\.1 \(tag v1\.0\.0\); an error fails unless it is recorded\n/,
+    );
   });
 
   it('passes a recorded error', async () => {
@@ -539,7 +538,17 @@ describe('applyRecords', () => {
     ...overrides,
   });
   const apply = (errors, records) =>
-    applyRecords({ results: [{ app: 'a', errors }], records, version: '1.0.0', strict: true });
+    applyRecords({ results: [{ app: 'a', errors }], records, version: '1.0.0' });
+
+  it('fails an error no record covers, against a pre-release too', () => {
+    const unrecorded = error();
+    applyRecords({
+      results: [{ app: 'a', errors: [unrecorded] }],
+      records: [],
+      version: '1.0.0-rc.1',
+    });
+    strictEqual(unrecorded.failsRun, true);
+  });
 
   it('fails a record that matches more than one error', () => {
     const { problems } = apply([error(), error({ column: 9 })], [record()]);
@@ -692,7 +701,6 @@ describe('the message of an error', () => {
         },
       ],
       version: '1.0.0',
-      strict: true,
     });
     deepStrictEqual(problems, []);
   });
@@ -702,7 +710,6 @@ describe('the record printed for an error', () => {
   const report = {
     version: '1.0.0',
     tag: 'v1.0.0',
-    strict: true,
     results: [
       {
         app: 'demo',
@@ -788,7 +795,6 @@ describe('the job summary, when long', () => {
       {
         version: '1.0.0',
         tag: 'v1.0.0',
-        strict: true,
         results: [{ app: 'a', errors, problems: [] }],
         recorded: [],
         removable: [],
@@ -806,7 +812,6 @@ describe('the job summary', () => {
     const markdown = reportMarkdown({
       version: '1.0.0',
       tag: 'v1.0.0',
-      strict: true,
       results: [
         {
           app: 'a',
@@ -862,7 +867,6 @@ describe('applyRecords, on an app whose check did not complete', () => {
         },
       ],
       version: '1.0.0',
-      strict: true,
     });
     deepStrictEqual(problems, []);
   });

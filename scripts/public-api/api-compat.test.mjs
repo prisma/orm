@@ -1,4 +1,4 @@
-import { deepStrictEqual, match, strictEqual, throws } from 'node:assert/strict';
+import { deepStrictEqual, match, rejects, strictEqual, throws } from 'node:assert/strict';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { after, describe, it } from 'node:test';
@@ -80,7 +80,7 @@ const strictBreak = {
 };
 
 describe('failsRun', () => {
-  it('fails on a break that counts or a problem, and not on one that is only reported', () => {
+  it('fails on a break or a problem, and not on a break in a name with a maturity level', () => {
     deepStrictEqual(
       [
         result({}),
@@ -250,6 +250,35 @@ describe('the report', () => {
     match(markdown, /The rest is in the job log\.\n$/);
   });
 
+  it('fails breaks against a pre-release too, and marks a break in a name with a maturity level', () => {
+    const prerelease = {
+      version: '8.0.0-rc.25',
+      results: [
+        result({
+          breaks: [strictBreak, { ...strictBreak, name: 'ea_search', failsRun: false }],
+        }),
+      ],
+      notReleased: [],
+    };
+    const text = reportText(prerelease);
+    match(text, /^api:compat: last release 8\.0\.0-rc\.25; breaks fail unless recorded\n/);
+    match(text, /\n {2}break {2}@prisma\/orm-a: Db \(type\)/);
+    match(
+      text,
+      /\n {2}break \(maturity level, does not fail\) {2}@prisma\/orm-a: ea_search \(type\)/,
+    );
+    const markdown = reportMarkdown(prerelease);
+    match(
+      markdown,
+      /\nA break fails the job unless it is recorded in the package’s `api-breaks\.json`\.\n/,
+    );
+    match(
+      markdown,
+      /\n- break \(maturity level, does not fail\): @prisma\/orm-a: ea_search \(type\)/,
+    );
+    strictEqual(`${text}${markdown}`.includes('pre-release'), false);
+  });
+
   it('keeps text such as <string> in the job summary', () => {
     const markdown = reportMarkdown({
       version: '8.0.0',
@@ -306,27 +335,23 @@ describe('removedPackageResults', () => {
   const gone = { package: '@prisma/orm-gone', lastRelease: '8.0.0-rc.25', reason: 'merged' };
   const breaksOf = (outcome) => outcome.results.flatMap((each) => each.breaks);
 
-  it('reports a removed package as a break that fails the run only once the release is GA', () => {
-    for (const strict of [false, true]) {
-      deepStrictEqual(
-        breaksOf(
-          removedPackageResults({
-            removed: ['@prisma/orm-gone'],
-            version: '8.0.0-rc.25',
-            strict,
-            records: [],
-          }),
-        ).map(({ name, test, failsRun: fails }) => ({ name, test, failsRun: fails })),
-        [{ name: '*', test: 'package', failsRun: strict }],
-      );
-    }
+  it('reports a removed package as a break that fails the run, against a pre-release too', () => {
+    deepStrictEqual(
+      breaksOf(
+        removedPackageResults({
+          removed: ['@prisma/orm-gone'],
+          version: '8.0.0-rc.25',
+          records: [],
+        }),
+      ).map(({ name, test, failsRun: fails }) => ({ name, test, failsRun: fails })),
+      [{ name: '*', test: 'package', failsRun: true }],
+    );
   });
 
   it('prints the record that would accept a removal', () => {
     const outcome = removedPackageResults({
       removed: ['@prisma/orm-gone'],
       version: '8.0.0-rc.25',
-      strict: false,
       records: [],
     });
     deepStrictEqual(outcome.results[0].breaks[0].record, {
@@ -345,7 +370,6 @@ describe('removedPackageResults', () => {
     const outcome = removedPackageResults({
       removed: ['@prisma/orm-gone'],
       version: '8.0.0-rc.25',
-      strict: true,
       records: [gone],
     });
     deepStrictEqual(breaksOf(outcome), []);
@@ -360,7 +384,6 @@ describe('removedPackageResults', () => {
     const outcome = removedPackageResults({
       removed: [],
       version: '8.0.0-rc.25',
-      strict: true,
       records: [gone, { ...gone, package: '@prisma/orm-old', lastRelease: '8.0.0-rc.1' }],
     });
     deepStrictEqual(outcome.problems, [
@@ -378,7 +401,7 @@ describe('main', () => {
   const breakIn = (job) => ({
     name: job.name,
     counts: { paths: 1, exports: 1, forwarded: 0, tests: 1, notCompared: 0 },
-    breaks: [{ path: '.', name: 'x', test: 'value', message: 'removed', failsRun: job.strict }],
+    breaks: [{ path: '.', name: 'x', test: 'value', message: 'removed', failsRun: true }],
     undecided: [],
     notCompared: [],
     recorded: [],
@@ -390,7 +413,6 @@ describe('main', () => {
   const run = (args, version, more = {}) => {
     let out = '';
     let err = '';
-    const strictness = [];
     return main({
       root,
       args: ['--only', 'orm-framework', ...args],
@@ -402,22 +424,20 @@ describe('main', () => {
       packagesAt: () => ['@prisma/orm-framework'],
       released: async () => true,
       install: () => {},
-      check: async (jobs) => jobs.map((job) => (strictness.push(job.strict), breakIn(job))),
+      check: async (jobs) => jobs.map(breakIn),
       ...more,
-    }).then((code) => ({ code, out, err, strictness }));
+    }).then((code) => ({ code, out, err }));
   };
 
-  it('reports a break against a pre-release and exits 0, and fails it with --ga', async () => {
-    const reported = await run([], '8.0.0-rc.25');
-    deepStrictEqual([reported.code, reported.strictness], [0, [false]]);
-    match(reported.out, /a pre-release, so breaks are reported and do not fail/);
-    match(reported.out, /break \(reported only\) {2}@prisma\/orm-framework: x \(value\): removed/);
-    const forced = await run(['--ga'], '8.0.0-rc.25');
-    deepStrictEqual([forced.code, forced.strictness], [1, [true]]);
-    match(
-      forced.out,
-      /^api:compat: last release 8\.0\.0-rc\.25, treated as GA \(--ga\); breaks fail unless recorded\n/,
-    );
+  it('fails a break against a pre-release', async () => {
+    const { code, out } = await run([], '8.0.0-rc.25');
+    strictEqual(code, 1);
+    match(out, /^api:compat: last release 8\.0\.0-rc\.25; breaks fail unless recorded\n/);
+    match(out, /\n {2}break {2}@prisma\/orm-framework: x \(value\): removed\n/);
+  });
+
+  it('has no --ga option', async () => {
+    await rejects(run(['--ga'], '8.0.0-rc.25'), { code: 'ERR_PARSE_ARGS_UNKNOWN_OPTION' });
   });
 
   it('leaves the removed-package records alone under --only, which cannot tell what was removed', async () => {
@@ -446,6 +466,7 @@ describe('main', () => {
       removedRecords: () => {
         throw new RecordsError('packages/9-public/removed-packages.json: not JSON');
       },
+      check: async () => [],
     });
     strictEqual(code, 0);
   });

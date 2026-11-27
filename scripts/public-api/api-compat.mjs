@@ -52,7 +52,6 @@ import {
 } from './records.mjs';
 import {
   fetchReleaseTag,
-  isPrerelease,
   isReleased,
   LastReleaseError,
   lastRelease,
@@ -74,7 +73,7 @@ export const readRemovedRecords = (root) =>
 
 // A released package the repository no longer has is a break, which a record in
 // removed-packages.json covers.
-export function removedPackageResults({ removed, version, strict, records }) {
+export function removedPackageResults({ removed, version, records }) {
   const results = [];
   const sorted = byLastRelease(records, version, (record) => record.package);
   const problems = [...sorted.problems];
@@ -103,7 +102,7 @@ export function removedPackageResults({ removed, version, strict, records }) {
         : [
             {
               ...failure,
-              failsRun: strict,
+              failsRun: true,
               record: { package: name, lastRelease: version, reason: '…' },
             },
           ],
@@ -242,16 +241,10 @@ const recordedOfKind = (result, kind) =>
 const FROM_DISK =
   'the fingerprint is taken from the package’s api.txt as it is on disk: run pnpm build and pnpm api:update first, or it will not match';
 
-// Whether breaks fail: from the release's version, or from --ga.
-const headline = (version, strict = !isPrerelease(version)) =>
-  !strict
-    ? `last release ${version}; a pre-release, so breaks are reported and do not fail`
-    : isPrerelease(version)
-      ? `last release ${version}, treated as GA (--ga); breaks fail unless recorded`
-      : `last release ${version}; breaks fail unless recorded`;
+const breakLabel = (each) => (each.failsRun ? 'break' : 'break (maturity level, does not fail)');
 
-export function reportText({ version, strict, results, notReleased }) {
-  const lines = [`api:compat: ${headline(version, strict)}`];
+export function reportText({ version, results, notReleased }) {
+  const lines = [`api:compat: last release ${version}; breaks fail unless recorded`];
   for (const result of results) {
     const counts = result.counts;
     const head = counts
@@ -264,9 +257,7 @@ export function reportText({ version, strict, results, notReleased }) {
     lines.push(`\n${head}${failsRun(result) ? ' — FAILS' : ''}`);
     const printed = new Set();
     for (const each of result.breaks ?? []) {
-      lines.push(
-        `  break${each.failsRun ? '' : ' (reported only)'}  ${describeFailure(result.name, each)}`,
-      );
+      lines.push(`  ${breakLabel(each)}  ${describeFailure(result.name, each)}`);
       if (each.note) lines.push(`    note: ${each.note}`);
       const record = each.record && JSON.stringify(each.record);
       if (record && !printed.has(record)) {
@@ -315,16 +306,11 @@ const cell = (text) =>
     .replaceAll('|', '\\|')
     .replaceAll('\n', ' ');
 
-export function reportMarkdown(
-  { version, strict = !isPrerelease(version), results, notReleased },
-  { maxBytes } = {},
-) {
+export function reportMarkdown({ version, results, notReleased }, { maxBytes } = {}) {
   const lines = [
     `## Breaks since the last release, ${version}`,
     '',
-    strict
-      ? 'A break fails the job unless it is recorded in the package’s `api-breaks.json`.'
-      : 'The last release is a pre-release, so breaks are reported and do not fail the job.',
+    'A break fails the job unless it is recorded in the package’s `api-breaks.json`.',
     '',
     '| Package | Comparisons | Forwarded names | Breaks | Undecided | Not compared | Recorded breaks | Recorded allowed | Problems |',
     '| --- | --- | --- | --- | --- | --- | --- | --- | --- |',
@@ -338,7 +324,7 @@ export function reportMarkdown(
     const items = [
       ...(result.breaks ?? []).map(
         (each) =>
-          `- break${each.failsRun ? '' : ' (reported only)'}: ${cell(describeFailure(result.name, each))}${each.note ? ` (${cell(each.note)})` : ''}`,
+          `- ${breakLabel(each)}: ${cell(describeFailure(result.name, each))}${each.note ? ` (${cell(each.note)})` : ''}`,
       ),
       ...(result.undecided ?? []).map(
         (each) => `- undecided (${each.stage}): ${cell(describeFailure(result.name, each))}`,
@@ -423,7 +409,6 @@ export async function main({
     options: {
       jobs: { type: 'string', default: String(Math.min(3, availableParallelism())) },
       only: { type: 'string' },
-      ga: { type: 'boolean', default: false },
     },
   });
   const fail = (message) => {
@@ -473,7 +458,6 @@ export async function main({
   }
   const released = plan.check;
   const notReleased = plan.notReleased;
-  const strict = values.ga || !isPrerelease(version);
 
   const results = [...plan.problems];
   // Under --only, the packages removed are not known, so their records are neither read nor
@@ -490,7 +474,6 @@ export async function main({
   const removed = removedPackageResults({
     removed: plan.removed,
     version,
-    strict,
     records: removedRecords,
   });
   results.push(...removed.results);
@@ -521,7 +504,6 @@ export async function main({
         testFile: join(installDir, 'tests', `${aliasOf('current', name)}.ts`),
         records: readRecords(dir, root),
         version,
-        strict,
         ownNames: [...ownNames],
         cost: comparisonCost(name, dirsByName),
       });
@@ -559,7 +541,7 @@ export async function main({
   results.push(...(await check(jobs, Math.min(workers, Math.max(jobs.length, 1)))));
   results.sort((a, b) => compareCodeUnits(a.name, b.name));
 
-  const report = { version, strict, results, notReleased };
+  const report = { version, results, notReleased };
   stdout.write(reportText(report));
   if (env.GITHUB_STEP_SUMMARY) appendFileSync(env.GITHUB_STEP_SUMMARY, reportMarkdown(report));
   return results.some(failsRun) ? 1 : 0;

@@ -8,7 +8,6 @@ import {
   compareVersions,
   fetchPackument,
   isExemptExport,
-  isPrerelease,
   isReleased,
   isVersion,
   LastReleaseError,
@@ -180,13 +179,6 @@ describe('the version rules', () => {
       false,
       true,
     ]);
-  });
-
-  it('calls a version with a pre-release part a pre-release', () => {
-    deepStrictEqual(
-      ['8.0.0-rc.25', '8.0.0', '8.1.2+build.1', '8.0.0-dev.3+abc'].map(isPrerelease),
-      [true, false, false, true],
-    );
   });
 
   it('exempts rc_, preview_ and ea_ exports, capitalised for a type or class', () => {

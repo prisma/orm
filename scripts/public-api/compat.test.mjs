@@ -666,11 +666,11 @@ describe('checkPackage on what it cannot compare', () => {
   });
 });
 
-describe('checkPackage before a GA release', () => {
-  it('reports the same break without failing the run', () => {
-    const result = check('narrowed-parameter', { version: '1.0.0-rc.1', strict: false });
+describe('checkPackage against a pre-release', () => {
+  it('fails the run on a break, as against a GA release', () => {
+    const result = check('narrowed-parameter', { version: '1.0.0-rc.1' });
     deepStrictEqual(brokenExports(result), [
-      { path: '.', name: 'format', test: 'value', failsRun: false },
+      { path: '.', name: 'format', test: 'value', failsRun: true },
     ]);
     deepStrictEqual(result.problems, []);
   });

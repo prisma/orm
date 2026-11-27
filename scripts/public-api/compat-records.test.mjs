@@ -91,9 +91,9 @@ describe('checkPackage with recorded breaks', () => {
   });
 
   it('judges a recorded export again once its lines in api.txt change, reporting the break with why', () => {
-    const result = check('narrowed-parameter-again', { records: [record], strict: false });
+    const result = check('narrowed-parameter-again', { records: [record] });
     deepStrictEqual(brokenExports(result), [
-      { path: '.', name: 'format', test: 'value', failsRun: false },
+      { path: '.', name: 'format', test: 'value', failsRun: true },
     ]);
     match(result.breaks[0].note, /^a record for an earlier state of this export exists/);
     match(
@@ -214,8 +214,8 @@ describe('checkPackage on import paths', () => {
     ]);
   });
 
-  it('fails, before GA too, when the current build lacks a path its package.json exports', () => {
-    const result = check('paths-unbuilt', { release: 'paths-release', strict: false });
+  it('fails when the current build lacks a path its package.json exports', () => {
+    const result = check('paths-unbuilt', { release: 'paths-release' });
     deepStrictEqual(result.breaks, []);
     strictEqual(result.problems.length, 1);
     match(result.problems[0], /^\.\/sub: the current build cannot be imported/);

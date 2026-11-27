@@ -1,0 +1,65 @@
+[
+  {
+    "path": "./internal/static-context",
+    "export": "PostgresStaticContext",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "23ad978bb2ee1eba",
+    "reason": "A column name that several joined tables share must now name its table (prisma/orm#31150)."
+  },
+  {
+    "path": "./runtime",
+    "export": "PostgresClient",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "4faeeac5a35f671a",
+    "reason": "A column name that several joined tables share must now name its table (prisma/orm#31150)."
+  },
+  {
+    "path": "./runtime",
+    "export": "PostgresQueryMembers",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "06530e5eaac5d343",
+    "reason": "A column name that several joined tables share must now name its table (prisma/orm#31150)."
+  },
+  {
+    "path": "./runtime",
+    "export": "PostgresTransactionContext",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "96d86bdaf508a04e",
+    "reason": "A column name that several joined tables share must now name its table (prisma/orm#31150)."
+  },
+  {
+    "path": "./serverless",
+    "export": "PostgresServerlessClient",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "576710d39fbf081a",
+    "reason": "A column name that several joined tables share must now name its table (prisma/orm#31150)."
+  },
+  {
+    "path": "./serverless",
+    "export": "PostgresServerlessConnection",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "018d5c97e23e1f5f",
+    "reason": "A column name that several joined tables share must now name its table (prisma/orm#31150)."
+  },
+  {
+    "path": "./static",
+    "export": "PostgresStaticContext",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "23ad978bb2ee1eba",
+    "reason": "A column name that several joined tables share must now name its table (prisma/orm#31150)."
+  }
+]

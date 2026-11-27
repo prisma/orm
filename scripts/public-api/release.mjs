@@ -1,5 +1,5 @@
 // The release rules both checks against the last release share: which release is the last one,
-// how versions are ordered, which are pre-releases, and which exports are exempt.
+// how versions are ordered, and which exports are exempt.
 //
 // The last release follows docs/oss/versioning.md: the root package.json `version` on a ref is the
 // version published from it, and every package carries it. So the last release is the version at
@@ -21,7 +21,6 @@ const NETWORK_ATTEMPTS = 3;
 export class LastReleaseError extends Error {}
 
 export const isVersion = (version) => VERSION.test(version);
-export const isPrerelease = (version) => VERSION.exec(version)?.[4] !== undefined;
 export const isDevBuild = (version) => /(^|[.-])dev\./.test(VERSION.exec(version)?.[4] ?? '');
 export const isExemptExport = (name) => EXEMPT_PREFIXES.some((prefix) => name.startsWith(prefix));
 
