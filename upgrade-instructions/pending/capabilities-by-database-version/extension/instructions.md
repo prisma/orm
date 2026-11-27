@@ -152,7 +152,7 @@ Verification reports the code `CONTRACT.DATABASE_CAPABILITIES_NOT_PROVIDED`, and
 
 ## `extension-descriptor-declares-no-capabilities`
 
-Each capability is now declared by the component that knows the fact: the target declares what each database version provides, the driver what the connection provides, and the adapter what it can write as a query. An extension declares none.
+Each capability is now declared by the component that knows the fact: the target declares what each database version provides, and the driver what the connection provides. PostgreSQL's adapter declares none, and neither does an extension.
 
 `prisma contract emit` still adds the `capabilities` of every descriptor in the config to the application's contract. The client then checks that its target, adapter and driver provide each flag the contract requires, and none of them provides an extension's flag. So an extension that keeps a flag makes every application that uses it fail to type-check where it creates the client, and log the warning `CONTRACT.CAPABILITIES_NOT_PROVIDED`.
 

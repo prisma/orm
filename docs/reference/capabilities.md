@@ -24,7 +24,7 @@ Each capability is declared by the component that knows the fact:
 | Target | What the database provides, by version | `sql.lateral` on PostgreSQL 15 to 18 |
 | Driver | What the connection provides | `sql.interactiveTransactions` |
 
-No PostgreSQL capability is declared by the adapter, and extension packs declare none. The adapters of targets not yet rebuilt this way still declare a fixed list, which the client counts with the driver's as the connection's (see [MySQL, MariaDB, SQLite and MongoDB](#mysql-mariadb-sqlite-and-mongodb)).
+No PostgreSQL capability is declared by the adapter, and extension packs declare none. On MySQL, MariaDB and SQLite, a contract takes a fixed list from its adapter at emit, and no client check runs yet; MongoDB's adapter declares no list (see [MySQL, MariaDB, SQLite and MongoDB](#mysql-mariadb-sqlite-and-mongodb)).
 
 Keys in the `sql` namespace are shared by every SQL target. They are not a separate set for the SQL family.
 
@@ -80,7 +80,7 @@ requiredCapabilities: [
 
 A list without `postgresDriver` does not require `sql.interactiveTransactions`, so `transaction()` is unavailable to it. Spreads of these lists, a filter by comparison and keys written out all stay literal in the contract's type, so the type-level checks below see each key. A list typed as `RequiredCapabilities` names no key in the type.
 
-Extensions listed in `extensions` add their own flags. `contract.json` stores the flags as a nested object, namespace by namespace, and never a version.
+Extensions listed in `extensions` add no flags. `contract.json` stores the flags as a nested object, namespace by namespace, and never a version.
 
 ### Where each check happens
 
@@ -114,7 +114,7 @@ The ORM client loads includes with one query, a correlated subquery per include 
 
 ## Extension capability keys
 
-An extension pack's flags go under its own namespace, such as `pgvector`, so they cannot collide with a target's ([ADR 117](../architecture%20docs/adrs/ADR%20117%20-%20Extension%20capability%20keys.md)). None of the shipped packs (pgvector, PostGIS, ParadeDB, citext, Supabase) declares a flag today.
+Extension descriptors declare no capability flags ([ADR 335](../architecture%20docs/adrs/ADR%20335%20-%20A%20contract%20lists%20the%20capabilities%20it%20requires.md)). The namespacing rule of [ADR 117](../architecture%20docs/adrs/ADR%20117%20-%20Extension%20capability%20keys.md), under which an extension's keys would go under its own namespace such as `pgvector`, is background only.
 
 ## References
 
