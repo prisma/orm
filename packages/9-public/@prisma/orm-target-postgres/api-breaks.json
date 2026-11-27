@@ -5,7 +5,7 @@
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "4bd1ba09fce7f6d2",
+    "fingerprint": "065e5a42fe659d93",
     "reason": "The PostgreSQL schema tree holds the server's version as the number `serverVersionNumber`, read from `server_version_num`, in place of the text `pgVersion` (prisma/orm#31218). It names `_prisma.marker`, so its type is no longer the old literal (prisma/orm#31234)."
   },
   {
@@ -14,7 +14,7 @@
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "4bd1ba09fce7f6d2",
+    "fingerprint": "065e5a42fe659d93",
     "reason": "The PostgreSQL schema tree holds the server's version as the number `serverVersionNumber`, read from `server_version_num`, in place of the text `pgVersion` (prisma/orm#31218). It names `_prisma.marker`, so its type is no longer the old literal (prisma/orm#31234)."
   },
   {
@@ -50,7 +50,7 @@
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "4bd1ba09fce7f6d2",
+    "fingerprint": "065e5a42fe659d93",
     "reason": "The PostgreSQL schema tree holds the server's version as the number `serverVersionNumber`, read from `server_version_num`, in place of the text `pgVersion` (prisma/orm#31218). It names `_prisma.marker`, so its type is no longer the old literal (prisma/orm#31234)."
   },
   {
@@ -59,7 +59,7 @@
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "4bd1ba09fce7f6d2",
+    "fingerprint": "065e5a42fe659d93",
     "reason": "The PostgreSQL schema tree holds the server's version as the number `serverVersionNumber`, read from `server_version_num`, in place of the text `pgVersion` (prisma/orm#31218). It names `_prisma.marker`, so its type is no longer the old literal (prisma/orm#31234)."
   },
   {
@@ -77,7 +77,7 @@
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "5022763d73c95783",
+    "fingerprint": "18a471cef8f92dcb",
     "reason": "A marker read can now report that Prisma's own tables are in a release candidate's schema (prisma/orm#31234)."
   },
   {

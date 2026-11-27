@@ -59,7 +59,7 @@
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "4e5a3739197f31e7",
+    "fingerprint": "592df2b5cacd7113",
     "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). The runner can now refuse because Prisma's own tables do not exist yet (prisma/orm#31234)."
   },
   {
@@ -68,7 +68,7 @@
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "269aebda057cb7e4",
+    "fingerprint": "337a44b702fb292e",
     "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). The runner can now refuse because Prisma's own tables do not exist yet (prisma/orm#31234)."
   },
   {
@@ -77,7 +77,7 @@
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "199173054d988d72",
+    "fingerprint": "cb9b5d0bf1f2f082",
     "reason": "The migration runner can now fail with `MIGRATION.DATABASE_CAPABILITIES_NOT_PROVIDED`, for a database that lacks a capability the contract requires (prisma/orm#31218). The runner can now refuse because Prisma's own tables do not exist yet (prisma/orm#31234)."
   },
   {
@@ -86,7 +86,7 @@
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "dd12f740341b4e57",
+    "fingerprint": "d1cb91e363f1fe20",
     "reason": "The migration runner can now fail with `MIGRATION.DATABASE_CAPABILITIES_NOT_PROVIDED`, for a database that lacks a capability the contract requires (prisma/orm#31218). The runner can now refuse because Prisma's own tables do not exist yet (prisma/orm#31234)."
   },
   {
@@ -95,7 +95,7 @@
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "78f4568a78d09966",
+    "fingerprint": "c68242b94fdf7ff3",
     "reason": "The migration runner can now fail with `MIGRATION.DATABASE_CAPABILITIES_NOT_PROVIDED`, for a database that lacks a capability the contract requires (prisma/orm#31218). The runner can now refuse because Prisma's own tables do not exist yet (prisma/orm#31234)."
   },
   {
@@ -104,7 +104,7 @@
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "0e69afd3ec32af8f",
+    "fingerprint": "51ab0fb80fb4bdb7",
     "reason": "The migration runner can now fail with `MIGRATION.DATABASE_CAPABILITIES_NOT_PROVIDED`, for a database that lacks a capability the contract requires (prisma/orm#31218). The runner can now refuse because Prisma's own tables do not exist yet (prisma/orm#31234)."
   },
   {
@@ -113,7 +113,7 @@
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "4e5a3739197f31e7",
+    "fingerprint": "592df2b5cacd7113",
     "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). The runner can now refuse because Prisma's own tables do not exist yet (prisma/orm#31234)."
   },
   {
@@ -122,7 +122,7 @@
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "269aebda057cb7e4",
+    "fingerprint": "337a44b702fb292e",
     "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). The runner can now refuse because Prisma's own tables do not exist yet (prisma/orm#31234)."
   },
   {
@@ -131,7 +131,7 @@
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "199173054d988d72",
+    "fingerprint": "cb9b5d0bf1f2f082",
     "reason": "The migration runner can now fail with `MIGRATION.DATABASE_CAPABILITIES_NOT_PROVIDED`, for a database that lacks a capability the contract requires (prisma/orm#31218). The runner can now refuse because Prisma's own tables do not exist yet (prisma/orm#31234)."
   },
   {
@@ -140,7 +140,7 @@
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "dd12f740341b4e57",
+    "fingerprint": "d1cb91e363f1fe20",
     "reason": "The migration runner can now fail with `MIGRATION.DATABASE_CAPABILITIES_NOT_PROVIDED`, for a database that lacks a capability the contract requires (prisma/orm#31218). The runner can now refuse because Prisma's own tables do not exist yet (prisma/orm#31234)."
   },
   {
@@ -149,7 +149,7 @@
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "78f4568a78d09966",
+    "fingerprint": "c68242b94fdf7ff3",
     "reason": "The migration runner can now fail with `MIGRATION.DATABASE_CAPABILITIES_NOT_PROVIDED`, for a database that lacks a capability the contract requires (prisma/orm#31218). The runner can now refuse because Prisma's own tables do not exist yet (prisma/orm#31234)."
   },
   {
@@ -158,7 +158,7 @@
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "0e69afd3ec32af8f",
+    "fingerprint": "51ab0fb80fb4bdb7",
     "reason": "The migration runner can now fail with `MIGRATION.DATABASE_CAPABILITIES_NOT_PROVIDED`, for a database that lacks a capability the contract requires (prisma/orm#31218). The runner can now refuse because Prisma's own tables do not exist yet (prisma/orm#31234)."
   },
   {
@@ -257,7 +257,7 @@
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "2421bc3cb2da3fa5",
+    "fingerprint": "6b2fb3a2e3dadb33",
     "reason": "A marker read can now report that Prisma's own tables are in a release candidate's schema (prisma/orm#31234)."
   },
   {
@@ -266,7 +266,7 @@
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "a45b13e9b7594d12",
+    "fingerprint": "2626db15e3ee55b8",
     "reason": "A marker read can now report that Prisma's own tables are in a release candidate's schema (prisma/orm#31234)."
   },
   {
@@ -293,7 +293,7 @@
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "e7b998df358fdc31",
+    "fingerprint": "62a430f74f42c432",
     "reason": "A marker read can now report that Prisma's own tables are in a release candidate's schema (prisma/orm#31234)."
   },
   {
