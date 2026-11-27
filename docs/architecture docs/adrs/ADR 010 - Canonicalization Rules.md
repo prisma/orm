@@ -19,7 +19,7 @@ In `storage`, each namespace (a PostgreSQL schema, for example) has an `entries`
           "post": {
             "columns": {
               "id": { "dataType": "pg/int4", "codecId": "pg/int4@1", "nullable": false, "many": false },
-              "title": { "dataType": "pg/text", "codecId": "pg/text@1", "nullable": false }
+              "title": { "dataType": "pg/text", "codecId": "pg/text@1", "nullable": false, "many": false }
             },
             "uniques": [],
             "indexes": [
@@ -97,7 +97,7 @@ The text that is hashed:
 
 Its SHA-256, the storage hash, is `3ef79977a23b8d2e85d96a9cea92d84254c32dab74f1bc282daa13a5affb050d`.
 
-The SQL family left out the column's `"many": false`, because the family defines an absent `many` to mean the same. It kept `"fastupdate": false`, because that value belongs to the GIN index type and the family does not know what it means. It also kept `"unique": false`, `"uniques": []` and `"foreignKeys": []`, which it does not name as defaults. The framework then sorted every key and printed the result with a two-space indent and no trailing newline.
+The SQL family left out each column's `"many": false`, because the family defines an absent `many` to mean the same. It kept `"fastupdate": false`, because that value belongs to the GIN index type and the family does not know what it means. It also kept `"unique": false`, `"uniques": []` and `"foreignKeys": []`, which it does not name as defaults. The framework then sorted every key and printed the result with a two-space indent and no trailing newline.
 
 ## Decision
 
@@ -109,7 +109,7 @@ Turning a section into the text that is hashed has two owners.
 The family's function is applied to `storage` both when a contract is written and whenever a storage hash is computed or checked. So the normal form is what `contract.json` holds, and a value is in the hash exactly when it is in the written `storage`, except for two fields that the written file holds and no hash covers:
 
 - the section's own `storageHash`, which the caller removes before hashing, since a hash cannot cover itself;
-- each namespace's `kind`, such as `postgres-schema`, which the framework removes. The serializer writes it into the file from the target and the namespace's `id`, which are both in the hash input already, and in the storage the family's authoring code builds, where a hash is first computed, it is an internal field that is not serialized.
+- each namespace's `kind`, such as `postgres-schema`, which the framework removes. The serializer writes it into the file from the target and the namespace's `id`, which are both in the hash input already. In the storage the family's authoring code builds, where a hash is first computed, `kind` is an internal field that is not serialized.
 
 Which sections each hash covers, and the rule that none of this changes within a major version, are in [ADR 332](ADR%20332%20-%20A%20hash%20covers%20what%20a%20contract%20means%2C%20by%20rules%20that%20do%20not%20change%20within%20a%20major.md). This record says how a section becomes the text that is hashed and the file that is written.
 
@@ -127,9 +127,9 @@ The hard part is defaults, because a value's shape does not say whether it is on
 - a MongoDB partial filter `{ "isAdmin": false }` would become a filter that matches every document;
 - two types whose parameters differ only by such a value would share a storage hash.
 
-Only the family knows that an absent `many` means `false`. So a family leaves out a field only where it defines the absent field and the value to mean the same, and it names each such field.
+Only the family knows that an absent `many` means `false`. So a family leaves out a field only where the family has said that leaving the field out means the same as the value, and it lists each such field in this record (under "What a family does").
 
-Prisma does not know what other data means, such as an index type's options, so it keeps that data exactly as given. Two ways of writing the same setting there, such as `{}` and `{ "fastupdate": true }`, give two storage hashes. That is accepted: it never makes two different contracts share a hash, and at worst it leads to a migration that changes nothing.
+Prisma does not know what other data means, such as an index type's options, so it keeps that data exactly as given. Two ways of writing the same setting there, such as no options and `{ "fastupdate": true }`, give two storage hashes. That is accepted: it never makes two different contracts share a hash. At worst, a user who switches between the two forms gets a migration that changes no setting, though for an index whose name is derived from its content ([ADR 234](ADR%20234%20-%20Content-addressed%20wire%20names%20for%20Postgres-normalized%20objects.md)) that migration renames or rebuilds the index.
 
 ## The rules
 
@@ -139,7 +139,7 @@ To compute a storage hash:
 
 1. Take the parsed `storage` section, and remove its `storageHash`.
 2. Remove each namespace's `kind`.
-3. Apply the family's `normalizeStorage`. When the contract is written, the function receives each namespace's `kind`; when a hash is computed, it does not. Neither family's function reads `kind`.
+3. Apply the family's `normalizeStorage`. When the contract is written, the function receives each namespace's `kind`; when a hash is computed, it does not. So the function must not depend on `kind`, or writing and hashing would disagree. Neither of Prisma's families reads it.
 4. Put the result beside the contract's top-level `target` and `targetFamily`: `{ storage, target, targetFamily }`.
 5. Sort every key, as below.
 6. Print it with `JSON.stringify(value, null, 2)`.
@@ -149,16 +149,13 @@ The profile hash follows steps 4 to 7 with `capabilities` in place of `storage`.
 
 ### What the framework does
 
-1. **Keys.** Every object's keys are sorted by UTF-16 code unit, at every depth, with one exception:
-   - Keys that are array indexes come first, in ascending numeric order, because that is how JavaScript orders an object's keys. An array index is a non-negative integer below 2³² − 1 written in its shortest form, such as `"0"` or `"10"`; `"01"` is not one and sorts as a string.
-   - So `{ "b": 1, "10": 2, "2": 3, "a": 4 }` is printed with its keys in the order `"2"`, `"10"`, `"a"`, `"b"`.
-   - A table named `2024`, or a column named `1`, has such a key.
+1. **Keys.** Every object's keys are sorted by UTF-16 code unit, at every depth, with one exception: keys that are array indexes come first, in ascending numeric order, because that is how JavaScript orders an object's keys. An array index is a non-negative integer below 2³² − 1 written in its shortest form, such as `"0"` or `"10"`; `"01"` is not one and sorts as a string. For example, `{ "b": 1, "10": 2, "2": 3, "a": 4 }` is printed with its keys in the order `"2"`, `"10"`, `"a"`, `"b"`. A table named `2024`, or a column named `1`, has such a key.
 2. **Arrays.** Every array keeps the order it is given in.
 3. **Encoding.**
    - The result is printed by `JSON.stringify` with a two-space indent. The indent is part of the rule: the same JSON printed without it has a different hash.
    - Numbers, booleans, `null` and string escapes are as `JSON.stringify` prints them.
    - A key whose value is `undefined` is left out, as `JSON.stringify` leaves it out.
-   - An implementation in another language must print exactly what `JSON.stringify` prints. It checks that by computing the hashes of the saved contracts in the fixed-answers tests (ADR 332) and comparing them with the literals there.
+   - An implementation in another language must print exactly what `JSON.stringify` prints. It checks that by computing the hashes of the saved contracts in each family's `hash-rules.fixed-answers.test.ts` ([ADR 332](ADR%20332%20-%20A%20hash%20covers%20what%20a%20contract%20means%2C%20by%20rules%20that%20do%20not%20change%20within%20a%20major.md)) and comparing them with the literals there.
 4. **Hash.** SHA-256 of that text as UTF-8, written as lowercase hexadecimal with no prefix. The hash does not record which rules produced it: there is only one set of rules within a major version (ADR 332).
 
 A hash is computed from parsed sections, never from the bytes of a file. To check a stored contract, Prisma parses the file and follows the steps above.
@@ -217,7 +214,10 @@ A target's serializer uses its family's function; PostgreSQL's has a test that i
 
 A family built outside this repository names its defaults in its own documentation, chooses an order for its unordered lists and keeps it for the major version, and holds its output fixed with the test described in ADR 332.
 
-Two sections outside `storage` follow the same idea. A family leaves its own defaults out of the `domain` section when it writes it, for example a model field's `many: false`; `domain` is in no hash. The framework code that builds the capability list leaves out a capability flag that is off, so `capabilities` holds only flags that are on.
+Two sections outside `storage` follow the same idea:
+
+- A family leaves its own defaults out of the `domain` section when it writes it, for example a model field's `many: false`. `domain` is in no hash.
+- The framework code that builds the capability list, before the contract is hashed, leaves out a capability flag that is off, so `capabilities` holds only flags that are on. This is a rule of how the list is built, not of the encoding.
 
 ### What an author of an entry kind does
 
@@ -254,7 +254,7 @@ Every function that computes or checks a storage hash takes the family's `normal
 - A family that forgets to name a default writes the default into every contract. That is visible in the file and in review, and it is harmless to the hash as long as the family always writes it. The opposite mistake, leaving out a value that is not a default, is the one that makes two contracts share a hash, and it is possible only through a rule a family writes on purpose.
 - An author of a type, an extension pack or a target can rely on Prisma to keep a `false`, `[]` or `{}` that appears inside the data they own.
 - The rules, and each family's output for a given contract, do not change within a major version (ADR 332). A family may reorganise its normal form's code, but it must give the same output. So a family cannot name a new default to leave out within a major version: a contract that wrote that field out would get a new hash.
-- Each family's test, `hash-rules.fixed-answers.test.ts`, holds saved contracts to literal hashes. Among them are two contracts that differ only in that one has every named default written out and every ordered list out of order, and the other has them left out and in order. Both must give the same storage hash.
+- Each family's test, `hash-rules.fixed-answers.test.ts`, holds saved contracts to literal hashes. Among them are two contracts that differ only in that one has every named default written out and every list the family sorts written out of sorted order, and the other has the defaults left out and the lists sorted. Both must give the same storage hash.
 
 ## Alternatives considered
 
