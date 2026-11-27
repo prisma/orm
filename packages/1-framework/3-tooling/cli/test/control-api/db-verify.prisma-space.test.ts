@@ -5,7 +5,7 @@ import type {
   ControlFamilyInstance,
   MigrationPackage,
 } from '@internal/framework-components/control';
-import { PRISMA_SPACE_ID } from '@internal/framework-components/control';
+import { APP_SPACE_ID, PRISMA_SPACE_ID } from '@internal/framework-components/control';
 import { createContract } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { executeDbVerify } from '../../src/control-api/operations/db-verify';
@@ -18,6 +18,13 @@ function migration(from: string | null, to: string): MigrationPackage {
   } as unknown as MigrationPackage;
 }
 
+const appContract = createContract();
+const appRow = {
+  storageHash: appContract.storage.storageHash,
+  profileHash: appContract.profileHash,
+  invariants: [],
+};
+
 const installedSpace: ContractSpace = {
   contractJson: createContract(),
   migrations: [migration(null, 'first'), migration('first', 'second')],
@@ -25,7 +32,7 @@ const installedSpace: ContractSpace = {
 };
 
 function verifyWithPrismaRowAt(
-  storageHash: string,
+  storageHash: string | null,
   options: {
     readonly target?: { readonly prismaSpace?: ContractSpace };
     readonly invariants?: readonly string[];
@@ -35,7 +42,9 @@ function verifyWithPrismaRowAt(
   const { target = { prismaSpace: installedSpace }, invariants = [], ledgerTo = [] } = options;
   const familyInstance = {
     readAllMarkers: async () =>
-      new Map([[PRISMA_SPACE_ID, { storageHash, profileHash: 'p', invariants }]]),
+      storageHash === null
+        ? new Map([[APP_SPACE_ID, appRow]])
+        : new Map([[PRISMA_SPACE_ID, { storageHash, profileHash: 'p', invariants }]]),
     readLedger: async ({ space }: { readonly space?: string }) =>
       ledgerTo.map((to) => ({ space, to })),
     deserializeContract: (json: unknown) => json as Contract,
@@ -43,7 +52,7 @@ function verifyWithPrismaRowAt(
   return executeDbVerify({
     driver: {} as ControlDriverInstance<string, string>,
     familyInstance,
-    contract: createContract(),
+    contract: appContract,
     migrationsDir: '/tmp/__test-db-verify-prisma-tables',
     targetId: 'postgres',
     extensions: [],
@@ -72,8 +81,17 @@ describe('db verify and the Prisma space', () => {
       code: 'CONTRACT.PRISMA_SPACE_BEHIND',
       message:
         'The records Prisma keeps for itself in this database are not up to date with the installed release of Prisma',
-      fix: 'Run `{bin} db migrate`, which brings the records Prisma keeps for itself up to date before it does anything else; `{bin} db init`, `{bin} db update` and `{bin} db sign` do the same.',
-      meta: { spaceId: PRISMA_SPACE_ID, markerHash: 'first', headRefHash: 'second' },
+      fix: expect.stringContaining('`{bin} db update`'),
+      meta: { spaceId: PRISMA_SPACE_ID, situation: 'olderContract' },
+    });
+  });
+
+  it("says the records are behind when the space has no row and the application's row matches", async () => {
+    const drift = (await verifyWithPrismaRowAt(null)).assertOk().markerDrift;
+
+    expect({ code: drift?.code, meta: drift?.meta }).toEqual({
+      code: 'CONTRACT.PRISMA_SPACE_BEHIND',
+      meta: { spaceId: PRISMA_SPACE_ID, situation: 'missingRow' },
     });
   });
 

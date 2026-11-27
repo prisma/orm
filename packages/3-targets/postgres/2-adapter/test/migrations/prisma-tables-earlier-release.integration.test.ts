@@ -18,7 +18,8 @@ const earlierRelease = expect.objectContaining({
   message:
     'The records Prisma keeps for itself in this database are not up to date with the installed release of Prisma',
   why: expect.stringContaining('`prisma_contract`'),
-  fix: expect.stringContaining('`{bin} db migrate'),
+  fix: expect.stringContaining('`{bin} db update`'),
+  meta: { spaceId: PRISMA_SPACE_ID, situation: 'releaseCandidateSchema' },
 });
 
 describe('reading Prisma tables an earlier release wrote', { concurrent: false }, () => {

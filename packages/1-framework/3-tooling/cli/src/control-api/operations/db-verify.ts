@@ -206,8 +206,7 @@ async function prismaSpaceFinding<TFamilyId extends string, TTargetId extends st
             : `The row of the \`${PRISMA_SPACE_ID}\` space records contract ${row.storageHash}, and the newest the installed release knows is ${headRefHash}.`,
         meta: {
           spaceId: PRISMA_SPACE_ID,
-          markerHash: row?.storageHash ?? null,
-          headRefHash,
+          situation: row === undefined ? 'missingRow' : 'olderContract',
         },
       });
     case 'unreachable':

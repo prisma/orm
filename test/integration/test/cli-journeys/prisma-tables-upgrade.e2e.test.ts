@@ -246,10 +246,11 @@ withTempDir(({ createTempDir }) => {
     const db = useDevDatabase();
 
     it(
-      'say the tables are not up to date, name db migrate, and change nothing, even when db verify checks only the schema',
+      'say the records are not up to date, name the command for each way a project changes its database, and change nothing, even when db verify checks only the schema',
       async () => {
         const { ctx } = await releaseCandidateProject(db.connectionString, createTempDir);
 
+        const verifyHuman = await runDbVerify(ctx);
         const verify = await runDbVerify(ctx, ['--json']);
         const verifySchemaOnly = await runDbVerify(ctx, ['--schema-only', '--json']);
         const status = await runMigrationStatus(ctx, ['--json']);
@@ -274,8 +275,21 @@ withTempDir(({ createTempDir }) => {
                 kind: 'run-command',
                 command: expect.stringContaining('db migrate'),
               }),
+              expect.objectContaining({
+                kind: 'run-command',
+                command: expect.stringContaining('db update'),
+              }),
+              expect.objectContaining({
+                kind: 'run-command',
+                command: expect.stringContaining('db sign'),
+              }),
             ],
+            meta: { spaceId: PRISMA_SPACE_ID, situation: 'releaseCandidateSchema' },
           });
+        }
+        const humanOutput = `${verifyHuman.stdout}${verifyHuman.stderr}`;
+        for (const command of ['db migrate', 'db update', 'db sign']) {
+          expect(humanOutput, command).toContain(command);
         }
         expect(await schemas(db.connectionString)).toEqual(['prisma_contract']);
       },

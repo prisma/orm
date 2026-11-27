@@ -35,7 +35,7 @@ export async function prismaTablesFromEarlierRelease(
 export function errorPrismaTablesFromEarlierRelease(): CliStructuredError {
   return errorPrismaSpaceBehind({
     why: `They are in the schema \`${RELEASE_CANDIDATE_PRISMA_TABLES_SCHEMA}\`, where the release candidates of Prisma 8 kept them. This release keeps them in the schema \`${PRISMA_TABLES_SCHEMA}\`, so it cannot read which contract the database matches until they are brought up to date.`,
-    meta: { spaceId: PRISMA_SPACE_ID, schema: RELEASE_CANDIDATE_PRISMA_TABLES_SCHEMA },
+    meta: { spaceId: PRISMA_SPACE_ID, situation: 'releaseCandidateSchema' },
   });
 }
 

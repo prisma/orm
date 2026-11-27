@@ -645,10 +645,10 @@ describe('Generic Error', () => {
 });
 
 describe('errorPrismaSpaceBehind', () => {
-  it('says the tables are not up to date, keeps the explanation it is given, and names the command that brings them up to date', () => {
+  it('says the records are not up to date, keeps the explanation and situation it is given, and names the command for each way a project changes its database', () => {
     const error = errorPrismaSpaceBehind({
       why: 'The row records an earlier contract.',
-      meta: { spaceId: '_prisma' },
+      meta: { spaceId: '_prisma', situation: 'olderContract' },
     });
 
     expect({
@@ -663,15 +663,26 @@ describe('errorPrismaSpaceBehind', () => {
       message:
         'The records Prisma keeps for itself in this database are not up to date with the installed release of Prisma',
       why: 'The row records an earlier contract.',
-      fix: 'Run `{bin} db migrate`, which brings the records Prisma keeps for itself up to date before it does anything else; `{bin} db init`, `{bin} db update` and `{bin} db sign` do the same.',
+      fix: 'Run the command the project already uses to change its database: `{bin} db migrate` in a project that applies migrations, `{bin} db update` in one that changes its database with `db update`, or `{bin} db sign` in one that only signs it. Each brings the records Prisma keeps for itself up to date before it does its usual work.',
       nextActions: [
         {
           kind: 'run-command',
-          label: 'Bring the records Prisma keeps for itself up to date',
+          label: 'Bring the records up to date, in a project that applies migrations',
           command: '{bin} db migrate',
         },
+        {
+          kind: 'run-command',
+          label:
+            'Bring the records up to date, in a project that changes its database with db update',
+          command: '{bin} db update',
+        },
+        {
+          kind: 'run-command',
+          label: 'Bring the records up to date, in a project that only signs its database',
+          command: '{bin} db sign',
+        },
       ],
-      meta: { spaceId: '_prisma' },
+      meta: { spaceId: '_prisma', situation: 'olderContract' },
     });
   });
 });

@@ -263,7 +263,7 @@ describe('verifyMarker', () => {
       expected: { storageHash: 'test', profileHash: 'test-profile' },
       actual: null,
       message:
-        "Prisma's own tables in this database were written by an earlier release of Prisma, so the contract the database matches cannot be read. Run `prisma db migrate` to bring them up to date.",
+        'The records Prisma keeps for itself in this database are not up to date with the installed release of Prisma, so the contract the database matches cannot be read. Run the command the project already uses to change its database: `prisma db migrate` in a project that applies migrations, `prisma db update` in one that changes its database with `db update`, or `prisma db sign` in one that only signs it. Each brings the records Prisma keeps for itself up to date before it does its usual work.',
     });
   });
 

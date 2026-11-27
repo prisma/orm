@@ -632,25 +632,30 @@ export function errorUnexpected(
 }
 
 /**
- * The Prisma space in the database is behind the installed release, which every command that changes the database brings up to date first. One code whatever the cause, since the user runs the same command; `why` says what was found.
+ * The Prisma space in the database is behind the installed release, which every command that changes the database brings up to date first. One code whatever the cause, since the user runs the same command; `why` says what was found and `meta.situation` names it: `releaseCandidateSchema` when the records are where a release candidate kept them, `missingRow` when the space has no row, `olderContract` when its row records an earlier contract of the space.
  */
 export function errorPrismaSpaceBehind(options: {
   readonly why: string;
-  readonly meta: Record<string, unknown>;
+  readonly meta: {
+    readonly spaceId: string;
+    readonly situation: 'releaseCandidateSchema' | 'missingRow' | 'olderContract';
+  };
 }): CliStructuredError {
-  const migrate = '{bin} db migrate';
+  const action = (project: string, command: string): NextAction => ({
+    kind: 'run-command',
+    label: `Bring the records up to date, in a project that ${project}`,
+    command,
+  });
   return new CliStructuredError(
     'CONTRACT.PRISMA_SPACE_BEHIND',
     'The records Prisma keeps for itself in this database are not up to date with the installed release of Prisma',
     {
       why: options.why,
-      fix: `Run \`${migrate}\`, which brings the records Prisma keeps for itself up to date before it does anything else; \`{bin} db init\`, \`{bin} db update\` and \`{bin} db sign\` do the same.`,
+      fix: 'Run the command the project already uses to change its database: `{bin} db migrate` in a project that applies migrations, `{bin} db update` in one that changes its database with `db update`, or `{bin} db sign` in one that only signs it. Each brings the records Prisma keeps for itself up to date before it does its usual work.',
       nextActions: [
-        {
-          kind: 'run-command',
-          label: 'Bring the records Prisma keeps for itself up to date',
-          command: migrate,
-        },
+        action('applies migrations', '{bin} db migrate'),
+        action('changes its database with db update', '{bin} db update'),
+        action('only signs its database', '{bin} db sign'),
       ],
       meta: options.meta,
     },
