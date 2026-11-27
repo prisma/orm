@@ -43,6 +43,15 @@ These functions are the seams inside `postgres()`, cut out so Supabase could reu
 - `validatePostgresContract` and the facade's `contractFromJson` today share one validation cache key, built from the facade's version. After the move they must still share one key, so a contract validated by one is not validated again by the other.
 - Prefix casing: a function or constant starts with `ea_`; a type or class with `Ea_` (`docs/oss/versioning.md`).
 
+## Found when building started (2026-11-27)
+
+- **The target and the SQL runtime.** The layering rules allow the PostgreSQL target to import `@internal/sql-runtime`, and the SQLite target already does. But a comment in `packages/3-targets/postgres/1-target/src/exports/runtime.ts` says the PostgreSQL target does not import it on purpose, so the target stays control-plane only. Moving the runtime class there contradicts that comment. Before building, find out what the comment protects; if it still holds, the class stays in the facade with the prefix (`Ea_PostgresRuntimeImpl` on `@prisma/orm-postgres/runtime`) instead.
+- **One validation key.** `contractFromJson` and `validatePostgresContract` share a cache entry keyed `postgres@<facade version>` (`static/contract-from-json.ts`). If the function moves to the target, the target exports the key and the facade uses it, so the two stay equal when the packages' versions differ.
+- **Four facades, not one.** Deleting the family's `runtime/internal/prepared-query` also removes `family-runtime/internal/prepared-query` from `@prisma/orm-postgres`, `-mysql`, `-mariadb` and `-sqlite`. Each records the break, and the API check runs on each.
+- **Other files:** `architecture.config.json` lists the four `internal-*.ts` files; `test/integration/test/sql-orm-client/runtime-helpers.ts` and `packages/9-public/@prisma/orm-target-postgres/test/cross-shell-tarball.test.ts` import the prepared-query path; the facade tests `test/internal-options.test.ts` and `test/internal-validate-contract.test.ts` are the existing pattern for checking what an entry exports; the facade README and the runtime subsystem doc name `PostgresRuntimeImpl`.
+- **Names with "internal" that stay after this slice**, for slice 3: Supabase imports `InternalError` and exports `SupabaseInternalDb`; the family's root entry exports `PreparedStatementInternals`.
+- **Stopgaps to keep until 8.0.** Declarations marked "Prisma 8.0 removes" in their doc comments (for example `retiredCapabilities`, `POSTGRES_MIN_SERVER_VERSION` on `./target/server-version`, `postgresAdapterCapabilities` on `./adapter/adapter`) stay; `test/e2e/framework/test/release-candidate-project.test.ts` proves a release-candidate project still works. This also applies to slices 2 and 3.
+
 ## Done when
 
 - No path or name in this slice contains "internal".
