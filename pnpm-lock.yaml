@@ -1771,6 +1771,9 @@ importers:
       '@internal/psl-printer':
         specifier: workspace:8.0.0-rc.25
         version: link:../../2-authoring/psl-printer
+      '@internal/ts-render':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../1-core/ts-render
       '@internal/utils':
         specifier: workspace:8.0.0-rc.25
         version: link:../../0-foundation/utils
@@ -3665,6 +3668,9 @@ importers:
       '@internal/operations':
         specifier: workspace:8.0.0-rc.25
         version: link:../../1-framework/1-core/operations
+      '@internal/postgres':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../3-targets/postgres/9-facade
       '@internal/sql-contract-psl':
         specifier: workspace:8.0.0-rc.25
         version: link:../../2-sql-family/2-authoring/contract-psl
@@ -5409,6 +5415,9 @@ importers:
       '@internal/target-postgres':
         specifier: workspace:8.0.0-rc.25
         version: link:../1-target
+      '@internal/ts-render':
+        specifier: workspace:8.0.0-rc.25
+        version: link:../../../1-framework/1-core/ts-render
       '@internal/utils':
         specifier: workspace:8.0.0-rc.25
         version: link:../../../1-framework/0-foundation/utils

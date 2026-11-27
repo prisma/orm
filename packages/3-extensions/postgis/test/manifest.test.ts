@@ -7,10 +7,10 @@ describe('postgis descriptor', () => {
     expect(postgisExtensionDescriptor.version).toBe('0.0.1');
     expect(postgisExtensionDescriptor.familyId).toBe('sql');
     expect(postgisExtensionDescriptor.targetId).toBe('postgres');
-    const postgresCapabilities = postgisExtensionDescriptor.capabilities?.['postgres'] as
-      | Record<string, unknown>
-      | undefined;
-    expect(postgresCapabilities?.['postgis.geometry']).toBe(true);
+  });
+
+  it('declares no capabilities, because nothing reads one', () => {
+    expect(postgisExtensionDescriptor).not.toHaveProperty('capabilities');
   });
 
   it('has codec types import', () => {

@@ -1,5 +1,10 @@
 import type { TargetPackRef } from '@internal/framework-components/components';
 import {
+  postgres18,
+  postgresContractCapabilities,
+  postgresDriver,
+} from '@internal/postgres/config';
+import {
   buildSqlContractFromDefinition,
   type ModelNode,
 } from '@internal/postgres/contract-builder';
@@ -9,10 +14,7 @@ import { postgresTypeLookups } from '../../postgres-type-lookups';
 const idDescriptor = { codecId: 'pg/int4@1' } as const;
 const textDescriptor = { codecId: 'pg/text@1' } as const;
 
-// The TS author path merges capabilities from the target pack; a full CLI emit
-// derives them from the codec/operation pipeline. For this author the runtime
-// read/write paths (RETURNING reads, jsonAgg/lateral relation reads) need the
-// capability flags present, so they ride on the target pack ref.
+// This contract is built without the facade's defineContract, so it states the capabilities that defineContract({ requiredCapabilities: [...postgres18, ...postgresDriver] }) would.
 const postgresTargetPack: TargetPackRef<'sql', 'postgres'> = {
   kind: 'target',
   id: 'postgres',
@@ -20,10 +22,7 @@ const postgresTargetPack: TargetPackRef<'sql', 'postgres'> = {
   targetId: 'postgres',
   version: '0.0.1',
   defaultNamespaceId: 'public',
-  capabilities: {
-    postgres: { jsonAgg: true, lateral: true, returning: true, limit: true, orderBy: true },
-    sql: { defaultInInsert: true, enums: true, lateral: true, returning: true },
-  },
+  capabilities: postgresContractCapabilities([...postgres18, ...postgresDriver]),
 };
 
 // Same bare table name `users` in BOTH namespaces with DIFFERENT columns:

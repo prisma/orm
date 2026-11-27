@@ -13,6 +13,7 @@ import {
 } from '@internal/target-postgres/codecs';
 import { postgresNowGenerators } from '@internal/target-postgres/runtime';
 import { createPostgresAdapterWithCodecRegistry, postgresRawCodecInferer } from '../core/adapter';
+import type { postgresAdapterCapabilities } from '../core/capabilities';
 import { postgresAdapterDescriptorMeta } from '../core/descriptor-meta';
 import type { PostgresContract, PostgresLoweredStatement } from '../core/types';
 
@@ -43,22 +44,24 @@ function createPostgresMutationDefaultGenerators(): ReadonlyArray<RuntimeMutatio
   ];
 }
 
-const postgresRuntimeAdapterDescriptor: SqlRuntimeAdapterDescriptor<'postgres', SqlRuntimeAdapter> =
-  {
-    ...postgresAdapterDescriptorMeta,
-    codecs: () => Array.from(postgresCodecRegistry.values()),
-    mutationDefaultGenerators: createPostgresMutationDefaultGenerators,
-    rawCodecInferer: postgresRawCodecInferer,
-    create(stack): SqlRuntimeAdapter {
-      const components = [stack.target, stack.adapter, ...stack.extensions];
-      const dataTypes = assembleDataTypes(components);
-      const codecRegistry = assemblePostgresCodecRegistry(components, dataTypes.lookup);
-      return createPostgresAdapterWithCodecRegistry(
-        codecRegistry,
-        dataTypes.lookup,
-        dataTypes.declared.map(({ type }) => type),
-      );
-    },
-  };
+const postgresRuntimeAdapterDescriptor: Omit<
+  SqlRuntimeAdapterDescriptor<'postgres', SqlRuntimeAdapter>,
+  'capabilities'
+> & { readonly capabilities: typeof postgresAdapterCapabilities } = {
+  ...postgresAdapterDescriptorMeta,
+  codecs: () => Array.from(postgresCodecRegistry.values()),
+  mutationDefaultGenerators: createPostgresMutationDefaultGenerators,
+  rawCodecInferer: postgresRawCodecInferer,
+  create(stack): SqlRuntimeAdapter {
+    const components = [stack.target, stack.adapter, ...stack.extensions];
+    const dataTypes = assembleDataTypes(components);
+    const codecRegistry = assemblePostgresCodecRegistry(components, dataTypes.lookup);
+    return createPostgresAdapterWithCodecRegistry(
+      codecRegistry,
+      dataTypes.lookup,
+      dataTypes.declared.map(({ type }) => type),
+    );
+  },
+};
 
 export default postgresRuntimeAdapterDescriptor;

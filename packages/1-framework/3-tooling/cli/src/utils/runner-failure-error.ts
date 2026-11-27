@@ -15,7 +15,7 @@ function whyNamingSpace(failure: MigrationRunnerFailure): string | undefined {
 /**
  * A runner failure as the CLI reports it: the runner's code, message, why and meta, and the failure
  * itself as `cause`, with the CLI's advice: each way out as a next action, and all of them as `fix`
- * prose. When the apply stopped in a space other than the application's, the why names it.
+ * prose. With no advice there is no `fix`. When the apply stopped in a space other than the application's, the why names it.
  */
 export function runnerFailureError(
   failure: MigrationRunnerFailure,
@@ -23,7 +23,7 @@ export function runnerFailureError(
 ): CliStructuredError {
   return new ActionableCliError(failure.code, failure.message, {
     ...ifDefined('why', whyNamingSpace(failure)),
-    fix: adviceText(advice),
+    ...(advice.length === 0 ? {} : { fix: adviceText(advice) }),
     nextActions: advice,
     meta: failure.meta,
     docsUrl: docsUrlFor(failure.code),

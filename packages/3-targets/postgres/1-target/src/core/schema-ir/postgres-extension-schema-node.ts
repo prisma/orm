@@ -1,5 +1,5 @@
 import type { ControlPolicy } from '@internal/contract/types';
-import type { DiffableNode, MismatchExplanation } from '@internal/framework-components/control';
+import type { DiffableNode, NodeMismatchExplanation } from '@internal/framework-components/control';
 import { freezeNode } from '@internal/framework-components/ir';
 import { assertNode, SqlSchemaIRNode } from '@internal/sql-schema-ir/types';
 import { invariant } from '@internal/utils/assertions';
@@ -72,7 +72,7 @@ export class PostgresExtensionSchemaNode extends SqlSchemaIRNode implements Diff
     return this.location.schemaName === node.location.schemaName;
   }
 
-  explainMismatch(actual: DiffableNode | undefined): MismatchExplanation | undefined {
+  explainMismatch(actual: DiffableNode | undefined): NodeMismatchExplanation | undefined {
     if (actual === undefined) return undefined;
     const node = blindCast<SqlSchemaIRNode, 'the differ pairs this node with a SqlSchemaIRNode'>(
       actual,

@@ -79,7 +79,7 @@ const emptyRoot = new PostgresDatabaseSchemaNode({
   namespaces: {},
   roles: [],
   existingSchemas: ['public'],
-  pgVersion: 'unknown',
+  serverVersionNumber: undefined,
 });
 
 /**
@@ -217,7 +217,7 @@ describe('planIssues', () => {
         },
         roles: [],
         existingSchemas: ['public'],
-        pgVersion: 'unknown',
+        serverVersionNumber: undefined,
       });
     }
 
@@ -298,7 +298,7 @@ describe('planIssues', () => {
         },
         roles: [],
         existingSchemas: ['public'],
-        pgVersion: 'unknown',
+        serverVersionNumber: undefined,
       });
 
       const result = planAgainst(toContract, actual, { statementColumns: backfillOf('email') });
@@ -351,7 +351,7 @@ describe('planIssues', () => {
         },
         roles: [],
         existingSchemas: ['public'],
-        pgVersion: 'unknown',
+        serverVersionNumber: undefined,
       });
     }
 
@@ -480,7 +480,7 @@ describe('planIssues', () => {
         },
         roles: [],
         existingSchemas: ['public'],
-        pgVersion: 'unknown',
+        serverVersionNumber: undefined,
       });
     }
 
@@ -639,7 +639,7 @@ describe('planIssues', () => {
         },
         roles: [],
         existingSchemas: ['public'],
-        pgVersion: 'unknown',
+        serverVersionNumber: undefined,
       });
 
       const result = planAgainst(toContract, actual, { strategies: [] });
@@ -699,7 +699,7 @@ describe('planIssues', () => {
         },
         roles: [],
         existingSchemas: ['public'],
-        pgVersion: 'unknown',
+        serverVersionNumber: undefined,
       });
 
       const result = planAgainst(toContract, actual, { statementColumns: backfillOf('status') });
@@ -795,7 +795,7 @@ describe('planIssues', () => {
         namespaces: {},
         roles: [],
         existingSchemas: ['public'],
-        pgVersion: 'unknown',
+        serverVersionNumber: undefined,
       });
 
       const ops = await planWithNamespaceStitch(toContract, actual);
@@ -816,7 +816,7 @@ describe('planIssues', () => {
         namespaces: {},
         roles: [],
         existingSchemas: ['public'],
-        pgVersion: 'unknown',
+        serverVersionNumber: undefined,
       });
 
       const ops = await planWithNamespaceStitch(toContract, actual);
@@ -867,7 +867,7 @@ describe('planIssues', () => {
         namespaces: {},
         roles: [],
         existingSchemas: ['public', 'tenant_a', 'tenant_b'],
-        pgVersion: 'unknown',
+        serverVersionNumber: undefined,
       });
 
       const result = planAgainst(toContract, actual);

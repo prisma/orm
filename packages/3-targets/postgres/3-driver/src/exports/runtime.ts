@@ -11,6 +11,7 @@ import type {
   SqlStatementStats,
 } from '@internal/sql-relational-core/ast';
 import { ifDefined } from '@internal/utils/defined';
+import type { postgresDriverCapabilities } from '../core/capabilities';
 import { postgresDriverDescriptorMeta } from '../core/descriptor-meta';
 import { driverError } from '../driver-error';
 import {
@@ -172,12 +173,10 @@ class PostgresUnboundDriverImpl implements PostgresRuntimeDriver {
   }
 }
 
-const postgresRuntimeDriverDescriptor: RuntimeDriverDescriptor<
-  'sql',
-  'postgres',
-  PostgresDriverCreateOptions,
-  PostgresRuntimeDriver
-> = {
+const postgresRuntimeDriverDescriptor: Omit<
+  RuntimeDriverDescriptor<'sql', 'postgres', PostgresDriverCreateOptions, PostgresRuntimeDriver>,
+  'capabilities'
+> & { readonly capabilities: typeof postgresDriverCapabilities } = {
   ...postgresDriverDescriptorMeta,
   create(
     options?: PostgresDriverCreateOptions,

@@ -59,6 +59,7 @@ const InitContributionSchema = type({
   'serverRequirement?': { minVersion: 'string', checkCommand: 'string' },
   'probe?': 'Function',
   'prisma7QuickReference?': 'Function',
+  'contractEntry?': 'Function',
 });
 
 /**

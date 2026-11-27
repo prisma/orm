@@ -1,7 +1,13 @@
 import { runInNewContext } from 'node:vm';
 import { int4Column, timestamptzJsDateColumn } from '@internal/adapter-postgres/column-types';
 import postgresAdapter from '@internal/adapter-postgres/runtime';
-import { defineContract, field, model } from '@internal/postgres/contract-builder';
+import {
+  defineContract,
+  field,
+  model,
+  postgres18,
+  postgresDriver,
+} from '@internal/postgres/contract-builder';
 import { Collection } from '@internal/sql-orm-client';
 import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
 import postgresTarget from '@internal/target-postgres/runtime';
@@ -15,7 +21,10 @@ const Post = model('Post', {
   },
 }).sql({ table: 'realm_posts' });
 
-const contract = defineContract({ models: { Post } });
+const contract = defineContract({
+  requiredCapabilities: [...postgres18, ...postgresDriver],
+  models: { Post },
+});
 const context = createExecutionContext({
   contract,
   stack: createSqlExecutionStack({ target: postgresTarget, adapter: postgresAdapter }),

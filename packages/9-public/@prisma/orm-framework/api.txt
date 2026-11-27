@@ -928,6 +928,8 @@
 ./components/control: function contractSnapshotJsonSpecifier(snapshotsImportPath: string, storageHash: string): string
 ./components/control: function contractSnapshotTypesSpecifier(snapshotsImportPath: string, storageHash: string): string
 ./components/control: function createControlStack<TFamilyId extends string, TTargetId extends string>(input: CreateControlStackInput<TFamilyId, TTargetId>): ControlStack<TFamilyId, TTargetId>
+./components/control: function databaseCapabilitiesNotProvidedIssue(input: { readonly path: readonly string[]; readonly expected: DiffableNode; readonly notProvided: DatabaseCapabilitiesNotProvided; }): SchemaDiffIssue
+./components/control: function databaseCapabilitiesNotProvidedText(notProvided: DatabaseCapabilitiesNotProvided): string
 ./components/control: function databasePoliciesMovedFailure(checked: DatabasePolicies, found: DatabasePolicies): MigrationRunnerFailure & { readonly code: 'MIGRATION.MARKER_CAS_FAILURE'; }
 ./components/control: function databasePoliciesOf(marker: ContractMarkerRecord | null | undefined): Result<DatabasePolicies, DatabasePoliciesUnreadable>
 ./components/control: function databasePolicyDifferences(declared: DeclaredDatabasePolicies, inForce: DatabasePolicies): readonly DatabasePolicyDifference[]
@@ -998,6 +1000,9 @@
 ./components/control: interface BlockingObject
 ./components/control: interface BlockingObject, readonly required property kind: string
 ./components/control: interface BlockingObject, readonly required property name: string
+./components/control: interface CapabilityFirstAvailable
+./components/control: interface CapabilityFirstAvailable, readonly required property capability: string
+./components/control: interface CapabilityFirstAvailable, readonly required property firstVersion: DatabaseVersion
 ./components/control: interface CheckExpectation
 ./components/control: interface CheckExpectation, readonly required property expects: 'absent' | 'present'
 ./components/control: interface CheckExpectation, readonly required property object: string
@@ -1088,6 +1093,13 @@
 ./components/control: interface CreateControlStackInput, readonly required property family: ControlFamilyDescriptor<TFamilyId>
 ./components/control: interface CreateControlStackInput, readonly required property target: ControlTargetDescriptor<TFamilyId, TTargetId>
 ./components/control: interface CreateControlStackInput<TFamilyId extends string = string, TTargetId extends string = string>
+./components/control: interface DatabaseCapabilitiesNotProvided
+./components/control: interface DatabaseCapabilitiesNotProvided, readonly required property database: string
+./components/control: interface DatabaseCapabilitiesNotProvided, readonly required property findings: readonly [DatabaseCapabilitiesNotProvidedFinding, ...DatabaseCapabilitiesNotProvidedFinding[]]
+./components/control: interface DatabaseCapabilitiesNotProvidedExplanation
+./components/control: interface DatabaseCapabilitiesNotProvidedExplanation, readonly required property cause: 'database-capabilities-not-provided'
+./components/control: interface DatabaseCapabilitiesNotProvidedExplanation, readonly required property notProvided: DatabaseCapabilitiesNotProvided
+./components/control: interface DatabaseCapabilitiesNotProvidedExplanation, readonly required property text: string
 ./components/control: interface DatabasePolicies
 ./components/control: interface DatabasePolicies, readonly required property change: readonly ChangeStrategy[]
 ./components/control: interface DatabasePolicies, readonly required property dataProtection: { readonly dataLoss: DataLossLevel; readonly accessWidening: AccessWideningLevel; }
@@ -1103,7 +1115,7 @@
 ./components/control: interface DefaultFunctionLoweringContext, readonly required property modelName: string
 ./components/control: interface DefaultFunctionLoweringContext, readonly required property sourceId: string
 ./components/control: interface DiffableNode
-./components/control: interface DiffableNode, optional method explainMismatch?(actual: DiffableNode | undefined): MismatchExplanation | undefined
+./components/control: interface DiffableNode, optional method explainMismatch?(actual: DiffableNode | undefined): NodeMismatchExplanation | undefined
 ./components/control: interface DiffableNode, readonly optional property dependsOn?: readonly SchemaNodeRef[]
 ./components/control: interface DiffableNode, readonly required property id: string
 ./components/control: interface DiffableNode, readonly required property nodeKind: string
@@ -1245,6 +1257,7 @@
 ./components/control: interface MigrationRunnerFailureMeta
 ./components/control: interface MigrationRunnerFailureMeta, readonly index signature [key: string]: unknown
 ./components/control: interface MigrationRunnerFailureMeta, readonly optional property blockingObjects?: readonly BlockingObject[]
+./components/control: interface MigrationRunnerFailureMeta, readonly optional property databaseCapabilitiesNotProvided?: DatabaseCapabilitiesNotProvided
 ./components/control: interface MigrationRunnerFailureMeta, readonly optional property databaseUnchanged?: boolean
 ./components/control: interface MigrationRunnerFailureMeta, readonly optional property failedCheck?: FailedCheck
 ./components/control: interface MigrationRunnerFailureMeta, readonly optional property failedTypeChange?: FailedTypeChange
@@ -1278,9 +1291,6 @@
 ./components/control: interface MigrationScaffoldContext, readonly required property toHash: string
 ./components/control: interface MigrationTemporaryValue extends MigrationOperationSubject
 ./components/control: interface MigrationTemporaryValue, readonly required property value: string
-./components/control: interface MismatchExplanation
-./components/control: interface MismatchExplanation, readonly required property cause: MismatchCause
-./components/control: interface MismatchExplanation, readonly required property text: string
 ./components/control: interface ModelCoordinate
 ./components/control: interface ModelCoordinate, readonly required property model: string
 ./components/control: interface ModelCoordinate, readonly required property namespaceId: NamespaceId
@@ -1289,6 +1299,9 @@
 ./components/control: interface ModelCoordinateJson, readonly required property model: string
 ./components/control: interface MutationDefaultGeneratorDescriptor
 ./components/control: interface MutationDefaultGeneratorDescriptor, readonly required property id: string
+./components/control: interface NodeMismatchExplanation
+./components/control: interface NodeMismatchExplanation, readonly required property cause: 'differs' | 'possibly-equivalent'
+./components/control: interface NodeMismatchExplanation, readonly required property text: string
 ./components/control: interface OpFactoryCall
 ./components/control: interface OpFactoryCall, readonly required property factoryName: string
 ./components/control: interface OpFactoryCall, readonly required property label: string
@@ -1478,7 +1491,9 @@
 ./components/control: type ChangeStrategy = (typeof CHANGE_STRATEGIES)[number]
 ./components/control: type ControlMutationDefaultRegistry = ReadonlyMap<string, ControlMutationDefaultEntry>
 ./components/control: type DataLossLevel = (typeof DATA_LOSS_LEVELS)[number]
+./components/control: type DatabaseCapabilitiesNotProvidedFinding = { readonly kind: 'missing-capabilities'; readonly databaseVersion: DatabaseVersion; readonly capabilities: readonly CapabilityFirstAvailable[]; } | { readonly kind: 'older-than-supported'; readonly databaseVersion: DatabaseVersion; readonly oldestSupported: DatabaseVersion; } | { readonly kind: 'version-not-read'; readonly versionQuery: string; }
 ./components/control: type DatabasePolicyDifference = { readonly setting: 'change'; readonly declared: readonly ChangeStrategy[]; readonly inForce: readonly ChangeStrategy[]; } | { readonly setting: 'dataProtection.accessWidening'; readonly declared: AccessWideningLevel; readonly inForce: AccessWideningLevel; } | { readonly setting: 'dataProtection.dataLoss'; readonly declared: DataLossLevel; readonly inForce: DataLossLevel; }
+./components/control: type DatabaseVersion = number | string
 ./components/control: type DiffSubjectGranularity = 'auxiliary' | 'entity' | 'field' | 'namespace' | 'structural'
 ./components/control: type ExpectationFailureReason = 'not-equal' | 'not-expected' | 'not-found'
 ./components/control: type FailedTypeChange = FailedCast | FailedConversion
@@ -1493,7 +1508,8 @@
 ./components/control: type MigrationStatementJson = { readonly kind: 'backfill' | 'convert'; readonly entity: 'field'; readonly field: FieldCoordinateJson; } | { readonly kind: 'backfill'; readonly entity: 'valueObjectField'; readonly field: ValueObjectFieldCoordinateJson; } | { readonly kind: 'convert'; readonly entity: 'model'; readonly model: ModelCoordinateJson; } | { readonly kind: 'rename'; readonly entity: 'enumValue'; readonly from: EnumValueCoordinateJson; readonly to: EnumValueCoordinateJson; } | { readonly kind: 'rename'; readonly entity: 'field'; readonly from: FieldCoordinateJson; readonly to: FieldCoordinateJson; } | { readonly kind: 'rename'; readonly entity: 'model'; readonly from: ModelCoordinateJson; readonly to: ModelCoordinateJson; } | { readonly kind: 'rename'; readonly entity: 'namespace'; readonly from: { readonly namespaceId: NamespaceId; }; readonly to: { readonly namespaceId: NamespaceId; }; } | { readonly kind: 'rename'; readonly entity: 'valueObjectField'; readonly from: ValueObjectFieldCoordinateJson; readonly to: ValueObjectFieldCoordinateJson; }
 ./components/control: type MigrationSubject = ({ readonly kind: 'enumValue'; } & EnumValueCoordinate) | ({ readonly kind: 'field'; } & FieldCoordinate) | ({ readonly kind: 'model'; } & ModelCoordinate) | ({ readonly kind: 'valueObjectField'; } & ValueObjectFieldCoordinate) | { readonly kind: 'storage'; readonly name: string; }
 ./components/control: type MigrationSubjectJson = ({ readonly kind: 'enumValue'; } & EnumValueCoordinateJson) | ({ readonly kind: 'field'; } & FieldCoordinateJson) | ({ readonly kind: 'model'; } & ModelCoordinateJson) | ({ readonly kind: 'valueObjectField'; } & ValueObjectFieldCoordinateJson) | { readonly kind: 'storage'; readonly name: string; }
-./components/control: type MismatchCause = 'differs' | 'possibly-equivalent'
+./components/control: type MismatchCause = MismatchExplanation['cause']
+./components/control: type MismatchExplanation = DatabaseCapabilitiesNotProvidedExplanation | NodeMismatchExplanation
 ./components/control: type ResolvedMigrationStatement = ResolvedFieldBackfillStatement | ResolvedFieldConvertStatement | ResolvedRenameStatement | ResolvedValueObjectFieldBackfillStatement | ResolvedVariantConvertStatement
 ./components/control: type ResolvedRenameStatement = ResolvedEnumValueRenameStatement | ResolvedFieldRenameStatement | ResolvedModelRenameStatement | ResolvedNamespaceRenameStatement | ResolvedValueObjectFieldRenameStatement
 ./components/control: type SchemaLabelPartRole = 'detail' | 'keyword' | 'name' | 'title'
@@ -2114,6 +2130,8 @@
 ./components: function dataTypeParams(type: DataType, typeParams: unknown): DataTypeParams
 ./components: function dataTypeParamsProblem(type: DataType, params: Readonly<Record<string, unknown>>): DataTypeParamsProblem | undefined
 ./components: function dataTypeValuesEqual(a: DataTypeValue, b: DataTypeValue): boolean
+./components: function databaseCapabilitiesNotProvidedIssue(input: { readonly path: readonly string[]; readonly expected: DiffableNode; readonly notProvided: DatabaseCapabilitiesNotProvided; }): SchemaDiffIssue
+./components: function databaseCapabilitiesNotProvidedText(notProvided: DatabaseCapabilitiesNotProvided): string
 ./components: function databasePoliciesMovedFailure(checked: DatabasePolicies, found: DatabasePolicies): MigrationRunnerFailure & { readonly code: 'MIGRATION.MARKER_CAS_FAILURE'; }
 ./components: function databasePoliciesOf(marker: ContractMarkerRecord | null | undefined): Result<DatabasePolicies, DatabasePoliciesUnreadable>
 ./components: function databasePolicyDifferences(declared: DeclaredDatabasePolicies, inForce: DatabasePolicies): readonly DatabasePolicyDifference[]
@@ -2499,6 +2517,9 @@
 ./components: interface BlockingObject
 ./components: interface BlockingObject, readonly required property kind: string
 ./components: interface BlockingObject, readonly required property name: string
+./components: interface CapabilityFirstAvailable
+./components: interface CapabilityFirstAvailable, readonly required property capability: string
+./components: interface CapabilityFirstAvailable, readonly required property firstVersion: DatabaseVersion
 ./components: interface CheckExpectation
 ./components: interface CheckExpectation, readonly required property expects: 'absent' | 'present'
 ./components: interface CheckExpectation, readonly required property object: string
@@ -2714,6 +2735,13 @@
 ./components: interface DataTypeSupport, readonly required property dataTypeOfCodec: (codecId: string) => DataTypeId | undefined
 ./components: interface DataTypeSupport, readonly required property entries: Readonly<Record<string, DataTypeAuthoringEntry>>
 ./components: interface DataTypeSupport, readonly required property lookup: DataTypeLookup
+./components: interface DatabaseCapabilitiesNotProvided
+./components: interface DatabaseCapabilitiesNotProvided, readonly required property database: string
+./components: interface DatabaseCapabilitiesNotProvided, readonly required property findings: readonly [DatabaseCapabilitiesNotProvidedFinding, ...DatabaseCapabilitiesNotProvidedFinding[]]
+./components: interface DatabaseCapabilitiesNotProvidedExplanation
+./components: interface DatabaseCapabilitiesNotProvidedExplanation, readonly required property cause: 'database-capabilities-not-provided'
+./components: interface DatabaseCapabilitiesNotProvidedExplanation, readonly required property notProvided: DatabaseCapabilitiesNotProvided
+./components: interface DatabaseCapabilitiesNotProvidedExplanation, readonly required property text: string
 ./components: interface DatabasePolicies
 ./components: interface DatabasePolicies, readonly required property change: readonly ChangeStrategy[]
 ./components: interface DatabasePolicies, readonly required property dataProtection: { readonly dataLoss: DataLossLevel; readonly accessWidening: AccessWideningLevel; }
@@ -2741,7 +2769,7 @@
 ./components: interface DefineAnnotationOptions, readonly required property namespace: string
 ./components: interface DefineAnnotationOptions<Kinds extends OperationKind>
 ./components: interface DiffableNode
-./components: interface DiffableNode, optional method explainMismatch?(actual: DiffableNode | undefined): MismatchExplanation | undefined
+./components: interface DiffableNode, optional method explainMismatch?(actual: DiffableNode | undefined): NodeMismatchExplanation | undefined
 ./components: interface DiffableNode, readonly optional property dependsOn?: readonly SchemaNodeRef[]
 ./components: interface DiffableNode, readonly required property id: string
 ./components: interface DiffableNode, readonly required property nodeKind: string
@@ -3007,6 +3035,7 @@
 ./components: interface MigrationRunnerFailureMeta
 ./components: interface MigrationRunnerFailureMeta, readonly index signature [key: string]: unknown
 ./components: interface MigrationRunnerFailureMeta, readonly optional property blockingObjects?: readonly BlockingObject[]
+./components: interface MigrationRunnerFailureMeta, readonly optional property databaseCapabilitiesNotProvided?: DatabaseCapabilitiesNotProvided
 ./components: interface MigrationRunnerFailureMeta, readonly optional property databaseUnchanged?: boolean
 ./components: interface MigrationRunnerFailureMeta, readonly optional property failedCheck?: FailedCheck
 ./components: interface MigrationRunnerFailureMeta, readonly optional property failedTypeChange?: FailedTypeChange
@@ -3040,9 +3069,6 @@
 ./components: interface MigrationScaffoldContext, readonly required property toHash: string
 ./components: interface MigrationTemporaryValue extends MigrationOperationSubject
 ./components: interface MigrationTemporaryValue, readonly required property value: string
-./components: interface MismatchExplanation
-./components: interface MismatchExplanation, readonly required property cause: MismatchCause
-./components: interface MismatchExplanation, readonly required property text: string
 ./components: interface ModelCoordinate
 ./components: interface ModelCoordinate, readonly required property model: string
 ./components: interface ModelCoordinate, readonly required property namespaceId: NamespaceId
@@ -3070,6 +3096,9 @@
 ./components: interface Namespace, readonly optional property isUnbound?: boolean
 ./components: interface Namespace, readonly required property entries: Readonly<Record<string, Readonly<Record<string, unknown>>>>
 ./components: interface Namespace, readonly required property kind: string
+./components: interface NodeMismatchExplanation
+./components: interface NodeMismatchExplanation, readonly required property cause: 'differs' | 'possibly-equivalent'
+./components: interface NodeMismatchExplanation, readonly required property text: string
 ./components: interface NumberClassification
 ./components: interface NumberClassification, readonly required property form: 'number' | 'text'
 ./components: interface NumberClassification, readonly required property type: DataTypeId
@@ -3594,7 +3623,9 @@
 ./components: type DataTypeSpelling = (json: JsonValue, params: DataTypeParams) => JsonValue
 ./components: type DataTypeValue<J extends JsonValue = JsonValue> = DataTypeValueRecord<J>
 ./components: type DataTypeWrittenForm = { readonly kind: 'plain'; readonly syntax: 'boolean' | 'string'; readonly parse: (text: string) => JsonValue; } | { readonly kind: 'plain'; readonly syntax: 'number'; readonly types: readonly DataTypeId[]; readonly classify: (text: string) => undefined | { readonly type: DataTypeId; readonly value: JsonValue; }; } | { readonly kind: 'tag'; readonly tag: string; readonly parse: (text: string) => JsonValue; }
+./components: type DatabaseCapabilitiesNotProvidedFinding = { readonly kind: 'missing-capabilities'; readonly databaseVersion: DatabaseVersion; readonly capabilities: readonly CapabilityFirstAvailable[]; } | { readonly kind: 'older-than-supported'; readonly databaseVersion: DatabaseVersion; readonly oldestSupported: DatabaseVersion; } | { readonly kind: 'version-not-read'; readonly versionQuery: string; }
 ./components: type DatabasePolicyDifference = { readonly setting: 'change'; readonly declared: readonly ChangeStrategy[]; readonly inForce: readonly ChangeStrategy[]; } | { readonly setting: 'dataProtection.accessWidening'; readonly declared: AccessWideningLevel; readonly inForce: AccessWideningLevel; } | { readonly setting: 'dataProtection.dataLoss'; readonly declared: DataLossLevel; readonly inForce: DataLossLevel; }
+./components: type DatabaseVersion = number | string
 ./components: type DateTimeShape = 'date' | 'dateTime' | 'instant' | 'time' | 'timeWithOffset'
 ./components: type DefaultNamespaceEntries<TStorage extends { readonly namespaces: object; }> = TStorage['namespaces'] extends Record<typeof UNBOUND_NAMESPACE_ID, { readonly entries: infer E; }> ? E : never
 ./components: type DiffSubjectGranularity = 'auxiliary' | 'entity' | 'field' | 'namespace' | 'structural'
@@ -3624,7 +3655,8 @@
 ./components: type MigrationStatementJson = { readonly kind: 'backfill' | 'convert'; readonly entity: 'field'; readonly field: FieldCoordinateJson; } | { readonly kind: 'backfill'; readonly entity: 'valueObjectField'; readonly field: ValueObjectFieldCoordinateJson; } | { readonly kind: 'convert'; readonly entity: 'model'; readonly model: ModelCoordinateJson; } | { readonly kind: 'rename'; readonly entity: 'enumValue'; readonly from: EnumValueCoordinateJson; readonly to: EnumValueCoordinateJson; } | { readonly kind: 'rename'; readonly entity: 'field'; readonly from: FieldCoordinateJson; readonly to: FieldCoordinateJson; } | { readonly kind: 'rename'; readonly entity: 'model'; readonly from: ModelCoordinateJson; readonly to: ModelCoordinateJson; } | { readonly kind: 'rename'; readonly entity: 'namespace'; readonly from: { readonly namespaceId: NamespaceId; }; readonly to: { readonly namespaceId: NamespaceId; }; } | { readonly kind: 'rename'; readonly entity: 'valueObjectField'; readonly from: ValueObjectFieldCoordinateJson; readonly to: ValueObjectFieldCoordinateJson; }
 ./components: type MigrationSubject = ({ readonly kind: 'enumValue'; } & EnumValueCoordinate) | ({ readonly kind: 'field'; } & FieldCoordinate) | ({ readonly kind: 'model'; } & ModelCoordinate) | ({ readonly kind: 'valueObjectField'; } & ValueObjectFieldCoordinate) | { readonly kind: 'storage'; readonly name: string; }
 ./components: type MigrationSubjectJson = ({ readonly kind: 'enumValue'; } & EnumValueCoordinateJson) | ({ readonly kind: 'field'; } & FieldCoordinateJson) | ({ readonly kind: 'model'; } & ModelCoordinateJson) | ({ readonly kind: 'valueObjectField'; } & ValueObjectFieldCoordinateJson) | { readonly kind: 'storage'; readonly name: string; }
-./components: type MismatchCause = 'differs' | 'possibly-equivalent'
+./components: type MismatchCause = MismatchExplanation['cause']
+./components: type MismatchExplanation = DatabaseCapabilitiesNotProvidedExplanation | NodeMismatchExplanation
 ./components: type MutationDefaultsOp = 'create' | 'update'
 ./components: type NamespacedEntities<TStorage extends { readonly namespaces: object; }, TBuiltinKinds extends string> = { readonly [Ns in keyof TStorage['namespaces']]: SingleNamespaceView<EntriesOf<TStorage['namespaces'][Ns]>, TBuiltinKinds>; }
 ./components: type NoInputAggregateDescriptor = AggregateDescriptorBase & { readonly input: { readonly kind: 'none'; }; readonly output: NamedAggregateOutput; }

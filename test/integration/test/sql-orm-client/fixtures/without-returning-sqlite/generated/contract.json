@@ -794,6 +794,7 @@
       "foreignKeys": true,
       "insertOnConflictSkip": true,
       "insertOnConflictWithoutTarget": true,
+      "interactiveTransactions": true,
       "jsonAgg": true,
       "jsonAggWithoutTruncation": true,
       "limit": true,

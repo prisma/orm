@@ -59,6 +59,7 @@
     "./contract": "./dist/contract.mjs",
     "./contract/authored-check-naming": "./dist/contract__authored-check-naming.mjs",
     "./contract/canonicalization-hooks": "./dist/contract__canonicalization-hooks.mjs",
+    "./contract/capability-messages": "./dist/contract__capability-messages.mjs",
     "./contract/check-expressions": "./dist/contract__check-expressions.mjs",
     "./contract/codec-json-type": "./dist/contract__codec-json-type.mjs",
     "./contract/contract-view": "./dist/contract__contract-view.mjs",

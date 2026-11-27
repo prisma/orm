@@ -9,6 +9,8 @@ import { postgresTargetDescriptorMetaRuntime } from '../core/descriptor-meta-run
 import { postgresFullTextMethods } from '../core/full-text-collection-method';
 import { decodePostgresListText } from '../core/list-decoder';
 import { postgresQueryOperations } from '../core/query-operations';
+import { postgresRetiredCapabilities } from '../core/retired-capabilities';
+import { postgresDatabaseCapabilities } from '../core/server-version';
 
 export { postgresNowGenerators } from '../core/date-time-now-generators';
 export type { PostgresFullTextMethods } from '../core/full-text-collection-method';
@@ -44,8 +46,13 @@ const postgresRuntimeTargetDescriptor: RuntimeTargetDescriptor<
   readonly listDecoder: () => PostgresListDecoder;
   readonly queryOperations: () => SqlOperationDescriptors;
   readonly collectionMethods: () => readonly CollectionMethodContribution[];
+  readonly databaseCapabilities: typeof postgresDatabaseCapabilities;
+  /** Prisma 8.0 removes this field. */
+  readonly retiredCapabilities: typeof postgresRetiredCapabilities;
 } = {
   ...postgresTargetDescriptorMetaRuntime,
+  databaseCapabilities: postgresDatabaseCapabilities,
+  retiredCapabilities: postgresRetiredCapabilities,
   codecs: () => [],
   listDecoder: () => decodePostgresListText,
   queryOperations: () => postgresQueryOperations(),

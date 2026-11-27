@@ -1,4 +1,5 @@
 import type { Contract } from '@internal/contract/types';
+import { capabilityUnavailableMessage } from '@internal/sql-contract/capability-messages';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import type { SqlStatementStats } from '@internal/sql-relational-core/ast';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
@@ -29,21 +30,29 @@ export function generatedKeyColumn(options: InsertedRows): string | undefined {
   if (column === undefined) {
     return undefined;
   }
-  const refused = (problem: string) =>
-    ormError('ORM.CAPABILITY_MISSING', `${method} on model "${modelName}" ${problem}`, {
-      meta: { capability: 'returning', action: method },
-    });
+  const refused = (reason: string) =>
+    ormError(
+      'ORM.CAPABILITY_MISSING',
+      capabilityUnavailableMessage(
+        `\`${method}\` on model "${modelName}"`,
+        ['sql.returning'],
+        reason,
+      ),
+      {
+        meta: { capability: 'returning', action: method },
+      },
+    );
   if (
     others.length > 0 ||
     !isAutoIncrementColumn(context.contract, namespaceId, tableName, column)
   ) {
     throw refused(
-      `cannot find the row it inserts: key column "${[column, ...others].join('", "')}" gets no value from the client and is not an auto-increment column, and the contract does not report capability "returning" to read the value the database chose. Supply the key, or give the column a client-side default.`,
+      `It cannot find the row it inserts: key column "${[column, ...others].join('", "')}" gets no value from the client and is not an auto-increment column, and without \`sql.returning\` the database does not report the value it chose. Supply the key, or give the column a client-side default.`,
     );
   }
   if (rows.length > 1) {
     throw refused(
-      `cannot return the rows it inserts: their key column "${column}" is generated, and without capability "returning" the database reports a generated value only for a one-row insert. Use createAndCount(), or create() for each row.`,
+      `It cannot return the rows it inserts: their key column "${column}" is generated, and without \`sql.returning\` the database reports a generated value only for a one-row insert. Use createAndCount(), or create() for each row.`,
     );
   }
   return column;

@@ -67,7 +67,7 @@ The compiled form of a query. Before anything touches the database, Prisma 8 com
 
 ### Adapter
 
-The piece that connects Prisma 8 to a specific database. For SQL targets, the adapter translates queries into the correct dialect. For MongoDB, the adapter dispatches commands to the `mongodb` Node.js driver. Adapters also report what features the database supports, so Prisma 8 can check at startup whether your contract's requirements are met.
+The piece that connects Prisma 8 to a specific database. For SQL targets, the adapter translates queries into the correct dialect. For MongoDB, the adapter dispatches commands to the `mongodb` Node.js driver. On PostgreSQL the adapter provides no [capabilities](#capability): the target says what each database version provides, and the driver what its connection provides. The other databases' adapters still declare a fixed list.
 
 ### Driver
 
@@ -253,7 +253,7 @@ Each plane has its own stack type:
 
 ### Capability
 
-A specific feature that a database may or may not support (e.g., `RETURNING` clauses, vector indexes). Your contract declares which capabilities it needs; the adapter reports which ones the database provides. Prisma 8 checks these match at startup, so you find out about missing features immediately rather than at query time.
+A specific feature that a database version or a connection **provides** and a contract **requires** (e.g., `RETURNING` clauses, interactive transactions). Capabilities are your contract's dependencies. You write the list where you write the contract, from the sets Prisma exports: `requiredCapabilities: [...postgres17, ...postgresDriver]` on PostgreSQL; other databases' contracts take a fixed list from their adapter. Signing a database checks that it provides the database capabilities the contract requires, and creating a client checks that its connection provides the rest, so you find out about a missing capability before any query runs. A feature whose capability your contract does not require is unavailable until you add it to the list. A database that lacks a capability is not drift: no change to its tables can add it, so it is reported as its own failure, with no advice to update the database.
 
 ### Codec
 
@@ -333,7 +333,7 @@ An append-only audit log of executed migrations, per database. The ledger record
 
 ### Drift
 
-Divergence between contract and database. Taxonomy includes marker-level (missing, corrupt, stale, hash mismatch), schema-level (manual DDL, partial execution, concurrent execution), graph-level (orphan database, no path, path breakage, cycle), capability (missing, downgrade, profile mismatch), transactional, cache/replica freshness, and canonicalization drift.
+Divergence between contract and database. Taxonomy includes marker-level (missing, corrupt, stale, hash mismatch), schema-level (manual DDL, partial execution, concurrent execution), graph-level (orphan database, no path, path breakage, cycle), transactional, cache/replica freshness, and canonicalization drift.
 
 ### Storage Hash
 

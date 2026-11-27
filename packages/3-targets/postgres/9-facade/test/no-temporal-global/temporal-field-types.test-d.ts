@@ -2,24 +2,27 @@ import type { DefaultModelRow } from '@internal/sql-orm-client';
 import type { CodecTypes } from '@internal/target-postgres/codec-types';
 import type { Temporal } from 'temporal-spec';
 import { expectTypeOf, test } from 'vitest';
-import { defineContract } from '../../src/exports/contract-builder';
+import { defineContract, postgres18, postgresDriver } from '../../src/exports/contract-builder';
 
-const contract = defineContract({}, ({ type, field, model, gen }) => ({
-  models: {
-    Event: model('Event', {
-      fields: {
-        id: field.column(type.Uuid()).id().onCreate(gen.uuid()),
-        at: field.column(type.TimestamptzTemporal(3)),
-        local: field.column(type.TimestampTemporal()),
-        day: field.column(type.DateTemporal()),
-        opens: field.column(type.TimeTemporal(0)),
-        utcAt: field.column(type.TimestampInstant(6)),
-        utcDate: field.column(type.TimestampJsDate(3)),
-        span: field.column(type.IntervalString(3)),
-      },
-    }),
-  },
-}));
+const contract = defineContract(
+  { requiredCapabilities: [...postgres18, ...postgresDriver] },
+  ({ type, field, model, gen }) => ({
+    models: {
+      Event: model('Event', {
+        fields: {
+          id: field.column(type.Uuid()).id().onCreate(gen.uuid()),
+          at: field.column(type.TimestamptzTemporal(3)),
+          local: field.column(type.TimestampTemporal()),
+          day: field.column(type.DateTemporal()),
+          opens: field.column(type.TimeTemporal(0)),
+          utcAt: field.column(type.TimestampInstant(6)),
+          utcDate: field.column(type.TimestampJsDate(3)),
+          span: field.column(type.IntervalString(3)),
+        },
+      }),
+    },
+  }),
+);
 
 type EventRow = DefaultModelRow<typeof contract, 'Event'>;
 
@@ -52,31 +55,34 @@ test('a timestamp read as a Date reads a Date, and an interval read as a string 
   expectTypeOf<EventRow['span']>().toEqualTypeOf<string>();
 });
 
-const convenience = defineContract({}, ({ type, field, model, gen }) => ({
-  models: {
-    Order: model('Order', {
-      fields: {
-        id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
-        paidAt: field.column(type.DateTime()),
-        settledAt: field.column(type.DateTime({ as: 'temporal' })),
-        textAt: field.column(type.DateTime({ as: 'string', precision: 6 })),
-        legacyAt: field.column(type.DateTime({ storage: 'timestamp' })),
-        utcAt: field.column(type.DateTime({ as: 'temporal', storage: 'timestamp' })),
-        shipBy: field.column(type.Date()),
-        shipOn: field.column(type.Date({ as: 'temporal' })),
-        opensAt: field.column(type.Time({ precision: 0 })),
-        opensAtT: field.column(type.Time({ as: 'temporal' })),
-        localAt: field.column(type.Time({ storage: 'timetz' })),
-        period: field.column(type.Duration()),
-        parts: field.column(type.Duration({ as: 'parts' })),
-        textAtExplicit: field.column(type.TimestamptzString(6)),
-        opensAtExplicit: field.column(type.TimeString(0)),
-        localAtExplicit: field.column(type.Timetz()),
-        partsExplicit: field.column(type.IntervalParts()),
-      },
-    }),
-  },
-}));
+const convenience = defineContract(
+  { requiredCapabilities: [...postgres18, ...postgresDriver] },
+  ({ type, field, model, gen }) => ({
+    models: {
+      Order: model('Order', {
+        fields: {
+          id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
+          paidAt: field.column(type.DateTime()),
+          settledAt: field.column(type.DateTime({ as: 'temporal' })),
+          textAt: field.column(type.DateTime({ as: 'string', precision: 6 })),
+          legacyAt: field.column(type.DateTime({ storage: 'timestamp' })),
+          utcAt: field.column(type.DateTime({ as: 'temporal', storage: 'timestamp' })),
+          shipBy: field.column(type.Date()),
+          shipOn: field.column(type.Date({ as: 'temporal' })),
+          opensAt: field.column(type.Time({ precision: 0 })),
+          opensAtT: field.column(type.Time({ as: 'temporal' })),
+          localAt: field.column(type.Time({ storage: 'timetz' })),
+          period: field.column(type.Duration()),
+          parts: field.column(type.Duration({ as: 'parts' })),
+          textAtExplicit: field.column(type.TimestamptzString(6)),
+          opensAtExplicit: field.column(type.TimeString(0)),
+          localAtExplicit: field.column(type.Timetz()),
+          partsExplicit: field.column(type.IntervalParts()),
+        },
+      }),
+    },
+  }),
+);
 
 type OrderRow = DefaultModelRow<typeof convenience, 'Order'>;
 
@@ -97,29 +103,32 @@ test('a convenience type is typed as the value of the explicit type it chooses',
 });
 
 test('a convenience type helper refuses a combination with no explicit type', () => {
-  defineContract({}, ({ type, field, model, gen }) => ({
-    models: {
-      Order: model('Order', {
-        fields: {
-          id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
-          // @ts-expect-error Temporal.PlainTime cannot hold a timetz offset
-          at: field.column(type.Time({ as: 'temporal', storage: 'timetz' })),
-          // @ts-expect-error a calendar date is never a JavaScript Date
-          day: field.column(type.Date({ as: 'jsDate' })),
-          // @ts-expect-error a calendar date has no precision
-          dayAt: field.column(type.Date({ precision: 3 })),
-          // @ts-expect-error the options are as and storage
-          stamp: field.column(type.DateTime({ value: 'string' })),
-          // @ts-expect-error a precision is written by name
-          opens: field.column(type.Time(3)),
-        },
-      }),
-    },
-  }));
+  defineContract(
+    { requiredCapabilities: [...postgres18, ...postgresDriver] },
+    ({ type, field, model, gen }) => ({
+      models: {
+        Order: model('Order', {
+          fields: {
+            id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
+            // @ts-expect-error Temporal.PlainTime cannot hold a timetz offset
+            at: field.column(type.Time({ as: 'temporal', storage: 'timetz' })),
+            // @ts-expect-error a calendar date is never a JavaScript Date
+            day: field.column(type.Date({ as: 'jsDate' })),
+            // @ts-expect-error a calendar date has no precision
+            dayAt: field.column(type.Date({ precision: 3 })),
+            // @ts-expect-error the options are as and storage
+            stamp: field.column(type.DateTime({ value: 'string' })),
+            // @ts-expect-error a precision is written by name
+            opens: field.column(type.Time(3)),
+          },
+        }),
+      },
+    }),
+  );
 });
 
 test('each convenience type call has the type of the explicit type helper it chooses', () => {
-  defineContract({}, ({ type }) => {
+  defineContract({ requiredCapabilities: [...postgres18, ...postgresDriver] }, ({ type }) => {
     expectTypeOf(type.DateTime()).toEqualTypeOf(type.TimestamptzJsDate(3));
     expectTypeOf(type.DateTime({ precision: 6 })).toEqualTypeOf(type.TimestamptzJsDate(6));
     expectTypeOf(type.DateTime({ as: 'jsDate', storage: 'timestamptz' })).toEqualTypeOf(

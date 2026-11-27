@@ -16,7 +16,6 @@ test('exported contracts retain pgvector public type metadata', () => {
   expectTypeOf(extension.id).toEqualTypeOf<'pgvector'>();
   expectTypeOf(extension.familyId).toEqualTypeOf<'sql'>();
   expectTypeOf(extension.targetId).toEqualTypeOf<'postgres'>();
-  expectTypeOf(extension.capabilities.postgres['pgvector.cosine']).toEqualTypeOf<true>();
   expectTypeOf(extension.authoring.type.pgvector.Vector.kind).toEqualTypeOf<'typeConstructor'>();
   expectTypeOf(extension.types.codecTypes.import.package).toEqualTypeOf<`${string}/codec-types`>();
   expectTypeOf<PgvectorCodecTypes['pg/vector@1']['input']>().toEqualTypeOf<number[]>();

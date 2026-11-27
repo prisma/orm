@@ -1,22 +1,31 @@
 import { rawColumn } from '@internal/adapter-postgres/column-types';
 import { describe, expect, it } from 'vitest';
-import { defineContract, type ScalarFieldBuilder, sql } from '../../src/exports/contract-builder';
+import {
+  defineContract,
+  postgres18,
+  postgresDriver,
+  type ScalarFieldBuilder,
+  sql,
+} from '../../src/exports/contract-builder';
 
 type Helpers = Parameters<NonNullable<Parameters<typeof defineContract>[1]>>[0];
 
 function shapeColumn(
   build: (field: Helpers['field'], type: Helpers['type']) => ScalarFieldBuilder,
 ) {
-  const contract = defineContract({}, ({ field, model, type, gen }) => ({
-    models: {
-      Shape: model('Shape', {
-        fields: {
-          id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
-          area: build(field, type),
-        },
-      }),
-    },
-  }));
+  const contract = defineContract(
+    { requiredCapabilities: [...postgres18, ...postgresDriver] },
+    ({ field, model, type, gen }) => ({
+      models: {
+        Shape: model('Shape', {
+          fields: {
+            id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
+            area: build(field, type),
+          },
+        }),
+      },
+    }),
+  );
   return contract.storage.namespaces['public']?.entries.table?.['Shape']?.columns['area'];
 }
 

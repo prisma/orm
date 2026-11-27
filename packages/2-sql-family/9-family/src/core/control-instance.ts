@@ -600,6 +600,12 @@ export function createSqlFamilyInstance<TTargetId extends string>(
     { readonly diffSchema?: SqlSchemaDiffFn },
     'reading the target-descriptor diffSchema hook'
   >(target).diffSchema;
+  // The target's check of the database's capabilities. Optional: a target that declares none of its
+  // database's capabilities omits it.
+  const targetDatabaseCapabilitiesNotProvided = blindCast<
+    SqlControlTargetDescriptor<TTargetId, unknown>,
+    'reading the optional target-descriptor databaseCapabilitiesNotProvided hook'
+  >(target).databaseCapabilitiesNotProvided;
   // The target's nodeKind → granularity classifier, resolved on demand by the
   // verdict and by the instance's `classifySubjectGranularity` method below —
   // never stamped onto an issue. Read lazily for the same
@@ -946,6 +952,7 @@ export function createSqlFamilyInstance<TTargetId extends string>(
         frameworkComponents: options.frameworkComponents,
         diffSchema,
         granularityOf: targetGranularityOf,
+        databaseCapabilitiesNotProvided: targetDatabaseCapabilitiesNotProvided,
       });
     },
 
