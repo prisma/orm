@@ -243,7 +243,7 @@ describe('Journey (MongoDB): a create with no after-check finds its collection',
     }).toEqual({
       stopped: 2,
       advice: expect.stringContaining(
-        `If items holds nothing you need, drop it, then run the command again; operations that already ran are skipped. If items holds documents you need, you can keep them by moving the collection aside: stop the application's writes to it, move it to items_kept, run db migrate --to ${itemsMigration} so this migration creates items with its options, and copy the documents back. Follow every step under "Moving a MongoDB collection aside" in the error reference for MIGRATION.PRECHECK_FAILED, which keep the documents until the copy back is checked.`,
+        `If items holds nothing you need, drop it, then run the command that stopped again, as you ran it; operations that already ran are skipped. If an earlier run of this command created items, its documents came from that run, and the next run writes them again, so drop it, unless the application has written documents to it since: then keep only those documents and copy them back after the run. If items holds documents you need, you can keep them by moving the collection aside: stop the application's writes to it, move it to items_kept, run db migrate --to ${itemsMigration} so this migration creates items with its options, and copy the documents back. Follow every step under "Moving a MongoDB collection aside" in the error reference for MIGRATION.PRECHECK_FAILED, which keep the documents until the copy back is checked.`,
       ),
       migratedTo: 0,
       duplicates: [{ _id: 'keep', n: 2 }],

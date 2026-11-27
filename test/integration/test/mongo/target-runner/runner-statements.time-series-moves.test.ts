@@ -451,7 +451,7 @@ describe('MongoMigrationPlanner and runner - a move into a time-series collectio
         ])
         .toArray();
       let running = await runningCopies();
-      while (running.length === 0) {
+      for (let attempt = 0; running.length === 0 && attempt < 100; attempt += 1) {
         await new Promise((resolve) => setTimeout(resolve, 50));
         running = await runningCopies();
       }
