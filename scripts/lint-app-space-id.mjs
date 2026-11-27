@@ -61,6 +61,8 @@ const EXCLUDED_DIRECTORIES = new Set([
   'fixtures',
   'recordings',
   'templates',
+  // A migration's source is a frozen record of the SQL it ran, which names the space as text.
+  'migrations',
 ]);
 
 const DECLARATION_RE = /export\s+const\s+APP_SPACE_ID\b/;
