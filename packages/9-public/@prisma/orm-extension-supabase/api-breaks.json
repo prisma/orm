@@ -5,7 +5,7 @@
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "4fb4ddf7775003e4",
+    "fingerprint": "bb7347288fc8a354",
     "reason": "A column name that several joined tables share must now name its table (prisma/orm#31150), and `transaction()` is a type error for a contract that does not require `sql.interactiveTransactions`; a release candidate's contract may still call it (prisma/orm#31218)."
   },
   {
@@ -14,7 +14,7 @@
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "3c9d16b4eda4510c",
+    "fingerprint": "13f925f8685a2861",
     "reason": "A column name that several joined tables share must now name its table (prisma/orm#31150), and `transaction()` is a type error for a contract that does not require `sql.interactiveTransactions`; a release candidate's contract may still call it (prisma/orm#31218)."
   },
   {
@@ -23,7 +23,7 @@
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "d355ac44c3abb036",
+    "fingerprint": "77c0302affe4a3e9",
     "reason": "A column name that several joined tables share must now name its table (prisma/orm#31150), and `transaction()` is a type error for a contract that does not require `sql.interactiveTransactions`; a release candidate's contract may still call it (prisma/orm#31218)."
   },
   {
