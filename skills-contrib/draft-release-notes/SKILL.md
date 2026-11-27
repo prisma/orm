@@ -242,7 +242,7 @@ Control then returns to `publish-npm-version` for the push + PR-open steps.
 ## Out of scope
 
 - **The publish-time presence gate and `--notes-file` wiring** (`scripts/check-release-notes.mjs`, `.github/workflows/`). This skill *produces* the file; the gate and workflow *consume* it.
-- **Wiring this skill into `publish-npm-version`** and updating `docs/oss/versioning.md` — handled separately; this file is the authoring logic only.
+- **Wiring this skill into `publish-npm-version`** and updating `docs/oss/releasing.md` — handled separately; this file is the authoring logic only.
 - **Dev/beta release notes.** Those builds create no GitHub Release.
 - **Backfilling notes for already-shipped releases.**
 - **A `.github/release.yml` label config or any third-party release-notes tool.** Categorization is done here, by reasoning over the diff + Linear context — not from PR labels or an external generator.
@@ -306,5 +306,5 @@ Contract deserialization gains an explicit adapter seam, and queries can now eag
 - [`record-upgrade-instructions`](../record-upgrade-instructions/SKILL.md) — per-PR pending-fragment authoring and validation.
 - [Upgrade instruction lifecycle](../../upgrade-instructions/README.md) — assembly, archives, and checks for the published guides linked from notes.
 - [`scripts/check-upgrade-coverage.mjs`](../../scripts/check-upgrade-coverage.mjs) — declaration coverage and release completeness.
-- [`docs/oss/versioning.md`](../../docs/oss/versioning.md) — the version contract and release procedure these notes are part of.
+- [`docs/oss/releasing.md`](../../docs/oss/releasing.md) — the release procedure these notes are part of.
 - Linear ticket: [TML-2758](https://linear.app/prisma-company/issue/TML-2758).

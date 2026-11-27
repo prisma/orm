@@ -103,7 +103,7 @@ describe("the required peers of this repository's facades", () => {
 
       const resolved = await resolveRequiredPeers({
         packageName,
-        ownsFacadeLine: false,
+        facadeLine: 'report',
         installedElsewhere: new Set([ENGINE_PACKAGE]),
         declared: () => new Map(),
         installedVersion: manifests.installedVersion,
@@ -116,12 +116,14 @@ describe("the required peers of this repository's facades", () => {
         packages: [
           ...platform.map((name) => ({
             name,
-            version: `workspace:${version}`,
+            line: `workspace:${version}`,
+            requirement: `workspace:${version}`,
             outcome: 'to-install',
           })),
           ...Object.entries(others).map(([name, range]) => ({
             name,
-            version: range,
+            line: range,
+            requirement: range,
             outcome: 'to-install',
           })),
         ],

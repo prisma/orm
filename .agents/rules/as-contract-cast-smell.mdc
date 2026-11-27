@@ -57,7 +57,7 @@ Updating only one of the two locations is the common drift mode; both must move 
 
 ## Related rules
 
-- [`type-predicates.mdc`](mdc:.cursor/rules/type-predicates.mdc) — `as unknown as X` is the documented blind-cast pattern; `as Contract` alone is the cast that bypasses validation.
+- [`type-predicates.mdc`](type-predicates.mdc) — `as unknown as X` is the documented blind-cast pattern; `as Contract` alone is the cast that bypasses validation.
 
 ## Related tickets
 

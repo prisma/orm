@@ -8,7 +8,7 @@ Each entry should also be filed as a Triage-state Linear ticket in the matching 
 - Prisma Compute → [`compute-gotchas`](https://linear.app/prisma-company/project/compute-gotchas-dd3ac34b5ad4/overview)
 - Prisma Postgres → [`ppg-gotchas`](https://linear.app/prisma-company/project/ppg-gotchas-afe77336f696/overview)
 
-The capture workflow is documented in [`.claude/skills/record-gotchas/SKILL.md`](.claude/skills/record-gotchas/SKILL.md).
+The capture workflow is documented in [`skills-contrib/record-gotcha/SKILL.md`](skills-contrib/record-gotcha/SKILL.md).
 
 ---
 

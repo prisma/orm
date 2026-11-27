@@ -60,7 +60,7 @@ pnpm --filter multi-extension-monorepo test
 
 Each internal "package" under `packages/` follows the **contract-space package layout** convention described in [ADR 212 — Contract spaces](../../docs/architecture%20docs/adrs/ADR%20212%20-%20Contract%20spaces.md). The same pipeline application authors use is applied per-subdirectory:
 
-1. Edit `packages/<pkg>/src/contract.prisma` (the PSL entry-point — see the [contract-space package layout convention](../../.cursor/rules/contract-space-package-layout.mdc) for why PSL is the preferred authoring form).
+1. Edit `packages/<pkg>/src/contract.prisma` (the PSL entry-point — see the [contract-space package layout convention](../../.agents/rules/contract-space-package-layout.mdc) for why PSL is the preferred authoring form).
 2. Re-emit the canonical contract artefacts (`src/contract.json`, `src/contract.d.ts`) from inside the subdirectory:
 
    ```sh

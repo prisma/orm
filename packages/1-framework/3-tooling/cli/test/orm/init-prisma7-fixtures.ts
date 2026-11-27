@@ -126,7 +126,12 @@ export function preparedTarget(
 ): PreparedTargetPackage {
   return {
     contribution: STUB_CONTRIBUTION,
-    requiredPeers: { facade: '@prisma/orm-postgres', packages: [], unread: [], warnings: [] },
+    requiredPeers: {
+      facade: '@prisma/orm-postgres',
+      packages: [],
+      unread: [],
+      warnings: [],
+    },
     installed: [],
     added: undefined,
     warnings: [],

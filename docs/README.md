@@ -7,6 +7,7 @@ This directory contains the primary documentation for the repository.
 - [Architecture Overview](./Architecture%20Overview.md) — high-level design and layering
 - [Getting Started](./onboarding/Getting-Started.md) — build, test, and run the demo
 - [Testing Guide](./Testing%20Guide.md) — testing philosophy and commands
+- [Public API compatibility checks](./Public%20API%20Compatibility.md) — what CI checks against the last release, and how to record a deliberate break
 
 ## Deploying
 
@@ -52,7 +53,8 @@ This directory contains the primary documentation for the repository.
 - [OSS posture overview](./oss/README.md) — index of governance, supply-chain, and contribution policies
 - [Governance](./oss/governance.md) — maintainer team, decision-making, DCO basis
 - [Supply chain](./oss/supply-chain.md) — license validation, NOTICE audit, npm provenance, Dependabot cooldown
-- [Versioning](./oss/versioning.md) — source of truth, lockstep, dist-tag convention, release procedure
+- [Versions and support](./oss/versioning.md) — which versions are supported, what a version number means, what stays compatible, how to upgrade
+- [Releasing](./oss/releasing.md) — who can publish, how a release is published, the procedures
 - [Supported Versions](./Supported%20Versions.md) — minimum Node, TypeScript, PostgreSQL, MongoDB, Bun, Deno versions
 - [Telemetry](./Telemetry.md) — what the CLI collects, the user-level config file, env-var opt-outs, the `init` consent prompt, agent detection
 

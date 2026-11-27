@@ -705,7 +705,7 @@ Cross-namespace relations (e.g. `public.Profile` → `auth.User`) follow the sam
 
 ## Reference Files
 
-- Example queries under [`examples/prisma-8-demo/src/orm-client/`](examples/prisma-8-demo/src/orm-client/) and [`examples/prisma-8-demo/src/queries/`](examples/prisma-8-demo/src/queries/) — canonical ORM and SQL-builder shapes.
+- Example queries under [`examples/prisma-8-demo/src/orm-client/`](https://github.com/prisma/orm/tree/main/examples/prisma-8-demo/src/orm-client) and [`examples/prisma-8-demo/src/queries/`](https://github.com/prisma/orm/tree/main/examples/prisma-8-demo/src/queries) — canonical ORM and SQL-builder shapes.
 - ORM client source under `packages/3-extensions/sql-orm-client/src/`.
 - SQL builder source under `packages/2-sql-family/4-lanes/sql-builder/src/`.
 

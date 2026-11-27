@@ -8,12 +8,11 @@ import { builtinModules } from 'node:module';
 import { dirname, join, relative } from 'node:path';
 import { ApiItemKind, ApiPackage } from '@microsoft/api-extractor-model';
 import ts from 'typescript';
-import { compareCodeUnits, normalizeTypes, renderNode, TypeTextError } from './normalize-type.mjs';
+import { compareCodeUnits } from './api-lines.mjs';
+import { normalizeTypes, renderNode, TypeTextError } from './normalize-type.mjs';
 import { readExports } from './read-exports.mjs';
 
 export class ApiListError extends Error {}
-
-export { compareCodeUnits };
 
 const WHITESPACE = new Set([ts.SyntaxKind.WhitespaceTrivia, ts.SyntaxKind.NewLineTrivia]);
 const LITERALS = new Set([
@@ -32,6 +31,12 @@ const COMMENTS = new Set([
 // kept as it is, except that a line break in it is written `\n`, so every item stays on one line.
 // Tokens are TypeScript's own: a `}` that closes a template's `${…}` is scanned again as the rest
 // of the template.
+// A line comment would end the line it is joined onto, hiding the code after it.
+const asBlockComment = (token, text) =>
+  token === ts.SyntaxKind.SingleLineCommentTrivia
+    ? `/* ${text.slice(2).trim().replaceAll('*/', '* /')} */`
+    : text;
+
 export function oneLine(text) {
   const scanner = ts.createScanner(
     ts.ScriptTarget.Latest,
@@ -50,7 +55,7 @@ export function oneLine(text) {
     }
     spaced = false;
     if (COMMENTS.has(token)) {
-      result += scanner.getTokenText().replace(/\s+/g, ' ');
+      result += asBlockComment(token, scanner.getTokenText()).replace(/\s+/g, ' ');
       continue;
     }
     if (token === ts.SyntaxKind.OpenBraceToken) open.push('brace');

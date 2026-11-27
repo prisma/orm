@@ -5,7 +5,6 @@ import { isStructuredError } from '@internal/utils/structured-error';
 import type { Block, Presentations } from '@prisma/cli-engine';
 import { flag, noDataLines } from '@prisma/cli-engine';
 import { notOk, ok } from '@prisma/cli-engine/protocol';
-import { createControlClient } from '../../control-api/client';
 import { errorFromCaught } from '../../control-api/operations/caught-errors';
 import {
   buildRefAdvancementFields,
@@ -267,5 +266,3 @@ export function createDbInitCommand(createClient: CreateControlClient) {
     },
   });
 }
-
-export const dbInitCommand = createDbInitCommand(createControlClient);

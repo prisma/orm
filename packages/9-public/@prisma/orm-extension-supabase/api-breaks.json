@@ -1,0 +1,29 @@
+[
+  {
+    "path": "./runtime",
+    "export": "RoleBoundDb",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "34261bf6461da021",
+    "reason": "A column name that several joined tables share must now name its table (prisma/orm#31150)."
+  },
+  {
+    "path": "./runtime",
+    "export": "ServiceRoleDb",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "61772b2813420f86",
+    "reason": "A column name that several joined tables share must now name its table (prisma/orm#31150)."
+  },
+  {
+    "path": "./runtime",
+    "export": "SupabaseTransactionContext",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "192a7de67f01c3fd",
+    "reason": "A column name that several joined tables share must now name its table (prisma/orm#31150)."
+  }
+]

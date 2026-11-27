@@ -46,6 +46,7 @@ import { builtinModules } from 'node:module';
 import { join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { init as initLexer, parse as parseModule } from 'es-module-lexer/minimal';
+import { parseVersion } from '../packages/0-shared/publish-surface/src/release-plan.ts';
 
 const ENGINE_PACKAGE = '@prisma/cli-engine';
 const TOOLCHAIN_PACKAGE = '@prisma/orm-toolchain';
@@ -291,14 +292,25 @@ export function findValidatorViolations(section) {
  * dependency graph names unpublished workspace siblings: every packed
  * workspace package reachable from `rootName` through
  * dependencies/peer/optional gets a version-qualified key
- * (`name@declared-spec`) mapped to its absolute `file:` tarball path.
- * Cycles between siblings are tolerated. Pure; exported for tests.
+ * (`name@declared-spec`) mapped to its absolute `file:` tarball path when
+ * the declared spec is one exact version, and its bare name when the spec
+ * is a range (`^8.1.0`, `~8.1.0-preview.0`), which no version-qualified key
+ * names. Cycles between siblings are tolerated. Pure; exported for tests.
  *
  * @param {object} args
  * @param {string} args.rootName
  * @param {Map<string, { tarballPath: string; manifest: Record<string, unknown> }>} args.packedByName
  * @returns {Record<string, string>}
  */
+function isExactVersion(spec) {
+  try {
+    parseVersion(spec);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function computeOverrides({ rootName, packedByName }) {
   const overrides = {};
   const visited = new Set();
@@ -313,7 +325,8 @@ export function computeOverrides({ rootName, packedByName }) {
       for (const [depName, spec] of Object.entries(deps)) {
         const sibling = packedByName.get(depName);
         if (!sibling) continue;
-        overrides[`${depName}@${spec}`] = `file:${sibling.tarballPath}`;
+        overrides[isExactVersion(spec) ? `${depName}@${spec}` : depName] =
+          `file:${sibling.tarballPath}`;
         visit(depName);
       }
     }

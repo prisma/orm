@@ -15,7 +15,7 @@ Anything in `projects/` is **transient**: once the project is complete, migrate 
 
 ### Workflow
 
-- Start with `drive-start-workflow` (which routes new work into direct change / slice / project) or invoke `drive-create-project` directly when you already know it's a project, then shape the work as **spec → plan → implement**. Methodology and skill map: [`docs/drive/`](../docs/drive/README.md).
+- Start with `drive-start-workflow` (which routes new work into direct change / slice / project) or invoke `drive-create-project` directly when you already know it's a project, then shape the work as **spec → plan → implement**. Methodology and skill map: [`docs/engineering/drive-process.md`](https://github.com/prisma/ignite/blob/main/docs/engineering/drive-process.md).
 
 ### Project lifecycle
 

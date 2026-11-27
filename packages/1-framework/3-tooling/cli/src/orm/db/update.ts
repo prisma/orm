@@ -17,7 +17,6 @@ import {
   notOk,
   ok,
 } from '@prisma/cli-engine/protocol';
-import { createControlClient } from '../../control-api/client';
 import { errorFromCaught } from '../../control-api/operations/caught-errors';
 import {
   type ResolveContractRefToSnapshotSuccess,
@@ -561,8 +560,6 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
     },
   });
 }
-
-export const dbUpdateCommand = createDbUpdateCommand(createControlClient);
 
 /**
  * The `migration plan` that takes the database where `db update` goes: to `destination`, the

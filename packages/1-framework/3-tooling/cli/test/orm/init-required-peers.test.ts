@@ -173,6 +173,28 @@ describe('init lists the packages the facade names as peers', () => {
   );
 
   it(
+    'reports each required peer in the JSON output with exactly the keys the output schema declares',
+    async () => {
+      installedPostgresStack();
+
+      const run = await (await harness('@prisma/orm-postgres')).run(POSTGRES, {
+        cwd: projectDir,
+      });
+
+      const reported: readonly Record<string, unknown>[] =
+        Reflect.get(
+          Reflect.get(run.presented?.data ?? {}, 'packagesInstalled') ?? {},
+          'requiredPeers',
+        ) ?? [];
+      expect({
+        keys: [...new Set(reported.map((peer) => Object.keys(peer).sort().join(',')))],
+        json: JSON.stringify(run.json).includes('"requirement"'),
+      }).toEqual({ keys: ['name,outcome,version'], json: false });
+    },
+    timeouts.coldTransformImport,
+  );
+
+  it(
     'installs the MongoDB platform packages at the version of the installed package',
     async () => {
       installed('@prisma/orm-mongo', {
@@ -316,10 +338,26 @@ describe('init lists the packages the facade names as peers', () => {
             'pg',
           ],
           requiredPeers: [
-            { name: '@prisma/orm-family-sql', version: VERSION, outcome: 'installed' },
-            { name: '@prisma/orm-framework', version: VERSION, outcome: 'left-at-another-version' },
-            { name: '@prisma/orm-target-postgres', version: VERSION, outcome: 'installed' },
-            { name: '@prisma/orm-toolchain', version: VERSION, outcome: 'installed' },
+            {
+              name: '@prisma/orm-family-sql',
+              version: VERSION,
+              outcome: 'installed',
+            },
+            {
+              name: '@prisma/orm-framework',
+              version: VERSION,
+              outcome: 'left-at-another-version',
+            },
+            {
+              name: '@prisma/orm-target-postgres',
+              version: VERSION,
+              outcome: 'installed',
+            },
+            {
+              name: '@prisma/orm-toolchain',
+              version: VERSION,
+              outcome: 'installed',
+            },
             { name: 'pg', version: '^8.22.0', outcome: 'already-listed' },
           ],
         },
@@ -442,7 +480,11 @@ describe('init lists the packages the facade names as peers', () => {
         warnings: expect.not.arrayContaining([expect.stringContaining('package.json lists')]),
         packagesInstalled: {
           requiredPeers: expect.arrayContaining([
-            { name: '@prisma/orm-framework', version: VERSION, outcome: 'already-listed' },
+            {
+              name: '@prisma/orm-framework',
+              version: VERSION,
+              outcome: 'already-listed',
+            },
           ]),
         },
       });

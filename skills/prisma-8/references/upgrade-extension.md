@@ -27,7 +27,10 @@ If detection is ambiguous, ask the user which role to operate under.
 
 ## Version detection
 
-- **From-version.** Read the currently-installed Prisma 8 version from `pnpm-lock.yaml` (or `package-lock.json` / `yarn.lock`) by inspecting the resolved version of any `@prisma/orm-*` platform package (`@prisma/orm-framework`, `@prisma/orm-family-*`, `@prisma/orm-target-*`, `@prisma/orm-toolchain`). Do not read it from an extension published by someone else; it carries its own version. Compare full semver strings, prerelease identifier included: `8.0.0-rc.10` and `8.0.0-rc.11` are different versions and different steps in the chain below. If the lockfile shows the platform packages at different versions, the lowest is the from-version.
+- **From-version.** Read the installed Prisma 8 version from `pnpm-lock.yaml` (or `package-lock.json` / `yarn.lock`): take the resolved version of any `@prisma/orm-*` platform package (`@prisma/orm-framework`, `@prisma/orm-family-*`, `@prisma/orm-target-*`, `@prisma/orm-toolchain`). Do not read it from an extension published by someone else, which has its own version.
+  - **On the `8.0.0` release candidates,** compare the full version strings, including the part after the hyphen. `8.0.0-rc.10` and `8.0.0-rc.11` are different versions, and different steps in the chain below.
+  - **From release 8.0,** a step is named by the release, which is the major and minor: `8.0-to-8.1`. So the from-version is the release that a package's version belongs to. `8.0.1-ea.0`, `8.0.1` and `8.0.2` all belong to release `8.0`. (A platform package below GA has a level suffix, such as `8.0.1-ea.0` for `@prisma/orm-family-mongo`.)
+  - If the lockfile shows the platform packages on different releases, the lowest is the from-version.
 - **To-version.** Either the version the user specified, or whatever `npm view @prisma/orm-framework dist-tags.latest` reports. Do not assume that is a stable version: while Prisma 8 is a release candidate, `latest` tracks the newest release, `8.0.0-rc.N` included. If the user wants a stable version specifically, they must name it.
 
 Report both back to the user before continuing.
@@ -46,21 +49,35 @@ Apply each step in order, fully: bump, install, run instructions, check pins, va
 
 ## Per-step flow
 
-This flow assumes you are an **external extension author** — your extension lives in its own repo and consumes `@prisma/orm-*` from npm. (Extensions inside the `prisma/prisma` monorepo itself are bumped via `pnpm bump-version` / `scripts/set-version.ts`, which rewrites every `workspace:<X.Y.Z>` spec in lockstep with the root version; they do not run this skill.)
+This flow assumes you are an **external extension author**: your extension lives in its own repository and gets `@prisma/orm-*` from npm. Extensions inside the Prisma ORM repository do not run this skill. Their versions and ranges are written by `pnpm bump-version` and `scripts/set-version.ts`, from the repository's release plan.
 
 For each `(from, to)` step in the chain:
 
-1. **Bump `@prisma/orm-*` deps.** Rewrite every `@prisma/orm-*` entry in the extension's `package.json` to the exact `<to>` version, another extension published from the Prisma repository such as `@prisma/orm-extension-pgvector` included: every `@prisma/orm-*` package is published at every release and names the others at that release's version (e.g. `"8.0.0-rc.11"` — no caret, no tilde, no range, no `workspace:` specifier; the exact-pin rule below details why). All entries advance to the same version. Every such package the extension's shipped code imports belongs under `peerDependencies` and again under `devDependencies`, at the same version. One that only the extension's tests use, such as a database package the tests run against, belongs under `devDependencies` alone, at the same version. Move any entry still under `dependencies` or `optionalDependencies` there: an extension written for an earlier release held the framework, the family and the toolchain as ordinary dependencies. The skill itself ships inside the Prisma packages, so bumping them is what updates it; there is no separate skill package to bump.
+1. **Bump `@prisma/orm-*` deps.** What to write depends on the release:
+   - **On the `8.0.0` release candidates,** rewrite every `@prisma/orm-*` entry in the extension's `package.json` to the exact `<to>` version, such as `"8.0.0-rc.11"`: no caret, no tilde, no range, and no `workspace:` specifier. The exact-pin rule below says why. All entries move to the same version. That includes another extension published from the Prisma repository, such as `@prisma/orm-extension-pgvector`: every `@prisma/orm-*` package is published at every release, and each lists the others at that release's version.
+   - **From release 8.0,** write the ranges that [the last section](#from-release-80-number-your-package-and-declare-ranges) gives.
+
+   Where each entry goes is the same on every release:
+   - A package that the extension's shipped code imports belongs under `peerDependencies`, and again under `devDependencies`, at the same version.
+   - A package that only the extension's tests use, such as a database package the tests run against, belongs under `devDependencies` alone, at the same version.
+   - Move any entry that is still under `dependencies` or `optionalDependencies`. An extension written for an earlier release had the framework, the family and the toolchain as ordinary dependencies.
+
+   The skill itself ships inside the Prisma packages, so bumping them is what updates it. There is no separate skill package to bump.
 
 2. **Install.** Run `pnpm install` (or the project's lockfile-managing command). The extension's source is now broken against the new SPI — the upgrade instructions for `<from> → <to>` exist to fix it.
 
-3. **Check pins.** Every `@prisma/orm-*` entry under `peerDependencies` or `devDependencies` must now be the single exact string `<to>`, every such peer must also be under `devDependencies`, and none may be under `dependencies` or `optionalDependencies`. A development dependency with no peer entry is one only the tests use, and passes. This prints any entry that breaks the rule, and exits 1:
+3. **Check pins.** This check is for the `8.0.0` release candidates. From release 8.0 it does not apply, because the entries are ranges, described in [the last section](#from-release-80-number-your-package-and-declare-ranges). On the release candidates:
+   - every `@prisma/orm-*` entry under `peerDependencies` or `devDependencies` must be the single exact string `<to>`;
+   - every such peer dependency must also be under `devDependencies`;
+   - none may be under `dependencies` or `optionalDependencies`.
+
+   A development dependency with no peer entry is one that only the tests use, and passes. This prints any entry that breaks the rule, and exits 1:
 
    ```bash
    node -e 'const p=require("./package.json");const to=process.argv[1];const ours=(n)=>n.startsWith("@prisma/orm-");const bad=[];for(const f of ["dependencies","optionalDependencies"])for(const n of Object.keys(p[f]??{}))if(ours(n))bad.push(f+": "+n+" belongs in peerDependencies, or in devDependencies alone if only tests use it");for(const f of ["peerDependencies","devDependencies"])for(const [n,v] of Object.entries(p[f]??{}))if(ours(n)&&v!==to)bad.push(f+": "+n+"@"+v);for(const n of Object.keys(p.peerDependencies??{}))if(ours(n)&&!(n in (p.devDependencies??{})))bad.push("devDependencies: "+n+" is missing");if(bad.length){console.error(bad.join("\n"));process.exit(1)}' <to>
    ```
 
-   If it fails, the bump step did not rewrite every spec — fix the offending entries and re-run before proceeding.
+   If it fails, the bump step did not rewrite every entry. Fix the entries it printed and run it again before going on.
 
 4. **Read the upgrade instructions.** Re-sync the skills (`prisma skills sync`) so the tree matches the version just installed, then load `../upgrading/extension/upgrades/<from>-to-<to>/instructions.md`. Parse the YAML frontmatter and pay particular attention to its `changes[]` array.
 
@@ -90,11 +107,39 @@ Move on to the next step. Repeat.
 
 ## Exact-pin rule
 
+This rule holds until release 8.0, while every Prisma 8 package is published as `8.0.0-rc.N`. From release 8.0, ranges replace it; see [the last section](#from-release-80-number-your-package-and-declare-ranges).
+
 A Prisma 8 extension names every `@prisma/orm-*` package its shipped code uses, another extension published from the Prisma repository included, as a **peer dependency** at a single **exact** version (no `^`, no `~`, no range, no wildcard, no `workspace:` specifier in the published `package.json`), and lists the same packages under `devDependencies` at that version, so its own build and tests install them. A package of ours that only its tests use is a development dependency alone, at that version. None of them is an ordinary dependency. All of those entries share the same version. The pin advances after each successful upgrade step, release-candidate steps included.
 
-The version is the one the application's database package (`@prisma/orm-postgres`, `@prisma/orm-mongo`, …) uses. The platform packages recognise a data-type value by which copy made it, so one made by one copy of Prisma ORM is refused by another, and values must never cross between copies. A host may load two copies on purpose, as Prisma Composer's boot wrapper does beside the application bundle, but the application, its extensions and the `prisma` CLI must share one. A package manager gives a package its own copy of an ordinary dependency whenever the version differs from the one already installed, but it never gives a package its own copy of a peer dependency: it uses the copy the application lists. So when every Prisma package an extension uses is a peer, the application's list is the only place a copy can come from, and a version that does not match is reported at install instead of becoming a second copy. When the packages that disagree are ones the application lists itself, npm refuses the install, and pnpm, Yarn and Bun install and print a peer dependency warning. A successful install does not prove the versions match, so read the peer warnings it prints. That holds within one application. A monorepo whose applications are on different Prisma versions can still get two copies under npm workspaces and Bun's hoisted linker; keep such applications on one version, or use pnpm, Yarn or Bun's isolated linker. The application lists the platform packages beside its database package for the same reason. The decision record explains this in full: [ADR 329](https://github.com/prisma/orm/blob/main/docs/architecture%20docs/adrs/ADR%20329%20-%20An%20application%20lists%20the%20platform%20packages%20and%20our%20packages%20name%20each%20other%20as%20peers.md). `npm ls @prisma/orm-framework`, `pnpm why @prisma/orm-framework` or `bun why @prisma/orm-framework` lists every copy and the package that brought it.
+The version is the one the application's database package (`@prisma/orm-postgres`, `@prisma/orm-mongo`, …) uses.
+
+An application must have one copy of each Prisma package, and peer dependencies are what make the package manager check that. A version that does not match is reported at install: npm refuses, and pnpm, Yarn and Bun install and print a peer dependency warning, so read the warnings. With an ordinary dependency, a version that does not fit would quietly become a second copy, which fails at run time.
+
+To list every copy and the package that brought it, run `npm ls @prisma/orm-framework`, `pnpm why @prisma/orm-framework` or `bun why @prisma/orm-framework`. [ADR 329](https://github.com/prisma/orm/blob/main/docs/architecture%20docs/adrs/ADR%20329%20-%20An%20application%20lists%20the%20platform%20packages%20and%20our%20packages%20name%20each%20other%20as%20peers.md) explains the reasons, and the one case peer dependencies do not cover, a monorepo with applications on different Prisma releases.
 
 The one-line check in step 3 of the per-step flow enforces the rule; the `prisma-8-check-pins` guard the monorepo uses for its own extensions is not published. Wire the check into the extension's CI alongside the build/test step so an accidental range pin fails the PR before it lands.
+
+## From release 8.0: number your package and declare ranges
+
+From release 8.0, Prisma's packages share a release number, which is the major and minor of the version. Each package then has its own patch number, or a level suffix such as `-preview.0` while it is below Generally Available (GA). [Versions and support](https://github.com/prisma/orm/blob/main/docs/oss/versioning.md#version-numbers) explains the scheme. For a package maintained outside the Prisma repository we recommend the same convention ([ADR 330](https://github.com/prisma/orm/blob/main/docs/architecture%20docs/adrs/ADR%20330%20-%20A%20maturity%20level%20is%20written%20in%20a%20package's%20version%20and%20an%20API's%20name.md#packages-maintained-outside-this-repository)).
+
+**Your package's version.** Take the major and minor of the first Prisma release your package works with. The patch number is your own. A package built on release `8.1` is `8.1.0`, then `8.1.1` and `8.1.2` for your own changes. The number means "needs at least this release". It does not have to equal the application's release.
+
+**The ranges you list on Prisma's packages,** as peer dependencies:
+
+| Situation | Range | Example |
+| --- | --- | --- |
+| A GA package, and you use only its GA functions | A caret on the first release your package works with | `^8.1.0` |
+| A GA package, and you use a function below GA, such as `preview_search` | A tilde: that function may change in the next release | `~8.1.0` |
+| A package below GA | A tilde on its first version in that release | `~8.1.0-preview.0` |
+
+With a caret, your package keeps working when an application moves to a later release: a package at `8.1.2` that lists `^8.1.0` works in an application on `8.4`. An application on a release below `8.1` gets a mismatch reported at install. With a tilde, you publish a new version of your package for each Prisma release.
+
+**At release 8.0, write `^8.0.1` and `~8.0.1-ea.0`** (or `-preview.0`, `-rc.0`). Every Prisma package starts release 8.0 at patch 1. Never write `8.0.0` in a range on Prisma's packages: `~8.0.0-ea.0` accepts the old `8.0.0-rc.N` release candidates, because `rc` sorts after `ea`, and some package managers then install one.
+
+**`@prisma/orm-extension-paradedb` is the exception.** It has version numbers of its own, `0.18.0` at release 8.0, and is not published again at every release. If your package lists it, write a range on its own version, such as `^0.18.0`. At each upgrade step, choose the ParadeDB release to use like this. Look at the Prisma packages each ParadeDB release lists under `dependencies`, `peerDependencies` and `optionalDependencies`. Take the release whose entries all accept the versions those Prisma packages have at that step. At release 8.0, a GA Prisma package is at `8.0.1` and one below GA at `8.0.1-ea.0`. The application flow's pre-flight finds an extension's release in the same way.
+
+The convention has two costs. A feature of yours that needs no newer Prisma release ships as a patch. And once your package is GA, you cannot make a breaking change of your own until Prisma's next major version.
 
 ## When the chain is done
 
