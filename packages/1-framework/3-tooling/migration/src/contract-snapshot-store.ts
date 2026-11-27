@@ -48,17 +48,9 @@ export function hasContractSnapshot(migrationsDir: string, storageHash: string):
 }
 
 /**
- * Recompute-and-compare integrity check for loaded contract snapshots,
- * mirroring `verifyMigrationHash` for migration packages and
- * `assertDescriptorSelfConsistency` for extension descriptors: the store is
- * content-addressed, so the JSON read back for a hash must reproduce that
- * hash. Every assertion recomputes — nothing is cached, so mutated or
- * re-read content is always re-verified; repeated resolutions of the same
- * snapshot are already deduplicated by the aggregate's result memo, so each
- * file read is hashed once in practice. The recompute is coupled to
- * the emit-time canonicalization: a release that changes the family hooks
- * or hash canonicalization rules must regenerate (or migrate) existing
- * snapshot stores, or every pre-existing snapshot reads as tampered.
+ * Recompute-and-compare integrity check for loaded contract snapshots, mirroring `verifyMigrationHash` for migration packages and `assertDescriptorSelfConsistency` for extension descriptors: the store is content-addressed, so the JSON read back for a hash must reproduce that hash. Every assertion recomputes; nothing is cached, so mutated or re-read content is always re-verified, and the aggregate's result memo already makes each file read hashed once in practice.
+ *
+ * A release that changes a family's `normalizeStorage` or the hash rules must migrate existing snapshot stores (as the `contract-hash-inputs` upgrade step does), or every existing snapshot reads as tampered.
  */
 export interface SnapshotContentVerifier {
   /**
