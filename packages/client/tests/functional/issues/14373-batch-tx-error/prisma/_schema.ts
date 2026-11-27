@@ -17,5 +17,10 @@ export default testMatrix.setupSchema(({ provider }) => {
     memo      String?
     createdAt DateTime @default(now())
   }
+
+  model Post {
+    id ${idForProvider(provider)}
+    title String
+  }
   `
 })

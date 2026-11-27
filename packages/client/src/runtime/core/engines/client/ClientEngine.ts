@@ -26,6 +26,7 @@ import { ParamGraph } from '@prisma/param-graph'
 
 import { version as clientVersion } from '../../../../../package.json'
 import { deserializeRawParameters } from '../../../utils/deserializeRawParameters'
+import { resolveErrorMeta } from '../../../utils/resolveErrorMeta'
 import type { BatchQueryEngineResult, EngineConfig, RequestBatchOptions, RequestOptions } from '../common/Engine'
 import { Engine } from '../common/Engine'
 import { LogEmitter, QueryEvent as ClientQueryEvent } from '../common/types/Events'
@@ -321,6 +322,19 @@ export class ClientEngine implements Engine {
     } catch (e) {
       return err
     }
+  }
+
+  /**
+   * Gives an error the query interpreter raised for one query of a batch that query's position in the
+   * batch, as `RemoteExecutor` does for its errors, and resolves its `meta` against that query's model.
+   */
+  #indexBatchError(error: UserFacingError, batchIndex: number, modelName: string | undefined): Error {
+    return new PrismaClientKnownRequestError(error.message, {
+      code: error.code,
+      meta: resolveErrorMeta(this.config.runtimeDataModel, error.meta, error.code, modelName),
+      clientVersion: this.config.clientVersion,
+      batchRequestIdx: batchIndex,
+    })
   }
 
   #transformCompileError(error: any): any {
@@ -645,7 +659,21 @@ export class ClientEngine implements Engine {
               await this.transaction('commit', {}, txInfo)
             }
           }
-          return results as BatchQueryEngineResult<T>[]
+          if (!rollback) {
+            return results as BatchQueryEngineResult<T>[]
+          }
+
+          // The queries skipped after a failure share its error, so they share its position too.
+          const indexed = new Map<UserFacingError, Error>()
+          return results.map((result, batchIndex) => {
+            if (!(result instanceof UserFacingError)) return result
+            let error = indexed.get(result)
+            if (error === undefined) {
+              error = this.#indexBatchError(result, batchIndex, queries[batchIndex].modelName)
+              indexed.set(result, error)
+            }
+            return error
+          }) as BatchQueryEngineResult<T>[]
         }
         case 'compacted': {
           if (!queries.every((q) => q.action === firstAction && q.modelName === firstModelName)) {
@@ -681,7 +709,11 @@ export class ClientEngine implements Engine {
           })
 
           const results = convertCompactedRows(rows as {}[], batchResponse, placeholderValues)
-          return results.map((result) => ({ data: { [firstAction]: result } }) as BatchQueryEngineResult<T>)
+          return results.map((result, batchIndex) =>
+            result instanceof UserFacingError
+              ? this.#indexBatchError(result, batchIndex, firstModelName)
+              : ({ data: { [firstAction]: result } } as BatchQueryEngineResult<T>),
+          )
         }
       }
     } catch (e: any) {
