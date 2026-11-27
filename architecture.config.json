@@ -565,6 +565,12 @@
       "plane": "shared"
     },
     {
+      "glob": "packages/3-targets/postgres/1-target/src/exports/server-version-range.ts",
+      "domain": "extensions",
+      "layer": "targets",
+      "plane": "shared"
+    },
+    {
       "glob": "packages/3-targets/postgres/1-target/src/exports/sql-utils.ts",
       "domain": "extensions",
       "layer": "targets",
@@ -661,6 +667,12 @@
       "plane": "runtime"
     },
     {
+      "glob": "packages/3-targets/postgres/2-adapter/src/exports/capabilities.ts",
+      "domain": "targets",
+      "layer": "adapters",
+      "plane": "shared"
+    },
+    {
       "glob": "packages/3-targets/postgres/2-adapter/src/exports/adapter.ts",
       "domain": "targets",
       "layer": "adapters",
@@ -728,6 +740,12 @@
     },
     {
       "glob": "packages/3-targets/postgres/3-driver/src/driver-error.ts",
+      "domain": "targets",
+      "layer": "drivers",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/3-targets/postgres/3-driver/src/exports/capabilities.ts",
       "domain": "targets",
       "layer": "drivers",
       "plane": "shared"

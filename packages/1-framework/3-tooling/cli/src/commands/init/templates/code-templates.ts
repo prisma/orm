@@ -2,6 +2,18 @@ import {
   type ContractSourceFormat,
   DEFAULT_CONTRACT_SOURCE_DIR,
 } from '@internal/config/config-types';
+import {
+  type ImportRequirement,
+  jsonToTsSource,
+  renderImports,
+  TsExpression,
+} from '@internal/ts-render';
+import { InternalError } from '@internal/utils/internal-error';
+import type {
+  ConfigModuleExports,
+  ContractEntryInput,
+  ContractEntryNode,
+} from '../init-contribution';
 
 export function defaultSchemaPath(authoring: ContractSourceFormat): string {
   if (authoring === 'typescript') {
@@ -10,46 +22,101 @@ export function defaultSchemaPath(authoring: ContractSourceFormat): string {
   return `${DEFAULT_CONTRACT_SOURCE_DIR}/contract.prisma`;
 }
 
-/** A module name as a single-quoted TypeScript string literal, the quoting the configs use. */
-function singleQuoted(moduleName: string): string {
-  return `'${moduleName.replaceAll('\\', '\\\\').replaceAll("'", "\\'")}'`;
+/**
+ * `renderImports` puts each module name between single quotes as it is, so a quote or a
+ * backslash in the name is escaped here.
+ */
+function escapedForSingleQuotes(requirement: ImportRequirement): ImportRequirement {
+  return {
+    ...requirement,
+    moduleSpecifier: requirement.moduleSpecifier.replaceAll('\\', '\\\\').replaceAll("'", "\\'"),
+  };
 }
 
-export function configFile(contractPath: string, configModule: string): string {
-  return `import 'dotenv/config';
-import { definePrismaConfig } from '@prisma/cli-engine';
-import { defineConfig as ormConfig } from ${singleQuoted(configModule)};
+class ContractPathEntry extends TsExpression implements ContractEntryNode {
+  constructor(private readonly path: string) {
+    super();
+  }
 
-export default definePrismaConfig({
-  orm: ormConfig({
-    contract: ${JSON.stringify(contractPath)},
-    db: {
-      connection: process.env['DATABASE_URL']!,
-    },
-  }),
-});
-`;
+  renderTypeScript(): string {
+    return jsonToTsSource(this.path);
+  }
+
+  importRequirements(): readonly ImportRequirement[] {
+    return [];
+  }
+
+  contractValue(): unknown {
+    return this.path;
+  }
+}
+
+class Prisma7SchemaEntry extends TsExpression implements ContractEntryNode {
+  constructor(
+    private readonly configModule: string,
+    private readonly path: string,
+  ) {
+    super();
+  }
+
+  renderTypeScript(): string {
+    return `prisma7Schema(${jsonToTsSource(this.path)})`;
+  }
+
+  importRequirements(): readonly ImportRequirement[] {
+    return [{ moduleSpecifier: this.configModule, symbol: 'prisma7Schema' }];
+  }
+
+  contractValue(exports: ConfigModuleExports): unknown {
+    const prisma7Schema = exports['prisma7Schema'];
+    if (typeof prisma7Schema !== 'function') {
+      throw new InternalError(
+        `${this.configModule} exports no prisma7Schema function, which the config's contract entry imports.`,
+      );
+    }
+    return prisma7Schema(this.path);
+  }
+}
+
+/** The config's `contract:` entry for a contribution that gives none: the path, or `prisma7Schema(<path>)` from `configModule`. */
+export function defaultContractEntry(
+  configModule: string,
+  input: ContractEntryInput,
+): ContractEntryNode {
+  return input.kind === 'prisma7-schema'
+    ? new Prisma7SchemaEntry(configModule, input.path)
+    : new ContractPathEntry(input.path);
+}
+
+function configFileImports(configModule: string): readonly ImportRequirement[] {
+  return [
+    { moduleSpecifier: '@prisma/cli-engine', symbol: 'definePrismaConfig' },
+    { moduleSpecifier: configModule, symbol: 'defineConfig', alias: 'ormConfig' },
+  ];
 }
 
 /**
- * The config for a project whose contract source is its Prisma 7 schema:
- * `prisma7Schema` beside `defineConfig`, from the same module, with the
- * schema path as the user gave it and the emitted artifacts under Prisma 8's
- * own directory (`output` is the directory; the target package names `contract.json`).
+ * `prisma.config.ts`, with `contract` as its contract entry. `output` is the directory the
+ * contract is emitted into, written only when it is given; the target package names the files.
  */
-export function prisma7ConfigFile(
-  schemaPath: string,
-  outputDir: string,
-  configModule: string,
-): string {
+export function configFile(options: {
+  readonly configModule: string;
+  readonly contract: ContractEntryNode;
+  readonly output: string | undefined;
+}): string {
+  const imports = renderImports(
+    [...configFileImports(options.configModule), ...options.contract.importRequirements()].map(
+      escapedForSingleQuotes,
+    ),
+  );
+  const output =
+    options.output === undefined ? '' : `\n    output: ${JSON.stringify(options.output)},`;
   return `import 'dotenv/config';
-import { definePrismaConfig } from '@prisma/cli-engine';
-import { defineConfig as ormConfig, prisma7Schema } from ${singleQuoted(configModule)};
+${imports}
 
 export default definePrismaConfig({
   orm: ormConfig({
-    contract: prisma7Schema(${JSON.stringify(schemaPath)}),
-    output: ${JSON.stringify(outputDir)},
+    contract: ${options.contract.renderTypeScript().replaceAll('\n', '\n    ')},${output}
     db: {
       connection: process.env['DATABASE_URL']!,
     },

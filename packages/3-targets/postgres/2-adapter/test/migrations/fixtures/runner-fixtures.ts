@@ -66,7 +66,7 @@ export const emptySchema = new PostgresDatabaseSchemaNode({
   namespaces: {},
   roles: [],
   existingSchemas: ['public'],
-  pgVersion: 'unknown',
+  serverVersionNumber: undefined,
 });
 
 const controlStack = createControlStack({

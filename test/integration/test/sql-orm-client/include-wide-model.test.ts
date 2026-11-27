@@ -1,10 +1,18 @@
 import { int4Column, textColumn } from '@internal/adapter-postgres/column-types';
-import { defineContract, field, model, rel } from '@internal/postgres/contract-builder';
+import postgresAdapter from '@internal/adapter-postgres/runtime';
+import {
+  defineContract,
+  field,
+  model,
+  postgres18,
+  postgresDriver,
+  rel,
+} from '@internal/postgres/contract-builder';
 import { Collection } from '@internal/sql-orm-client';
 import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
 import postgresTarget from '@internal/target-postgres/runtime';
 import { describe, expect, it } from 'vitest';
-import { includeStrategies, postgresAdapterFor } from './helpers';
+import { includeStrategies, withIncludeStrategy } from './helpers';
 import { timeouts, withPushedContractRuntime } from './integration-helpers';
 
 function wideContract(wideColumns: readonly string[]) {
@@ -21,7 +29,10 @@ function wideContract(wideColumns: readonly string[]) {
     relations: { comments: rel.hasMany(() => Comment, { by: 'postId' }) },
   }).sql({ table: 'wide_posts' });
 
-  return defineContract({ models: { Post, Comment } });
+  return defineContract({
+    requiredCapabilities: [...postgres18, ...postgresDriver],
+    models: { Post, Comment },
+  });
 }
 
 describe.each(includeStrategies)(
@@ -36,10 +47,10 @@ describe.each(includeStrategies)(
         );
         const contract = wideContract(wideColumns);
         const context = createExecutionContext({
-          contract,
+          contract: withIncludeStrategy(contract, strategy),
           stack: createSqlExecutionStack({
             target: postgresTarget,
-            adapter: postgresAdapterFor(strategy),
+            adapter: postgresAdapter,
           }),
         });
 

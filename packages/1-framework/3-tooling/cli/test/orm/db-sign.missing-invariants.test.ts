@@ -4,15 +4,19 @@ import type { DbSignSpaceOutcome } from '../../src/control-api/operations/db-sig
 import { issueNodes } from '../../src/orm/db/verification';
 import {
   cleanupProjectDirs,
+  DATABASE_NOT_PROVIDED,
   DRIFTED,
   diagnosticsOf,
   envelopeOf,
+  failedSpace,
   HASH_A,
   HASH_EXT,
   HASH_PREVIOUS,
   harness,
   MISSING_COLUMN,
   mocks,
+  NOT_PROVIDED,
+  OLDER_THAN_SUPPORTED,
   ormConfig,
   PROFILE_HASH,
   projectDir,
@@ -66,7 +70,7 @@ describe('db sign refusing a space whose marker lacks a required invariant', () 
         code: 'MIGRATION.SIGN_INVARIANTS_MISSING',
         severity: 'error',
         summary: 'Space "pgvector" requires invariants its marker does not record',
-        why: `The head ref of space "pgvector" requires the invariant "${INSTALL_VECTOR}", which the database marker does not record. An invariant records that a migration ran, and db sign never runs migrations, so it did not sign this space.`,
+        why: `The head ref of space "pgvector" requires the invariant "${INSTALL_VECTOR}", which the database marker does not record. An invariant records that a migration ran, and \`db sign\` never runs migrations, so it did not sign this space.`,
         nextActions: [
           {
             kind: 'run-command',
@@ -173,5 +177,91 @@ describe('db sign refusing a space that also fails verification', () => {
         },
       ],
     });
+  });
+});
+
+describe('db sign refusing a space whose database also does not provide what its contract requires', () => {
+  const refusedAndLacking: DbSignSpaceOutcome = { ...refused, schema: NOT_PROVIDED };
+
+  beforeEach(() => {
+    mocks.dbSign.mockResolvedValue(ok({ spaces: [signed, refusedAndLacking] }));
+  });
+
+  it('offers no command that changes the database, db migrate included', async () => {
+    const dir = await projectDir();
+
+    const run = await harness(ormConfig()).run(['db', 'sign', '--json'], { cwd: dir });
+
+    expect(diagnosticsOf(run).map(({ code, nextActions }) => ({ code, nextActions }))).toEqual([
+      { code: 'MIGRATION.SIGN_INVARIANTS_MISSING', nextActions: [] },
+      { code: 'CONTRACT.DATABASE_CAPABILITIES_NOT_PROVIDED', nextActions: [] },
+    ]);
+    expect(diagnosticsOf(run)[0]).toEqual({
+      code: 'MIGRATION.SIGN_INVARIANTS_MISSING',
+      severity: 'error',
+      summary: 'Space "pgvector" requires invariants its marker does not record',
+      why: `The head ref of space "pgvector" requires the invariant "${INSTALL_VECTOR}", which the database marker does not record. An invariant records that a migration ran, and \`db sign\` never runs migrations, so it did not sign this space. \`db update\`, \`db init\` and \`db migrate\` refuse this database until it provides what the contract requires.`,
+      nextActions: [],
+      meta: { space: 'pgvector', missingInvariants: [INSTALL_VECTOR] },
+    });
+  });
+
+  it('says the database does not provide what the contract requires, in the summary and the label, with no schema issue under it', async () => {
+    const dir = await projectDir();
+
+    const json = await harness(ormConfig()).run(['db', 'sign', '--json'], { cwd: dir });
+    const human = await harness(ormConfig()).run(['db', 'sign', '--no-advance-ref'], {
+      cwd: dir,
+      isTty: { stdout: true },
+    });
+
+    expect(json.presented?.data).toMatchObject({
+      summary:
+        'Space "pgvector" requires invariants its marker does not record; the database does not provide what the contract requires for space "pgvector"; signed "app"',
+    });
+    expect(human.presented?.presentation.human[1]).toMatchObject({
+      kind: 'tree',
+      roots: [
+        { status: 'ok' },
+        {
+          label:
+            'pgvector: not signed, its marker does not record invariants its head ref requires, and the database does not provide what its contract requires',
+          status: 'error',
+          children: [{ label: `missing invariant: ${INSTALL_VECTOR}`, status: 'error' }],
+        },
+      ],
+    });
+  });
+});
+
+describe('db sign refusing a space that lacks invariants beside another space whose database does not provide what its contract requires', () => {
+  beforeEach(() => {
+    mocks.dbSign.mockResolvedValue(
+      ok({ spaces: [failedSpace('app', HASH_A, NOT_PROVIDED), refused] }),
+    );
+  });
+
+  it('offers no db migrate, and says why, since db update, db init and db migrate refuse the database', async () => {
+    const dir = await projectDir();
+
+    const run = await harness(ormConfig()).run(['db', 'sign', '--json'], { cwd: dir });
+
+    expect(diagnosticsOf(run)).toEqual([
+      {
+        code: 'CONTRACT.DATABASE_CAPABILITIES_NOT_PROVIDED',
+        severity: 'error',
+        summary: OLDER_THAN_SUPPORTED,
+        nextActions: [],
+        meta: { space: 'app', schemaIssues: [DATABASE_NOT_PROVIDED] },
+      },
+      {
+        code: 'MIGRATION.SIGN_INVARIANTS_MISSING',
+        severity: 'error',
+        summary: 'Space "pgvector" requires invariants its marker does not record',
+        why: `The head ref of space "pgvector" requires the invariant "${INSTALL_VECTOR}", which the database marker does not record. An invariant records that a migration ran, and \`db sign\` never runs migrations, so it did not sign this space. \`db update\`, \`db init\` and \`db migrate\` refuse this database until it provides what the contract of another space requires.`,
+        nextActions: [],
+        meta: { space: 'pgvector', missingInvariants: [INSTALL_VECTOR] },
+      },
+    ]);
   });
 });

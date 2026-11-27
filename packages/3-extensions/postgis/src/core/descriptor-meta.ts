@@ -139,11 +139,6 @@ const postgisPackMetaBase = {
   familyId: 'sql',
   targetId: 'postgres',
   version: '0.0.1',
-  capabilities: {
-    postgres: {
-      'postgis.geometry': true,
-    },
-  },
   authoring: {
     type: postgisAuthoringTypes,
   },

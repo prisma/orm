@@ -1,6 +1,13 @@
 import { int4Column, textColumn } from '@internal/adapter-postgres/column-types';
 import postgresAdapter from '@internal/adapter-postgres/runtime';
-import { defineContract, field, model, rel } from '@internal/postgres/contract-builder';
+import {
+  defineContract,
+  field,
+  model,
+  postgres18,
+  postgresDriver,
+  rel,
+} from '@internal/postgres/contract-builder';
 import { Collection } from '@internal/sql-orm-client';
 import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
 import postgresTarget from '@internal/target-postgres/runtime';
@@ -44,7 +51,10 @@ const Member = model('Member', {
   })
   .sql({ table: 'composite_members' });
 
-const contract = defineContract({ models: { Member, Course, Enrollment } });
+const contract = defineContract({
+  requiredCapabilities: [...postgres18, ...postgresDriver],
+  models: { Member, Course, Enrollment },
+});
 const context = createExecutionContext({
   contract,
   stack: createSqlExecutionStack({ target: postgresTarget, adapter: postgresAdapter }),

@@ -52,10 +52,15 @@ vi.mock('pg', () => {
 });
 
 import { Client, Pool } from 'pg';
+import { defineContract, postgres18, postgresDriver } from '../src/exports/contract-builder';
 import { buildNativeEnumsMapForNamespace } from '../src/runtime/native-enums';
 import postgres from '../src/runtime/postgres';
 
 const contract = createContract<SqlStorage>();
+// The default capabilities list includes the driver's interactive transactions.
+const transactionalContract = defineContract({
+  requiredCapabilities: [...postgres18, ...postgresDriver],
+});
 
 function poolEndSpy() {
   return (Pool as unknown as { _endSpy: ReturnType<typeof vi.fn> })._endSpy;
@@ -239,7 +244,7 @@ describe('postgres', () => {
     };
     (pool as unknown as { connect: typeof vi.fn }).connect = vi.fn().mockResolvedValue(fakeClient);
 
-    const db = postgres({ contract, pg: pool });
+    const db = postgres({ contract: transactionalContract, pg: pool });
     await db.connect();
 
     const result = await db.transaction(async () => 'tx-value');
@@ -258,7 +263,7 @@ describe('postgres', () => {
     };
     (pool as unknown as { connect: typeof vi.fn }).connect = vi.fn().mockResolvedValue(fakeClient);
 
-    const db = postgres({ contract, pg: pool });
+    const db = postgres({ contract: transactionalContract, pg: pool });
     await db.connect();
 
     let receivedTx: { sql?: unknown } | undefined;
@@ -279,7 +284,7 @@ describe('postgres', () => {
     };
     (pool as unknown as { connect: typeof vi.fn }).connect = vi.fn().mockResolvedValue(fakeClient);
 
-    const db = postgres({ contract, pg: pool });
+    const db = postgres({ contract: transactionalContract, pg: pool });
     await db.connect();
 
     let receivedTx: { orm?: unknown } | undefined;
@@ -300,7 +305,7 @@ describe('postgres', () => {
     };
     (pool as unknown as { connect: typeof vi.fn }).connect = vi.fn().mockResolvedValue(fakeClient);
 
-    const db = postgres({ contract, pg: pool });
+    const db = postgres({ contract: transactionalContract, pg: pool });
 
     // No runtime yet
     let runtimeBefore: Runtime | undefined;

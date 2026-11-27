@@ -18,6 +18,7 @@ import createTablesOps from '../../migrations/20261126T1200_create_prisma_tables
 };
 import headRef from '../../migrations/refs/head.json' with { type: 'json' };
 import contractJson from '../contract.json' with { type: 'json' };
+import { postgresDatabaseCapabilitiesNotProvidedByTable } from '../core/database-capabilities-not-provided';
 import { postgresTargetDescriptorMeta } from '../core/descriptor-meta';
 import { recordedAccessChangesOf } from '../core/migrations/access-changes';
 import { diffPostgresSchema } from '../core/migrations/diff-database-schema';
@@ -66,6 +67,13 @@ function createPostgresTargetDescriptor(): SqlControlTargetDescriptor<
     },
     diffSchema(input) {
       return diffPostgresSchema(input);
+    },
+    databaseCapabilitiesNotProvided({ contract, schema }) {
+      PostgresDatabaseSchemaNode.assert(schema);
+      return postgresDatabaseCapabilitiesNotProvidedByTable(
+        contract.capabilities,
+        schema.serverVersionNumber,
+      );
     },
     classifySubjectGranularity: postgresDiffSubjectGranularity,
     classifyEntityKind: postgresDiffSubjectEntityKind,

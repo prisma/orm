@@ -13,6 +13,7 @@ import { createTestCli } from '@prisma/cli-engine/testing';
 import { timeouts } from '@repo/test-utils';
 import { basename, dirname, join } from 'pathe';
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { initConfigFile } from '../../src/commands/init/contract-entry';
 import type { InitContribution } from '../../src/commands/init/init-contribution';
 import { resolveTargetName } from '../../src/commands/init/input-values';
 import { BIN_COMMANDS, BIN_GROUPS } from '../../src/orm/cli';
@@ -170,11 +171,16 @@ describe('the Prisma 7 scaffold', () => {
 
       const outcome = scaffold();
 
-      expect(readProjectFile('prisma.config.ts')).toContain(
-        "import { defineConfig as ormConfig, prisma7Schema } from '@internal/postgres/config';",
+      expect(readProjectFile('prisma.config.ts')).toBe(
+        initConfigFile({
+          contribution,
+          input: { kind: 'prisma7-schema', path: 'prisma/schema.prisma' },
+          owner: { packageName: target.packageName, unlisted: false },
+          output: 'src/prisma',
+        }),
       );
       expect(readProjectFile('prisma.config.ts')).toContain(
-        'contract: prisma7Schema("prisma/schema.prisma"),\n    output: "src/prisma",',
+        "import { defineConfig as ormConfig, postgres18, postgresDriver, prisma7Schema } from '@internal/postgres/config';",
       );
       expect(readProjectFile('src/prisma/db.ts')).toContain(
         "import type { Contract } from './contract.d.js';",

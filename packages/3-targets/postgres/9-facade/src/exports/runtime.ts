@@ -1,3 +1,4 @@
+export type { InteractiveTransactionsCapability } from '@internal/sql-runtime';
 export type { PostgresFullTextMethods } from '@internal/target-postgres/full-text';
 export { postgresIsolationLevels as IsolationLevel } from '@internal/target-postgres/runtime';
 export { isPgClient, isPgPool, type PostgresBinding } from '../runtime/binding';
@@ -9,7 +10,11 @@ export type {
   PostgresOptionsBase,
 } from '../runtime/postgres';
 export { default } from '../runtime/postgres';
-export type { PostgresQueryMembers, PostgresTransactionContext } from '../runtime/postgres-members';
+export type {
+  PostgresQueryMembers,
+  PostgresTransactionCallback,
+  PostgresTransactionContext,
+} from '../runtime/postgres-members';
 export type {
   PostgresCursorOptions,
   PostgresPoolOptions,

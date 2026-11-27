@@ -11,7 +11,7 @@ The v1 surface covers the `key_field` storage parameter only. Per-field tokenize
 ## Responsibilities
 
 - **bm25 index registration**: declares a `'bm25'` entry via `defineIndexTypes()` carrying an arktype validator for the bm25 options shape
-- **Extension descriptor**: declares the `paradedb/bm25` capability for contract-level feature detection
+- **Extension descriptor**: declares no capabilities; the bm25 index type is available wherever the contract lists the extension
 - **Pack ref export**: ships a pure `/pack` entrypoint for TypeScript contract authoring
 - **Extension in the contract**: the pack's contract declares the `pg_search` Postgres extension, so the planner creates it and verification checks that it is installed
 
@@ -74,7 +74,7 @@ ParadeDB BM25 indexes require a `key_field` — a unique column that identifies 
 
 ## Capabilities
 
-- `paradedb/bm25` — indicates support for BM25 full-text search indexes
+The extension declares no capabilities. See [`docs/reference/capabilities.md`](../../../docs/reference/capabilities.md).
 
 ## Authoring (maintainers)
 

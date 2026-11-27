@@ -25,6 +25,18 @@ const possiblyEquivalent: SchemaDiffIssue = {
   },
 };
 const plain: SchemaDiffIssue = { path: ['public', 'event', 'id'], expected: node };
+const databaseCapabilitiesNotProvided: SchemaDiffIssue = {
+  path: ['capabilities'],
+  expected: node,
+  explanation: {
+    text: 'This release of Prisma requires PostgreSQL 15 or later. This database runs PostgreSQL 14.10. Upgrade the database to PostgreSQL 15 or later.',
+    cause: 'database-capabilities-not-provided',
+    notProvided: {
+      database: 'PostgreSQL',
+      findings: [{ kind: 'older-than-supported', databaseVersion: '14.10', oldestSupported: 15 }],
+    },
+  },
+};
 
 const writeAsStored = (retry: string) => ({
   kind: 'user-choice',
@@ -46,20 +58,36 @@ const describeDatabase = (retry: string) => ({
 
 describe('schemaDriftNextActions', () => {
   it('offers db update, then a change to the contract source, for db sign', () => {
-    expect(schemaDriftNextActions({ verb: 'sign', contractRef: undefined, issues: [] })).toEqual([
-      dbUpdate('sign'),
-      describeDatabase('sign again'),
-    ]);
+    expect(
+      schemaDriftNextActions({
+        verb: 'sign',
+        contractRef: undefined,
+        issues: [],
+        databaseRefused: false,
+      }),
+    ).toEqual([dbUpdate('sign'), describeDatabase('sign again')]);
   });
 
   it('says verify again for db verify', () => {
     expect(
-      schemaDriftNextActions({ verb: 'verify', contractRef: undefined, issues: [plain] }),
+      schemaDriftNextActions({
+        verb: 'verify',
+        contractRef: undefined,
+        issues: [plain],
+        databaseRefused: false,
+      }),
     ).toEqual([dbUpdate('verify'), describeDatabase('verify again')]);
   });
 
   it('aims db update at the ref being signed, and the contract change at the emitted contract', () => {
-    expect(schemaDriftNextActions({ verb: 'sign', contractRef: 'staging', issues: [] })).toEqual([
+    expect(
+      schemaDriftNextActions({
+        verb: 'sign',
+        contractRef: 'staging',
+        issues: [],
+        databaseRefused: false,
+      }),
+    ).toEqual([
       dbUpdate('sign', '{bin} db update --to "staging"'),
       describeDatabase('sign the emitted contract instead of "staging"'),
     ]);
@@ -71,6 +99,7 @@ describe('schemaDriftNextActions', () => {
         verb: 'verify',
         contractRef: undefined,
         issues: [possiblyEquivalent],
+        databaseRefused: false,
       }),
     ).toEqual([writeAsStored('verify again'), dbUpdate('verify')]);
   });
@@ -81,6 +110,7 @@ describe('schemaDriftNextActions', () => {
         verb: 'sign',
         contractRef: 'staging',
         issues: [possiblyEquivalent],
+        databaseRefused: false,
       }),
     ).toEqual([
       writeAsStored('sign the emitted contract instead of "staging"'),
@@ -94,6 +124,7 @@ describe('schemaDriftNextActions', () => {
         verb: 'verify',
         contractRef: undefined,
         issues: [possiblyEquivalent, plain, possiblyEquivalent],
+        databaseRefused: false,
       }),
     ).toEqual([
       writeAsStored('verify again'),
@@ -104,7 +135,12 @@ describe('schemaDriftNextActions', () => {
 
   it('offers db update, then a change to the contract source, for an issue whose values differ', () => {
     expect(
-      schemaDriftNextActions({ verb: 'verify', contractRef: undefined, issues: [differs] }),
+      schemaDriftNextActions({
+        verb: 'verify',
+        contractRef: undefined,
+        issues: [differs],
+        databaseRefused: false,
+      }),
     ).toEqual([dbUpdate('verify'), describeDatabase('verify again')]);
   });
 
@@ -114,11 +150,34 @@ describe('schemaDriftNextActions', () => {
         verb: 'verify',
         contractRef: undefined,
         issues: [differs, possiblyEquivalent],
+        databaseRefused: false,
       }),
     ).toEqual([
       writeAsStored('verify again'),
       dbUpdate('verify'),
       describeOtherIssues('verify again'),
     ]);
+  });
+
+  it('offers nothing in a run whose database does not provide what a contract requires, which db update, db init and db migrate refuse', () => {
+    expect(
+      schemaDriftNextActions({
+        verb: 'sign',
+        contractRef: undefined,
+        issues: [databaseCapabilitiesNotProvided, possiblyEquivalent],
+        databaseRefused: true,
+      }),
+    ).toEqual([]);
+  });
+
+  it("offers nothing for another space's drift in a run whose database is refused", () => {
+    expect(
+      schemaDriftNextActions({
+        verb: 'verify',
+        contractRef: undefined,
+        issues: [differs],
+        databaseRefused: true,
+      }),
+    ).toEqual([]);
   });
 });

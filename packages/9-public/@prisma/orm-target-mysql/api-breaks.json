@@ -69,7 +69,7 @@
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
     "fingerprint": "8e6270864a3cbcfb",
-    "reason": "The shared SQL-family type for a runner's error codes gained `MIGRATION.PRISMA_TABLES_MISSING`, which only PostgreSQL returns today (prisma/orm#31234)."
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). The shared SQL-family type for a runner's error codes gained `MIGRATION.PRISMA_TABLES_MISSING`, which only PostgreSQL returns today (prisma/orm#31234)."
   },
   {
     "path": "./target",
@@ -78,7 +78,7 @@
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
     "fingerprint": "77594cdd46ba987f",
-    "reason": "The shared SQL-family type for a runner's error codes gained `MIGRATION.PRISMA_TABLES_MISSING`, which only PostgreSQL returns today (prisma/orm#31234)."
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). The shared SQL-family type for a runner's error codes gained `MIGRATION.PRISMA_TABLES_MISSING`, which only PostgreSQL returns today (prisma/orm#31234)."
   },
   {
     "path": "./target/control",
@@ -87,7 +87,7 @@
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
     "fingerprint": "8e6270864a3cbcfb",
-    "reason": "The shared SQL-family type for a runner's error codes gained `MIGRATION.PRISMA_TABLES_MISSING`, which only PostgreSQL returns today (prisma/orm#31234)."
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). The shared SQL-family type for a runner's error codes gained `MIGRATION.PRISMA_TABLES_MISSING`, which only PostgreSQL returns today (prisma/orm#31234)."
   },
   {
     "path": "./target/control",
@@ -96,7 +96,7 @@
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
     "fingerprint": "51dfd2677f7d9ef1",
-    "reason": "The shared SQL-family type for a runner's error codes gained `MIGRATION.PRISMA_TABLES_MISSING`, which only PostgreSQL returns today (prisma/orm#31234)."
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). The shared SQL-family type for a runner's error codes gained `MIGRATION.PRISMA_TABLES_MISSING`, which only PostgreSQL returns today (prisma/orm#31234)."
   },
   {
     "path": "./target/migration",
@@ -105,6 +105,249 @@
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
     "fingerprint": "77594cdd46ba987f",
-    "reason": "The shared SQL-family type for a runner's error codes gained `MIGRATION.PRISMA_TABLES_MISSING`, which only PostgreSQL returns today (prisma/orm#31234)."
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). The shared SQL-family type for a runner's error codes gained `MIGRATION.PRISMA_TABLES_MISSING`, which only PostgreSQL returns today (prisma/orm#31234)."
+  },
+  {
+    "path": "./adapter",
+    "export": "createMysqlControlAdapter",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "8340dcda4d405382",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./adapter/control",
+    "export": "createMysqlControlAdapter",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "8340dcda4d405382",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./adapter/control",
+    "export": "default",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "7fc550862ce74def",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./target",
+    "export": "Migration",
+    "test": "constructor",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "97abc8ba8813d998",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./target",
+    "export": "Migration",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "97abc8ba8813d998",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./target",
+    "export": "Migration",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "97abc8ba8813d998",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./target",
+    "export": "MysqlMigrationBase",
+    "test": "constructor",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "05d28c12e85b98eb",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./target",
+    "export": "MysqlMigrationBase",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "05d28c12e85b98eb",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./target",
+    "export": "MysqlMigrationBase",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "05d28c12e85b98eb",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./target",
+    "export": "MysqlMigrationPlanner",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "f467b819d1ec8663",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./target",
+    "export": "MysqlMigrationPlanner",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "f467b819d1ec8663",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./target",
+    "export": "MysqlPlanResult",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "1a783318cd715d2b",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./target",
+    "export": "TypeScriptRenderableMysqlMigration",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "dc11a833eee9865e",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./target",
+    "export": "TypeScriptRenderableMysqlMigration",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "dc11a833eee9865e",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./target",
+    "export": "createMysqlMigrationPlanner",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "53d77888d3cfc13c",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./target/migration",
+    "export": "Migration",
+    "test": "constructor",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "97abc8ba8813d998",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./target/migration",
+    "export": "Migration",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "97abc8ba8813d998",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./target/migration",
+    "export": "Migration",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "97abc8ba8813d998",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./target/migration",
+    "export": "MysqlMigrationBase",
+    "test": "constructor",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "05d28c12e85b98eb",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./target/migration",
+    "export": "MysqlMigrationBase",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "05d28c12e85b98eb",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./target/migration",
+    "export": "MysqlMigrationBase",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "05d28c12e85b98eb",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./target/migration",
+    "export": "MysqlMigrationPlanner",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "f467b819d1ec8663",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./target/migration",
+    "export": "MysqlMigrationPlanner",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "f467b819d1ec8663",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./target/migration",
+    "export": "MysqlPlanResult",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "1a783318cd715d2b",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./target/migration",
+    "export": "TypeScriptRenderableMysqlMigration",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "dc11a833eee9865e",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./target/migration",
+    "export": "TypeScriptRenderableMysqlMigration",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "dc11a833eee9865e",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./target/migration",
+    "export": "createMysqlMigrationPlanner",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "53d77888d3cfc13c",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
   }
 ]

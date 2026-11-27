@@ -95,7 +95,7 @@ describe('PostgresMigrationPlanner - unique constraints vs indexes (structural n
           },
         }),
       },
-      pgVersion: '',
+      serverVersionNumber: undefined,
       roles: [],
       existingSchemas: [],
     });

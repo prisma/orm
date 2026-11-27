@@ -29,6 +29,8 @@ export interface RuntimeFamilyAdapter<TContract = unknown> {
  * - `false`: the marker reader is never invoked. No log line is emitted. Use this to opt out of
  *   the diagnostic entirely (e.g. during a known deploy-skew window).
  *
+ * A client that checks its stack against the contract when it is created (`CONTRACT.CAPABILITIES_NOT_PROVIDED`) reports that through the same setting: `false` turns that warning off too.
+ *
  * The string-or-false shape is forward-compatible: future modes such as `'startup'` (eager check
  * inside the wrapper `connect()` step) can be added as additive union members without an API break.
  * `true` is intentionally not permitted — modes are always named.

@@ -2,6 +2,7 @@
  * The ORM reads each value of an included row back with the column's codec, whether the row arrives as JSON the database builds (the one-query include) or as a row of its own (one query per relation). A list column may hold NULL elements, and a nullable list column may be NULL; both must come back as they are stored.
  */
 import postgresAdapter from '@internal/adapter-postgres/control';
+import postgresRuntimeAdapter from '@internal/adapter-postgres/runtime';
 import type { Contract } from '@internal/contract/types';
 import postgresControlDriver from '@internal/driver-postgres/control';
 import sql, { INIT_ADDITIVE_POLICY } from '@internal/family-sql/control';
@@ -15,7 +16,7 @@ import postgresRuntimeTarget from '@internal/target-postgres/runtime';
 import { createDevDatabase, type DevDatabase, timeouts, withClient } from '@repo/test-utils';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createPrismaTables } from '../postgres-bootstrap';
-import { includeStrategies, postgresAdapterFor } from '../sql-orm-client/helpers';
+import { includeStrategies, withIncludeStrategy } from '../sql-orm-client/helpers';
 import { createTestRuntimeFromClient } from '../utils';
 import { authorSqlContractFromPsl, postgresFrameworkComponents } from './psl-list-authoring';
 
@@ -142,10 +143,10 @@ describe.each(includeStrategies)(
             verifyMarker: false,
           });
           const context = createExecutionContext({
-            contract,
+            contract: withIncludeStrategy(contract, strategy),
             stack: createSqlExecutionStack({
               target: postgresRuntimeTarget,
-              adapter: postgresAdapterFor(strategy),
+              adapter: postgresRuntimeAdapter,
               extensions: [],
             }),
           });

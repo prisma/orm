@@ -1,3 +1,4 @@
+import postgresAdapter from '@internal/adapter-postgres/runtime';
 import { Collection } from '@internal/sql-orm-client';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
@@ -5,7 +6,7 @@ import postgresTarget, { PostgresContractSerializer } from '@internal/target-pos
 import { describe, expect, it } from 'vitest';
 import type { Contract } from './fixtures/mn-polymorphism/generated/contract';
 import contractJson from './fixtures/mn-polymorphism/generated/contract.json' with { type: 'json' };
-import { type IncludeStrategy, includeStrategies, postgresAdapterFor } from './helpers';
+import { type IncludeStrategy, includeStrategies, withIncludeStrategy } from './helpers';
 import {
   expectPerRelationStatements,
   timeouts,
@@ -16,10 +17,10 @@ const contract = new PostgresContractSerializer().deserializeContract<Contract>(
 
 function contextOf(strategy: IncludeStrategy): ExecutionContext<Contract> {
   return createExecutionContext({
-    contract,
+    contract: withIncludeStrategy(contract, strategy),
     stack: createSqlExecutionStack({
       target: postgresTarget,
-      adapter: postgresAdapterFor(strategy),
+      adapter: postgresAdapter,
     }),
   });
 }

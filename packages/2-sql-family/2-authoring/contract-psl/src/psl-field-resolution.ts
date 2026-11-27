@@ -26,6 +26,7 @@ import {
   typeReferenceNode,
 } from '@internal/psl-parser';
 import type { PslSources } from '@internal/psl-parser/syntax';
+import { capabilityUnavailableMessage } from '@internal/sql-contract/capability-messages';
 import {
   type AuthoredColumnDefault,
   type EnumTypeHandle,
@@ -242,7 +243,6 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
     valueObjectTypes,
     authoringContributions,
     binder,
-    targetId,
     defaultFunctionRegistry,
     generatorFunctions,
     dataTypes,
@@ -334,7 +334,10 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
       if (capabilities['sql']?.['scalarList'] !== true) {
         diagnostics.push({
           code: 'PSL_SCALAR_LIST_UNSUPPORTED_TARGET',
-          message: `Field "${model.name}.${field.name}" is a scalar list, but target "${targetId}" does not support scalar lists (the adapter does not report the "scalarList" capability). Remove the list or author it against a target that supports scalar lists.`,
+          message: capabilityUnavailableMessage(
+            `The scalar list field "${model.name}.${field.name}"`,
+            ['sql.scalarList'],
+          ),
           ...source.at(field.span),
         });
         continue;

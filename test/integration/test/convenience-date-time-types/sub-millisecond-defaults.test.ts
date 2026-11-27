@@ -1,4 +1,4 @@
-import { defineContract } from '@internal/postgres/contract-builder';
+import { defineContract, postgres18, postgresDriver } from '@internal/postgres/contract-builder';
 import { describe, expect, it } from 'vitest';
 import { authorSqlContractFromPsl } from '../scalar-lists/psl-list-authoring';
 
@@ -19,18 +19,21 @@ describe('a default with digits below a millisecond on a field read as a Date', 
   });
 
   it('cannot be written in the TypeScript builder, whose Date default is stored at the millisecond', () => {
-    const contract = defineContract({}, ({ type, field, model }) => ({
-      models: {
-        Event: model('Event', {
-          fields: {
-            id: field.column(type.Int()).id(),
-            at: field
-              .column(type.DateTime({ precision: 6 }))
-              .default(new Date('2024-01-01T01:00:00.123Z')),
-          },
-        }).sql({ table: 'event' }),
-      },
-    }));
+    const contract = defineContract(
+      { requiredCapabilities: [...postgres18, ...postgresDriver] },
+      ({ type, field, model }) => ({
+        models: {
+          Event: model('Event', {
+            fields: {
+              id: field.column(type.Int()).id(),
+              at: field
+                .column(type.DateTime({ precision: 6 }))
+                .default(new Date('2024-01-01T01:00:00.123Z')),
+            },
+          }).sql({ table: 'event' }),
+        },
+      }),
+    );
     expect(
       contract.storage.namespaces['public']?.entries.table?.['event']?.columns['at']?.default,
     ).toEqual({

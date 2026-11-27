@@ -37,6 +37,7 @@ export default defineConfig({
     'src/exports/rls-canonicalize.ts',
     'src/exports/runtime.ts',
     'src/exports/schema-ir-annotations.ts',
+    'src/exports/server-version-range.ts',
     'src/exports/server-version.ts',
     'src/exports/sql-utils.ts',
     'src/exports/types.ts',

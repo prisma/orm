@@ -83,7 +83,7 @@ describe('PostgresControlAdapter', () => {
 
       expect(tablesOf(result)).toEqual({});
       expect(schemaNameOf(result)).toBe('public');
-      expect(result.pgVersion).toEqual(expect.any(String));
+      expect(result.serverVersionNumber).toBeUndefined();
       expect(result.existingSchemas).toEqual([]);
     });
 
@@ -102,8 +102,8 @@ describe('PostgresControlAdapter', () => {
           maxInFlight = Math.max(maxInFlight, inFlight);
           await Promise.resolve();
           inFlight--;
-          if (sql.includes('version()')) {
-            return { rows: [{ version: 'PostgreSQL 15.1' }] as unknown as Row[] };
+          if (sql.includes('server_version_num')) {
+            return { rows: [{ server_version_num: 150001 }] as unknown as Row[] };
           }
           return { rows: [] as unknown as Row[] };
         },
@@ -181,9 +181,9 @@ describe('PostgresControlAdapter', () => {
           if (sql.includes('pg_extension')) {
             return { rows: [] as unknown as Row[] };
           }
-          if (sql.includes('version()')) {
+          if (sql.includes('server_version_num')) {
             return {
-              rows: [{ version: 'PostgreSQL 15.1 on x86_64-pc-linux-gnu' }] as unknown as Row[],
+              rows: [{ server_version_num: 150001 }] as unknown as Row[],
             };
           }
           return { rows: [] as unknown as Row[] };
@@ -247,9 +247,9 @@ describe('PostgresControlAdapter', () => {
           if (sql.includes('pg_extension')) {
             return { rows: [] as unknown as Row[] };
           }
-          if (sql.includes('version()')) {
+          if (sql.includes('server_version_num')) {
             return {
-              rows: [{ version: 'PostgreSQL 15.1' }] as unknown as Row[],
+              rows: [{ server_version_num: 150001 }] as unknown as Row[],
             };
           }
           return { rows: [] as unknown as Row[] };
@@ -305,9 +305,9 @@ describe('PostgresControlAdapter', () => {
           if (sql.includes('pg_extension')) {
             return { rows: [] as unknown as Row[] };
           }
-          if (sql.includes('version()')) {
+          if (sql.includes('server_version_num')) {
             return {
-              rows: [{ version: 'PostgreSQL 15.1' }] as unknown as Row[],
+              rows: [{ server_version_num: 150001 }] as unknown as Row[],
             };
           }
           return { rows: [] as unknown as Row[] };
@@ -363,9 +363,9 @@ describe('PostgresControlAdapter', () => {
           if (sql.includes('pg_extension')) {
             return { rows: [] as unknown as Row[] };
           }
-          if (sql.includes('version()')) {
+          if (sql.includes('server_version_num')) {
             return {
-              rows: [{ version: 'PostgreSQL 15.1' }] as unknown as Row[],
+              rows: [{ server_version_num: 150001 }] as unknown as Row[],
             };
           }
           return { rows: [] as unknown as Row[] };
@@ -421,9 +421,9 @@ describe('PostgresControlAdapter', () => {
           if (sql.includes('pg_extension')) {
             return { rows: [] as unknown as Row[] };
           }
-          if (sql.includes('version()')) {
+          if (sql.includes('server_version_num')) {
             return {
-              rows: [{ version: 'PostgreSQL 15.1' }] as unknown as Row[],
+              rows: [{ server_version_num: 150001 }] as unknown as Row[],
             };
           }
           return { rows: [] as unknown as Row[] };
@@ -489,9 +489,9 @@ describe('PostgresControlAdapter', () => {
           if (sql.includes('pg_extension')) {
             return { rows: [] as unknown as Row[] };
           }
-          if (sql.includes('version()')) {
+          if (sql.includes('server_version_num')) {
             return {
-              rows: [{ version: 'PostgreSQL 15.1' }] as unknown as Row[],
+              rows: [{ server_version_num: 150001 }] as unknown as Row[],
             };
           }
           return { rows: [] as unknown as Row[] };
@@ -533,7 +533,7 @@ describe('PostgresControlAdapter', () => {
         { match: includes("contype = 'u'"), rows: [] },
         { match: includes('pg_indexes'), rows: [] },
         { match: includes('pg_extension'), rows: [] },
-        { match: includes('version()'), rows: [{ version: 'PostgreSQL 15.1' }] },
+        { match: includes('server_version_num'), rows: [{ server_version_num: 150001 }] },
       ]);
 
       const result = await adapter.introspect(mockDriver);
@@ -635,7 +635,7 @@ describe('PostgresControlAdapter', () => {
         { match: includes("contype = 'u'"), rows: [] },
         { match: includes('pg_indexes'), rows: [] },
         { match: includes('pg_extension'), rows: [] },
-        { match: includes('version()'), rows: [{ version: 'PostgreSQL 15.1' }] },
+        { match: includes('server_version_num'), rows: [{ server_version_num: 150001 }] },
       ]);
 
       const result = await adapter.introspect(mockDriver);
@@ -719,7 +719,7 @@ describe('PostgresControlAdapter', () => {
         { match: includes("contype = 'u'"), rows: [] },
         { match: includes('pg_indexes'), rows: [] },
         { match: includes('pg_extension'), rows: [] },
-        { match: includes('version()'), rows: [{ version: 'PostgreSQL 15.1' }] },
+        { match: includes('server_version_num'), rows: [{ server_version_num: 150001 }] },
       ]);
 
       const result = await adapter.introspect(mockDriver);
@@ -821,7 +821,7 @@ describe('PostgresControlAdapter', () => {
         { match: includes("contype = 'u'"), rows: [] },
         { match: includes('pg_indexes'), rows: [] },
         { match: includes('pg_extension'), rows: [] },
-        { match: includes('version()'), rows: [{ version: 'PostgreSQL 15.1' }] },
+        { match: includes('server_version_num'), rows: [{ server_version_num: 150001 }] },
       ]);
 
       const result = await adapter.introspect(mockDriver);
@@ -895,7 +895,7 @@ describe('PostgresControlAdapter', () => {
         },
         { match: includes('pg_indexes'), rows: [] },
         { match: includes('pg_extension'), rows: [] },
-        { match: includes('version()'), rows: [{ version: 'PostgreSQL 15.1' }] },
+        { match: includes('server_version_num'), rows: [{ server_version_num: 150001 }] },
       ]);
 
       const result = await adapter.introspect(mockDriver);
@@ -961,7 +961,7 @@ describe('PostgresControlAdapter', () => {
         },
         { match: includes('pg_indexes'), rows: [] },
         { match: includes('pg_extension'), rows: [] },
-        { match: includes('version()'), rows: [{ version: 'PostgreSQL 15.1' }] },
+        { match: includes('server_version_num'), rows: [{ server_version_num: 150001 }] },
       ]);
 
       const result = await adapter.introspect(mockDriver);
@@ -1029,7 +1029,7 @@ describe('PostgresControlAdapter', () => {
           ],
         },
         { match: includes('pg_extension'), rows: [] },
-        { match: includes('version()'), rows: [{ version: 'PostgreSQL 15.1' }] },
+        { match: includes('server_version_num'), rows: [{ server_version_num: 150001 }] },
       ]);
 
       const result = await adapter.introspect(mockDriver);
@@ -1107,7 +1107,7 @@ describe('PostgresControlAdapter', () => {
           ],
         },
         { match: includes('pg_extension'), rows: [] },
-        { match: includes('version()'), rows: [{ version: 'PostgreSQL 15.1' }] },
+        { match: includes('server_version_num'), rows: [{ server_version_num: 150001 }] },
       ]);
 
       const result = await adapter.introspect(mockDriver);
@@ -1200,9 +1200,9 @@ describe('PostgresControlAdapter', () => {
           if (sql.includes('pg_extension')) {
             return { rows: [] as unknown as Row[] };
           }
-          if (sql.includes('version()')) {
+          if (sql.includes('server_version_num')) {
             return {
-              rows: [{ version: 'PostgreSQL 15.1' }] as unknown as Row[],
+              rows: [{ server_version_num: 150001 }] as unknown as Row[],
             };
           }
           return { rows: [] as unknown as Row[] };
@@ -1311,9 +1311,9 @@ describe('PostgresControlAdapter', () => {
           if (sql.includes('pg_extension')) {
             return { rows: [] as unknown as Row[] };
           }
-          if (sql.includes('version()')) {
+          if (sql.includes('server_version_num')) {
             return {
-              rows: [{ version: 'PostgreSQL 15.1' }] as unknown as Row[],
+              rows: [{ server_version_num: 150001 }] as unknown as Row[],
             };
           }
           return { rows: [] as unknown as Row[] };
@@ -1361,9 +1361,9 @@ describe('PostgresControlAdapter', () => {
           if (sql.includes('pg_extension')) {
             return { rows: [] as unknown as Row[] };
           }
-          if (sql.includes('version()')) {
+          if (sql.includes('server_version_num')) {
             return {
-              rows: [{ version: 'PostgreSQL 15.1' }] as unknown as Row[],
+              rows: [{ server_version_num: 150001 }] as unknown as Row[],
             };
           }
           return { rows: [] as unknown as Row[] };
@@ -1377,7 +1377,7 @@ describe('PostgresControlAdapter', () => {
     });
 
     it(
-      'handles version string without match',
+      'reads no server version from a value that is not an integer',
       async () => {
         const adapter = createTestPostgresControlAdapter(
           createPostgresBuiltinCodecLookup(),
@@ -1393,9 +1393,9 @@ describe('PostgresControlAdapter', () => {
             if (sql.includes('pg_extension')) {
               return { rows: [] as unknown as Row[] };
             }
-            if (sql.includes('version()')) {
+            if (sql.includes('server_version_num')) {
               return {
-                rows: [{ version: 'Unknown database version' }] as unknown as Row[],
+                rows: [{ server_version_num: '15.4' }] as unknown as Row[],
               };
             }
             return { rows: [] as unknown as Row[] };
@@ -1405,12 +1405,36 @@ describe('PostgresControlAdapter', () => {
 
         const result = await adapter.introspect(mockDriver);
 
-        expect(result.pgVersion).toBe('unknown');
+        expect(result.serverVersionNumber).toBeUndefined();
       },
       timeouts.databaseOperation,
     );
 
-    it('handles missing version result', async () => {
+    it.each([150004, '150004'])(
+      'reads the server version number the database reports as %j',
+      async (reported) => {
+        const adapter = createTestPostgresControlAdapter(
+          createPostgresBuiltinCodecLookup(),
+          createPostgresBuiltinDataTypeLookup(),
+        );
+        const mockDriver: SqlControlDriverInstance<'postgres'> = {
+          familyId: 'sql',
+          targetId: 'postgres',
+          query: async <Row = Record<string, unknown>>(sql: string) => ({
+            rows: (sql.includes('server_version_num')
+              ? [{ server_version_num: reported }]
+              : []) as unknown as Row[],
+          }),
+          close: async () => {},
+        };
+
+        const result = await adapter.introspect(mockDriver);
+
+        expect(result.serverVersionNumber).toBe(150004);
+      },
+    );
+
+    it('reads no server version when the database reports none', async () => {
       const adapter = createTestPostgresControlAdapter(
         createPostgresBuiltinCodecLookup(),
         createPostgresBuiltinDataTypeLookup(),
@@ -1425,7 +1449,7 @@ describe('PostgresControlAdapter', () => {
           if (sql.includes('pg_extension')) {
             return { rows: [] as unknown as Row[] };
           }
-          if (sql.includes('version()')) {
+          if (sql.includes('server_version_num')) {
             return { rows: [] as unknown as Row[] };
           }
           return { rows: [] as unknown as Row[] };
@@ -1435,7 +1459,7 @@ describe('PostgresControlAdapter', () => {
 
       const result = await adapter.introspect(mockDriver);
 
-      expect(result.pgVersion).toBe('unknown');
+      expect(result.serverVersionNumber).toBeUndefined();
     });
 
     it('handles table without primary key', async () => {
@@ -1481,9 +1505,9 @@ describe('PostgresControlAdapter', () => {
           if (sql.includes('pg_extension')) {
             return { rows: [] as unknown as Row[] };
           }
-          if (sql.includes('version()')) {
+          if (sql.includes('server_version_num')) {
             return {
-              rows: [{ version: 'PostgreSQL 15.1' }] as unknown as Row[],
+              rows: [{ server_version_num: 150001 }] as unknown as Row[],
             };
           }
           return { rows: [] as unknown as Row[] };
@@ -1548,9 +1572,9 @@ describe('PostgresControlAdapter', () => {
           if (sql.includes('pg_extension')) {
             return { rows: [] as unknown as Row[] };
           }
-          if (sql.includes('version()')) {
+          if (sql.includes('server_version_num')) {
             return {
-              rows: [{ version: 'PostgreSQL 15.1' }] as unknown as Row[],
+              rows: [{ server_version_num: 150001 }] as unknown as Row[],
             };
           }
           return { rows: [] as unknown as Row[] };
@@ -1647,7 +1671,7 @@ describe('PostgresControlAdapter', () => {
         { match: includes("contype = 'u'"), rows: [] },
         { match: includes('pg_indexes'), rows: [] },
         { match: includes('pg_extension'), rows: [] },
-        { match: includes('version()'), rows: [{ version: 'PostgreSQL 15.1' }] },
+        { match: includes('server_version_num'), rows: [{ server_version_num: 150001 }] },
       ]);
 
       const result = await adapter.introspect(mockDriver);
@@ -1723,7 +1747,7 @@ describe('PostgresControlAdapter', () => {
         },
         { match: includes('pg_indexes'), rows: [] },
         { match: includes('pg_extension'), rows: [] },
-        { match: includes('version()'), rows: [{ version: 'PostgreSQL 15.1' }] },
+        { match: includes('server_version_num'), rows: [{ server_version_num: 150001 }] },
       ]);
 
       const result = await adapter.introspect(mockDriver);
@@ -1786,7 +1810,7 @@ describe('PostgresControlAdapter', () => {
         { match: includes("contype = 'u'"), rows: [] },
         { match: includes('pg_indexes'), rows: [] },
         { match: includes('pg_extension'), rows: [] },
-        { match: includes('version()'), rows: [{ version: 'PostgreSQL 15.1' }] },
+        { match: includes('server_version_num'), rows: [{ server_version_num: 150001 }] },
       ]);
 
       const result = await adapter.introspect(mockDriver);
@@ -1838,7 +1862,7 @@ describe('PostgresControlAdapter', () => {
         { match: includes("contype = 'u'"), rows: [] },
         { match: includes('pg_indexes'), rows: [] },
         { match: includes('pg_extension'), rows: [] },
-        { match: includes('version()'), rows: [{ version: 'PostgreSQL 15.1' }] },
+        { match: includes('server_version_num'), rows: [{ server_version_num: 150001 }] },
       ]);
 
       const result = await adapter.introspect(mockDriver);
@@ -1876,7 +1900,7 @@ describe('PostgresControlAdapter', () => {
         { match: includes("contype = 'u'"), rows: [] },
         { match: includes('pg_indexes'), rows: [] },
         { match: includes('pg_extension'), rows: [] },
-        { match: includes('version()'), rows: [{ version: 'PostgreSQL 15.1' }] },
+        { match: includes('server_version_num'), rows: [{ server_version_num: 150001 }] },
       ]);
 
       const result = await adapter.introspect(mockDriver);

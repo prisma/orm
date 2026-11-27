@@ -5,8 +5,8 @@
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "5e68be1913435492",
-    "reason": "It names `_prisma.marker`, so its type is no longer the old literal (prisma/orm#31234)."
+    "fingerprint": "4bd1ba09fce7f6d2",
+    "reason": "The PostgreSQL schema tree holds the server's version as the number `serverVersionNumber`, read from `server_version_num`, in place of the text `pgVersion` (prisma/orm#31218). It names `_prisma.marker`, so its type is no longer the old literal (prisma/orm#31234)."
   },
   {
     "path": "./adapter",
@@ -14,8 +14,8 @@
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "5e68be1913435492",
-    "reason": "It names `_prisma.marker`, so its type is no longer the old literal (prisma/orm#31234)."
+    "fingerprint": "4bd1ba09fce7f6d2",
+    "reason": "The PostgreSQL schema tree holds the server's version as the number `serverVersionNumber`, read from `server_version_num`, in place of the text `pgVersion` (prisma/orm#31218). It names `_prisma.marker`, so its type is no longer the old literal (prisma/orm#31234)."
   },
   {
     "path": "./adapter",
@@ -50,8 +50,8 @@
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "5e68be1913435492",
-    "reason": "It names `_prisma.marker`, so its type is no longer the old literal (prisma/orm#31234)."
+    "fingerprint": "4bd1ba09fce7f6d2",
+    "reason": "The PostgreSQL schema tree holds the server's version as the number `serverVersionNumber`, read from `server_version_num`, in place of the text `pgVersion` (prisma/orm#31218). It names `_prisma.marker`, so its type is no longer the old literal (prisma/orm#31234)."
   },
   {
     "path": "./adapter/control",
@@ -59,8 +59,8 @@
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "5e68be1913435492",
-    "reason": "It names `_prisma.marker`, so its type is no longer the old literal (prisma/orm#31234)."
+    "fingerprint": "4bd1ba09fce7f6d2",
+    "reason": "The PostgreSQL schema tree holds the server's version as the number `serverVersionNumber`, read from `server_version_num`, in place of the text `pgVersion` (prisma/orm#31218). It names `_prisma.marker`, so its type is no longer the old literal (prisma/orm#31234)."
   },
   {
     "path": "./adapter/runtime",
@@ -123,6 +123,303 @@
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
     "fingerprint": "de7236849976d2a0",
-    "reason": "The runner can now refuse because Prisma's own tables do not exist yet (prisma/orm#31234)."
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). The runner can now refuse because Prisma's own tables do not exist yet (prisma/orm#31234)."
+  },
+  {
+    "path": "./adapter",
+    "export": "postgresAdapterCapabilities",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "42dd06282121175a",
+    "reason": "The PostgreSQL adapter declares no capabilities, because a contract lists the capabilities it requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./adapter",
+    "export": "postgresAdapterContractContributions",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "d81980751fc53674",
+    "reason": "The PostgreSQL adapter declares no capabilities, because a contract lists the capabilities it requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./adapter/adapter",
+    "export": "postgresAdapterCapabilities",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "42dd06282121175a",
+    "reason": "The PostgreSQL adapter declares no capabilities, because a contract lists the capabilities it requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./adapter/adapter",
+    "export": "postgresAdapterContractContributions",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "d81980751fc53674",
+    "reason": "The PostgreSQL adapter declares no capabilities, because a contract lists the capabilities it requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./adapter/control",
+    "export": "default",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "7642f29aab023a24",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./target",
+    "export": "Migration",
+    "test": "constructor",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "8db32054212a5c03",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./target",
+    "export": "Migration",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "8db32054212a5c03",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./target",
+    "export": "Migration",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "8db32054212a5c03",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./target",
+    "export": "PostgresDatabaseSchemaNode",
+    "test": "constructor",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "930b38f3978e8ecc",
+    "reason": "The PostgreSQL schema tree holds the server's version as the number `serverVersionNumber`, read from `server_version_num`, in place of the text `pgVersion` (prisma/orm#31218)."
+  },
+  {
+    "path": "./target",
+    "export": "PostgresDatabaseSchemaNode",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "930b38f3978e8ecc",
+    "reason": "The PostgreSQL schema tree holds the server's version as the number `serverVersionNumber`, read from `server_version_num`, in place of the text `pgVersion` (prisma/orm#31218)."
+  },
+  {
+    "path": "./target",
+    "export": "PostgresDatabaseSchemaNode",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "930b38f3978e8ecc",
+    "reason": "The PostgreSQL schema tree holds the server's version as the number `serverVersionNumber`, read from `server_version_num`, in place of the text `pgVersion` (prisma/orm#31218)."
+  },
+  {
+    "path": "./target",
+    "export": "PostgresDatabaseSchemaNodeInput",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "5dbf14c81618daa1",
+    "reason": "The PostgreSQL schema tree holds the server's version as the number `serverVersionNumber`, read from `server_version_num`, in place of the text `pgVersion` (prisma/orm#31218)."
+  },
+  {
+    "path": "./target",
+    "export": "TypeScriptRenderablePostgresMigration",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "57f65b6a018d4e1d",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./target",
+    "export": "TypeScriptRenderablePostgresMigration",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "57f65b6a018d4e1d",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./target",
+    "export": "buildPostgresPlanDiff",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "6a75978f479c23b9",
+    "reason": "The PostgreSQL schema tree holds the server's version as the number `serverVersionNumber`, read from `server_version_num`, in place of the text `pgVersion` (prisma/orm#31218)."
+  },
+  {
+    "path": "./target",
+    "export": "coalesceSubtreeIssues",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "90ce7d0c7f9a8f8b",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./target",
+    "export": "contractToPostgresDatabaseSchemaNode",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "8ecb47fb9a4db9df",
+    "reason": "The PostgreSQL schema tree holds the server's version as the number `serverVersionNumber`, read from `server_version_num`, in place of the text `pgVersion` (prisma/orm#31218)."
+  },
+  {
+    "path": "./target",
+    "export": "createPostgresMigrationPlanner",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "c695346bb5e4727e",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./target",
+    "export": "planIssues",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "253b218ba133cbfb",
+    "reason": "The PostgreSQL schema tree holds the server's version as the number `serverVersionNumber`, read from `server_version_num`, in place of the text `pgVersion` (prisma/orm#31218)."
+  },
+  {
+    "path": "./target/diff-database-schema",
+    "export": "buildPostgresPlanDiff",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "6a75978f479c23b9",
+    "reason": "The PostgreSQL schema tree holds the server's version as the number `serverVersionNumber`, read from `server_version_num`, in place of the text `pgVersion` (prisma/orm#31218)."
+  },
+  {
+    "path": "./target/issue-planner",
+    "export": "coalesceSubtreeIssues",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "90ce7d0c7f9a8f8b",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./target/issue-planner",
+    "export": "planIssues",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "253b218ba133cbfb",
+    "reason": "The PostgreSQL schema tree holds the server's version as the number `serverVersionNumber`, read from `server_version_num`, in place of the text `pgVersion` (prisma/orm#31218)."
+  },
+  {
+    "path": "./target/migration",
+    "export": "Migration",
+    "test": "constructor",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "8db32054212a5c03",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./target/migration",
+    "export": "Migration",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "8db32054212a5c03",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./target/migration",
+    "export": "Migration",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "8db32054212a5c03",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./target/planner",
+    "export": "contractToPostgresDatabaseSchemaNode",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "8ecb47fb9a4db9df",
+    "reason": "The PostgreSQL schema tree holds the server's version as the number `serverVersionNumber`, read from `server_version_num`, in place of the text `pgVersion` (prisma/orm#31218)."
+  },
+  {
+    "path": "./target/planner",
+    "export": "createPostgresMigrationPlanner",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "c695346bb5e4727e",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./target/planner-produced-postgres-migration",
+    "export": "TypeScriptRenderablePostgresMigration",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "57f65b6a018d4e1d",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./target/planner-produced-postgres-migration",
+    "export": "TypeScriptRenderablePostgresMigration",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "57f65b6a018d4e1d",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./target/types",
+    "export": "PostgresDatabaseSchemaNode",
+    "test": "constructor",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "930b38f3978e8ecc",
+    "reason": "The PostgreSQL schema tree holds the server's version as the number `serverVersionNumber`, read from `server_version_num`, in place of the text `pgVersion` (prisma/orm#31218)."
+  },
+  {
+    "path": "./target/types",
+    "export": "PostgresDatabaseSchemaNode",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "930b38f3978e8ecc",
+    "reason": "The PostgreSQL schema tree holds the server's version as the number `serverVersionNumber`, read from `server_version_num`, in place of the text `pgVersion` (prisma/orm#31218)."
+  },
+  {
+    "path": "./target/types",
+    "export": "PostgresDatabaseSchemaNode",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "930b38f3978e8ecc",
+    "reason": "The PostgreSQL schema tree holds the server's version as the number `serverVersionNumber`, read from `server_version_num`, in place of the text `pgVersion` (prisma/orm#31218)."
+  },
+  {
+    "path": "./target/types",
+    "export": "PostgresDatabaseSchemaNodeInput",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "5dbf14c81618daa1",
+    "reason": "The PostgreSQL schema tree holds the server's version as the number `serverVersionNumber`, read from `server_version_num`, in place of the text `pgVersion` (prisma/orm#31218)."
   }
 ]

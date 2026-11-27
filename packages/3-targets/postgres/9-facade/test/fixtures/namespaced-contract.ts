@@ -67,9 +67,10 @@ type Storage = {
   };
 };
 
-type ContractBase = Omit<ContractType<Storage>, 'roots' | 'domain'> & {
+type ContractBase = Omit<ContractType<Storage>, 'roots' | 'domain' | 'capabilities'> & {
   readonly target: 'postgres';
   readonly targetFamily: 'sql';
+  readonly capabilities: { readonly sql: { readonly interactiveTransactions: true } };
   readonly roots: Record<string, never>;
   readonly domain: {
     readonly namespaces: {

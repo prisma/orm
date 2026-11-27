@@ -55,7 +55,7 @@ const schema = new PostgresDatabaseSchemaNode({
   },
   roles: [],
   existingSchemas: ['public'],
-  pgVersion: 'unknown',
+  serverVersionNumber: undefined,
 });
 
 const ddlSchemaOf = (name: string) => (name === UNBOUND_NAMESPACE_ID ? 'public' : name);

@@ -326,6 +326,10 @@
 (not exported) interface SqlFamilyInstanceState, readonly required property codecTypeImports: ReadonlyArray<TypesImportSpec>
 (not exported) interface SqlFamilyInstanceState, readonly required property extensionIds: ReadonlyArray<string>
 (not exported) interface SqlRuntimeFamilyInstance extends RuntimeFamilyInstance<'sql'>
+(not exported) interface StackDescriptors
+(not exported) interface StackDescriptors, readonly required property adapter: { readonly capabilities?: unknown; }
+(not exported) interface StackDescriptors, readonly required property driver: { readonly capabilities?: unknown; }
+(not exported) interface StackDescriptors, readonly required property target: { readonly databaseCapabilities?: unknown; readonly retiredCapabilities?: unknown; }
 (not exported) interface StoredValueMember
 (not exported) interface StoredValueMember, readonly required property nullable: boolean
 (not exported) interface StoredValueMember, readonly required property path: string
@@ -443,6 +447,8 @@
 (not exported) type BuiltUnique<Definition, ModelName extends ModelNames<Definition>> = AttributeUnique<Definition, ModelName> | InlineUnique<Definition, ModelName>
 (not exported) type ByCodecRows<Operation> = Operation extends { readonly byCodec: infer Rows; } ? Rows : never
 (not exported) type CapabilitiesBase = Record<string, Record<string, boolean>>
+(not exported) type CapabilitiesNotProvided<Capabilities, DatabaseCapabilities, AdapterCapabilities, DriverCapabilities, RetiredCapabilities = undefined> = IsAny<Capabilities> extends true ? never : Exclude<EnabledFlagNames<Capabilities>, EnabledFlagNames<AdapterCapabilities> | EnabledFlagNames<DriverCapabilities> | FlagNames<DatabaseCapabilities> | FlagNames<RetiredCapabilities>>
+(not exported) type CapabilitySet = Readonly<Record<string, unknown>> | undefined
 (not exported) type CarriesCodecInput<Input> = { __codecInput?(input: Input): void; }
 (not exported) type CharKind<C extends string> = C extends '' ? 'end' : C extends Lowercase<C> ? C extends Uppercase<C> ? 'other' : 'lower' : 'upper'
 (not exported) type ChildForeignKeyFieldNames<TContract extends Contract<SqlStorage>, ModelName extends string, NsId extends string = never> = Extract<AllModelRelationEntries<TContract>, RelationDefWithTargetFields> extends (infer Relation) ? Relation extends { readonly to: { readonly model: ModelName; }; readonly on: { readonly targetFields: infer Fields extends readonly string[]; }; } ? [NsId] extends [never] ? Fields[number] : Relation extends { readonly to: { readonly namespace: infer Target extends string; }; } ? Target extends NsId ? Fields[number] : never : Fields[number] : never : never
@@ -549,9 +555,11 @@
 (not exported) type DuplicateLiteralNames<Items extends readonly unknown[], Seen extends string = never, Duplicates extends string = never> = Items extends readonly [infer First, ...infer Rest extends readonly unknown[]] ? NamedConstraintLiteralName<First> extends (infer Name extends string) ? Name extends Seen ? DuplicateLiteralNames<Rest, Seen, Duplicates | Name> : DuplicateLiteralNames<Rest, Name | Seen, Duplicates> : DuplicateLiteralNames<Rest, Seen, Duplicates> : Duplicates
 (not exported) type DuplicateModelNamesError = 'Error: two ids, uniques, indexes or foreign keys on this model have the same name'
 (not exported) type EagerRelationModelName<ModelName extends string = string, Source extends Exclude<RelationModelRefSource, 'lazyToken'> = Exclude<RelationModelRefSource, 'lazyToken'>> = { readonly kind: 'relationModelName'; readonly source: Source; readonly modelName: ModelName; }
+(not exported) type EmittedByEarlierRelease<Capabilities, RetiredCapabilities> = [Extract<EnabledFlagNames<Capabilities>, FlagNames<RetiredCapabilities>>] extends [never] ? false : true
 (not exported) type EmptyRow = Record<never, ScopeField>
 (not exported) type EnabledCapabilities<Capabilities> = { readonly [Namespace in keyof Capabilities as keyof EnabledCapabilityFlags<Capabilities[Namespace]> extends never ? never : Namespace]: EnabledCapabilityFlags<Capabilities[Namespace]>; }
 (not exported) type EnabledCapabilityFlags<Flags> = { readonly [Flag in keyof Flags as Flags[Flag] extends true ? Flag : never]: true; }
+(not exported) type EnabledFlagNames<Set> = Set extends unknown ? { [Namespace in keyof Known<Set> & string]: { [Flag in keyof Known<Known<Set>[Namespace]> & string]: Known<Known<Set>[Namespace]>[Flag] extends true ? `${Namespace}.${Flag}` : never; }[keyof Known<Known<Set>[Namespace]> & string]; }[keyof Known<Set> & string] : never
 (not exported) type EntryScopeField<Entry> = Entry extends string ? { codecId: Entry; nullable: false; } : Entry extends { readonly codecId: infer Id extends string; readonly nullable?: infer N; } ? { codecId: Id; nullable: [N] extends [true] ? true : false; } : never
 (not exported) type EnumFieldHandle<FieldState> = [FieldEnumHandleOf<FieldState>] extends [never] ? never : FieldEnumHandleOf<FieldState> extends EnumTypeHandle ? FieldEnumHandleOf<FieldState> : never
 (not exported) type EnumHandleDescriptor<Handle> = Handle extends { readonly codecId: infer CodecId extends string; } ? { readonly codecId: CodecId; } : never
@@ -621,6 +629,8 @@
 (not exported) type FieldValueUnion<FieldState> = [EnumValueUnion<FieldState>] extends [never] ? DescriptorValueSetUnion<FieldState> : EnumValueUnion<FieldState>
 (not exported) type FieldsOf<TContract extends Contract<SqlStorage>, ModelName extends string, NsId extends string = never> = ModelDef_2<TContract, ModelName, NsId> extends { readonly fields: infer F; } ? F extends Record<string, unknown> ? F : Record<string, never> : Record<string, never>
 (not exported) type FirstChar<S extends string> = S extends `${infer First}${string}` ? First : ''
+(not exported) type FlagNames<Set> = Set extends unknown ? { [Namespace in keyof Known<Set> & string]: `${Namespace}.${keyof Known<Known<Set>[Namespace]> & string}`; }[keyof Known<Set> & string] : never
+(not exported) type FlagOf<Key, Namespace extends string> = Key extends `${Namespace}.${infer Flag}` ? Flag : never
 (not exported) type FlagOfEach<Flags, Flag> = Flags extends unknown ? Flag extends keyof Flags ? Flags[Flag] : never : never
 (not exported) type ForeignKeyConstraint_2<SourceFieldNames extends readonly string[] = readonly string[], TargetModelName extends string = string, TargetFieldNames extends readonly string[] = readonly string[], Name extends string | undefined = string | undefined, Index extends boolean | string | undefined = boolean | string | undefined> = { readonly kind: 'fk'; readonly fields: SourceFieldNames; readonly targetModel: TargetModelName; readonly targetFields: TargetFieldNames; readonly targetSource?: TargetFieldRefSource; readonly targetSpaceId?: string; readonly targetNamespaceId?: string; readonly targetTableName?: string; readonly name?: Name; readonly onDelete?: 'cascade' | 'noAction' | 'restrict' | 'setDefault' | 'setNull'; readonly onUpdate?: 'cascade' | 'noAction' | 'restrict' | 'setDefault' | 'setNull'; readonly constraint?: boolean; readonly index?: Index; }
 (not exported) type ForeignKeyOptions_2<Name extends string | undefined = string | undefined> = ConstraintOptions<Name> & { readonly onDelete?: 'cascade' | 'noAction' | 'restrict' | 'setDefault' | 'setNull'; readonly onUpdate?: 'cascade' | 'noAction' | 'restrict' | 'setDefault' | 'setNull'; readonly constraint?: boolean; readonly index?: boolean | string; }
@@ -690,6 +700,8 @@
 (not exported) type InputlessOverload<Descriptors, Kind extends 'any' | 'none'> = Extract<Descriptors, { readonly input: { readonly kind: Kind; }; }>
 (not exported) type InputlessRows<Overloads extends OperationOverloads<never>> = ([Overloads['none']] extends [never] ? [Overloads['any']] extends [never] ? Record<never, never> : { readonly withoutInput: SettledRow<Overloads['any'], never>; } : { readonly withoutInput: SettledRow<Overloads['none'], never>; }) & ([Overloads['any']] extends [never] ? Record<never, never> : { readonly anyInput: SettledRow<Overloads['any'], never>; })
 (not exported) type InsertRow<C extends TableProxyContract, NsId extends string, Table extends StorageTable, TableName extends string, Values> = { [K in keyof Values as IsOptionalInsertColumn<C, NsId, Table, TableName, K> extends true ? never : K]: Values[K]; } & { [K in keyof Values as IsOptionalInsertColumn<C, NsId, Table, TableName, K> extends true ? K : never]?: Values[K]; } extends (infer Row) ? { [K in keyof Row]: Row[K]; } : never
+(not exported) type InteractiveTransactionsNotListed<Capabilities, RetiredCapabilities> = IsAny<Capabilities> extends true ? never : Capabilities extends InteractiveTransactionsCapability ? never : EmittedByEarlierRelease<Capabilities, RetiredCapabilities> extends true ? never : 'sql.interactiveTransactions'
+(not exported) type IsAny<Type> = 0 extends 1 & Type ? true : false
 (not exported) type IsBooleanCodec<CodecId, TCodecTypes extends Record<string, unknown>> = CodecId extends keyof TCodecTypes ? TCodecTypes[CodecId] extends { readonly traits: infer Traits; } ? 'boolean' extends Traits ? true : false : false : false
 (not exported) type IsBooleanReturn<Returns, TCodecTypes extends Record<string, unknown>> = Returns extends { readonly codecId: infer Id extends string; } ? Id extends keyof TCodecTypes ? TCodecTypes[Id] extends { readonly traits: infer T; } ? 'boolean' extends T ? true : false : false : false : false
 (not exported) type IsList<State> = State extends { readonly many: { readonly elementNullable: boolean; }; } ? true : false
@@ -711,6 +723,7 @@
 (not exported) type JunctionTargetColumns<Definition, Target extends ModelNames<Definition>> = ModelIdFieldNames<Definition, Target> extends (infer IdFields extends readonly string[]) ? FieldNamesToColumnNames<Definition, Target, IdFields> : BuiltUnique<Definition, Target>['columns']
 (not exported) type Keyed = { readonly columns: readonly string[]; }
 (not exported) type KeysOfEach<T> = T extends unknown ? keyof T : never
+(not exported) type Known<Set> = { [Key in keyof Set as string extends Key ? never : Key]: Set[Key]; }
 (not exported) type LazyNamedModelToken<Token extends AnyNamedModelToken = AnyNamedModelToken> = () => Token
 (not exported) type LazyRelationModelName<ModelName extends string = string> = { readonly kind: 'lazyRelationModelName'; readonly source: 'lazyToken'; readonly resolve: () => ModelName; }
 (not exported) type LengthParams = { readonly length?: number; }
@@ -786,6 +799,7 @@
 (not exported) type NamedKey = Keyed & { readonly name?: string | undefined; }
 (not exported) type NamedModelTokenShape<ModelName extends string = string, Fields extends Record<string, ScalarFieldBuilder> = Record<string, ScalarFieldBuilder>> = { readonly stageOne: { readonly modelName?: ModelName; readonly fields: Fields; }; }
 (not exported) type NamedTypeFieldHelper = <Handle extends EnumTypeHandle>(handle: Handle) => EnumScalarFieldBuilder<Handle>
+(not exported) type NamesSomething<Missing> = [Missing] extends [1 & Missing] ? false : true
 (not exported) type NamespaceColumnNames<S extends Scope> = { [Namespace in keyof S['namespaces']]: keyof S['namespaces'][Namespace]; }[keyof S['namespaces']]
 (not exported) type NamespaceContainingTable<TContract extends Contract<SqlStorage>, TableName extends string> = { [K in keyof TContract['storage']['namespaces'] & string]: TContract['storage']['namespaces'][K] extends { readonly entries: { readonly table: infer Tables; }; } ? TableName extends keyof Tables ? K : never : never; }[keyof TContract['storage']['namespaces'] & string]
 (not exported) type NamespaceDomain = Readonly<Record<string, { readonly models: Readonly<Record<string, unknown>>; }>>
@@ -796,6 +810,7 @@
 (not exported) type NamespaceModelNames<TContract extends Contract<SqlStorage>, NsId extends keyof TContract['domain']['namespaces']> = keyof TContract['domain']['namespaces'][NsId]['models'] & string & ModelNames_2<TContract>
 (not exported) type NamespaceModels<TContract extends ColumnResolutionContract, NsId extends string> = TContract['domain']['namespaces'][NsId] extends { readonly models: infer Models extends Record<string, unknown>; } ? Models : never
 (not exported) type NamespaceModelsOf<TContract extends Contract<SqlStorage>, NsId extends string> = NsId extends keyof TContract['domain']['namespaces'] ? TContract['domain']['namespaces'][NsId]['models'] extends (infer M extends Record<string, unknown>) ? M : Record<string, never> : Record<string, never>
+(not exported) type NamespaceOf<Key> = Key extends `${infer Namespace}.${string}` ? Namespace : never
 (not exported) type NamespaceOfEach<Matrices, Namespace> = Matrices extends unknown ? Namespace extends keyof Matrices ? Matrices[Namespace] : never : never
 (not exported) type NamespaceStorageColumn<TContract extends ColumnResolutionContract, NsId extends string, TableName extends string, ColumnName extends string> = TContract['storage']['namespaces'][NsId] extends { readonly entries: { readonly table: infer Tables extends Record<string, unknown>; }; } ? TableName extends keyof Tables ? Tables[TableName] extends { readonly columns: infer Columns extends Record<string, unknown>; } ? ColumnName extends keyof Columns ? Columns[ColumnName] extends StorageColumn ? Columns[ColumnName] : never : never : never : never : never
 (not exported) type NamespaceTable<C extends TableProxyContract, NsId extends string, Name extends string> = TablesInNamespace<C['storage']['namespaces'][NsId]>[Name]
@@ -810,6 +825,7 @@
 (not exported) type NestedRequiredCreateFieldNames<TContract extends Contract<SqlStorage>, ModelName extends string, NsId extends string = never> = Exclude<CreateFieldNames<TContract, ModelName, NsId>, NestedOptionalCreateFieldNames<TContract, ModelName, NsId>>
 (not exported) type NestedVariantConflictRowCreateInput<TContract extends Contract<SqlStorage>, BaseModelName extends string, VariantValue extends string, NsId extends string = never> = Omit<ConflictRowCreateInput<TContract, BaseModelName, NsId>, DiscriminatorFieldName<TContract, BaseModelName, NsId>> & RowCreateFields<TContract, VariantModelName<TContract, BaseModelName, VariantValue, NsId>, VariantModelNamespace<TContract, BaseModelName, VariantValue, NsId>> & ConflictRowRelationFields<TContract, VariantModelName<TContract, BaseModelName, VariantValue, NsId>, VariantModelNamespace<TContract, BaseModelName, VariantValue, NsId>>
 (not exported) type NestedVariantCreateInput<TContract extends Contract<SqlStorage>, BaseModelName extends string, VariantValue extends string, NsId extends string = never> = Omit<MutationCreateInput<TContract, BaseModelName, NsId>, DiscriminatorFieldName<TContract, BaseModelName, NsId>> & CreateInput<TContract, VariantModelName<TContract, BaseModelName, VariantValue, NsId>, VariantModelNamespace<TContract, BaseModelName, VariantValue, NsId>>
+(not exported) type NoneMissing<Missing extends string, Prefix extends string, Suffix extends string = ''> = [NamesSomething<Missing>] extends [true] ? { readonly [Name in Missing as `${Prefix}${Name}${Suffix}`]: never; } : unknown
 (not exported) type NullElementOf<State> = State extends { readonly many: { readonly elementNullable: true; }; } ? null : never
 (not exported) type NullSuffix<N> = N extends true ? null : never
 (not exported) type NullableColumnOperand<CodecId extends string> = Expression<{ codecId: CodecId; nullable: boolean; many?: never; }> & HasComparisonMethods
@@ -1163,6 +1179,7 @@
 ./contract-prisma7/provider: interface Prisma7ColumnType, readonly required property codecId: string
 ./contract-prisma7/provider: interface Prisma7ColumnType, readonly required property dataType: string
 ./contract-prisma7/provider: interface Prisma7ContractOptions
+./contract-prisma7/provider: interface Prisma7ContractOptions, readonly optional property capabilities?: CapabilityMatrix
 ./contract-prisma7/provider: interface Prisma7ContractOptions, readonly optional property defaultControlPolicy?: ControlPolicy
 ./contract-prisma7/provider: interface Prisma7ContractOptions, readonly optional property output?: string
 ./contract-prisma7/provider: interface Prisma7ContractOptions, readonly required property binding: Prisma7TargetBinding
@@ -1213,8 +1230,10 @@
 ./contract-psl/diagnostics: function describeUnresolvedSqlType(contributions: AssembledAuthoringContributions): DescribeUnresolvedType
 ./contract-psl/map-names: function pslFieldMapName(fieldName: string, columnName: string): string | undefined
 ./contract-psl/map-names: function pslModelMapName(modelName: string, tableName: string): string | undefined
+./contract-psl/provider: function isSourceGivenNoCapabilities(source: object): boolean
 ./contract-psl/provider: function prismaContract(schemaPath: string, options: PrismaContractOptions): ContractConfig
 ./contract-psl/provider: interface PrismaContractOptions
+./contract-psl/provider: interface PrismaContractOptions, readonly optional property capabilities?: CapabilityMatrix
 ./contract-psl/provider: interface PrismaContractOptions, readonly optional property composedExtensionPackRefs?: readonly ExtensionPackRef<'sql', string>[]
 ./contract-psl/provider: interface PrismaContractOptions, readonly optional property defaultControlPolicy?: ControlPolicy
 ./contract-psl/provider: interface PrismaContractOptions, readonly optional property enumInferenceCodecs?: { readonly text: string; readonly int: string; }
@@ -1319,6 +1338,8 @@
 ./contract-ts/contract-builder: function buildBoundContract<const F extends FamilyPackRef<string>, const T extends TargetPackRef<'sql', string>, const Definition extends BoundDefinitionInput<Record<string, AuthoredStorageTypeInstance>, Record<string, ModelLike>, Record<string, ExtensionPackRef<'sql', string>> | undefined, ContractInput['naming'] | undefined, string | undefined, ForeignKeyDefaultsState | undefined, readonly string[] | undefined>>(family: F, target: T, definition: Definition, factory?: undefined): SqlContractResult<WithFamilyTarget<Definition, F, T>>
 ./contract-ts/contract-builder: function buildContractDefinition(definition: LoweringInput): ContractDefinition
 ./contract-ts/contract-builder: function buildSqlContractFromDefinition(definition: ContractDefinition, codecLookup: CodecLookupWithDescriptors, dataTypeLookup: DataTypeLookup): Contract<SqlStorage>
+./contract-ts/contract-builder: function capabilitiesFromKeys<const Key extends CapabilityKey>(keys: readonly Key[]): CapabilitiesFromKeys<Key>
+./contract-ts/contract-builder: function capabilityKeysOf<const Capabilities extends CapabilityMatrix>(capabilities: Capabilities): readonly CapabilityKeysOf<Capabilities>[]
 ./contract-ts/contract-builder: function check(input: { readonly expression: SqlExpression; readonly name?: string; readonly map?: string; }): AuthoredCheckConstraint
 ./contract-ts/contract-builder: function columnsPhrase(columns: readonly string[]): string
 ./contract-ts/contract-builder: function composedExtensionPackRefs(target: Pick<TargetPackRef<'sql', string>, 'familyId' | 'targetId'>, extensionIds: Iterable<string>, knownPackRefs?: readonly ExtensionPackRef<'sql', string>[]): Record<string, ExtensionPackRef<'sql', string>> | undefined
@@ -1461,7 +1482,10 @@
 ./contract-ts/contract-builder: type AttachedEntities = Readonly<Record<string, Readonly<Record<string, Readonly<Record<string, unknown>>>>>>
 ./contract-ts/contract-builder: type AuthoredColumnDefault = ColumnDefault | { readonly kind: 'literal'; readonly value: AuthoredColumnDefaultLiteralValue; readonly inStoredForm?: boolean; }
 ./contract-ts/contract-builder: type AuthoredColumnDefaultLiteralValue = unknown
+./contract-ts/contract-builder: type CapabilitiesFromKeys<Key extends CapabilityKey> = { readonly [Namespace in NamespaceOf<Key>]: { readonly [Flag in FlagOf<Key, Namespace>]: true; }; }
 ./contract-ts/contract-builder: type CapabilityContributor = { readonly capabilities: Readonly<Record<string, Readonly<Record<string, boolean>>>>; }
+./contract-ts/contract-builder: type CapabilityKey = `${string}.${string}`
+./contract-ts/contract-builder: type CapabilityKeysOf<Capabilities> = { [Namespace in keyof Capabilities & string]: { [Flag in keyof Capabilities[Namespace] & string]: Capabilities[Namespace][Flag] extends true ? `${Namespace}.${Flag}` : never; }[keyof Capabilities[Namespace] & string]; }[keyof Capabilities & string]
 ./contract-ts/contract-builder: type CheckNode = { readonly expression: string; readonly map: string | undefined; readonly name: string | undefined; }
 ./contract-ts/contract-builder: type ColumnRef<FieldName extends string = string> = { readonly kind: 'columnRef'; readonly fieldName: FieldName; }
 ./contract-ts/contract-builder: type ComposedAuthoringHelpers<Family extends FamilyPackRef<string>, Target extends TargetPackRef<'sql', string>, Extensions extends Record<string, ExtensionPackRef<'sql', string>> | undefined> = EntityHelpersFromNamespace<ExtractEntitiesNamespaceFromPack<Family> & ExtractEntitiesNamespaceFromPack<Target> & MergeExtensionEntityNamespaces<Extensions>> & { readonly field: FieldHelpersForCodecs<CodecTypesOfPacks<Family, Target, Extensions>>; readonly model: PackAwareModel<MergeAllPackIndexTypes<Family, Target, Extensions>>; readonly rel: typeof rel; readonly type: TypeHelpersFromNamespace<ExtractTypeNamespaceFromPack<Family> & ExtractTypeNamespaceFromPack<Target> & MergeExtensionTypeNamespaces<Extensions>, DataTypeArgumentTypesOfPacks<Family, Target, Extensions>>; readonly gen: GeneratorHelpersOf<ExtensionPackValues<Extensions> | Family | Target>; }
@@ -1543,6 +1567,8 @@
 ./contract-ts: function buildBoundContract<const F extends FamilyPackRef<string>, const T extends TargetPackRef<'sql', string>, const Definition extends BoundDefinitionInput<Record<string, AuthoredStorageTypeInstance>, Record<string, ModelLike>, Record<string, ExtensionPackRef<'sql', string>> | undefined, ContractInput['naming'] | undefined, string | undefined, ForeignKeyDefaultsState | undefined, readonly string[] | undefined>>(family: F, target: T, definition: Definition, factory?: undefined): SqlContractResult<WithFamilyTarget<Definition, F, T>>
 ./contract-ts: function buildContractDefinition(definition: LoweringInput): ContractDefinition
 ./contract-ts: function buildSqlContractFromDefinition(definition: ContractDefinition, codecLookup: CodecLookupWithDescriptors, dataTypeLookup: DataTypeLookup): Contract<SqlStorage>
+./contract-ts: function capabilitiesFromKeys<const Key extends CapabilityKey>(keys: readonly Key[]): CapabilitiesFromKeys<Key>
+./contract-ts: function capabilityKeysOf<const Capabilities extends CapabilityMatrix>(capabilities: Capabilities): readonly CapabilityKeysOf<Capabilities>[]
 ./contract-ts: function check(input: { readonly expression: SqlExpression; readonly name?: string; readonly map?: string; }): AuthoredCheckConstraint
 ./contract-ts: function columnsPhrase(columns: readonly string[]): string
 ./contract-ts: function composedExtensionPackRefs(target: Pick<TargetPackRef<'sql', string>, 'familyId' | 'targetId'>, extensionIds: Iterable<string>, knownPackRefs?: readonly ExtensionPackRef<'sql', string>[]): Record<string, ExtensionPackRef<'sql', string>> | undefined
@@ -1695,7 +1721,10 @@
 ./contract-ts: type AttachedEntities = Readonly<Record<string, Readonly<Record<string, Readonly<Record<string, unknown>>>>>>
 ./contract-ts: type AuthoredColumnDefault = ColumnDefault | { readonly kind: 'literal'; readonly value: AuthoredColumnDefaultLiteralValue; readonly inStoredForm?: boolean; }
 ./contract-ts: type AuthoredColumnDefaultLiteralValue = unknown
+./contract-ts: type CapabilitiesFromKeys<Key extends CapabilityKey> = { readonly [Namespace in NamespaceOf<Key>]: { readonly [Flag in FlagOf<Key, Namespace>]: true; }; }
 ./contract-ts: type CapabilityContributor = { readonly capabilities: Readonly<Record<string, Readonly<Record<string, boolean>>>>; }
+./contract-ts: type CapabilityKey = `${string}.${string}`
+./contract-ts: type CapabilityKeysOf<Capabilities> = { [Namespace in keyof Capabilities & string]: { [Flag in keyof Capabilities[Namespace] & string]: Capabilities[Namespace][Flag] extends true ? `${Namespace}.${Flag}` : never; }[keyof Capabilities[Namespace] & string]; }[keyof Capabilities & string]
 ./contract-ts: type CheckNode = { readonly expression: string; readonly map: string | undefined; readonly name: string | undefined; }
 ./contract-ts: type ColumnRef<FieldName extends string = string> = { readonly kind: 'columnRef'; readonly fieldName: FieldName; }
 ./contract-ts: type ComposedAuthoringHelpers<Family extends FamilyPackRef<string>, Target extends TargetPackRef<'sql', string>, Extensions extends Record<string, ExtensionPackRef<'sql', string>> | undefined> = EntityHelpersFromNamespace<ExtractEntitiesNamespaceFromPack<Family> & ExtractEntitiesNamespaceFromPack<Target> & MergeExtensionEntityNamespaces<Extensions>> & { readonly field: FieldHelpersForCodecs<CodecTypesOfPacks<Family, Target, Extensions>>; readonly model: PackAwareModel<MergeAllPackIndexTypes<Family, Target, Extensions>>; readonly rel: typeof rel; readonly type: TypeHelpersFromNamespace<ExtractTypeNamespaceFromPack<Family> & ExtractTypeNamespaceFromPack<Target> & MergeExtensionTypeNamespaces<Extensions>, DataTypeArgumentTypesOfPacks<Family, Target, Extensions>>; readonly gen: GeneratorHelpersOf<ExtensionPackValues<Extensions> | Family | Target>; }
@@ -1718,6 +1747,8 @@
 ./contract/authored-check-naming: function lowerAuthoredCheck(tableName: string, authored: AuthoredCheckInput, warnings?: AuthoringWarningSink): CheckConstraintInput
 ./contract/authored-check-naming: type AuthoredCheckInput = { readonly expression: string; readonly map: string | undefined; readonly name: string | undefined; }
 ./contract/canonicalization-hooks: const sqlContractCanonicalizationHooks: { readonly shouldPreserveEmpty: PreserveEmptyPredicate; readonly sortStorage: StorageSort; }
+./contract/capability-messages: function capabilityKeysText(capabilities: readonly string[]): string
+./contract/capability-messages: function capabilityUnavailableMessage(feature: string, capabilities: readonly string[], reason?: string): string
 ./contract/check-expressions: function discriminatorValueSet(baseModelName: string, discriminatorField: string, variantValues: readonly string[]): { readonly name: string; readonly values: readonly string[]; }
 ./contract/check-expressions: function reachesAny(storage: Pick<StorageBase, 'namespaces'>, from: EntityCoordinate<'storage', 'valueObject'>, targets: ReadonlySet<string>): boolean
 ./contract/check-expressions: function referenceKey(reference: EntityCoordinate<'storage', 'valueObject'>): string
@@ -2315,6 +2346,8 @@
 ./contract: function assertNothingCastsFromSqlExpression(declaredDataTypes: ReadonlyArray<{ readonly type: DataType; readonly contributedBy: string; }>): void
 ./contract: function buildSqlSchemaQualifiedView<TContract extends Contract<SqlStorage>>(contract: TContract): SqlSchemaQualifiedView<TContract>
 ./contract: function buildSqlSingleNamespaceView<TContract extends Contract<SqlStorage>>(contract: TContract): SqlSingleNamespaceView<TContract>
+./contract: function capabilityKeysText(capabilities: readonly string[]): string
+./contract: function capabilityUnavailableMessage(feature: string, capabilities: readonly string[], reason?: string): string
 ./contract: function checkConstraintInputFromSerialized(flat: SerializedCheckConstraint): CheckConstraintInput
 ./contract: function checkRawTypeText(text: string): string | undefined
 ./contract: function checkSqlDefaultText(text: string): string | undefined
@@ -2727,6 +2760,7 @@
 ./family/control: const INIT_ADDITIVE_POLICY: MigrationOperationPolicy
 ./family/control: const NO_RENAMED_ORIGINS: WorkingSchemaOrigins
 ./family/control: const TABLE_NAME_CASE_CHANGED_CODE = "MIGRATION.TABLE_NAME_CASE_CHANGED"
+./family/control: const VERIFY_CODE_DATABASE_CAPABILITIES_NOT_PROVIDED = "CONTRACT.DATABASE_CAPABILITIES_NOT_PROVIDED"
 ./family/control: const exactName: SameName
 ./family/control: export assembleAuthoringContributions from @prisma/orm-framework/components/control
 ./family/control: export default = const _default: SqlFamilyDescriptor
@@ -2992,6 +3026,7 @@
 ./family/control: interface SqlControlFamilyInstance, required method verifySchema(options: { readonly contract: unknown; readonly schema: SqlSchemaIRNode; readonly strict: boolean; readonly frameworkComponents: ReadonlyArray<TargetBoundComponentDescriptor<'sql', string>>; }): VerifyDatabaseSchemaResult
 ./family/control: interface SqlControlFamilyInstance, required method writeLedgerEntry(options: { readonly driver: SqlControlDriverInstance<string>; readonly space: string; readonly entry: { readonly edgeId: string; readonly from: string; readonly to: string; readonly migrationName: string; readonly migrationHash: string; readonly operations: readonly unknown[]; readonly destinationContractJson?: unknown; }; }): Promise<void>
 ./family/control: interface SqlControlTargetDescriptor, readonly optional property buildPslContract?: (contract: TContract, context: SqlPslBuildContext) => PslDocumentAst
+./family/control: interface SqlControlTargetDescriptor, readonly optional property databaseCapabilitiesNotProvided?: SqlDatabaseCapabilitiesNotProvidedFn
 ./family/control: interface SqlControlTargetDescriptor, readonly optional property inferPslContract?: (schema: SqlSchemaIRNode, context: SqlPslBuildContext, describedContracts?: readonly SqlDescribedContractSpace[]) => Promise<PslDocumentAst>
 ./family/control: interface SqlControlTargetDescriptor, readonly optional property queryOperations?: () => SqlOperationDescriptors
 ./family/control: interface SqlControlTargetDescriptor, readonly required property accessChangesOf: (operations: readonly MigrationPlanOperation[]) => readonly MigrationAccessChange[]
@@ -3230,8 +3265,9 @@
 ./family/control: type ReportedBody = Uint8Array | number | string
 ./family/control: type ReportedLiteralDefault = { readonly kind: 'list'; readonly elements: readonly (ReportedBody | null)[]; } | { readonly kind: 'value'; readonly body: ReportedBody; }
 ./family/control: type SameName = (left: string, right: string) => boolean
+./family/control: type SqlDatabaseCapabilitiesNotProvidedFn = (input: { readonly contract: Contract<SqlStorage>; readonly schema: SqlSchemaIRNode; }) => DatabaseCapabilitiesNotProvided | undefined
 ./family/control: type SqlDefaultFunctionName = 'autoincrement' | 'now'
-./family/control: type SqlMigrationRunnerErrorCode = 'MIGRATION.DESTINATION_CONTRACT_MISMATCH' | 'MIGRATION.EXECUTION_FAILED' | 'MIGRATION.FOREIGN_KEY_VIOLATION' | 'MIGRATION.MARKER_CAS_FAILURE' | 'MIGRATION.MARKER_ORIGIN_MISMATCH' | 'MIGRATION.POLICY_VIOLATION' | 'MIGRATION.POSTCHECK_FAILED' | 'MIGRATION.PRECHECK_FAILED' | 'MIGRATION.PRISMA_TABLES_MISSING' | 'MIGRATION.SCHEMA_VERIFY_FAILED'
+./family/control: type SqlMigrationRunnerErrorCode = 'MIGRATION.DATABASE_CAPABILITIES_NOT_PROVIDED' | 'MIGRATION.DESTINATION_CONTRACT_MISMATCH' | 'MIGRATION.EXECUTION_FAILED' | 'MIGRATION.FOREIGN_KEY_VIOLATION' | 'MIGRATION.MARKER_CAS_FAILURE' | 'MIGRATION.MARKER_ORIGIN_MISMATCH' | 'MIGRATION.POLICY_VIOLATION' | 'MIGRATION.POSTCHECK_FAILED' | 'MIGRATION.PRECHECK_FAILED' | 'MIGRATION.PRISMA_TABLES_MISSING' | 'MIGRATION.SCHEMA_VERIFY_FAILED'
 ./family/control: type SqlMigrationRunnerResult = Result<SqlMigrationRunnerSuccessValue, SqlMigrationRunnerFailure>
 ./family/control: type SqlPlannerConflictKind = 'controlPolicySuppressedCall' | 'foreignKeyConflict' | 'indexIncompatible' | 'missingButNonAdditive' | 'nullabilityConflict' | 'rlsPolicyIncompatible' | 'statementRefused' | 'tableNameCaseChanged' | 'typeMismatch' | 'unsupportedOperation'
 ./family/control: type SqlPlannerResult<TTargetDetails> = SqlPlannerFailureResult | SqlPlannerSuccessResult<TTargetDetails>
@@ -3265,6 +3301,7 @@
 ./family/diff: interface StorageTypeVerdictInput, readonly required property contract: Contract<SqlStorage>
 ./family/diff: interface StorageTypeVerdictInput, readonly required property namespacePairs: ReadonlyArray<{ readonly actual: SqlSchemaIRNode | undefined; }>
 ./family/diff: interface VerifySqlSchemaByDiffInput
+./family/diff: interface VerifySqlSchemaByDiffInput, readonly optional property databaseCapabilitiesNotProvided?: SqlDatabaseCapabilitiesNotProvidedFn | undefined
 ./family/diff: interface VerifySqlSchemaByDiffInput, readonly required property contract: Contract<SqlStorage>
 ./family/diff: interface VerifySqlSchemaByDiffInput, readonly required property diffSchema: SqlSchemaDiffFn
 ./family/diff: interface VerifySqlSchemaByDiffInput, readonly required property frameworkComponents: ReadonlyArray<TargetBoundComponentDescriptor<'sql', string>>
@@ -3424,6 +3461,7 @@
 ./family: const INIT_ADDITIVE_POLICY: MigrationOperationPolicy
 ./family: const NO_RENAMED_ORIGINS: WorkingSchemaOrigins
 ./family: const TABLE_NAME_CASE_CHANGED_CODE = "MIGRATION.TABLE_NAME_CASE_CHANGED"
+./family: const VERIFY_CODE_DATABASE_CAPABILITIES_NOT_PROVIDED = "CONTRACT.DATABASE_CAPABILITIES_NOT_PROVIDED"
 ./family: const exactName: SameName
 ./family: export UNBOUND_DOMAIN_NAMESPACE_ID from @prisma/orm-framework/contract/types
 ./family: export assembleAuthoringContributions from @prisma/orm-framework/components/control
@@ -3771,6 +3809,7 @@
 ./family: interface SqlControlFamilyInstance, required method verifySchema(options: { readonly contract: unknown; readonly schema: SqlSchemaIRNode; readonly strict: boolean; readonly frameworkComponents: ReadonlyArray<TargetBoundComponentDescriptor<'sql', string>>; }): VerifyDatabaseSchemaResult
 ./family: interface SqlControlFamilyInstance, required method writeLedgerEntry(options: { readonly driver: SqlControlDriverInstance<string>; readonly space: string; readonly entry: { readonly edgeId: string; readonly from: string; readonly to: string; readonly migrationName: string; readonly migrationHash: string; readonly operations: readonly unknown[]; readonly destinationContractJson?: unknown; }; }): Promise<void>
 ./family: interface SqlControlTargetDescriptor, readonly optional property buildPslContract?: (contract: TContract, context: SqlPslBuildContext) => PslDocumentAst
+./family: interface SqlControlTargetDescriptor, readonly optional property databaseCapabilitiesNotProvided?: SqlDatabaseCapabilitiesNotProvidedFn
 ./family: interface SqlControlTargetDescriptor, readonly optional property inferPslContract?: (schema: SqlSchemaIRNode, context: SqlPslBuildContext, describedContracts?: readonly SqlDescribedContractSpace[]) => Promise<PslDocumentAst>
 ./family: interface SqlControlTargetDescriptor, readonly optional property queryOperations?: () => SqlOperationDescriptors
 ./family: interface SqlControlTargetDescriptor, readonly required property accessChangesOf: (operations: readonly MigrationPlanOperation[]) => readonly MigrationAccessChange[]
@@ -4013,6 +4052,7 @@
 ./family: interface VariantRowRewrite, readonly required property table: string
 ./family: interface VariantRowRewrite, readonly required property to: string | undefined
 ./family: interface VerifySqlSchemaByDiffInput
+./family: interface VerifySqlSchemaByDiffInput, readonly optional property databaseCapabilitiesNotProvided?: SqlDatabaseCapabilitiesNotProvidedFn | undefined
 ./family: interface VerifySqlSchemaByDiffInput, readonly required property contract: Contract<SqlStorage>
 ./family: interface VerifySqlSchemaByDiffInput, readonly required property diffSchema: SqlSchemaDiffFn
 ./family: interface VerifySqlSchemaByDiffInput, readonly required property frameworkComponents: ReadonlyArray<TargetBoundComponentDescriptor<'sql', string>>
@@ -4046,9 +4086,10 @@
 ./family: type ReportedBody = Uint8Array | number | string
 ./family: type ReportedLiteralDefault = { readonly kind: 'list'; readonly elements: readonly (ReportedBody | null)[]; } | { readonly kind: 'value'; readonly body: ReportedBody; }
 ./family: type SameName = (left: string, right: string) => boolean
+./family: type SqlDatabaseCapabilitiesNotProvidedFn = (input: { readonly contract: Contract<SqlStorage>; readonly schema: SqlSchemaIRNode; }) => DatabaseCapabilitiesNotProvided | undefined
 ./family: type SqlDefaultFunctionName = 'autoincrement' | 'now'
 ./family: type SqlEntityHydrationFactory = (entry: unknown) => unknown
-./family: type SqlMigrationRunnerErrorCode = 'MIGRATION.DESTINATION_CONTRACT_MISMATCH' | 'MIGRATION.EXECUTION_FAILED' | 'MIGRATION.FOREIGN_KEY_VIOLATION' | 'MIGRATION.MARKER_CAS_FAILURE' | 'MIGRATION.MARKER_ORIGIN_MISMATCH' | 'MIGRATION.POLICY_VIOLATION' | 'MIGRATION.POSTCHECK_FAILED' | 'MIGRATION.PRECHECK_FAILED' | 'MIGRATION.PRISMA_TABLES_MISSING' | 'MIGRATION.SCHEMA_VERIFY_FAILED'
+./family: type SqlMigrationRunnerErrorCode = 'MIGRATION.DATABASE_CAPABILITIES_NOT_PROVIDED' | 'MIGRATION.DESTINATION_CONTRACT_MISMATCH' | 'MIGRATION.EXECUTION_FAILED' | 'MIGRATION.FOREIGN_KEY_VIOLATION' | 'MIGRATION.MARKER_CAS_FAILURE' | 'MIGRATION.MARKER_ORIGIN_MISMATCH' | 'MIGRATION.POLICY_VIOLATION' | 'MIGRATION.POSTCHECK_FAILED' | 'MIGRATION.PRECHECK_FAILED' | 'MIGRATION.PRISMA_TABLES_MISSING' | 'MIGRATION.SCHEMA_VERIFY_FAILED'
 ./family: type SqlMigrationRunnerResult = Result<SqlMigrationRunnerSuccessValue, SqlMigrationRunnerFailure>
 ./family: type SqlPlannerConflictKind = 'controlPolicySuppressedCall' | 'foreignKeyConflict' | 'indexIncompatible' | 'missingButNonAdditive' | 'nullabilityConflict' | 'rlsPolicyIncompatible' | 'statementRefused' | 'tableNameCaseChanged' | 'typeMismatch' | 'unsupportedOperation'
 ./family: type SqlPlannerResult<TTargetDetails> = SqlPlannerFailureResult | SqlPlannerSuccessResult<TTargetDetails>
@@ -6355,6 +6396,7 @@
 ./runtime: export type StatementEnded from @prisma/orm-framework/components/runtime
 ./runtime: export type TransactionActivity from @prisma/orm-framework/components/runtime
 ./runtime: export type TransactionEnded from @prisma/orm-framework/components/runtime
+./runtime: function assertInteractiveTransactionsListed(contract: Contract<SqlStorage>, retiredCapabilities: CapabilitySet): void
 ./runtime: function budgets(options?: BudgetsOptions): SqlMiddleware
 ./runtime: function createAstCodecRegistry(descriptors: CodecDescriptorRegistry): ContractCodecRegistry
 ./runtime: function createExecutionContext<TContract extends Contract<SqlStorage> = Contract<SqlStorage>, TTargetId extends string = string>(options: { readonly contract: TContract; readonly stack: SqlExecutionStack<TTargetId>; readonly driver?: RuntimeDriverDescriptor<'sql', TTargetId, unknown, SqlRuntimeDriverInstance<TTargetId>>; }): ExecutionContext<TContract>
@@ -6367,6 +6409,7 @@
 ./runtime: function encodeParamsWithMetadata(values: readonly unknown[], metadata: readonly ParamMetadata[], ctx: SqlCodecCallContext, contractCodecs?: ContractCodecRegistry): Promise<readonly unknown[]>
 ./runtime: function extractCodecIds(contract: Contract<SqlStorage>): Set<string>
 ./runtime: function findActivitySource(target: RuntimeScope): ActivitySource | undefined
+./runtime: function interactiveTransactionsAvailable(contract: Contract<SqlStorage>, retiredCapabilities: CapabilitySet): boolean
 ./runtime: function lazyActivitySource(source: () => ActivitySource): ActivitySource
 ./runtime: function lints(options?: LintsOptions): SqlMiddleware
 ./runtime: function lowerSqlPlan<Row>(adapter: Adapter<AnyQueryAst, Contract<SqlStorage>, LoweredStatement>, contract: Contract<SqlStorage>, queryPlan: SqlQueryPlan<Row>): SqlExecutionPlan<Row>
@@ -6375,6 +6418,7 @@
 ./runtime: function toRuntimeOptions<TTargetId extends string>(options: SqlExecutionOptions<TTargetId>): RuntimeExecutionOptions
 ./runtime: function validateCodecRegistryCompleteness(registry: CodecDescriptorRegistry, contract: Contract<SqlStorage>): void
 ./runtime: function validateContractCodecMappings(registry: CodecDescriptorRegistry, contract: Contract<SqlStorage>): void
+./runtime: function warnOfCapabilitiesNotProvided(contract: Contract<SqlStorage>, stack: SqlExecutionStackWithDriver, options: Pick<RuntimeExecutionOptions, 'log' | 'verifyMarker'>): void
 ./runtime: function withTransaction<R>(runtime: ConnectionProvider, fn: (tx: TransactionContext) => PromiseLike<R>, options?: RuntimeTransactionOptions, parent?: ActivityParent): Promise<R>
 ./runtime: function withTransactionMembers<TMembers extends object>(txCtx: TransactionContext, members: TMembers): TransactionContext & TMembers
 ./runtime: interface ActivityExecuteOptions extends RuntimeExecuteOptions
@@ -6418,6 +6462,8 @@
 ./runtime: interface ExecutionContext, readonly required property contractCodecs: ContractCodecRegistry
 ./runtime: interface ExecutionContext, readonly required property queryOperations: SqlOperationRegistry
 ./runtime: interface ExecutionContext<TContract extends Contract<SqlStorage> = Contract<SqlStorage>> extends MutationDefaults
+./runtime: interface InteractiveTransactionsCapability
+./runtime: interface InteractiveTransactionsCapability, readonly required property sql: { readonly interactiveTransactions: true; }
 ./runtime: interface LintsOptions
 ./runtime: interface LintsOptions, readonly optional property fallbackWhenAstMissing?: 'raw' | 'skip'
 ./runtime: interface LintsOptions, readonly optional property severities?: { readonly selectStar?: 'error' | 'warn'; readonly noLimit?: 'error' | 'warn'; readonly deleteWithoutWhere?: 'error' | 'warn'; readonly updateWithoutWhere?: 'error' | 'warn'; readonly readOnlyMutation?: 'error' | 'warn'; }
@@ -6508,6 +6554,8 @@
 ./runtime: interface SqlRuntimeExtensionDescriptor, required method create(): SqlRuntimeExtensionInstance<TTargetId>
 ./runtime: interface SqlRuntimeExtensionDescriptor<TTargetId extends string = string> extends RuntimeExtensionDescriptor<'sql', TTargetId, SqlRuntimeExtensionInstance<TTargetId>>, SqlStaticContributions
 ./runtime: interface SqlRuntimeExtensionInstance<TTargetId extends string> extends RuntimeExtensionInstance<'sql', TTargetId>
+./runtime: interface SqlRuntimeTargetDescriptor, readonly optional property databaseCapabilities?: Readonly<Record<string, Readonly<Record<string, true>>>>
+./runtime: interface SqlRuntimeTargetDescriptor, readonly optional property retiredCapabilities?: Readonly<Record<string, Readonly<Record<string, true>>>>
 ./runtime: interface SqlRuntimeTargetDescriptor<TTargetId extends string = string, TTargetInstance extends RuntimeTargetInstance<'sql', TTargetId> = RuntimeTargetInstance<'sql', TTargetId>> extends RuntimeTargetDescriptor<'sql', TTargetId, TTargetInstance>, SqlStaticContributions
 ./runtime: interface SqlStaticContributions extends Pick<MutationDefaultGeneratorContributor, 'mutationDefaultGenerators'>
 ./runtime: interface SqlStaticContributions, readonly optional property collectionMethods?: () => ReadonlyArray<CollectionMethodContribution>
@@ -6525,6 +6573,7 @@
 ./runtime: type DeclaredNullable<S> = S extends { readonly nullable: true; } ? true : false
 ./runtime: type DelegatingRuntime = Pick<Runtime, 'connection' | 'execute' | 'prepare' | 'query'> & ActivitySourceTarget
 ./runtime: type HashablePlan = BoundPreparedStatement | SqlExecutionPlan | SqlQueryPlan
+./runtime: type InteractiveTransactionsListed<TContract extends Contract<SqlStorage>, RetiredCapabilities = undefined> = NoneMissing<InteractiveTransactionsNotListed<TContract['capabilities'], RetiredCapabilities>, '`transaction()` is unavailable: your contract declares no dependency on `', '`'>
 ./runtime: type MarkerReadResult = { readonly kind: 'absent'; } | { readonly kind: 'earlier-release'; } | { readonly kind: 'no-table'; } | { readonly kind: 'present'; readonly record: ContractMarkerRecord; }
 ./runtime: type ParamSpec<CT extends CodecTypesBase = CodecTypesBase> = (keyof CT & string) | { readonly codecId: keyof CT & string; readonly typeParams?: JsonValue; readonly nullable?: boolean; }
 ./runtime: type ParamsFromDeclaration<D, CT extends CodecTypesBase> = { readonly [K in keyof D]: CodecValue<DeclaredCodecId<D[K]>, DeclaredNullable<D[K]>, CT>; }
@@ -6534,6 +6583,7 @@
 ./runtime: type SqlExecutionStackWithDriver<TTargetId extends string = string> = SqlExecutionStack<TTargetId> & { readonly driver: RuntimeDriverDescriptor<'sql', TTargetId, unknown, SqlRuntimeDriverInstance<TTargetId>>; }
 ./runtime: type SqlRuntimeAdapterInstance<TTargetId extends string = string> = RuntimeAdapterInstance<'sql', TTargetId> & Adapter<AnyQueryAst, Contract<SqlStorage>, LoweredStatement>
 ./runtime: type SqlRuntimeDriverInstance<TTargetId extends string = string> = RuntimeDriverInstance<'sql', TTargetId> & SqlDriver<unknown>
+./runtime: type StackProvides<TContract extends Contract<SqlStorage>, Stack extends StackDescriptors> = NoneMissing<CapabilitiesNotProvided<TContract['capabilities'], Stack['target']['databaseCapabilities'], Stack['adapter']['capabilities'], Stack['driver']['capabilities'], Stack['target']['retiredCapabilities']>, '', " is required by the contract but not provided by this client's connection">
 ./runtime: type TelemetryOutcome = 'runtime-error' | 'success'
 ./runtime: type VerifyMarkerOption = 'onFirstUse' | false
 ./schema-ir/naming: const CHECK_KINDS: readonly CheckKind[]
@@ -6603,7 +6653,7 @@
 ./schema-ir/types: class SqlColumnDefaultIR, readonly required property get id(): string
 ./schema-ir/types: class SqlColumnDefaultIR, readonly required property nodeKind: "sql-column-default"
 ./schema-ir/types: class SqlColumnDefaultIR, required method children(): readonly DiffableNode[]
-./schema-ir/types: class SqlColumnDefaultIR, required method explainMismatch(actual: DiffableNode | undefined): MismatchExplanation | undefined
+./schema-ir/types: class SqlColumnDefaultIR, required method explainMismatch(actual: DiffableNode | undefined): NodeMismatchExplanation | undefined
 ./schema-ir/types: class SqlColumnDefaultIR, required method isEqualTo(other: DiffableNode): boolean
 ./schema-ir/types: class SqlColumnDefaultIR, static required method is(node: SqlSchemaIRNode): node is SqlColumnDefaultIR
 ./schema-ir/types: class SqlColumnIR extends SqlSchemaIRNode implements DiffableNode
@@ -6628,7 +6678,7 @@
 ./schema-ir/types: class SqlColumnIR, readonly required property nullable: boolean
 ./schema-ir/types: class SqlColumnIR, readonly required property typeText: string
 ./schema-ir/types: class SqlColumnIR, required method children(): readonly DiffableNode[]
-./schema-ir/types: class SqlColumnIR, required method explainMismatch(actual: DiffableNode | undefined): MismatchExplanation | undefined
+./schema-ir/types: class SqlColumnIR, required method explainMismatch(actual: DiffableNode | undefined): NodeMismatchExplanation | undefined
 ./schema-ir/types: class SqlColumnIR, required method isEqualTo(other: DiffableNode): boolean
 ./schema-ir/types: class SqlColumnIR, required method withName(name: string): SqlColumnIR
 ./schema-ir/types: class SqlColumnIR, static required method is(node: SqlSchemaIRNode): node is SqlColumnIR
@@ -6826,7 +6876,7 @@
 ./schema-ir: class SqlColumnDefaultIR, readonly required property get id(): string
 ./schema-ir: class SqlColumnDefaultIR, readonly required property nodeKind: "sql-column-default"
 ./schema-ir: class SqlColumnDefaultIR, required method children(): readonly DiffableNode[]
-./schema-ir: class SqlColumnDefaultIR, required method explainMismatch(actual: DiffableNode | undefined): MismatchExplanation | undefined
+./schema-ir: class SqlColumnDefaultIR, required method explainMismatch(actual: DiffableNode | undefined): NodeMismatchExplanation | undefined
 ./schema-ir: class SqlColumnDefaultIR, required method isEqualTo(other: DiffableNode): boolean
 ./schema-ir: class SqlColumnDefaultIR, static required method is(node: SqlSchemaIRNode): node is SqlColumnDefaultIR
 ./schema-ir: class SqlColumnIR extends SqlSchemaIRNode implements DiffableNode
@@ -6851,7 +6901,7 @@
 ./schema-ir: class SqlColumnIR, readonly required property nullable: boolean
 ./schema-ir: class SqlColumnIR, readonly required property typeText: string
 ./schema-ir: class SqlColumnIR, required method children(): readonly DiffableNode[]
-./schema-ir: class SqlColumnIR, required method explainMismatch(actual: DiffableNode | undefined): MismatchExplanation | undefined
+./schema-ir: class SqlColumnIR, required method explainMismatch(actual: DiffableNode | undefined): NodeMismatchExplanation | undefined
 ./schema-ir: class SqlColumnIR, required method isEqualTo(other: DiffableNode): boolean
 ./schema-ir: class SqlColumnIR, required method withName(name: string): SqlColumnIR
 ./schema-ir: class SqlColumnIR, static required method is(node: SqlSchemaIRNode): node is SqlColumnIR

@@ -1,6 +1,13 @@
 import { int4Column } from '@internal/adapter-postgres/column-types';
 import pgvector from '@internal/extension-pgvector/pack';
-import { autoincrement, defineContract, field, model } from '@internal/postgres/contract-builder';
+import {
+  autoincrement,
+  defineContract,
+  field,
+  model,
+  postgres18,
+  postgresDriver,
+} from '@internal/postgres/contract-builder';
 
 const Embedding1536 = field.column({
   codecId: 'pg/vector@1',
@@ -8,6 +15,7 @@ const Embedding1536 = field.column({
 } as const);
 
 export const contract = defineContract({
+  requiredCapabilities: [...postgres18, ...postgresDriver],
   extensions: { pgvector },
   models: {
     Document: model('Document', {

@@ -4,11 +4,7 @@ import { Collection } from '../../src/collection';
 import { readGraph } from '../../src/statement-graph/read-graph';
 import type { CollectionState } from '../../src/types';
 import { defineContract, field, model, rel } from '../contract-builder';
-import {
-  buildTestContextFromContract,
-  createMockRuntime,
-  perRelationPostgresAdapter,
-} from '../helpers';
+import { buildTestContextFromContract, createMockRuntime, perRelation } from '../helpers';
 
 const UserBase = model('User', {
   fields: {
@@ -31,7 +27,7 @@ const User = UserBase.relations({
 
 const contract = defineContract({ models: { User, Log } });
 
-const context = buildTestContextFromContract(contract, { adapter: perRelationPostgresAdapter });
+const context = buildTestContextFromContract(perRelation(contract));
 
 function collectionOf<ModelName extends 'User' | 'Log'>(modelName: ModelName) {
   return new Collection({ runtime: createMockRuntime(), context }, modelName, {

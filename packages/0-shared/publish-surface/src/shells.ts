@@ -735,6 +735,7 @@ export const publicShells: ReadonlyMap<ShellName, ShellDefinition> = new Map<
           'runtime',
           'schema-ir-annotations',
           'server-version',
+          'server-version-range',
           'sql-utils',
           'types',
         ],

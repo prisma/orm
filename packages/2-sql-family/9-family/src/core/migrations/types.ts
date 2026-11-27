@@ -422,6 +422,7 @@ export interface SqlMigrationRunnerExecuteOptions<TTargetDetails>
 }
 
 export type SqlMigrationRunnerErrorCode =
+  | 'MIGRATION.DATABASE_CAPABILITIES_NOT_PROVIDED'
   | 'MIGRATION.DESTINATION_CONTRACT_MISMATCH'
   | 'MIGRATION.MARKER_ORIGIN_MISMATCH'
   | 'MIGRATION.MARKER_CAS_FAILURE'

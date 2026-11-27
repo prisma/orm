@@ -101,6 +101,7 @@
     "./runtime": "./dist/runtime.mjs",
     "./schema-ir-annotations": "./dist/schema-ir-annotations.mjs",
     "./server-version": "./dist/server-version.mjs",
+    "./server-version-range": "./dist/server-version-range.mjs",
     "./sql-utils": "./dist/sql-utils.mjs",
     "./types": "./dist/types.mjs",
     "./package.json": "./package.json"

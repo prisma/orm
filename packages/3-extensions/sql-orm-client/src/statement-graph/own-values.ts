@@ -1,4 +1,5 @@
 import { AsyncIterableResult } from '@internal/framework-components/runtime';
+import { capabilityUnavailableMessage } from '@internal/sql-contract/capability-messages';
 import type {
   AnyExpression,
   InsertAst,
@@ -49,7 +50,11 @@ export function checkOwnValues(
   if (asts.some((ast) => ast.onConflict?.action.kind === 'do-nothing')) {
     throw ormError(
       'ORM.CAPABILITY_MISSING',
-      `${method} with onConflict "skip" on model "${owner.modelName}" requires contract capability "returning": without it the rows are read back by key, which finds a skipped row's existing match. Use createAndCount() to skip conflicting rows.`,
+      capabilityUnavailableMessage(
+        `\`${method}\` with onConflict "skip" on model "${owner.modelName}"`,
+        ['sql.returning'],
+        "Without it the rows are read back by key, which finds a skipped row's existing match. Use createAndCount() to skip conflicting rows.",
+      ),
       { meta: { capability: 'returning', action: method } },
     );
   }
@@ -77,7 +82,11 @@ function refuseUpsertOfColumnsReadBack(
   const refused = (problem: string) =>
     ormError(
       'ORM.CAPABILITY_MISSING',
-      `${method} on model "${owner.modelName}" ${problem}; without capability "returning" the row is read back by the create's values for the conflict columns.`,
+      capabilityUnavailableMessage(
+        `\`${method}\` on model "${owner.modelName}"`,
+        ['sql.returning'],
+        `It ${problem}, and without \`sql.returning\` the row is read back by the create's values for the conflict columns.`,
+      ),
       { meta: { capability: 'returning', action: method } },
     );
   const read = returns.map((column) => column.alias);

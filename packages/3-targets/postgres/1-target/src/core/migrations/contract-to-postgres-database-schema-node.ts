@@ -107,7 +107,7 @@ export function contractToPostgresDatabaseSchemaNode(
       roles: [],
       extensions: [],
       existingSchemas: [],
-      pgVersion: '',
+      serverVersionNumber: undefined,
     });
   }
 
@@ -329,6 +329,6 @@ export function contractToPostgresDatabaseSchemaNode(
     roles,
     extensions,
     existingSchemas: ownedSchemas,
-    pgVersion: '',
+    serverVersionNumber: undefined,
   });
 }

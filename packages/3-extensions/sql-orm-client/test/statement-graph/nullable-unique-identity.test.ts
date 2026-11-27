@@ -1,13 +1,13 @@
-import { postgresAdapterCapabilities } from '@internal/adapter-postgres/adapter';
 import { int4Column, textColumn } from '@internal/adapter-postgres/column-types';
-import postgresAdapter from '@internal/adapter-postgres/runtime';
 import { describe, expect, it } from 'vitest';
 import { Collection } from '../../src/collection';
 import { defineContract, field, model, rel } from '../contract-builder';
 import {
   buildTestContextFromContract,
   createMockRuntime,
-  perRelationPostgresAdapter,
+  perRelation,
+  statedCapabilities,
+  withCapabilities,
 } from '../helpers';
 
 const UserBase = model('User', {
@@ -31,18 +31,15 @@ const User = UserBase.relations({
 
 const contract = defineContract({ models: { Log, User } });
 
-const withoutReturning: typeof postgresAdapter = {
-  ...postgresAdapter,
-  capabilities: {
-    ...postgresAdapterCapabilities,
-    postgres: { ...postgresAdapterCapabilities.postgres, returning: false },
-    sql: { ...postgresAdapterCapabilities.sql, returning: false },
-  },
+const contracts = {
+  stated: contract,
+  perRelation: perRelation(contract),
+  withoutReturning: withCapabilities(contract, statedCapabilities.withoutReturning),
 };
 
-function logs(adapter: typeof postgresAdapter = postgresAdapter) {
+function logs(variant: keyof typeof contracts = 'stated') {
   const runtime = createMockRuntime();
-  const context = buildTestContextFromContract(contract, { adapter });
+  const context = buildTestContextFromContract(contracts[variant]);
   const collection = new Collection({ runtime, context }, 'Log', { namespaceId: 'public' });
   return { runtime, collection: collection.where({ message: 'hello' }) };
 }
@@ -85,7 +82,7 @@ describe('a table whose only unique key has a nullable column', () => {
   });
 
   it('refuses a read with includes when includes load with one query per relation', async () => {
-    const { collection, runtime } = logs(perRelationPostgresAdapter);
+    const { collection, runtime } = logs('perRelation');
 
     await expect(collection.include('author').all()).rejects.toThrow(includeRefusal);
     expect(runtime.executions).toEqual([]);
@@ -93,14 +90,14 @@ describe('a table whose only unique key has a nullable column', () => {
 
   describe('on a database without RETURNING', () => {
     it('refuses a create that returns its row', async () => {
-      const { collection, runtime } = logs(withoutReturning);
+      const { collection, runtime } = logs('withoutReturning');
 
       await expect(collection.create(ada)).rejects.toThrow(refusal('create()'));
       expect(runtime.executions).toEqual([]);
     });
 
     it('refuses a createAll() that returns its rows', async () => {
-      const { collection, runtime } = logs(withoutReturning);
+      const { collection, runtime } = logs('withoutReturning');
 
       await expect(collection.createAll([ada, { ...ada, message: 'bye' }])).rejects.toThrow(
         refusal('createAll()'),
@@ -109,7 +106,7 @@ describe('a table whose only unique key has a nullable column', () => {
     });
 
     it('refuses an updateAll() that returns its rows', async () => {
-      const { collection, runtime } = logs(withoutReturning);
+      const { collection, runtime } = logs('withoutReturning');
 
       await expect(collection.updateAll({ message: 'bye' })).rejects.toThrow(
         refusal('updateAll()'),
@@ -119,7 +116,7 @@ describe('a table whose only unique key has a nullable column', () => {
   });
 
   it('refuses a deleteAll() with includes when includes load with one query per relation', async () => {
-    const { collection, runtime } = logs(perRelationPostgresAdapter);
+    const { collection, runtime } = logs('perRelation');
 
     expect(() => collection.include('author').deleteAll()).toThrow(includeRefusal);
     expect(runtime.executions).toEqual([]);

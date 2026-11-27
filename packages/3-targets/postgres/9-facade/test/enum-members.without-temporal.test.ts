@@ -1,6 +1,12 @@
 import 'temporal-polyfill/full/global';
 import { describe, expect, it } from 'vitest';
-import { defineContract, enumType, member } from '../src/exports/contract-builder';
+import {
+  defineContract,
+  enumType,
+  member,
+  postgres18,
+  postgresDriver,
+} from '../src/exports/contract-builder';
 import { contractFromJson } from '../src/static/contract-from-json';
 import postgresStatic from '../src/static/postgres-static';
 
@@ -13,17 +19,23 @@ const InstantLevel = enumType(
 
 const contractJson: unknown = JSON.parse(
   JSON.stringify(
-    defineContract({ enums: { TextLevel, InstantLevel } }, ({ field, model, gen, type }) => ({
-      models: {
-        Reading: model('Reading', {
-          fields: {
-            id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
-            text: field.namedType(TextLevel),
-            instant: field.namedType(InstantLevel),
-          },
-        }),
+    defineContract(
+      {
+        requiredCapabilities: [...postgres18, ...postgresDriver],
+        enums: { TextLevel, InstantLevel },
       },
-    })),
+      ({ field, model, gen, type }) => ({
+        models: {
+          Reading: model('Reading', {
+            fields: {
+              id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
+              text: field.namedType(TextLevel),
+              instant: field.namedType(InstantLevel),
+            },
+          }),
+        },
+      }),
+    ),
   ),
 );
 

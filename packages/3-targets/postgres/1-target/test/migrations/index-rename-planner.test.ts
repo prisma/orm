@@ -129,7 +129,7 @@ function actualSchema(indexes: readonly LiveIndex[]): PostgresDatabaseSchemaNode
     },
     roles: [],
     existingSchemas: ['public'],
-    pgVersion: 'unknown',
+    serverVersionNumber: undefined,
   });
 }
 

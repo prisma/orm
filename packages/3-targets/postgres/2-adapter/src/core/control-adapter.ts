@@ -109,6 +109,7 @@ import { postgresError } from '@internal/target-postgres/errors';
 import { MARKER_LOCK_KEY, MARKER_LOCK_SQL } from '@internal/target-postgres/marker-lock';
 import { introspectedTypeText } from '@internal/target-postgres/native-type-normalizer';
 import { POLICY_COMMAND_SQL, policyRoleList } from '@internal/target-postgres/rls-canonicalize';
+import { readPostgresServerVersionNumber } from '@internal/target-postgres/server-version';
 import {
   CONTROL_PLANE_LC_MONETARY,
   escapeLiteral,
@@ -128,7 +129,6 @@ import {
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { adapterError } from './adapter-errors';
-import { postgresAdapterCapabilities } from './capabilities';
 import { encodeControlQueryParams } from './control-codecs';
 import {
   execute,
@@ -255,15 +255,10 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
         { meta: { surface: 'control-adapter' } },
       );
     }
-    return renderLoweredSql(
-      ast,
-      blindCast<PostgresContract, 'caller must supply a matching PostgresContract'>(
-        context.contract,
-      ),
-      this.codecRegistry,
-      this.dataTypeLookup,
-      postgresAdapterCapabilities,
+    const contract = blindCast<PostgresContract, 'caller must supply a matching PostgresContract'>(
+      context.contract,
     );
+    return renderLoweredSql(ast, contract, this.codecRegistry, this.dataTypeLookup);
   }
 
   async renderColumnDefault(column: DdlColumn, table: string): Promise<string> {
@@ -300,13 +295,7 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
     const contract = blindCast<PostgresContract, 'Caller must supply matching contract'>(
       context?.contract,
     );
-    const lowered = renderLoweredSql(
-      ast,
-      contract,
-      this.codecRegistry,
-      this.dataTypeLookup,
-      postgresAdapterCapabilities,
-    );
+    const lowered = renderLoweredSql(ast, contract, this.codecRegistry, this.dataTypeLookup);
     const codecRegistry = blindCast<
       ContractCodecRegistry,
       'framework CodecRegistry: its descriptors materialise SQL codecs; the framework Codec type erases to BaseCodec at this boundary'
@@ -724,27 +713,26 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
       // control connection, so a parallel walk only serialises behind the wire
       // protocol and trips pg's "already executing a query" deprecation.
       const namespaces: Record<string, PostgresNamespaceSchemaNode> = {};
-      let pgVersion = 'unknown';
       for (const [resolved, declaredHere] of declaredTablesBySchema) {
-        const { namespace, pgVersion: version } = await this.introspectSchema(
+        const namespace = await this.introspectSchema(
           driver,
           resolved,
           declaredHere.tables,
           (table, column) => contractColumnsOf.columnOf(declaredHere.namespaceIds, table, column),
         );
         defineOwn(namespaces, resolved, namespace);
-        pgVersion = version;
       }
 
       const roles = await this.introspectRoles(driver);
       const extensions = await this.introspectExtensions(driver);
       const existingSchemas = await this.listExistingSchemas(driver);
+      const serverVersionNumber = await readPostgresServerVersionNumber(driver);
       return new PostgresDatabaseSchemaNode({
         namespaces,
         roles,
         extensions,
         existingSchemas,
-        pgVersion,
+        serverVersionNumber,
       });
     });
   }
@@ -881,7 +869,7 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
     schema: string,
     declaredTables: ReadonlySet<string>,
     contractColumnOf: (table: string, column: string) => ContractColumn | undefined,
-  ): Promise<{ readonly namespace: PostgresNamespaceSchemaNode; readonly pgVersion: string }> {
+  ): Promise<PostgresNamespaceSchemaNode> {
     // Issue the schema-wide queries one at a time. A single control connection
     // serialises queries anyway, so Promise.all buys no parallelism here and
     // makes pg emit a "client is already executing a query" deprecation. One
@@ -1535,23 +1523,11 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
       );
     }
 
-    const namespace = new PostgresNamespaceSchemaNode({
+    return new PostgresNamespaceSchemaNode({
       schemaName: schema,
       tables,
       nativeEnums: enums,
     });
-    return { namespace, pgVersion: await this.getPostgresVersion(driver) };
-  }
-
-  /**
-   * Gets the Postgres version from the database.
-   */
-  private async getPostgresVersion(driver: SqlControlDriverInstance<'postgres'>): Promise<string> {
-    const result = await driver.query<{ version: string }>('SELECT version() AS version', []);
-    const versionString = result.rows[0]?.version ?? '';
-    // Extract version number from "PostgreSQL 15.1 ..." format
-    const match = versionString.match(/PostgreSQL (\d+\.\d+)/);
-    return match?.[1] ?? 'unknown';
   }
 }
 

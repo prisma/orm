@@ -1,22 +1,25 @@
-import { defineContract } from '@internal/postgres/contract-builder';
+import { defineContract, postgres18, postgresDriver } from '@internal/postgres/contract-builder';
 import { describe, expect, it } from 'vitest';
 import { vector } from '../src/exports/column-types';
 import pgvector from '../src/exports/pack';
 
 function embeddingDefault(literal: number[], form: 'typeHelper' | 'column'): unknown {
-  const contract = defineContract({ extensions: { pgvector } }, ({ field, model, type, gen }) => {
-    const embedding = field.column(form === 'typeHelper' ? type.pgvector.Vector(3) : vector(3));
-    return {
-      models: {
-        Doc: model('Doc', {
-          fields: {
-            id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
-            embedding: embedding.default(literal),
-          },
-        }),
-      },
-    };
-  });
+  const contract = defineContract(
+    { requiredCapabilities: [...postgres18, ...postgresDriver], extensions: { pgvector } },
+    ({ field, model, type, gen }) => {
+      const embedding = field.column(form === 'typeHelper' ? type.pgvector.Vector(3) : vector(3));
+      return {
+        models: {
+          Doc: model('Doc', {
+            fields: {
+              id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
+              embedding: embedding.default(literal),
+            },
+          }),
+        },
+      };
+    },
+  );
   return contract.storage.namespaces['public']?.entries.table?.['Doc']?.columns['embedding']
     ?.default;
 }
@@ -61,7 +64,7 @@ describe('literal defaults on a codec contributed through extensions', () => {
     'stores a default without a dimension through %s',
     (form) => {
       const contract = defineContract(
-        { extensions: { pgvector } },
+        { requiredCapabilities: [...postgres18, ...postgresDriver], extensions: { pgvector } },
         ({ field, model, type, gen }) => {
           const embedding = field.column(form === 'typeHelper' ? type.pgvector.Vector() : vector());
           return {
@@ -89,16 +92,19 @@ describe('literal defaults on a codec contributed through extensions', () => {
   describe('on a column whose type parameters the data type does not accept', () => {
     it('reports the type parameters, not the default', () => {
       expect(() =>
-        defineContract({ extensions: { pgvector } }, ({ field, model, gen, type }) => ({
-          models: {
-            Doc: model('Doc', {
-              fields: {
-                id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
-                embedding: field.column(vector(0)).default([1, 2, 3]),
-              },
-            }),
-          },
-        })),
+        defineContract(
+          { requiredCapabilities: [...postgres18, ...postgresDriver], extensions: { pgvector } },
+          ({ field, model, gen, type }) => ({
+            models: {
+              Doc: model('Doc', {
+                fields: {
+                  id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
+                  embedding: field.column(vector(0)).default([1, 2, 3]),
+                },
+              }),
+            },
+          }),
+        ),
       ).toThrow(
         expect.objectContaining({
           code: 'CONTRACT.TYPE_PARAMS_INVALID',
