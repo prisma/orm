@@ -217,7 +217,12 @@ function contractViolations(input: IntegrityComputationInput): readonly Integrit
       contract = space.contract();
     } catch (error) {
       if (isFormatVersionError(error)) throw error;
-      out.push({ kind: 'contractUnreadable', spaceId: space.spaceId, detail: detailOf(error) });
+      out.push({
+        kind: 'contractUnreadable',
+        spaceId: space.spaceId,
+        detail: detailOf(error),
+        hash: space.headRef?.hash,
+      });
       continue;
     }
 

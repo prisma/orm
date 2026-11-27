@@ -1,7 +1,13 @@
 import type { IntegrityViolation } from '@internal/migration-tools/aggregate';
+import { contractSnapshotDir } from '@internal/migration-tools/contract-snapshot-store';
 import { join, relative } from 'pathe';
 import type { CheckFailure } from '../commands/json/schemas';
-import { chooseAction, migrationPackageRepairActions, runCommandAction } from './next-actions';
+import {
+  chooseAction,
+  migrationPackageRepairActions,
+  runCommandAction,
+  snapshotRepairActions,
+} from './next-actions';
 
 export type { CheckFailure } from '../commands/json/schemas';
 
@@ -159,12 +165,28 @@ export function integrityViolationToCheckFailure(
       return {
         space: violation.spaceId,
         code: 'MIGRATION.CHECK_CONTRACT_UNREADABLE',
-        where: migrationFileRelative(join(migrationsDir, violation.spaceId), 'contract.json'),
-        why: `Contract for space "${violation.spaceId}" is unreadable: ${violation.detail}`,
-        nextActions: [
-          runCommandAction('Re-emit the extension contract artefacts', '{bin} contract emit'),
-          chooseAction('Or fix the descriptor producing the invalid contract'),
-        ],
+        where:
+          violation.hash === undefined
+            ? refRelative(violation.spaceId, 'head')
+            : migrationPathRelative(
+                join(contractSnapshotDir(migrationsDir, violation.hash), 'contract.json'),
+              ),
+        why: `The head contract snapshot of space "${violation.spaceId}" is unreadable: ${violation.detail}`,
+        nextActions:
+          violation.hash === undefined
+            ? [
+                runCommandAction(
+                  "Write the extension's head ref and head snapshot again from the installed extension",
+                  '{bin} contract emit',
+                ),
+              ]
+            : snapshotRepairActions({
+                spaceId: violation.spaceId,
+                hash: violation.hash,
+                headHash: violation.hash,
+                migrationsDir,
+                cwd,
+              }),
       };
     case 'duplicateMigrationHash':
       return {

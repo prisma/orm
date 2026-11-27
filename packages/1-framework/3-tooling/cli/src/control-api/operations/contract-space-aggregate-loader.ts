@@ -16,6 +16,7 @@ import type {
 import { loadContractSpaceAggregate } from '@internal/migration-tools/aggregate';
 import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import type { SnapshotContentVerifier } from '@internal/migration-tools/contract-snapshot-store';
+import { contractSnapshotDir } from '@internal/migration-tools/contract-snapshot-store';
 import { errorInvalidRefFile } from '@internal/migration-tools/errors';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
@@ -179,7 +180,7 @@ export function mapIntegrityViolations(
       `Contract-space contract validation failed for "${contractUnreadable.spaceId}"`,
       {
         why: contractUnreadable.detail,
-        fix: 'Re-emit the extension contract with `{bin} contract emit`, or fix the extension pack descriptor producing the invalid contract.',
+        fix: extensionHeadSnapshotFix(migrationsDir, contractUnreadable.hash),
         violations: [contractUnreadable],
       },
     );
@@ -211,7 +212,12 @@ export function mapIntegrityViolations(
   });
 }
 
-/** How a migration package whose files are wrong is put right, in one sentence; see `migrationPackageRepairActions`. */
+function extensionHeadSnapshotFix(migrationsDir: string, hash: string | undefined): string {
+  return hash === undefined
+    ? 'Run `{bin} contract emit`, which writes the head ref and the head snapshot of each extension from the installed extension.'
+    : `Delete ${relative(process.cwd(), contractSnapshotDir(migrationsDir, hash))} and run \`{bin} contract emit\`, which writes it again from the installed extension. If the file was edited by hand, restore it from version control.`;
+}
+
 function migrationPackageRepairText(
   migrationsDir: string,
   spaceId: string,
