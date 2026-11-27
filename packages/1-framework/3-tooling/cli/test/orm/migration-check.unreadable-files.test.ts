@@ -322,4 +322,41 @@ describe('migration check on a file it cannot read', () => {
     ]);
     expect(failures[0]?.why).toContain('zzz must be removed');
   });
+
+  it('reports an unreadable migration.json when no contract has been emitted yet', async () => {
+    const dir = await projectDir();
+    const migrationsDir = join(dir, 'migrations');
+    const first = await seedMigration(migrationsDir);
+    await addUnknownKey(join(first, 'migration.json'));
+
+    const run = await harness(strictFamilyConfig()).run(['migration', 'check', '--json'], {
+      cwd: dir,
+    });
+
+    expect(run.exitCode).toBe(4);
+    expect(failuresOf(run).map(({ code }) => code)).toEqual(['MIGRATION.CHECK_PACKAGE_UNLOADABLE']);
+  });
+
+  it('refuses a contract.json that is not JSON, naming it, instead of passing', async () => {
+    const dir = await projectDir();
+    await seedMigration(join(dir, 'migrations'));
+    await mkdir(join(dir, 'output'), { recursive: true });
+    await writeFile(join(dir, 'output', 'contract.json'), '{ not json', 'utf-8');
+
+    const run = await harness(strictFamilyConfig()).run(['migration', 'check', '--json'], {
+      cwd: dir,
+    });
+
+    expect(run.exitCode).toBe(2);
+    expect(run.json.at(-1)).toMatchObject({
+      kind: 'result',
+      envelope: {
+        ok: false,
+        error: {
+          code: 'CONTRACT.VALIDATION_FAILED',
+          why: expect.stringContaining(join(dir, 'output', 'contract.json')),
+        },
+      },
+    });
+  });
 });

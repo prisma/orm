@@ -8,7 +8,10 @@ import type { Diagnostic } from '@prisma/cli-engine/protocol';
 import { notOk, ok } from '@prisma/cli-engine/protocol';
 import type { CheckFailure, MigrationCheckResult } from '../../commands/json/schemas';
 import { PRECONDITION } from '../../commands/migration-check/exit-codes';
-import { buildReadAggregate } from '../../control-api/operations/contract-space-aggregate-loader';
+import {
+  buildReadAggregate,
+  unreadableFiles,
+} from '../../control-api/operations/contract-space-aggregate-loader';
 import {
   checkSingleTarget,
   enumerateCheckSpaces,
@@ -193,7 +196,13 @@ export const migrationCheckCommand = defineOrmCommand({
       if (!loadedViolations.ok) {
         return notOk(normalizeError(loadedViolations.failure));
       }
-      const violations = loadedViolations.value;
+      const violations = [
+        ...loadedViolations.value.filter(
+          (violation) =>
+            violation.kind !== 'refUnreadable' && violation.kind !== 'packageUnloadable',
+        ),
+        ...unreadableFiles(loaded.value.aggregate),
+      ];
       const spacesNotReadInFull = new Set(
         spaces
           .filter((space) => space.unreadableMigrations.length > 0)

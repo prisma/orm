@@ -303,3 +303,22 @@ describe('migration status with a migration it could not read', () => {
     expect(summary).toContain('could not be read');
   });
 });
+
+describe('a listing meets a contract.json that is not JSON', () => {
+  it.each([['list'], ['graph']])(
+    'migration %s reports it and still lists the migrations',
+    async (command) => {
+      const project = await projectWithTwoMigrations();
+      await writeFile(project.contractPath, '{ not json', 'utf-8');
+
+      const run = await harness(offlineConfig({ project })).run(['migration', command, '--json'], {
+        cwd: project.dir,
+      });
+
+      expect({ exitCode: run.exitCode, diagnostics: run.presented?.diagnostics }).toEqual({
+        exitCode: 0,
+        diagnostics: [expect.objectContaining({ code: 'CONTRACT.UNREADABLE', severity: 'warn' })],
+      });
+    },
+  );
+});

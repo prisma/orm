@@ -469,13 +469,16 @@ export async function buildReadAggregate(
   >
 > {
   let contractHash: string = EMPTY_CONTRACT_HASH;
+  let envelopeRefusal: string | undefined;
   try {
     const envelope = await readContractEnvelope(config);
     contractHash = envelope.storageHash;
   } catch (error) {
     const formatFailure = formatVersionFailure(error);
     if (formatFailure !== undefined) return notOk(formatFailure);
-    // Contract unreadable — marker uses EMPTY_CONTRACT_HASH
+    if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) {
+      envelopeRefusal = error instanceof Error ? error.message : String(error);
+    }
   }
 
   try {
@@ -489,7 +492,7 @@ export async function buildReadAggregate(
       targetId: config.target.id,
       targetFamily: config.target.familyId,
     });
-    let contractRefusal: string | undefined;
+    let contractRefusal = envelopeRefusal;
     if (contractRawForAggregate !== null) {
       try {
         appContractForLoad = deserializeContract(contractRawForAggregate);

@@ -479,6 +479,14 @@ export async function loadAggregateIntegrityViolations(
     ) {
       return mapContractAtError(error);
     }
+    if (error instanceof SyntaxError) {
+      return notOk(
+        errorContractValidationFailed(
+          `Contract at ${contractPath} is not valid JSON: ${error.message}`,
+          { where: { path: contractPath }, cause: error },
+        ),
+      );
+    }
     if (isStructuredError(error) && error.code === 'CONTRACT.VALIDATION_FAILED') {
       return notOk(
         errorContractValidationFailed(
