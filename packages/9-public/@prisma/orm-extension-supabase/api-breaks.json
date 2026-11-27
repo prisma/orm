@@ -14,7 +14,7 @@
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "3c9d16b4eda4510c",
+    "fingerprint": "81c677c9323a6992",
     "reason": "A column name that several joined tables share must now name its table (prisma/orm#31150), and `transaction()` is a type error for a contract that does not require `sql.interactiveTransactions`; a release candidate's contract may still call it (prisma/orm#31218)."
   },
   {
@@ -23,7 +23,7 @@
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "d355ac44c3abb036",
+    "fingerprint": "913f5d0c24b08e6d",
     "reason": "A column name that several joined tables share must now name its table (prisma/orm#31150), and `transaction()` is a type error for a contract that does not require `sql.interactiveTransactions`; a release candidate's contract may still call it (prisma/orm#31218)."
   },
   {
@@ -32,8 +32,8 @@
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "aa1d211f375e6a3c",
-    "reason": "The Supabase contract's capabilities are the ones it requires; the `postgres` flags this release retired, such as `jsonAgg`, are gone (prisma/orm#31218)."
+    "fingerprint": "ab3d7907c1ecb1ad",
+    "reason": "The Supabase contract's capabilities are the ones it requires; the `postgres` flags this release retired, such as `jsonAgg`, are gone (prisma/orm#31218). Its storage and profile hash literals also take the values this release's hash rules give the same contract (ADR 332)."
   },
   {
     "path": "./runtime",
@@ -41,7 +41,7 @@
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "927d50a8cf68b4ae",
+    "fingerprint": "05bcb076bb9d1760",
     "reason": "The Supabase contract's capabilities are the ones it requires; the `postgres` flags this release retired, such as `jsonAgg`, are gone (prisma/orm#31218)."
   },
   {
