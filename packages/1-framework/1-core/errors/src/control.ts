@@ -228,8 +228,31 @@ export function errorContractValidationFailed(
     readonly cause?: unknown;
     /** What the refusal is about, such as the columns whose defaults were refused. */
     readonly meta?: Record<string, unknown> | undefined;
+    /** The refused contract is a migration snapshot, which no command rewrites, so it can only be upgraded or restored. */
+    readonly snapshot?: boolean;
   },
 ): CliStructuredError {
+  if (options?.snapshot === true) {
+    return new CliStructuredError('CONTRACT.VALIDATION_FAILED', 'Contract validation failed', {
+      why: reason,
+      fix: `If an earlier release wrote this snapshot, follow the app upgrade instructions of each release since, which rewrite the contract and its migration snapshots: ${APP_UPGRADE_GUIDES_URL}. Otherwise restore the snapshot from version control; no command rewrites it`,
+      nextActions: [
+        {
+          kind: 'open-url',
+          label: 'If an earlier release wrote the snapshot, follow the app upgrade instructions',
+          url: APP_UPGRADE_GUIDES_URL,
+        },
+        {
+          kind: 'user-choice',
+          label: 'Restore the snapshot from version control; no command rewrites it',
+        },
+      ],
+      docsUrl: docsUrlFor('CONTRACT.VALIDATION_FAILED'),
+      ...(options.where ? { where: options.where } : {}),
+      ...ifDefined('cause', options.cause),
+      ...ifDefined('meta', options.meta),
+    });
+  }
   return new CliStructuredError('CONTRACT.VALIDATION_FAILED', 'Contract validation failed', {
     why: reason,
     fix: `If an earlier release emitted this contract, follow the app upgrade instructions of each release since, which rewrite the contract and its migration snapshots: ${APP_UPGRADE_GUIDES_URL}. If this release emitted it, re-run \`{bin} contract emit\`, or fix the contract file if you edited it, and try again`,

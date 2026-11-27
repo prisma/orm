@@ -33,7 +33,12 @@ export function mapContractAtError(
         return notOk(
           errorContractValidationFailed(
             `${role === 'to' ? 'Target' : 'Predecessor'} contract at ${filePath} failed to deserialize: ${message}`,
-            { where: { path: filePath }, cause: error, meta: contractValidationMeta(error) },
+            {
+              where: { path: filePath },
+              cause: error,
+              meta: contractValidationMeta(error),
+              snapshot: true,
+            },
           ),
         );
       }

@@ -164,12 +164,22 @@ describe('executeMigrate reads the snapshot each migration ends at through the f
     const result = await executeMigrate(migrateOptions(migrationsDir, migrations));
 
     expect({
-      failure: result.ok ? undefined : { code: result.failure.code, why: result.failure.why },
+      failure: result.ok
+        ? undefined
+        : {
+            code: result.failure.code,
+            why: result.failure.why,
+            advice: result.failure.nextActions?.map(({ label }) => label),
+          },
       handed,
     }).toEqual({
       failure: {
         code: 'CONTRACT.VALIDATION_FAILED',
         why: `Target contract at ${snapshotPath} failed to deserialize: zzz must be removed`,
+        advice: [
+          'If an earlier release wrote the snapshot, follow the app upgrade instructions',
+          'Restore the snapshot from version control; no command rewrites it',
+        ],
       },
       handed: [],
     });
