@@ -92,7 +92,7 @@ Two checks fail when the rule is broken, and each integration developed in this 
 
 - **Looser types inside the package.** No published type says "a client whose contract contains these models". The integration treats the client loosely on the inside, and its correctness rests on the contract check described under rule 2 and on its tests.
 - **Gaps are worked around, and written down.** Where the published packages lack something, the integration carries its own small substitute and records it in its developer notes. Each one marks a gap to close in the published packages.
-- **The rule covers Prisma's packages, not the library's.** An integration may need a hook that the library itself labels internal. The integration then accepts only the library versions it has been tested against, because the library may change an internal hook in any release.
+- **The rule covers Prisma's packages, not the library's.** An integration may need a hook that the library itself labels internal, and the library may change such a hook in any release. The integration then accepts a narrow range of library versions, such as one minor version, and runs its tests at the lowest version in the range and at the newest one it was built against. It uses the hook only where the library provides it, so a release that removes the hook loses what the hook gave but nothing else, and it widens the range only after its tests pass on the new versions.
 
 ## Rule 2: the library's tables are models in the application's contract
 
