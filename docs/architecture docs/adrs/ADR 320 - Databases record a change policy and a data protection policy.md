@@ -45,7 +45,7 @@ Every database records two policies about itself, and every command that changes
 - a **change policy**: whether the database may be moved by walking the migration graph, by reconciling it directly to a contract, or by both;
 - a **data protection policy**: whether a change may lose data, and whether it may widen who can read or write rows.
 
-The database records them in its marker. A ref declares the policies its database should have. A command given a ref refuses to run when the two disagree, and changes the database's policies only when told it may.
+The database records them in a table of its own (on PostgreSQL; elsewhere in its marker). A ref declares the policies its database should have. A command given a ref refuses to run when the two disagree, and changes the database's policies only when told it may.
 
 ## The two policies
 
@@ -76,7 +76,7 @@ A database that records no policy takes the defaults: `change: ["migrate", "reco
 
 ## Where the policies live
 
-**The database records the policies in force.** The marker is the record each database keeps of the contract it is at, one per contract space (the application, and each extension that owns part of the schema). The application space's marker stores the policies under `meta.policies`, in the same shape as the ref's `policies`, on every target. They are the database's policies, so they govern every contract space a command moves; an extension space's marker never carries them. A setting the marker does not record takes its default.
+**The database records the policies in force.** They are the database's policies, so they govern every contract space a command moves. On PostgreSQL they are the one row of `_prisma.config`, in a `policies` column of the same shape as the ref's `policies` ([ADR 021](ADR%20021%20-%20Contract%20Marker%20Storage.md)). The marker, the record each database keeps of the contract each space is at, is a row per space, so it is the wrong place for something that describes the whole database. SQLite, MySQL and MongoDB still store the policies in the application space's marker under `meta.policies`, until they move to the same tables; an extension space's marker never carries them. A setting the database does not record takes its default.
 
 **A ref declares the policies its database should have.** A ref is a named pointer at a contract, kept in the repository at `migrations/<space>/refs/<name>.json`. Every key in `policies` is optional, and a ref declares nothing about a key it leaves out. Only a person editing the file changes it; every command that rewrites a ref keeps the fields it does not change.
 
@@ -90,7 +90,7 @@ A command given a ref (`db migrate --to <ref>`, `db update --to <ref>`, a Compos
 
 - **They agree:** the command runs under the database's policies.
 - **They differ:** the command fails with `MIGRATION.POLICY_MISMATCH`.
-- **They differ and the command was given `--permit-policy-change`** (Composer: `permitPolicyChange`): the run is checked against the ref's policies, runs, and writes them into the marker when it succeeds. If the policies are the only difference, it writes the policies and nothing else.
+- **They differ and the command was given `--permit-policy-change`** (Composer: `permitPolicyChange`): the run is checked against the ref's policies, runs, and writes them into the database when it succeeds. If the policies are the only difference, it writes the policies and nothing else.
 
 A command given no ref, or a ref that declares nothing, never changes a policy. A ref that declares nothing is accepted with `--permit-policy-change` and changes nothing. Given `--permit-policy-change` (Composer: `permitPolicyChange`) without a ref, the command fails with `CLI.INVALID_ARGUMENTS` before it connects, because there is nothing it could write.
 
@@ -100,7 +100,7 @@ No error or advice offers the flag unless the user gave it in the command being 
 
 The policies are written when the run succeeds, so a failed deploy never leaves a database with a loosened policy and none of the change that needed it. On Postgres, SQLite and MySQL the write is part of the run's transaction. MongoDB has no transaction around a run, so it writes the policies with the application space's marker after the last migration.
 
-Another process may change the policies while a command runs. The runner therefore compares the policies the command checked with the marker before it applies the first space, while it holds its lock, as it already does for the contract hash. MongoDB has no lock: it compares them before the first space and writes the application space's marker only while the marker still records them. A concurrent change fails the run with `MIGRATION.MARKER_CAS_FAILURE`; it is never overridden.
+Another process may change the policies while a command runs. The runner therefore compares the policies the command checked with those the database records before it applies the first space, while it holds its lock, as it already does for the contract hash. MongoDB has no lock: it compares them before the first space and writes the application space's marker only while the marker still records them. A concurrent change fails the run with `MIGRATION.MARKER_CAS_FAILURE`; it is never overridden.
 
 ## What each command enforces
 
@@ -121,7 +121,7 @@ When a database's marker names a contract that is not in the migration graph, th
 - The framework owns `meta.policies`: its key, its stored form, its parser, the comparison and the defaults. Targets write the value the framework gives them, and every marker write on every target keeps the `meta` keys it does not own. MongoDB's guarded marker write is built from the framework's key and value lists, so it accepts exactly the stored values the framework would read as the checked policies.
 - [ADR 287](ADR%20287%20-%20Prisma%208%20has%20no%20db%20push%20to%20production.md)'s rule that production changes only through migrations becomes something a database states about itself and the tools enforce.
 - A refusal happens before the first operation on the user's schema runs. The command has by then brought Prisma's own tables up to date, which is the one thing a refused command may change; the policies are read from those tables, so that step comes first ([ADR 339](ADR%20339%20-%20Each%20target%20has%20a%20contract%20space%20for%20Prisma%27s%20own%20tables.md)). A refusal cannot be answered: under `forbidden`, `--delete` and `--allow` do not permit the change. Only a statement that says the change loses nothing changes the outcome: `--rename`, and in `migration plan` `--convert`. A migration that copies the data elsewhere and then drops the original still drops it, and is still refused; dropping data from such a database takes a change to its policy first.
-- The policies stop mistakes, not deliberate workarounds. Anyone who can write the marker table, or who passes `--permit-policy-change` with an edited ref, can change them.
+- The policies stop mistakes, not deliberate workarounds. Anyone who can write the tables that record them, or who passes `--permit-policy-change` with an edited ref, can change them.
 - Control policy ([ADR 224](ADR%20224%20-%20Control%20Policy%20—%20framework-locked%20vocabulary%20and%20family-owned%20dispatch.md)) is a different concept: it says whether Prisma may write a given database object.
 - The names leave room for other kinds of change control later, such as which operation classes may run, or which running application versions must stay compatible during a change.
 
@@ -135,4 +135,4 @@ When a database's marker names a contract that is not in the migration graph, th
 - **Writing the new policies before the migrations run.** Rejected: on MongoDB a failed deploy would leave a loosened policy behind.
 - **A ledger row for every policy change.** Rejected: the ledger holds applied migrations, its row shape has no upgrade path, and the ref file's history already records what was declared.
 - **A separate `db policy set` command.** Rejected: a pipeline can only deploy, and a second way to change a policy is a second way around review.
-- **A new marker column.** Rejected: `meta` exists on every target for fields added later, so no marker table changes.
+- **The policies in the application space's marker, under `meta`**, as first built. Replaced on PostgreSQL before `8.0.0`: a row that belongs to one space was the wrong place for the database's policies, and the tables could not be split after `8.0.0` ([ADR 339](ADR%20339%20-%20Each%20target%20has%20a%20contract%20space%20for%20Prisma%27s%20own%20tables.md)).
