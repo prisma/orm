@@ -1,3 +1,4 @@
+import { compareCodeUnits } from '@internal/contract/hashing-utils';
 import { describe, expect, it } from 'vitest';
 import type { MigrationEdge, MigrationGraph } from '../src/graph';
 import { bfs } from '../src/graph-ops';
@@ -38,9 +39,9 @@ function unprunedSearch(
   }
   const key = (s: State) => JSON.stringify([s.node, [...s.covered].sort()]);
   const tieBreak = (a: MigrationEdge, b: MigrationEdge) =>
-    a.createdAt.localeCompare(b.createdAt) ||
-    a.to.localeCompare(b.to) ||
-    a.migrationHash.localeCompare(b.migrationHash);
+    compareCodeUnits(a.createdAt, b.createdAt) ||
+    compareCodeUnits(a.to, b.to) ||
+    compareCodeUnits(a.migrationHash, b.migrationHash);
   const neighbours = (s: State) =>
     (graph.forwardChain.get(s.node) ?? [])
       .map((edge) => {

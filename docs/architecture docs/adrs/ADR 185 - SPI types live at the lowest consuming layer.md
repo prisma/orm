@@ -133,5 +133,5 @@ Accepted.
   — defines the descriptor/instance pattern that these SPI types support
 - [ADR 150 — Family-Agnostic CLI and Pack Entry Points](ADR%20150%20-%20Family-Agnostic%20CLI%20and%20Pack%20Entry%20Points.md)
   — establishes the family-agnostic orchestration that consumes these SPIs
-- [`@internal/framework-components` README](../../../packages/1-framework/1-core/shared/framework-components/README.md)
+- [`@internal/framework-components` README](../../../packages/1-framework/1-core/framework-components/README.md)
   — documents the SPI placement rationale for contributors

@@ -70,7 +70,7 @@ The capability is **a key, not a code path** — gates are explicit, namespaced 
 
 ## Related rules
 
-- [`.cursor/rules/capabilities-ownership.mdc`](../../../.cursor/rules/capabilities-ownership.mdc) — the tactical rule for who owns which capability namespace and how to register a new key.
+- [`.agents/rules/capabilities-ownership.mdc`](../../../.agents/rules/capabilities-ownership.mdc) — the tactical rule for who owns which capability namespace and how to register a new key.
 
 ## Cautions / common mistakes
 

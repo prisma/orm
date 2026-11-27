@@ -8,6 +8,36 @@ reviews:
     base_branches:
       - ".*"
   path_instructions:
+    - path: "**/*.{md,mdc}"
+      instructions: |
+        Review documentation as a reader who has none of the author's context, and check its facts against
+        the code in this repository. Read the whole file to judge the change, but comment only on text this
+        pull request adds or changes. Do not comment on wording that is merely different from how you would
+        write it.
+
+        In any changed text, flag:
+        - a statement about what the code, a command or a check does that the code contradicts;
+        - a code sample or command that would not work as written;
+        - a package, file, function, flag, script or error code that the text presents as this repository's
+          and that does not exist;
+        - a rule or fact that the change removes or alters with nothing in the pull request explaining why;
+        - a rule the changed text states that another file, changed or not, states differently;
+        - a relative link or heading anchor that does not resolve.
+
+        In text that explains or teaches (a decision record, a guide, a policy page, the prose of a README),
+        but not in reference tables, indexes, checklists or changelogs, also flag:
+        - a term used before it is explained (a link to its definition counts as an explanation);
+        - a mechanism explained before the problem it solves;
+        - a rule stated with no example that shows it;
+        - a long paragraph that packs in several rules and would read better as a list or a table.
+
+        In guidance for agents (a rule under .agents/rules/, a SKILL.md), also flag an instruction that gives
+        no reason: such guidance says what went wrong and why before it says what to do.
+
+        In a decision record under docs/architecture docs/adrs/, also flag a ticket number, a pull request
+        number, a project milestone, and narration of how the work went, such as "before this refactor" or
+        "we used to". History that explains something permanent, such as versions that remain published, is
+        fine.
     - path: "**/*.{ts,tsx,mts,cts,js,mjs,cjs}"
       instructions: >-
         Decimal, bigint and 64-bit integer types exist to hold values a JavaScript number would round, so flag

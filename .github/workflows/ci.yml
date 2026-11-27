@@ -109,6 +109,8 @@ jobs:
         run: pnpm lint:rules:footprint
       - name: Validate package READMEs
         run: pnpm lint:docs
+      - name: Check Markdown links
+        run: pnpm lint:doc-links
       - name: Validate package manifests (license declarations)
         run: pnpm lint:manifests
       - name: Lint workflow triggers (forbid Pwn Request pattern)
