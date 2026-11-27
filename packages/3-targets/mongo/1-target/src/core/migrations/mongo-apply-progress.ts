@@ -14,8 +14,9 @@ export interface CopyCounts {
 /**
  * How far an apply got. `finished` operations ran to their end; when `inFlight` is true, the next
  * one threw while it ran, so its commands may or may not have taken effect. `copyCounts` holds
- * the counts read before the next operation, when it is a copy they are read for; they are read
- * before it starts, so a failed read leaves it not started.
+ * the counts read before the next operation, when it is a copy they are read for. It is
+ * `undefined` for that copy when they cannot show whether it finished: a read failed, a count is
+ * not exact, or the two collections have different collations. The copy runs either way.
  */
 export interface ApplyProgress {
   operations: readonly AnyMongoMigrationOperation[];

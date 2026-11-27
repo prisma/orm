@@ -31,6 +31,17 @@ interface Union {
   readonly whole: boolean;
 }
 
+/** The stages the planner writes after a copy's `$match`: each writes every document it reads, so none drops one the filter selects. */
+const REWRITE_STAGES = new Set(['$set', '$addFields', '$unset']);
+
+function rewritesOnly(stages: readonly unknown[]): boolean {
+  return stages.every((stage) => {
+    if (typeof stage !== 'object' || stage === null) return false;
+    const keys = Object.keys(stage);
+    return keys.length === 1 && keys.every((key) => REWRITE_STAGES.has(key));
+  });
+}
+
 function unionOf(stage: unknown): Union | undefined {
   if (typeof stage !== 'object' || stage === null) return undefined;
   const union: unknown = Reflect.get(stage, '$unionWith');
@@ -41,10 +52,11 @@ function unionOf(stage: unknown): Union | undefined {
   const pipeline: unknown = Reflect.get(union, 'pipeline');
   if (pipeline === undefined) return { coll, filter: undefined, whole: true };
   if (!Array.isArray(pipeline)) return undefined;
-  const [first]: unknown[] = pipeline;
+  const [first, ...rest]: unknown[] = pipeline;
   if (first === undefined) return { coll, filter: undefined, whole: true };
   const match: unknown =
     typeof first === 'object' && first !== null ? Reflect.get(first, '$match') : undefined;
+  if (!rewritesOnly(rest)) return undefined;
   return {
     coll,
     filter: typeof match === 'object' && match !== null ? { ...match } : undefined,
@@ -61,9 +73,19 @@ function outOf(stage: unknown): string | undefined {
   return typeof coll === 'string' && Reflect.get(out, 'db') === undefined ? coll : undefined;
 }
 
-/** The copy `operation` is, when it is one the planner prints for a move into a time-series collection. */
+/**
+ * The copy `operation` is, when it is one the planner prints for a move into a time-series
+ * collection. That copy has no check, so a run that finished it ran it: a copy with an after-check
+ * may have been skipped, which proves nothing about what its target holds.
+ */
 export function unionCopyOf(operation: AnyMongoMigrationOperation): UnionCopy | undefined {
-  if (!isMongoDmlOperation(operation) || operation.operationClass !== 'data') return undefined;
+  if (
+    !isMongoDmlOperation(operation) ||
+    operation.operationClass !== 'data' ||
+    operation.postcheck.length > 0
+  ) {
+    return undefined;
+  }
   const [plan, ...more] = operation.run;
   const command = plan?.command;
   if (more.length > 0 || !(command instanceof RawAggregateCommand)) return undefined;
@@ -151,7 +173,7 @@ function settleByHandText(copy: UnionCopy): string {
     copy.filters.length === 0
       ? `The next run copies every document of collection ${source} into collection ${into} again, then drops collection ${source}`
       : `The next run copies every document of collection ${source} that the copy selects into collection ${into} again, then deletes them from collection ${source}`;
-  return `delete nothing from either collection, and do not run the command again, until you have compared collections ${into} and ${source} by hand and settled which documents each should keep: only you can tell which of their documents are which. ${rerun}, so before you run it, leave in collection ${source} only the documents that collection ${into} does not hold yet.`;
+  return `delete nothing from either collection, and do not run the command again, until you have compared collections ${into} and ${source} by hand and settled which documents each should keep: only you can tell which of their documents are which. ${rerun}, so before you run it, ${copy.filters.length === 0 ? `leave in collection ${source} only the documents that collection ${into} does not hold yet` : `leave in collection ${source} every document the copy does not select, and of those it selects only the ones that collection ${into} does not hold yet`}.`;
 }
 
 /**
@@ -208,6 +230,15 @@ function undroppedText(copy: UnionCopy, dropId: string, running: boolean): strin
 }
 
 /**
+ * The advice for a copy that was running when the apply stopped, when the runner has no counts
+ * that can show whether it finished: the user settles it by hand.
+ */
+function uncountedCopyText(copy: UnionCopy): string {
+  const { id, into, source } = copy;
+  return `Operation ${id} was copying ${copy.filters.length === 0 ? 'the documents' : 'documents'} of collection ${source} into collection ${into} with an $out stage when the apply stopped. The error does not show whether the copy finished, and the runner has no count of the documents from before it that could show it. Before you do anything else, ${copyEndedText(into)} Then ${settleByHandText(copy)}`;
+}
+
+/**
  * The advice for a copy that was running when the apply stopped, from the counts read before it:
  * how to tell from the target's count whether it finished, and what to do in each case.
  */
@@ -233,16 +264,16 @@ function interruptedCopyText(
     : one
       ? `run that delete yourself, on collection ${source} with the filter of its deleteDocuments call in the migration's migration.ts`
       : `run those deletes yourself, on collection ${source}, each with the filter of its deleteDocuments call in the migration's migration.ts`;
-  return `${stopped} The error does not show whether the copy finished. ${removals}. Before the copy, collection ${into} held ${documentsText(counts.target)}, and the copy was to add ${documentsText(counts.selected)} of collection ${source}. To tell whether it finished, ${copyEndedText(into)} Then count the documents of collection ${into}, for example with db.getCollection(${JSON.stringify(into)}).countDocuments() in mongosh. The count shows this only if ${UNCHANGED}. If you cannot be sure of that, ${settleByHandText(copy)} If it holds ${counts.target + counts.selected}, and ${UNCHANGED}, the copy finished. ${writesStoppedText(copy, one)} Before you run the command again, ${finish}. The copy has no check, so it runs again, and it would add ${whole ? 'the documents of' : 'the documents still in'} collection ${source} to collection ${into} a second time. Do not delete documents from collection ${into} instead. If it holds ${counts.target}, and ${UNCHANGED}, the copy did not finish: delete nothing, and run the command again as it is. If it holds any other number, something else wrote to or deleted from collection ${into}, or the command was already run again: ${settleByHandText(copy)} If the command was already run again after the copy finished, collection ${into} holds some of the moved documents two or more times, under the same _id. ${duplicatesText(into)}`;
+  return `${stopped} The error does not show whether the copy finished. ${removals}. Before the copy, collection ${into} held ${documentsText(counts.target)}, and the copy was to add ${documentsText(counts.selected)} of collection ${source}. To tell whether it finished, ${copyEndedText(into)} Then count the documents of collection ${into} that a majority of the replica set has written, which a failover cannot roll back, for example with db.getCollection(${JSON.stringify(into)}).countDocuments({}, { readConcern: { level: "majority" } }) in mongosh. The count shows this only if ${UNCHANGED}. If you cannot be sure of that, ${settleByHandText(copy)} If it holds ${counts.target + counts.selected}, and ${UNCHANGED}, the copy finished. ${writesStoppedText(copy, one)} Before you run the command again, ${finish}. The copy has no check, so it runs again, and it would add ${whole ? 'the documents of' : 'the documents still in'} collection ${source} to collection ${into} a second time. Do not delete documents from collection ${into} instead. If it holds ${counts.target}, and ${UNCHANGED}, the copy did not finish: delete nothing, and run the command again as it is. If it holds any other number, something else wrote to or deleted from collection ${into}, or the command was already run again: ${settleByHandText(copy)} If the command was already run again after the copy finished, collection ${into} holds some of the moved documents two or more times, under the same _id. ${duplicatesText(into)}`;
 }
 
 /**
  * What to do before a re-run about a copy the planner prints for a move into a time-series
  * collection, when the apply stopped after it, or while it ran, and before the delete or the drop
  * that follows it finished. The copy has no check, so a re-run adds the documents still in its
- * source a second time. A copy that was running when the apply stopped had its counts read before
- * it started. Any other copy gets no text: the
- * runner cannot tell what its re-run does.
+ * source a second time. For a copy that was running when the apply stopped, the counts read before
+ * it started show whether it finished; without them the user settles it by hand. Any other copy
+ * gets no text: the runner cannot tell what its re-run does.
  */
 export function outCopyRerunText(progress: Readonly<ApplyProgress>): string | undefined {
   const { operations, finished, inFlight, copyCounts } = progress;
@@ -256,7 +287,11 @@ export function outCopyRerunText(progress: Readonly<ApplyProgress>): string | un
     const [first] = ids;
     if (first === undefined) return [];
     if (index === finished) {
-      return copyCounts === undefined ? [] : [interruptedCopyText(copy, ids, copyCounts)];
+      return [
+        copyCounts === undefined
+          ? uncountedCopyText(copy)
+          : interruptedCopyText(copy, ids, copyCounts),
+      ];
     }
     return [
       copy.filters.length === 0

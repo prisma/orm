@@ -50,7 +50,7 @@ async function executeUnderChange(change: readonly ('migrate' | 'reconcile')[], 
 }
 
 describe('MongoMigrationRunner, a create whose collection already exists', () => {
-  it('names the two ways out, and that only postchecks and idempotency checks skip the create, when they are off', async () => {
+  it('says the runner did not compare the options, and that only postchecks and idempotency checks skip the create, when they are off', async () => {
     const harness = makeHarness();
     harness.inspectionExecutor.collections = [{ name: 'orders' }];
 
@@ -62,9 +62,8 @@ describe('MongoMigrationRunner, a create whose collection already exists', () =>
 
     expect(failureFields(result.assertNotOk())).toEqual({
       code: 'MIGRATION.PRECHECK_FAILED',
-      message:
-        'Operation collection.orders.create stopped: collection orders already exists without the options this migration creates it with',
-      why: "If orders holds nothing you need, drop it, then run the command again. With postchecks or idempotency checks turned off, a run skips no operation, so each operation that already ran runs again. Otherwise give it the options the createCollection call of this migration's migration.ts sets, and no validator, since that call sets none, and run the command again with postchecks and idempotency checks on: only they skip the creation. The failed apply changed nothing.",
+      message: 'Operation collection.orders.create stopped: collection orders already exists',
+      why: "The runner did not compare the options of collection orders with those this migration creates it with, since postchecks or idempotency checks are turned off. If orders holds nothing you need, drop it, then run the command again. With postchecks or idempotency checks turned off, a run skips no operation, so each operation that already ran runs again. Otherwise run the command again with postchecks and idempotency checks on: only they skip the creation, and they skip it if orders has the options the createCollection call of this migration's migration.ts sets, and no validator, since that call sets none. If it does not, give it those options first. The failed apply changed nothing.",
       meta: { operationId: 'collection.orders.create', databaseUnchanged: true },
     });
   });

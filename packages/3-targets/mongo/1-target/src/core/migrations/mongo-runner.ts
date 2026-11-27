@@ -436,8 +436,9 @@ function createOptionsText(create: CreateCollectionCommand): string {
 }
 
 /**
- * The failure when a create's before-check finds a collection of that name, which the create's
- * after-check did not take as the one it makes: made another way, with other options.
+ * The failure when a create's before-check finds a collection of that name. With skips on, the
+ * create's after-check did not take it as the one it makes: made another way, with other options.
+ * With skips off, the runner did not compare its options, so it may be the one an earlier run made.
  */
 function createTargetExistsRefusal(
   op: MongoMigrationPlanOperation,
@@ -447,11 +448,25 @@ function createTargetExistsRefusal(
   const create = failedCreateOf(op, failed);
   if (create === undefined || op.postcheck.length === 0) return undefined;
   const name = create.collection;
+  const drop = rerunText(
+    `If ${name} holds nothing you need, drop it, then run the command again`,
+    before,
+  );
+  if (!before.skips) {
+    return runnerFailure(
+      'MIGRATION.PRECHECK_FAILED',
+      `Operation ${op.id} stopped: collection ${name} already exists`,
+      {
+        why: `The runner did not compare the options of collection ${name} with those this migration creates it with, since postchecks or idempotency checks are turned off. ${drop} Otherwise run the command again with postchecks and idempotency checks on: only they skip the creation, and they skip it if ${name} has ${createOptionsText(create)}. If it does not, give it those options first.`,
+        meta: { operationId: op.id },
+      },
+    );
+  }
   return runnerFailure(
     'MIGRATION.PRECHECK_FAILED',
     `Operation ${op.id} stopped: collection ${name} already exists without the options this migration creates it with`,
     {
-      why: `${rerunText(`If ${name} holds nothing you need, drop it, then run the command again`, before)} Otherwise give it ${createOptionsText(create)}, ${before.skips ? 'and run the command again: the creation is then skipped.' : 'and run the command again with postchecks and idempotency checks on: only they skip the creation.'}`,
+      why: `${drop} Otherwise give it ${createOptionsText(create)}, and run the command again: the creation is then skipped.`,
       meta: { operationId: op.id },
     },
   );
@@ -1789,6 +1804,30 @@ function keepRemovedValueEdit(options: RemoveStoredValueOptions): KeepDataEdit {
   };
 }
 
+/**
+ * Calls `onOperationComplete`. An error it throws is the outcome only when the operation finished:
+ * when the operation failed, its own failure, which the user acts on, stays the outcome.
+ */
+function reportCompleted(
+  options: MongoMigrationRunnerExecuteOptions,
+  operation: AnyMongoMigrationOperation,
+  finished: boolean,
+): void {
+  try {
+    options.callbacks?.onOperationComplete?.(operation);
+  } catch (error) {
+    if (finished) throw error;
+  }
+}
+
+/** A count MongoDB returned, when a JavaScript number holds it exactly. */
+function exactCount(value: unknown): number | undefined {
+  if (typeof value === 'bigint') {
+    return value <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(value) : undefined;
+  }
+  return typeof value === 'number' && Number.isSafeInteger(value) ? value : undefined;
+}
+
 export class MongoMigrationRunner {
   constructor(private readonly deps: MongoRunnerDependencies) {}
 
@@ -1989,7 +2028,7 @@ export class MongoMigrationRunner {
         progress.inFlight = true;
         throw error;
       } finally {
-        options.callbacks?.onOperationComplete?.(operation);
+        reportCompleted(options, operation, progress.finished > operationIndex);
       }
     }
 
@@ -2603,32 +2642,72 @@ export class MongoMigrationRunner {
     );
   }
 
-  /** The counts for `operation` when it is a copy whose finish they show, read before it starts. */
+  /**
+   * The counts for `operation` when it is a copy whose finish they show, read before it starts.
+   * They are only advice, so a read that fails leaves them out and the copy runs.
+   */
   private async copyCountsBefore(
     operation: AnyMongoMigrationOperation,
   ): Promise<CopyCounts | undefined> {
     if (!isMongoDmlOperation(operation)) return undefined;
     const copy = unionCopyOf(operation);
     const [plan] = operation.run;
-    return copy === undefined || plan === undefined ? undefined : this.copyCounts(plan, copy);
+    if (copy === undefined || plan === undefined) return undefined;
+    try {
+      return (await this.sameCollation(copy)) ? await this.copyCounts(plan, copy) : undefined;
+    } catch (error) {
+      if (isInternalError(error)) throw error;
+      return undefined;
+    }
   }
 
-  /** The counts that show afterwards whether `copy` finished, read before it runs: first the target's, then the source's for each of its filters. */
-  private async copyCounts(plan: MongoQueryPlan, copy: UnionCopy): Promise<CopyCounts> {
+  /**
+   * Whether the two collections of `copy` have the same collation. The copy's `$unionWith` stage
+   * reads the source with the target's collation, and a count of the source with its own, so with
+   * different collations the count can select other documents than the copy.
+   */
+  private async sameCollation(copy: UnionCopy): Promise<boolean> {
+    const collections = await this.deps.inspectionExecutor.listCollections(
+      new ListCollectionsCommand(),
+    );
+    const collationOf = (name: string) => {
+      const options: unknown = collections.find((info) => info['name'] === name)?.['options'];
+      return typeof options === 'object' && options !== null
+        ? Reflect.get(options, 'collation')
+        : undefined;
+    };
+    return (
+      canonicalize(collationOf(copy.into) ?? null) ===
+      canonicalize(collationOf(copy.source) ?? null)
+    );
+  }
+
+  /**
+   * The counts that show afterwards whether `copy` finished, read before it runs: first the
+   * target's, then the source's for each of its filters. `undefined` when a count or their sum is
+   * not a number a JavaScript number holds exactly.
+   */
+  private async copyCounts(plan: MongoQueryPlan, copy: UnionCopy): Promise<CopyCounts | undefined> {
     const count = async (collection: string, pipeline: readonly Record<string, unknown>[]) => {
       const row = await this.firstRow({
         ...plan,
         collection,
         command: new RawAggregateCommand(collection, [...pipeline, { $count: 'documents' }]),
       });
-      return Number(row?.['documents'] ?? 0);
+      return exactCount(row?.['documents'] ?? 0);
     };
     const target = await count(copy.into, []);
-    let selected = 0;
+    let selected: number | undefined = 0;
     for (const filter of copy.filters.length === 0 ? [undefined] : copy.filters) {
-      selected += await count(copy.source, filter === undefined ? [] : [{ $match: filter }]);
+      const one = await count(copy.source, filter === undefined ? [] : [{ $match: filter }]);
+      selected = selected === undefined || one === undefined ? undefined : selected + one;
     }
-    return { target, selected };
+    return target === undefined ||
+      selected === undefined ||
+      !Number.isSafeInteger(selected) ||
+      !Number.isSafeInteger(target + selected)
+      ? undefined
+      : { target, selected };
   }
 
   private async firstRow(plan: MongoQueryPlan): Promise<Record<string, unknown> | undefined> {

@@ -71,18 +71,28 @@ export class StubMongoDriver implements MongoQueryable {
   readonly executeCalls: WireCommand[] = [];
   private readonly responses: Row[][] = [];
   private failure:
-    | { readonly kind: WireCommand['kind']; readonly error: unknown; passes: number }
+    | {
+        readonly kind: WireCommand['kind'];
+        readonly error: unknown;
+        passes: number;
+        readonly once: boolean;
+      }
     | undefined;
 
   constructor(private readonly log?: EventLog) {}
 
   failUpdateManyWith(error: unknown): void {
-    this.failure = { kind: 'updateMany', error, passes: 0 };
+    this.failure = { kind: 'updateMany', error, passes: 0, once: false };
   }
 
   /** Fails every aggregate after the first `passes`, which answer as usual. */
   failAggregateWith(error: unknown, passes = 0): void {
-    this.failure = { kind: 'aggregate', error, passes };
+    this.failure = { kind: 'aggregate', error, passes, once: false };
+  }
+
+  /** Fails only the next aggregate. */
+  failNextAggregateWith(error: unknown): void {
+    this.failure = { kind: 'aggregate', error, passes: 0, once: true };
   }
 
   queueResponse(rows: Row[]): void {
@@ -95,7 +105,10 @@ export class StubMongoDriver implements MongoQueryable {
     let failure: unknown;
     if (this.failure !== undefined && wireCommand.kind === this.failure.kind) {
       if (this.failure.passes > 0) this.failure.passes -= 1;
-      else failure = this.failure.error;
+      else {
+        failure = this.failure.error;
+        if (this.failure.once) this.failure = undefined;
+      }
     }
     const rows = failure === undefined ? (this.responses.shift() ?? []) : [];
     return (async function* () {
