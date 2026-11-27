@@ -1,4 +1,5 @@
 export type {
+  ConfigModuleExports,
   ContractEntryInput,
   ContractEntryNode,
   InitContribution,

@@ -132,7 +132,7 @@ function initWithContractValue(contractValue: (schemaPath: string) => unknown): 
             return {
               renderTypeScript: () => entry?.renderTypeScript() ?? '',
               importRequirements: () => entry?.importRequirements() ?? [],
-              contractValue: async () => contractValue(input.path),
+              contractValue: () => contractValue(input.path),
             };
           },
         },

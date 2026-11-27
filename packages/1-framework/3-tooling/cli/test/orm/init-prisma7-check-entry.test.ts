@@ -43,7 +43,7 @@ async function withEntry(entry: (path: string) => unknown): Promise<InitContribu
   return Object.assign({}, real, { contractEntry: ({ path }: { path: string }) => entry(path) });
 }
 
-function nodeWithValue(value: () => Promise<unknown>): ContractEntryNode {
+function nodeWithValue(value: ContractEntryNode['contractValue']): ContractEntryNode {
   return {
     renderTypeScript: () => 'unused',
     importRequirements: () => [],
@@ -69,25 +69,26 @@ describe('the Prisma 7 check runs the contract entry node', {
     expect(imports).toEqual([[projectDir, TARGET_CONFIG]]);
   });
 
-  it('builds the value with the node, once', async () => {
+  it('builds the value with the node, once, from the exports of the config module', async () => {
     const real = await fixtureContribution(PACKAGE);
-    const built: string[] = [];
+    const config = await importFromProject(projectDir, TARGET_CONFIG);
+    const given: unknown[] = [];
     const contribution = await withEntry((path) => {
       const node = real.contractEntry?.({ kind: 'prisma7-schema', path });
       if (node === undefined) throw new Error(`${PACKAGE} gives no contract entry`);
-      return nodeWithValue(async () => {
-        built.push(path);
-        return node.contractValue();
+      return nodeWithValue((exports) => {
+        given.push(exports);
+        return node.contractValue(exports);
       });
     });
 
     await expect(check(contribution)).resolves.toMatchObject({ outcome: 'readable' });
-    expect(built).toEqual([SCHEMA_PATH]);
+    expect(given).toEqual([config.kind === 'loaded' ? config.module : undefined]);
   });
 
   it('passes on the refusal of a value the config does not accept, and writes nothing', async () => {
     const before = readdirSync(projectDir, { recursive: true });
-    const contribution = await withEntry((path) => nodeWithValue(async () => ({ path })));
+    const contribution = await withEntry((path) => nodeWithValue(() => ({ path })));
 
     await expect(check(contribution)).rejects.toMatchObject({
       code: 'CONTRACT.ARGUMENT_INVALID',

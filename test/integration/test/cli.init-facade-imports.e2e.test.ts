@@ -238,7 +238,19 @@ function workspaceModulesLoadedBy(entry: string): { files: string[]; specifiers:
   return { files, specifiers };
 }
 
-describe('the init entrypoints import no framework code that runs', () => {
+/**
+ * The framework files `ts-render` loads, as `entry` resolves it. A facade builds the config's contract entry as a `TsExpression` node, as migration files are written, so its init entrypoint may load `ts-render`. The CLI calls the node's methods and never checks its class, so it does not matter that the node comes from another installed copy of the framework.
+ */
+function tsRenderModulesFor(entry: string): string[] {
+  const specifier = moduleSpecifiers(readFileSync(entry, 'utf-8')).find((candidate) =>
+    /\/ts-render$/.test(candidate),
+  );
+  return specifier === undefined
+    ? []
+    : workspaceModulesLoadedBy(realpathSync(createRequire(entry).resolve(specifier))).files;
+}
+
+describe('the init entrypoints import no framework code that runs, but ts-render', () => {
   const entrypoints = [
     {
       name: '@internal/postgres/init',
@@ -303,16 +315,20 @@ describe('the init entrypoints import no framework code that runs', () => {
 
   for (const { name, dir, statesServerVersion } of entrypoints) {
     it(`${name} loads only target and third-party modules`, () => {
-      const { files, specifiers } = workspaceModulesLoadedBy(
-        resolve(REPO_ROOT, dir, 'dist/init.mjs'),
-      );
+      const entry = resolve(REPO_ROOT, dir, 'dist/init.mjs');
+      const { files, specifiers } = workspaceModulesLoadedBy(entry);
+      const tsRender = tsRenderModulesFor(entry);
 
       expect(specifiers).toContain('pathe');
       expect(specifiers.some((specifier) => /\/server-version(-range)?$/.test(specifier))).toBe(
         statesServerVersion,
       );
       expect(
-        files.filter((file) => FRAMEWORK_LOCATIONS.some((location) => file.startsWith(location))),
+        files.filter(
+          (file) =>
+            FRAMEWORK_LOCATIONS.some((location) => file.startsWith(location)) &&
+            !tsRender.includes(file),
+        ),
       ).toEqual([]);
     });
   }

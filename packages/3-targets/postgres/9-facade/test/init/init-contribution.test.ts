@@ -9,6 +9,7 @@ import { join } from 'pathe';
 import { describe, expect, it } from 'vitest';
 import { prisma7Schema } from '../../src/config/prisma7-schema';
 import { postgres18, postgresDriver } from '../../src/contract/contract-capabilities';
+import * as configModuleExports from '../../src/exports/config';
 import contribution from '../../src/exports/init';
 
 const INIT_DIR = join(import.meta.dirname, '../../src/init');
@@ -78,7 +79,7 @@ describe('templates', () => {
       { moduleSpecifier: '@internal/postgres/config', symbol: 'postgresDriver' },
     ];
 
-    it('lists the newest PostgreSQL version’s and the driver’s capabilities beside a Prisma schema contract', async () => {
+    it('lists the newest PostgreSQL version’s and the driver’s capabilities beside a Prisma schema contract', () => {
       const entry = contractEntryOf({
         kind: 'starter',
         mode: 'psl',
@@ -87,13 +88,13 @@ describe('templates', () => {
 
       expect(entry.renderTypeScript()).toBe(`{ path: "./prisma/contract.prisma", ${required} }`);
       expect(entry.importRequirements()).toEqual(capabilityImports);
-      expect(await entry.contractValue()).toEqual({
+      expect(entry.contractValue(configModuleExports)).toEqual({
         path: './prisma/contract.prisma',
         requiredCapabilities: [...postgres18, ...postgresDriver],
       });
     });
 
-    it('is the path of a TypeScript contract, which lists its required capabilities in defineContract', async () => {
+    it('is the path of a TypeScript contract, which lists its required capabilities in defineContract', () => {
       const entry = contractEntryOf({
         kind: 'starter',
         mode: 'typescript',
@@ -102,13 +103,13 @@ describe('templates', () => {
 
       expect(entry.renderTypeScript()).toBe('"./prisma/contract.ts"');
       expect(entry.importRequirements()).toEqual([]);
-      expect(await entry.contractValue()).toBe('./prisma/contract.ts');
+      expect(entry.contractValue(configModuleExports)).toBe('./prisma/contract.ts');
       expect(contribution.starterContract('typescript')).toContain(
         `defineContract({ ${required} }`,
       );
     });
 
-    it('calls prisma7Schema from its config module, and builds the config the call builds', async () => {
+    it('calls prisma7Schema from its config module, and builds the config the call builds', () => {
       const entry = contractEntryOf({ kind: 'prisma7-schema', path: 'prisma/schema.prisma' });
 
       expect(entry.renderTypeScript()).toBe(
@@ -118,13 +119,29 @@ describe('templates', () => {
         { moduleSpecifier: '@internal/postgres/config', symbol: 'prisma7Schema' },
         ...capabilityImports,
       ]);
-      expect(JSON.stringify(await entry.contractValue())).toEqual(
+      expect(JSON.stringify(entry.contractValue(configModuleExports))).toEqual(
         JSON.stringify(
           prisma7Schema('prisma/schema.prisma', {
             requiredCapabilities: [...postgres18, ...postgresDriver],
           }),
         ),
       );
+    });
+    it('builds its value from the exports it imports, by the names its text imports them by', () => {
+      const exports = {
+        prisma7Schema: (path: string, options: object) => ({ path, options }),
+        [`postgres${POSTGRES_NEWEST_VERSION}`]: ['sql.fromTheVersion'],
+        postgresDriver: ['sql.fromTheDriver'],
+      };
+
+      expect(
+        contractEntryOf({ kind: 'prisma7-schema', path: 'prisma/schema.prisma' }).contractValue(
+          exports,
+        ),
+      ).toEqual({
+        path: 'prisma/schema.prisma',
+        options: { requiredCapabilities: ['sql.fromTheVersion', 'sql.fromTheDriver'] },
+      });
     });
   });
 

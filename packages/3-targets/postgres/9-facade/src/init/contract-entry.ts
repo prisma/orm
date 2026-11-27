@@ -1,4 +1,8 @@
-import type { ContractEntryInput, ContractEntryNode } from '@internal/cli/init-contribution';
+import type {
+  ConfigModuleExports,
+  ContractEntryInput,
+  ContractEntryNode,
+} from '@internal/cli/init-contribution';
 import { POSTGRES_NEWEST_VERSION } from '@internal/target-postgres/server-version-range';
 import { type ImportRequirement, jsonToTsSource, TsExpression } from '@internal/ts-render';
 import { moduleBase } from '../config/module-base';
@@ -15,9 +19,8 @@ export function requiredCapabilitiesSource(): string {
   return `[${requiredCapabilityLists.map((list) => `...${list}`).join(', ')}]`;
 }
 
-async function requiredCapabilitiesValue() {
-  const lists = await import('../contract/contract-capabilities');
-  return requiredCapabilityLists.flatMap((list) => lists[list]);
+function requiredCapabilitiesIn(exports: ConfigModuleExports): unknown[] {
+  return requiredCapabilityLists.flatMap((list) => exports[list]);
 }
 
 function capabilityListImports(): readonly ImportRequirement[] {
@@ -38,7 +41,7 @@ class TypeScriptContractEntry extends TsExpression implements ContractEntryNode 
     return [];
   }
 
-  async contractValue(): Promise<string> {
+  contractValue(): unknown {
     return this.path;
   }
 }
@@ -57,8 +60,8 @@ class PrismaSchemaContractEntry extends TsExpression implements ContractEntryNod
     return capabilityListImports();
   }
 
-  async contractValue(): Promise<unknown> {
-    return { path: this.path, requiredCapabilities: await requiredCapabilitiesValue() };
+  contractValue(exports: ConfigModuleExports): unknown {
+    return { path: this.path, requiredCapabilities: requiredCapabilitiesIn(exports) };
   }
 }
 
@@ -76,12 +79,11 @@ class Prisma7SchemaContractEntry extends TsExpression implements ContractEntryNo
     return [{ moduleSpecifier: configModule, symbol: 'prisma7Schema' }, ...capabilityListImports()];
   }
 
-  async contractValue(): Promise<unknown> {
-    const [{ prisma7Schema }, requiredCapabilities] = await Promise.all([
-      import('../config/prisma7-schema'),
-      requiredCapabilitiesValue(),
-    ]);
-    return prisma7Schema(this.path, { requiredCapabilities });
+  contractValue(exports: ConfigModuleExports): unknown {
+    const prisma7Schema = exports['prisma7Schema'];
+    return typeof prisma7Schema === 'function'
+      ? prisma7Schema(this.path, { requiredCapabilities: requiredCapabilitiesIn(exports) })
+      : undefined;
   }
 }
 

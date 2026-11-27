@@ -718,7 +718,7 @@
 ./cli/control-api: type StatementOrigin = { readonly kind: 'contract'; readonly contract: ContractWithDomain; } | { readonly kind: 'missing'; readonly hash: null | string; readonly snapshotDirectory: string; readonly unreadable: string | undefined; }
 ./cli/control-api: type StatementVerb = 'allow' | 'backfill' | 'convert' | 'delete' | 'rename'
 ./cli/init-contribution: interface ContractEntryNode extends Pick<TsExpression, 'importRequirements' | 'renderTypeScript'>
-./cli/init-contribution: interface ContractEntryNode, required method contractValue(): Promise<unknown>
+./cli/init-contribution: interface ContractEntryNode, required method contractValue(configModule: ConfigModuleExports): unknown
 ./cli/init-contribution: interface InitContribution
 ./cli/init-contribution: interface InitContribution, readonly optional property contractEntry?: (input: ContractEntryInput) => ContractEntryNode
 ./cli/init-contribution: interface InitContribution, readonly optional property prisma7QuickReference?: (input: Prisma7QuickReferenceInput) => string
@@ -752,6 +752,7 @@
 ./cli/init-contribution: interface ServerRequirement
 ./cli/init-contribution: interface ServerRequirement, readonly required property checkCommand: string
 ./cli/init-contribution: interface ServerRequirement, readonly required property minVersion: string
+./cli/init-contribution: type ConfigModuleExports = Readonly<Record<string, unknown>>
 ./cli/init-contribution: type ContractEntryInput = { readonly kind: 'prisma7-schema'; readonly path: string; } | { readonly kind: 'starter'; readonly mode: ContractSourceFormat; readonly path: string; }
 ./cli/init-contribution: type InitProbeResult = { readonly kind: 'driver-failed'; readonly driver: string; readonly cause: string; } | { readonly kind: 'driver-missing'; readonly driver: string; readonly cause: string; } | { readonly kind: 'server-version'; readonly serverVersion: string; } | { readonly kind: 'version-unreadable'; readonly detail: string; }
 ./cli/init-output: const InitOutputSchema: ObjectType<{ ok: true; target: string; package: string; authoring: "prisma7" | "psl" | "typescript"; schemaPath: string; filesWritten: string[]; filesDeleted: string[]; filesRenamed: { from: string; to: string; }[]; packagesInstalled: { status: "failed" | "installed" | "skipped"; deps: string[]; devDeps: string[]; requiredPeers: { name: string; version: string; outcome: "already-listed" | "installed" | "left-at-another-version" | "to-install"; }[]; }; contractEmitted: boolean; prisma7: null | { schemaPath: string; configRenamedTo: null | string; scriptsRewritten: string[]; packagesMoved: string[]; }; nextSteps: string[]; warnings: string[]; }, {}>

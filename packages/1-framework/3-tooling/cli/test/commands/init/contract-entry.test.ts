@@ -47,7 +47,7 @@ describe('contractEntryFor', () => {
     const node: ContractEntryNode = {
       renderTypeScript: () => 'stubContract("./x")',
       importRequirements: () => [{ moduleSpecifier: 'stub/config', symbol: 'stubContract' }],
-      contractValue: async () => './x',
+      contractValue: () => './x',
     };
     const contribution = withEntry((...args) => {
       inputs.push(...args);

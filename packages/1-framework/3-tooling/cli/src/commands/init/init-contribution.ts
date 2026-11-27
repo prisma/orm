@@ -11,13 +11,16 @@ export type ContractEntryInput =
   | { readonly kind: 'starter'; readonly mode: ContractSourceFormat; readonly path: string }
   | { readonly kind: 'prisma7-schema'; readonly path: string };
 
+/** The exports of the contribution's `configModule`, loaded as the project resolves it. */
+export type ConfigModuleExports = Readonly<Record<string, unknown>>;
+
 /**
  * The config's `contract:` entry as a TypeScript expression node, as a migration's operation calls are: it renders itself and the imports it needs into `prisma.config.ts`, and builds the value that expression computes, so `init` can run the entry to check a Prisma 7 schema before it writes anything. The package that returns it may depend on another installed copy of the framework, so `init` calls these methods and never checks the node's class.
  */
 export interface ContractEntryNode
   extends Pick<TsExpression, 'renderTypeScript' | 'importRequirements'> {
-  /** The value the rendered expression computes in `prisma.config.ts`. */
-  contractValue(): Promise<unknown>;
+  /** The value the rendered expression computes in `prisma.config.ts`, from the exports of `configModule` it imports. */
+  contractValue(configModule: ConfigModuleExports): unknown;
 }
 
 export interface QuickReferenceInput {
