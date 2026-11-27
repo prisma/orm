@@ -39,7 +39,7 @@ node scripts/print-release-plan.ts 8.1.0      # the plan for another root versio
 
 The command reads the workspace and writes nothing. Its option `--ever-ga <name,...>` names the packages that have already had a GA version, which decides the tag of a version below GA. The publish workflow works that list out from the npm registry: a package has had a GA version if a plain version, with no suffix, is published there. `0.x` versions do not count. [`scripts/fixtures/release-plan/`](../../scripts/fixtures/release-plan/) holds the expected output for the current root version, for `8.0.1` and for `8.1.0`, and `pnpm test:scripts` compares the real output with them.
 
-[`scripts/set-version.ts`](../../scripts/set-version.ts) writes the plan into the `package.json` files. Nobody writes a version or a range between our packages by hand.
+[`scripts/set-version.ts`](../../scripts/set-version.ts) writes the plan into the `package.json` files. Nobody writes a version or a range between our packages by hand. The release pull request commits the versions it writes. The publish workflow runs it again before publishing and stops if any package's version would change, so the versions in the `package.json` files at a release's tag are the ones on the registry. The `API compatibility` job relies on that.
 
 Three things about the plan are worth knowing:
 
@@ -155,7 +155,13 @@ Do the steps in this order.
    | The README of every package under `packages/9-public/@prisma/` | The note at the top says how the package is published "until release 8.0". The five database packages also give the install rule for release candidates. |
    | The [`publish-npm-version`](../../skills-contrib/publish-npm-version/SKILL.md) and [`draft-release-notes`](../../skills-contrib/draft-release-notes/SKILL.md) skills | Their introductions describe release candidates only. Say that a release is now a minor of Prisma 8. |
 
-7. **Do a dry run, then merge.** First commit and push the edits of steps 5 and 6, so that the branch on GitHub is what will be merged. Then run the `Publish to npm` workflow by hand on the release branch with its inputs left as they are: `dist-tag` is `latest` and `dry-run` is on. It publishes nothing. In its log, the step that sets the versions lists every package with its version. The publish step prints the tag once at its start, and prints a package's own tag only when it is a different one. Check that the versions are those of the table from step 1, and that no package shows a tag of its own: every tag in that table is `latest`. Then merge the pull request, which publishes the release. If the publish fails part-way, run it again as [Publishing again](#publishing-again-or-under-beta) describes, before anything else merges to `main`: a package that is already on npm at its version is left alone. Release 8.0 stays `8.0.1`.
+7. **Do a dry run, then merge.**
+   1. Commit and push the edits of steps 5 and 6, so that the branch on GitHub is what will be merged.
+   2. Run the `Publish to npm` workflow by hand on the release branch with its inputs left as they are: `dist-tag` is `latest` and `dry-run` is on. It publishes nothing.
+   3. In its log, the step that sets the versions lists every package with its version. The publish step prints the tag once at its start, and prints a package's own tag only when it is a different one. Check that the versions are those of the table from step 1, and that no package shows a tag of its own: every tag in that table is `latest`.
+   4. Merge the pull request, which publishes the release. Release 8.0 stays `8.0.1` whatever happens next.
+
+   If the publish fails part-way, run it again as [Publishing again](#publishing-again-or-under-beta) describes, before anything else merges to `main`: a package that is already on npm at its version is left alone. If it stops before publishing because the committed versions are stale, follow the second paragraph of that section instead.
 
 **After the publish**
 
@@ -172,8 +178,17 @@ Do the steps in this order.
 
 If a publish fails for a temporary reason, such as a registry error, run the `Publish to npm` workflow by hand from `main` with `dist-tag=latest` and `dry-run=false`. It publishes the root version at the current commit again, with the development build. Run it before anything else merges to `main`. The run uses the newest commit of `main`, and a package that is already on npm is left alone, so after a later merge the packages that were still missing would be published from different code than the rest.
 
+If the publish stopped because the committed versions differ from the ones `set-version.ts` plans, for example because a change to `levels.ts` merged just before the release, publishing again does not help. Open a pull request that runs `node scripts/set-version.ts <version>` and then `pnpm install --lockfile-only`, because the versions are also written into `pnpm-lock.yaml`, and commits the result. Once it merges, run the workflow by hand from `main` with `dist-tag=latest` and `dry-run=false`.
+
 The same manual run with `dist-tag=beta` publishes a build under `beta`, with no development build. It publishes the root version, so it does nothing for a package whose version is already on npm.
 
 ## Procedure: check a change to the release tooling
 
-After changing `publish.yml`, `set-version.ts`, `determine-version.ts` (which works out the development build's version), the publish script, the release plan or a build script, run the `Publish to npm` workflow by hand on your branch with `dry-run` left on, which is the default. It runs `pnpm publish --dry-run` for every package, including `@prisma/orm-extension-paradedb`, and every check except the release-notes check. It publishes nothing, and creates no tag and no GitHub Release.
+After changing `publish.yml`, `set-version.ts`, `determine-version.ts` (which works out the development build's version), the publish script, the release plan or a build script, run the `Publish to npm` workflow by hand on your branch with `dry-run` left on, which is the default. It runs `pnpm publish --dry-run` for every package, including `@prisma/orm-extension-paradedb`. It publishes nothing, and creates no tag and no GitHub Release. Which checks run depends on `dist-tag`:
+
+| `dist-tag` | Use it when | Checks |
+| --- | --- | --- |
+| `latest`, the default | your branch changes no package's planned version | every check except the release-notes check |
+| `beta` | your branch changes a package's planned version, for example its level | the same, except that the check of committed versions is skipped and the upgrade instructions are checked as for a development build |
+
+With `latest`, a branch that changes a planned version stops at the check of committed versions, because only a release pull request commits versions.

@@ -151,6 +151,23 @@ describe('the report', () => {
     );
   });
 
+  it('names the version a package was released at where it is not the release’s', () => {
+    const levels = {
+      version: '8.0.1',
+      results: [result({}), result({ name: '@prisma/orm-ea' })],
+      releasedAt: { '@prisma/orm-a': '8.0.1', '@prisma/orm-ea': '8.0.1-ea.0' },
+      notReleased: [],
+    };
+    const text = reportText(levels);
+    match(text, /^api:compat: last release 8\.0\.1; breaks fail unless recorded\n/);
+    match(text, /\n@prisma\/orm-a: 10 exports/);
+    match(text, /\n@prisma\/orm-ea at 8\.0\.1-ea\.0: 10 exports/);
+    const markdown = reportMarkdown(levels);
+    match(markdown, /^## Breaks since the last release, 8\.0\.1\n/);
+    match(markdown, /\n\| @prisma\/orm-a \| 8 \|/);
+    match(markdown, /\n\| @prisma\/orm-ea at 8\.0\.1-ea\.0 \| 8 \|/);
+  });
+
   it('prints one record for each test of an export, and the note of a break judged again', () => {
     const record = { path: '.', export: 'Shape', test: 'type' };
     const breaks = ['a', 'b'].map((member) => ({
@@ -306,24 +323,33 @@ describe('selectPackages', () => {
 describe('planPackages', () => {
   it('checks the packages the release tag has, lists one the repository no longer has as removed, and fails on one missing from the registry', () => {
     const plan = planPackages({
-      version: '8.0.0',
-      atTag: ['@prisma/orm-a', '@prisma/orm-gone', '@prisma/orm-lagging'],
+      version: '8.0.1',
+      atTag: [
+        { name: '@prisma/orm-a', version: '8.0.1' },
+        { name: '@prisma/orm-ea', version: '8.0.1-ea.0' },
+        { name: '@prisma/orm-gone', version: '8.0.1' },
+        { name: '@prisma/orm-lagging', version: '8.0.1-ea.0' },
+      ],
       inRepository: [
         { name: '@prisma/orm-a', dir: 'a' },
+        { name: '@prisma/orm-ea', dir: 'e' },
         { name: '@prisma/orm-lagging', dir: 'l' },
         { name: '@prisma/orm-new', dir: 'n' },
       ],
-      onRegistry: new Set(['@prisma/orm-a']),
+      onRegistry: new Set(['@prisma/orm-a', '@prisma/orm-ea']),
     });
     deepStrictEqual(plan, {
-      check: [{ name: '@prisma/orm-a', dir: 'a' }],
+      check: [
+        { name: '@prisma/orm-a', dir: 'a', version: '8.0.1' },
+        { name: '@prisma/orm-ea', dir: 'e', version: '8.0.1-ea.0' },
+      ],
       notReleased: ['@prisma/orm-new'],
       removed: ['@prisma/orm-gone'],
       problems: [
         {
           name: '@prisma/orm-lagging',
           problems: [
-            'the release v8.0.0 has this package, but the registry has no version 8.0.0 of it; if it was published moments ago, the registry may not show it yet',
+            'the release v8.0.1 has this package at 8.0.1-ea.0, but the registry has no version 8.0.1-ea.0 of it; if it was published moments ago, the registry may not show it yet',
           ],
         },
       ],
@@ -421,7 +447,7 @@ describe('main', () => {
       stderr: { write: (text) => (err += text) },
       findRelease: async () => ({ version, tag: `v${version}` }),
       fetchTag: () => {},
-      packagesAt: () => ['@prisma/orm-framework'],
+      packagesAt: () => [{ name: '@prisma/orm-framework', version }],
       released: async () => true,
       install: () => {},
       check: async (jobs) => jobs.map(breakIn),
@@ -434,6 +460,50 @@ describe('main', () => {
     strictEqual(code, 1);
     match(out, /^api:compat: last release 8\.0\.0-rc\.25; breaks fail unless recorded\n/);
     match(out, /\n {2}break {2}@prisma\/orm-framework: x \(value\): removed\n/);
+  });
+
+  it('looks up and installs each package at the version it was released at', async () => {
+    const asked = [];
+    let installed;
+    let pinned;
+    const { code, out } = await run([], '8.0.1', {
+      packagesAt: () => [
+        { name: '@prisma/orm-family-sql', version: '8.0.1' },
+        { name: '@prisma/orm-framework', version: '8.0.1-ea.0' },
+      ],
+      released: async (name, version) => {
+        asked.push([name, version]);
+        return true;
+      },
+      install: (options) => {
+        installed = options.packages.map(({ name, version }) => ({ name, version }));
+        pinned = options.released;
+      },
+    });
+    strictEqual(code, 1);
+    deepStrictEqual(asked, [['@prisma/orm-framework', '8.0.1-ea.0']]);
+    deepStrictEqual(installed, [{ name: '@prisma/orm-framework', version: '8.0.1-ea.0' }]);
+    deepStrictEqual(pinned, {
+      '@prisma/orm-family-sql': '8.0.1',
+      '@prisma/orm-framework': '8.0.1-ea.0',
+    });
+    match(out, /^api:compat: last release 8\.0\.1; breaks fail unless recorded\n/);
+    match(out, /\n@prisma\/orm-framework at 8\.0\.1-ea\.0: 1 exports/);
+  });
+
+  it('records a break against the release, not the package’s own version', async () => {
+    let jobs;
+    await run([], '8.0.1', {
+      packagesAt: () => [{ name: '@prisma/orm-framework', version: '0.18.0' }],
+      check: async (each) => {
+        jobs = each;
+        return [];
+      },
+    });
+    deepStrictEqual(
+      jobs.map(({ version }) => version),
+      ['8.0.1'],
+    );
   });
 
   it('has no --ga option', async () => {

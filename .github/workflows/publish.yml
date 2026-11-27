@@ -104,6 +104,12 @@ jobs:
       - name: Set package versions
         run: node scripts/set-version.ts "${{ steps.version.outputs.version }}"
 
+      # A release publishes the versions its commit holds, because the API compatibility job reads
+      # each package's released version from its package.json at the release's tag. Dry runs too.
+      - name: Check the release publishes the committed versions
+        if: ${{ steps.version.outputs.tag == 'latest' }}
+        run: node scripts/check-release-versions.mjs "${{ steps.version.outputs.version }}"
+
       - name: Build packages
         run: pnpm build
 

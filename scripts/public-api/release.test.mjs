@@ -1,4 +1,4 @@
-import { deepStrictEqual, rejects, strictEqual } from 'node:assert/strict';
+import { deepStrictEqual, rejects, strictEqual, throws } from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -12,6 +12,7 @@ import {
   isVersion,
   LastReleaseError,
   lastRelease,
+  packagesAtTag,
   releaseTags,
   versionAtRef,
 } from './release.mjs';
@@ -100,6 +101,94 @@ describe('releaseTags', () => {
 describe('versionAtRef', () => {
   it('reads the root package.json version at a ref', () => {
     strictEqual(versionAtRef(clone, 'origin/main'), '1.1.0-rc.2');
+  });
+});
+
+describe('packagesAtTag', () => {
+  const repository = join(work, 'packages');
+  const release = (tag, root, versions) => {
+    writeFileSync(join(repository, 'package.json'), JSON.stringify({ version: root }));
+    for (const [name, version] of Object.entries(versions)) {
+      const dir = join(repository, 'packages', '9-public', name);
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(join(dir, 'package.json'), JSON.stringify({ name, version }));
+    }
+    git(repository, 'add', '.');
+    git(repository, 'commit', '--quiet', '-m', tag);
+    git(repository, 'tag', tag);
+  };
+
+  before(() => {
+    mkdirSync(repository, { recursive: true });
+    git(repository, 'init', '--quiet', '--initial-branch=main');
+    git(repository, 'config', 'user.email', 'test@example.com');
+    git(repository, 'config', 'user.name', 'test');
+    git(repository, 'config', 'commit.gpgSign', 'false');
+    release('v8.0.0-rc.25', '8.0.0-rc.25', {
+      '@prisma/orm-postgres': '8.0.0-rc.25',
+      '@prisma/orm-mysql': '8.0.0-rc.25',
+      '@prisma/orm-extension-paradedb': '8.0.0-rc.25',
+    });
+    release('v8.0.1', '8.0.1', {
+      '@prisma/orm-postgres': '8.0.1',
+      '@prisma/orm-mysql': '8.0.1-ea.0',
+      '@prisma/orm-extension-paradedb': '0.18.0',
+    });
+    release('v8.1.0', '8.1.0', {
+      '@prisma/orm-postgres': '8.1.0',
+      '@prisma/orm-mysql': '8.1.0',
+      '@prisma/orm-extension-paradedb': '0.18.0',
+    });
+  });
+
+  it('names every package at a release candidate with the release candidate', () => {
+    deepStrictEqual(packagesAtTag('v8.0.0-rc.25', repository), [
+      { name: '@prisma/orm-extension-paradedb', version: '8.0.0-rc.25' },
+      { name: '@prisma/orm-mysql', version: '8.0.0-rc.25' },
+      { name: '@prisma/orm-postgres', version: '8.0.0-rc.25' },
+    ]);
+  });
+
+  it('names each package at a release with levels with the version it was released at: GA, Early Access, or its own', () => {
+    deepStrictEqual(packagesAtTag('v8.0.1', repository), [
+      { name: '@prisma/orm-extension-paradedb', version: '0.18.0' },
+      { name: '@prisma/orm-mysql', version: '8.0.1-ea.0' },
+      { name: '@prisma/orm-postgres', version: '8.0.1' },
+    ]);
+  });
+
+  it('fails on a package without a valid version at the tag, naming the file and the tag', () => {
+    const dir = join(repository, 'packages', '9-public', '@prisma', 'orm-broken');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, 'package.json'),
+      JSON.stringify({ name: '@prisma/orm-broken', version: 'next' }),
+    );
+    git(repository, 'add', '.');
+    git(repository, 'commit', '--quiet', '-m', 'broken');
+    git(repository, 'tag', 'v8.2.0');
+    throws(
+      () => packagesAtTag('v8.2.0', repository),
+      (error) => {
+        strictEqual(error instanceof LastReleaseError, true);
+        strictEqual(
+          error.message,
+          'packages/9-public/@prisma/orm-broken/package.json at v8.2.0 has no valid version ("next")',
+        );
+        return true;
+      },
+    );
+  });
+
+  it('reads a package promoted after a release at the level it had at that release', () => {
+    deepStrictEqual(
+      packagesAtTag('v8.0.1', repository).find(({ name }) => name === '@prisma/orm-mysql'),
+      { name: '@prisma/orm-mysql', version: '8.0.1-ea.0' },
+    );
+    deepStrictEqual(
+      packagesAtTag('v8.1.0', repository).find(({ name }) => name === '@prisma/orm-mysql'),
+      { name: '@prisma/orm-mysql', version: '8.1.0' },
+    );
   });
 });
 

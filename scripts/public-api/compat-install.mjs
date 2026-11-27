@@ -1,8 +1,8 @@
-// Installs the last release of each package beside the current build, in a folder with a
-// workspace of its own so that the repository's lockfile never changes. The release's third-party
-// dependencies get the versions the current build resolves, which come from the repository's
-// lockfile: with different versions on the two sides, every type from such a dependency would
-// differ, and each would show up as a break.
+// Installs each package at its version at the last release's tag, beside the current build, in a
+// folder with a workspace of its own so that the repository's lockfile never changes. Our packages
+// are pinned to their versions at the tag. The release's third-party dependencies get the versions
+// the current build resolves, which come from the repository's lockfile: with different versions on
+// the two sides, every type from such a dependency would differ, and each would show up as a break.
 
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -222,24 +222,35 @@ export function makeTwin({ releaseDir, twinRoot, ownNames, copies = new Map() })
   return dir;
 }
 
+// The install folder's dependencies and overrides. Each package is installed under an alias at its
+// version at the release's tag. Every package of ours the tag has is pinned at that version too,
+// so that a range one of them names another by resolves to the release, not to something published
+// since; third-party packages are pinned as `thirdParty` says.
+export function releaseInstall({ packages, released, peers, thirdParty }) {
+  return {
+    dependencies: {
+      ...peers,
+      ...Object.fromEntries(
+        packages.map(({ name, version }) => [aliasOf('release', name), `npm:${name}@${version}`]),
+      ),
+    },
+    overrides: sortedObject({ ...thirdParty, ...released }),
+  };
+}
+
 // Writes the install folder's manifest and workspace, installs, stamps every copy of our packages
 // with a version of its own, and links each current package beside its release.
 export function installRelease({
   dir,
   packages,
-  version,
-  overrides,
+  released,
+  thirdParty,
   peers,
   ownNames,
   settings = {},
 }) {
   mkdirSync(dir, { recursive: true });
-  const dependencies = {
-    ...peers,
-    ...Object.fromEntries(
-      packages.map(({ name }) => [aliasOf('release', name), `npm:${name}@${version}`]),
-    ),
-  };
+  const { dependencies, overrides } = releaseInstall({ packages, released, peers, thirdParty });
   writeFileSync(
     join(dir, 'package.json'),
     `${JSON.stringify({ name: 'api-compat', private: true, type: 'module', dependencies }, null, 2)}\n`,

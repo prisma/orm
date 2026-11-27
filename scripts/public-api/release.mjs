@@ -1,12 +1,16 @@
 // The release rules both checks against the last release share: which release is the last one,
-// how versions are ordered, and which exports are exempt.
+// which version each package was published at in it, how versions are ordered, and which exports
+// are exempt.
 //
-// The last release follows docs/oss/versioning.md: the root package.json `version` on a ref is the
-// version published from it, and every package carries it. So the last release is the version at
-// the pull request's base, or, while a release bump has merged and its tag is not yet pushed, the
-// newest release tag below it. Dev builds (`-dev.`) are not releases. The registry is not asked
-// for its `latest`, which a yanked release or a rewritten dist-tag would move; it is asked only
-// whether each package was published at that version.
+// The last release follows docs/oss/versioning.md: the root package.json `version` on a ref names
+// the release published from it. So the last release is the version at the pull request's base,
+// or, while a release bump has merged and its tag is not yet pushed, the newest release tag below
+// it. Dev builds (`-dev.`) are not releases. From release 8.0 a package's version can differ from
+// the release's: it shows the package's maturity level (`8.0.1-ea.0`), or the package has a version
+// of its own. The release bump writes each package's version into its package.json, so the version a
+// package was published at is the one in its package.json at the release's tag. The registry is
+// not asked for its `latest`, which a yanked release or a rewritten dist-tag would move; it is
+// asked only whether each package was published at that version.
 
 import { execFileSync } from 'node:child_process';
 
@@ -188,10 +192,21 @@ export function fetchReleaseTag(tag, root) {
   }
 }
 
-// The names of the published packages at the release's tag, from their package.json files.
+// The published packages at the release's tag, each with the version it was published at, from
+// their package.json files.
 export function packagesAtTag(tag, root) {
   const files = git(['ls-tree', '-r', '--name-only', tag, '--', 'packages/9-public/@prisma'], root)
     .split('\n')
     .filter((file) => /^packages\/9-public\/@prisma\/[^/]+\/package\.json$/.test(file));
-  return files.map((file) => JSON.parse(git(['show', `${tag}:${file}`], root)).name).sort();
+  return files
+    .map((file) => {
+      const { name, version } = JSON.parse(git(['show', `${tag}:${file}`], root));
+      if (typeof version !== 'string' || !isVersion(version)) {
+        throw new LastReleaseError(
+          `${file} at ${tag} has no valid version (${JSON.stringify(version)})`,
+        );
+      }
+      return { name, version };
+    })
+    .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
 }
