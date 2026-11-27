@@ -29,13 +29,13 @@ describe('PostgresControlAdapter marker/ledger write lowering', () => {
   );
 
   it('insertMarker lowers to a plain insert with DB-side updated_at', async () => {
-    const driver = createCapturingDriver();
+    const driver = createCapturingDriver([{ table_schema: '_prisma' }]);
     await adapter.insertMarker(driver, 'app', {
       storageHash: 'core',
       profileHash: 'prof',
     });
 
-    const { sql, params } = driver.calls[0]!;
+    const { sql, params } = driver.calls.find((call) => call.sql.startsWith('INSERT'))!;
     expect(sql).toContain(
       'INSERT INTO "_prisma"."marker" ("space", "core_hash", "profile_hash", ' +
         '"contract_json", "canonical_version", "updated_at", "app_tag", "meta", "invariants")',

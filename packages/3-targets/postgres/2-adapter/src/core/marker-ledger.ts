@@ -39,7 +39,7 @@ export const marker = pgTable(
     canonical_version: int4({ nullable: true }),
     updated_at: timestamptz(),
     app_tag: text({ nullable: true }),
-    meta: jsonb({ nullable: true }),
+    meta: jsonb(),
     invariants: textArray(),
   },
 );
@@ -99,6 +99,11 @@ export const ledgerReadShape = pgTable(
 export const infoSchemaTables = pgTable(
   { name: 'tables', schema: 'information_schema' },
   { table_schema: text(), table_name: text() },
+);
+
+export const infoSchemaColumns = pgTable(
+  { name: 'columns', schema: 'information_schema' },
+  { table_schema: text(), table_name: text(), column_name: text() },
 );
 
 export const NOW = new RawExpr({
@@ -166,4 +171,20 @@ export async function prismaTableExists(
     .where(infoSchemaTables.table_schema.eq(schema).and(infoSchemaTables.table_name.eq(table)))
     .build();
   return (await execute(lower, driver, probe)).length > 0;
+}
+
+/** Whether one of Prisma's own tables in `schema` has every column in `columns`, by name. */
+export async function prismaTableHasColumns(
+  lower: Lower,
+  driver: MarkerDriver,
+  table: PrismaTableName,
+  columns: readonly string[],
+  schema: string = PRISMA_TABLES_SCHEMA,
+): Promise<boolean> {
+  const probe = infoSchemaColumns
+    .select(infoSchemaColumns.column_name)
+    .where(infoSchemaColumns.table_schema.eq(schema).and(infoSchemaColumns.table_name.eq(table)))
+    .build();
+  const present = new Set((await execute(lower, driver, probe)).map((row) => row['column_name']));
+  return columns.every((column) => present.has(column));
 }

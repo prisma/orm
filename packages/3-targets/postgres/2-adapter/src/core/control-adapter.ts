@@ -30,6 +30,7 @@ import {
 import {
   APP_SPACE_ID,
   DATABASE_POLICIES_META_KEY,
+  isPrismaSpace,
   type MarkerDestination,
   type MarkerInsert,
   type SchemaNodeRef,
@@ -139,6 +140,7 @@ import {
   metaRecordingPolicies,
   NOW,
   prismaTableExists,
+  prismaTableHasColumns,
 } from './marker-ledger';
 import {
   errorPrismaTablesFromEarlierRelease,
@@ -633,6 +635,9 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
     );
   }
 
+  /**
+   * A marker table in `_prisma` that lacks a column this select names was not created by Prisma's first migration. For the Prisma space's own row that reads as no row, so the phase runs the first migration, whose check of the marker table's columns stops it and names the table.
+   */
   private async readMarkerResult(driver: SqlControlDriverInstance<'postgres'>, space: string) {
     const lower = (query: AnyQueryAst) => this.lower(query, { contract: undefined });
     if (!(await prismaTableExists(lower, driver, PRISMA_TABLE_NAMES.marker))) {
@@ -641,17 +646,30 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
         : { kind: 'no-table' as const };
     }
 
+    const selected = [
+      marker.core_hash,
+      marker.profile_hash,
+      marker.contract_json,
+      marker.canonical_version,
+      marker.updated_at,
+      marker.app_tag,
+      marker.meta,
+      marker.invariants,
+    ];
+    if (
+      isPrismaSpace(space) &&
+      !(await prismaTableHasColumns(
+        lower,
+        driver,
+        PRISMA_TABLE_NAMES.marker,
+        [marker.space, ...selected].map((column) => column.columnName),
+      ))
+    ) {
+      return { kind: 'absent' as const };
+    }
+
     const fetch = marker
-      .select(
-        marker.core_hash,
-        marker.profile_hash,
-        marker.contract_json,
-        marker.canonical_version,
-        marker.updated_at,
-        marker.app_tag,
-        marker.meta,
-        marker.invariants,
-      )
+      .select(...selected)
       .where(marker.space.eq(space))
       .build();
     const result = await execute(lower, driver, fetch);

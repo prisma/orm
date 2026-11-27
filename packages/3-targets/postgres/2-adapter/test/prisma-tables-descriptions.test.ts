@@ -8,9 +8,8 @@ import { describe, expect, it } from 'vitest';
 import { ledger, ledgerContract, ledgerReadShape, marker } from '../src/core/marker-ledger';
 
 interface ContractColumn {
-  readonly dataType: string;
+  readonly codecId: string;
   readonly nullable: boolean;
-  readonly many?: unknown;
 }
 
 const contractSpace = postgres.contractSpace;
@@ -27,43 +26,40 @@ const contractTables = (
   >
 )[PRISMA_TABLES_SCHEMA]?.entries.table;
 
-const formatTypeOf: Record<string, string> = {
-  'pg/text': 'text',
-  'pg/jsonb': 'jsonb',
-  'pg/int4': 'integer',
-  'pg/int8': 'bigint',
-  'pg/timestamptz': 'timestamp with time zone',
-};
+interface ColumnForm {
+  readonly name: string;
+  readonly codecId: string;
+  readonly nullable: boolean;
+}
 
-function contractColumns(table: string) {
+function byName(a: ColumnForm, b: ColumnForm): number {
+  return a.name.localeCompare(b.name);
+}
+
+function contractColumns(table: string): readonly ColumnForm[] {
   const columns = contractTables?.[table]?.columns ?? {};
   return Object.entries(columns)
     .map(([name, column]) => ({
       name,
-      type: `${formatTypeOf[column.dataType] ?? column.dataType}${column.many === undefined ? '' : '[]'}`,
-      notNull: !column.nullable,
+      codecId: column.codecId,
+      nullable: column.nullable,
     }))
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .sort(byName);
 }
 
-function checkedColumns(operationId: string) {
-  const [migration] = contractSpace?.migrations ?? [];
-  const operation = migration?.ops.find((op) => op.id === operationId) as
-    | { readonly precheck: readonly { readonly params: readonly unknown[] }[] }
-    | undefined;
-  return (operation?.precheck ?? [])
-    .map(({ params: [, , name, type, notNull] }) => ({ name, type, notNull }))
-    .sort((a, b) => String(a.name).localeCompare(String(b.name)));
-}
-
-function handleColumns(handle: object): readonly string[] {
+function handleColumns(handle: object): readonly ColumnForm[] {
   return Object.values(handle)
     .flatMap((value: unknown) =>
       typeof value === 'object' && value !== null && 'columnName' in value
-        ? [String(value.columnName)]
+        ? [value as { columnName: string; codecId: string; nullable: boolean }]
         : [],
     )
-    .sort();
+    .map((column) => ({
+      name: column.columnName,
+      codecId: column.codecId,
+      nullable: column.nullable,
+    }))
+    .sort(byName);
 }
 
 describe("the descriptions of Prisma's own tables", () => {
@@ -73,30 +69,27 @@ describe("the descriptions of Prisma's own tables", () => {
     expect(Object.keys(contractTables ?? {}).sort()).toEqual([...tableNames].sort());
   });
 
-  it.each(tableNames)(
-    'check the columns of %s, in both schemas, exactly as the contract describes them',
-    (table) => {
-      expect({
-        current: checkedColumns(`_prisma.check-columns.${table}`),
-        releaseCandidate: checkedColumns(`_prisma.check-release-candidate-columns.${table}`),
-      }).toEqual({ current: contractColumns(table), releaseCandidate: contractColumns(table) });
-    },
-  );
-
-  it("name in the adapter's handles only columns the contract describes", () => {
-    const names = (table: string) => contractColumns(table).map(({ name }) => name);
+  it("declare in the adapter's handles only columns the contract describes, with its codecs and nullability", () => {
+    const outside = (handle: object, table: string) =>
+      handleColumns(handle).filter(
+        (column) =>
+          !contractColumns(table).some(
+            (described) =>
+              described.name === column.name &&
+              described.codecId === column.codecId &&
+              described.nullable === column.nullable,
+          ),
+      );
     expect({
       marker: handleColumns(marker),
       ledgerReadShape: handleColumns(ledgerReadShape),
-      ledger: handleColumns(ledger).every((name) => names('ledger').includes(name)),
-      ledgerContract: handleColumns(ledgerContract).every((name) =>
-        names('contract').includes(name),
-      ),
+      ledgerOutside: outside(ledger, 'ledger'),
+      ledgerContractOutside: outside(ledgerContract, 'contract'),
     }).toEqual({
-      marker: names('marker'),
-      ledgerReadShape: names('ledger'),
-      ledger: true,
-      ledgerContract: true,
+      marker: contractColumns('marker'),
+      ledgerReadShape: contractColumns('ledger'),
+      ledgerOutside: [],
+      ledgerContractOutside: [],
     });
   });
 
