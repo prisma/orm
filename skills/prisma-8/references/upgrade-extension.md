@@ -10,7 +10,7 @@ Each step's guide is under `upgrading/extension/upgrades/` in the copy of this s
 
 **If this file is inside a folder named `.prisma-upgrade-guides`,** you are already reading the fetched copy. `<skill>` is the `prisma-8` folder that holds this file's `references/` folder. Skip the rest of this step and go on to the next section.
 
-Otherwise you are reading the copy that was installed with the Prisma packages, which belongs to the release installed now. Do not follow it past this step, for this reason. Each step of an upgrade has a guide: a file `instructions.md` in a folder named `<from>-to-<to>`. Every Prisma release carries the guides for every step so far, and a guide is sometimes corrected after its release. A published package never changes, so the corrected guide exists only in later releases. The whole upgrade is therefore run from the newest published copy of the skill.
+Otherwise you are reading the copy that was installed with the Prisma packages, which belongs to the release installed now. Do not follow it past this step. The reason is this. Each step of an upgrade has a guide: a file `instructions.md` in a folder named `<from>-to-<to>`. Every Prisma release carries the guides for every step so far, and a guide is sometimes corrected after its release. A published package never changes, so the corrected guide exists only in later releases. The whole upgrade is therefore run from the newest published copy of the skill.
 
 From the folder whose `package.json` lists the Prisma packages, run:
 
@@ -18,7 +18,7 @@ From the folder whose `package.json` lists the Prisma packages, run:
 node <installed skill>/scripts/fetch-upgrade-guides.mjs <database package>
 ```
 
-- `<installed skill>` is the `prisma-8` folder that holds this file's `references/` folder. If it has no `scripts/` folder, use the copy inside the installed database package, `node_modules/<database package>/skills/prisma-8`.
+- `<installed skill>` is the `prisma-8` folder that holds this file's `references/` folder. If it has no `scripts/` folder, use the copy inside an installed database package, `node_modules/<database package>/skills/prisma-8`. If the project installs no database package, add `@prisma/orm-postgres` as a development dependency at the installed release first.
 - `<database package>` is any one of `@prisma/orm-postgres`, `@prisma/orm-mongo`, `@prisma/orm-sqlite`, `@prisma/orm-mysql` and `@prisma/orm-mariadb`. Each of them carries the guides for extensions. Use the one your extension's tests run against if there is one, and `@prisma/orm-postgres` otherwise.
 
 The script downloads the newest published Prisma 8 version of that package without installing it. It does not change `package.json`, the lockfile or any installed package. It creates a folder `.prisma-upgrade-guides/` in the current folder, with a `.gitignore` of its own so that git ignores it, and extracts that version's copy of this skill into it. It prints the path of the extracted `prisma-8` folder, which contains the version in its name, such as `.prisma-upgrade-guides/prisma-orm-postgres-8.3.0/prisma-8`.
@@ -82,11 +82,13 @@ For each `(from, to)` step in the chain:
 
 2. **Bump `@prisma/orm-*` deps.** What to write depends on the release:
    - **On the `8.0.0` release candidates,** rewrite every `@prisma/orm-*` entry in the extension's `package.json` to the exact `<to>` version, such as `"8.0.0-rc.11"`: no caret, no tilde, no range, and no `workspace:` specifier. The exact-pin rule below says why. All entries move to the same version. That includes another extension published from the Prisma repository, such as `@prisma/orm-extension-pgvector`: every `@prisma/orm-*` package is published at every release, and each lists the others at that release's version.
-   - **From release 8.0,** write the ranges that [the last section](#from-release-80-number-your-package-and-declare-ranges) gives under `peerDependencies`. Under `devDependencies`, a caret would let the install take a release later than `<to>`, whose guides have not been applied. So unless `<to>` is the newest published release, write a tilde on the same version there, such as `~8.1.0`, which stays within `<to>`.
+   - **From release 8.0,** the two sections of `package.json` differ.
+     - Under `peerDependencies`, write the ranges that [the last section](#from-release-80-number-your-package-and-declare-ranges) gives. They say which releases your package accepts, and a caret there need not change at every step.
+     - Under `devDependencies`, write each package's first version in the `<to>` release, so that your build and tests run against `<to>`: `8.2.0` for a GA package at the step to release 8.2, whatever the peer range says. Put a caret in front only when `<to>` is the newest published release. At any other step put a tilde, such as `~8.2.0`: a caret would let the install take a release later than `<to>`, whose guides have not been applied. The newest published release is the release of the version in the fetched folder's name. If the upgrade ends on a release that is not the newest, say in the final report that the development dependencies have a tilde.
 
    Where each entry goes is the same on every release:
-   - A package that the extension's shipped code imports belongs under `peerDependencies`, and again under `devDependencies`, at the same version.
-   - A package that only the extension's tests use, such as a database package the tests run against, belongs under `devDependencies` alone, at the same version.
+   - A package that the extension's shipped code imports belongs under `peerDependencies`, and again under `devDependencies`.
+   - A package that only the extension's tests use, such as a database package the tests run against, belongs under `devDependencies` alone.
    - Move any entry that is still under `dependencies` or `optionalDependencies`. An extension written for an earlier release had the framework, the family and the toolchain as ordinary dependencies.
 
 3. **Install.** Run `pnpm install` (or the project's lockfile-managing command). The extension's source is now broken against the new SPI — the upgrade instructions for `<from> → <to>` exist to fix it.

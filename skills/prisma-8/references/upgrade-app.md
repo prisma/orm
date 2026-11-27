@@ -8,7 +8,7 @@ Each step's guide is under `upgrading/app/upgrades/` in the copy of this skill t
 
 **If this file is inside a folder named `.prisma-upgrade-guides`,** you are already reading the fetched copy. `<skill>` is the `prisma-8` folder that holds this file's `references/` folder. Skip the rest of this step and go on to the next section.
 
-Otherwise you are reading the copy that was installed with the Prisma packages, which belongs to the release installed now. Do not follow it past this step, for this reason. Each step of an upgrade has a guide: a file `instructions.md` in a folder named `<from>-to-<to>`. Every Prisma release carries the guides for every step so far, and a guide is sometimes corrected after its release. A published package never changes, so the corrected guide exists only in later releases. The whole upgrade is therefore run from the newest published copy of the skill.
+Otherwise you are reading the copy that was installed with the Prisma packages, which belongs to the release installed now. Do not follow it past this step. The reason is this. Each step of an upgrade has a guide: a file `instructions.md` in a folder named `<from>-to-<to>`. Every Prisma release carries the guides for every step so far, and a guide is sometimes corrected after its release. A published package never changes, so the corrected guide exists only in later releases. The whole upgrade is therefore run from the newest published copy of the skill.
 
 From the folder whose `package.json` lists the Prisma packages, run:
 
@@ -119,7 +119,7 @@ For each `(from, to)` step in the chain:
    - beside a GA database package, a GA entry gets a caret and an entry below GA gets a tilde;
    - beside a database package below GA, every entry gets a tilde.
 
-   **Write a caret only when `<to>` is the newest published release.** A caret accepts later releases, so at any other step the install would take a release later than `<to>`, whose guides have not been applied. This covers every step before the last one, and the last one too when the user's target is older than the newest release. At such a step write a tilde in place of the caret: a tilde stays within `<to>` and still takes its fixes. If the upgrade ends on a release that is not the newest, say in the final report that those entries have a tilde where [Versions and support](https://github.com/prisma/orm/blob/main/docs/oss/versioning.md#what-an-application-writes) gives a caret.
+   **Write a caret only when `<to>` is the newest published release.** The newest published release is the release of the version in the fetched folder's name. A caret accepts later releases, so at any other step the install would take a release later than `<to>`, whose guides have not been applied. That is every step before the last one, and the last one too when the user's target is older than the newest release. At such a step write a tilde in place of the caret: a tilde stays within `<to>` and still takes its fixes. If the upgrade ends on a release that is not the newest, say in the final report that those entries have a tilde where [Versions and support](https://github.com/prisma/orm/blob/main/docs/oss/versioning.md#what-an-application-writes) gives a caret.
 
    **`@prisma/orm-extension-paradedb`** has version numbers of its own. Set it to the release the pre-flight noted for this step, as for an extension published by someone else.
 
@@ -161,13 +161,17 @@ Some projects depend on a package that is not an extension and that requires one
 
 **How to notice it.** Before the first step, look through the project's dependencies for a package, other than the extensions the pre-flight covers, whose `peerDependencies` name an `@prisma/orm-*` package at an exact version. `pnpm view <name> peerDependencies --json` shows them. If there is none, use the per-step flow.
 
-If there is one, the last release of the chain must be one that a published version of that package requires. If the user's target is not, tell the user which releases are possible and stop. Otherwise replace the per-step flow with this:
+If there is one, list the Prisma release each of its published versions requires.
+
+- If it has a version for every release in the chain, use the per-step flow, and at each step set that package to its version for the step.
+- If the last release of the chain is not among them, tell the user which releases are possible and stop.
+- Otherwise replace the per-step flow with the steps below. This is the one exception to the rule that no step is skipped.
 
 1. Read the guide of every step in the chain.
-2. Bump once. Write every Prisma entry as the bump step gives it for the last step of the chain, and set the package that requires an exact release to its version for that release. Also make every change to `package.json` that any of the guides asks for before its install.
+2. Bump once. Write every Prisma entry as the bump step gives it for the last step of the chain. Set each extension published by someone else to the release the pre-flight noted for the last step. Set the package that requires an exact release to its version for that release. Also make every change to `package.json` that any of the guides asks for before its install.
 3. Install once, and commit the bump with the lockfile.
-4. Apply each step's guide in order, with one commit for each. Do not install again between them.
-5. After a guide that is not the last, a failing typecheck is expected, because the installed types are those of the last release. Go on to the next guide. Anything else that fails, such as a script or a Prisma command the guide tells you to run, is a halt: tell the user which guide and which command.
+4. Apply each step's guide in order, with one commit for each. Install again only where a guide tells you to add or change a package.
+5. After a guide that is not the last, do not run the typecheck or the tests: they are expected to fail, because the installed types are those of the last release. Go on to the next guide. A script or a Prisma command that a guide tells you to run must succeed. If one fails, halt and tell the user which guide and which command.
 6. After the last guide, run the full validation from the per-step flow. It must pass.
 
 Tell the user that the releases in between were never installed, so a failure may come from any of the guides.
