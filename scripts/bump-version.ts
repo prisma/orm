@@ -6,7 +6,7 @@
  * Reads the root `package.json` version *as committed at HEAD*, computes
  * the next release version (`8.0.0-rc.1` → `8.0.0-rc.2`; a pre-8 stable
  * base transitions onto the RC line as `8.0.0-rc.1` — see
- * docs/oss/versioning.md), and writes that value to every workspace
+ * docs/oss/releasing.md), and writes that value to every workspace
  * `package.json` via `set-version.ts`.
  *
  * Reading from HEAD (rather than disk) is what makes the script
@@ -14,7 +14,7 @@
  * would otherwise read the *bumped* root version and double-advance.
  *
  * Designed to be invoked from a maintainer skill (see
- * `docs/oss/versioning.md` for the procedure). The skill is
+ * `docs/oss/releasing.md` for the procedure). The skill is
  * responsible for: branch creation, commit, and PR opening.
  */
 
