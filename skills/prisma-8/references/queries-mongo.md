@@ -255,7 +255,7 @@ In an ORM read, a placeholder goes in `limit`, `offset`, a scalar field's value 
 
 ## Reference Files
 
-- Example queries under [`examples/mongo-demo/src/server.ts`](examples/mongo-demo/src/server.ts) — ORM reads, `.include`, `.variant`, and pipeline DSL via `db.query`.
+- Example queries under [`examples/mongo-demo/src/server.ts`](https://github.com/prisma/orm/blob/main/examples/mongo-demo/src/server.ts) — ORM reads, `.include`, `.variant`, and pipeline DSL via `db.query`.
 - Integration tests under `examples/mongo-demo/test/` (`blog.test.ts`, `crud-lifecycle.test.ts`, `query-builder-writes.test.ts`).
 - Query builder README under `packages/2-mongo-family/5-query-builders/query-builder/README.md`.
 - ORM collection surface under `packages/2-mongo-family/5-query-builders/orm/src/collection.ts`.

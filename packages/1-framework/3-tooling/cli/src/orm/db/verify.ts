@@ -653,5 +653,3 @@ export function createDbVerifyCommand(
     },
   });
 }
-
-export const dbVerifyCommand = createDbVerifyCommand();

@@ -2,12 +2,39 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import {
+  lockstepManifest,
   type MutablePackageJson,
   participatesInLockstep,
   restampExtensionVersion,
   rewriteWorkspaceDeps,
   stampSkillMetadata,
 } from './set-version-utils.ts';
+
+describe('lockstepManifest', () => {
+  it('parses a manifest with workspace pins', () => {
+    assert.deepEqual(
+      lockstepManifest(
+        '{ "name": "app", "dependencies": { "@prisma/orm-postgres": "workspace:8.0.0" } }',
+      ),
+      { name: 'app', dependencies: { '@prisma/orm-postgres': 'workspace:8.0.0' } },
+    );
+  });
+
+  it('skips a manifest without workspace pins, even one that is not valid JSON', () => {
+    assert.equal(lockstepManifest('{ "name": "fixture-malformed", }'), undefined);
+  });
+
+  it('skips a manifest that only mentions workspace: outside its dependencies', () => {
+    assert.equal(lockstepManifest('{ "name": "a", "description": "workspace: notes" }'), undefined);
+  });
+
+  it('refuses a manifest with workspace pins that is not valid JSON', () => {
+    assert.throws(
+      () => lockstepManifest('{ "dependencies": { "a": "workspace:1.0.0" }, }'),
+      SyntaxError,
+    );
+  });
+});
 
 describe('participatesInLockstep', () => {
   it('true for a project-boundary manifest with workspace pins (not a workspace member)', () => {

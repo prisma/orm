@@ -1,9 +1,11 @@
 import { ormConfigSection } from '@internal/config-loader';
+import type { DeclaredDatabasePolicies } from '@internal/framework-components/control';
 import type { Refs } from '@internal/migration-tools/refs';
 import type { Block, Presentations, Text } from '@prisma/cli-engine';
 import { notOk, ok } from '@prisma/cli-engine/protocol';
 import type { RefListResult } from '../../control-api/operations/ref';
 import { executeRefListCommand } from '../../control-api/operations/ref';
+import { declaredEntries, declaredSettings, settingsText } from '../../utils/policy-settings';
 import { dataLine } from '../data-lines';
 import { defineOrmCommand } from '../define-command';
 import { normalizeError } from '../normalize-error';
@@ -11,19 +13,28 @@ import { normalizeError } from '../normalize-error';
 const HEADING_REF = 'Ref';
 const HEADING_CONTRACT = 'Contract';
 const HEADING_INVARIANTS = 'Invariants';
+const HEADING_POLICIES = 'Policies';
 
 const EMPTY_MESSAGE = 'No refs defined';
 
+function declaredPoliciesText(policies: DeclaredDatabasePolicies | undefined): string {
+  return settingsText(declaredEntries(declaredSettings(policies)));
+}
+
 /**
- * The refs as a grid the engine sizes. The invariants heading appears only
- * when a ref carries any, as the commander shell appended them only then.
+ * The refs as a grid the engine sizes. The invariants and policies headings appear only
+ * when a ref carries any.
  */
 function refsGrid(refs: Refs): Block {
   const entries = Object.entries(refs);
   const showInvariants = entries.some(([, entry]) => entry.invariants.length > 0);
-  const headings: Text[] = showInvariants
-    ? [HEADING_REF, HEADING_CONTRACT, HEADING_INVARIANTS]
-    : [HEADING_REF, HEADING_CONTRACT];
+  const showPolicies = entries.some(([, entry]) => declaredPoliciesText(entry.policies) !== '');
+  const headings: Text[] = [
+    HEADING_REF,
+    HEADING_CONTRACT,
+    ...(showInvariants ? [HEADING_INVARIANTS] : []),
+    ...(showPolicies ? [HEADING_POLICIES] : []),
+  ];
 
   const rows = entries.map(([name, entry]) => {
     const cells: Text[] = [
@@ -32,6 +43,9 @@ function refsGrid(refs: Refs): Block {
     ];
     if (showInvariants) {
       cells.push(entry.invariants.join(', '));
+    }
+    if (showPolicies) {
+      cells.push(declaredPoliciesText(entry.policies));
     }
     return cells;
   });

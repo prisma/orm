@@ -5,7 +5,6 @@ import { flag } from '@prisma/cli-engine';
 import type { NextAction } from '@prisma/cli-engine/protocol';
 import { notOk, ok } from '@prisma/cli-engine/protocol';
 import { join, resolve } from 'pathe';
-import { createControlClient } from '../../control-api/client';
 import type { ContractSpaceSeedPhaseRecord } from '../../control-api/operations/contract-space-seed-phase';
 import type { MigrationPlanResult } from '../../control-api/operations/migration-plan';
 import { executeMigrationPlanCommand } from '../../control-api/operations/migration-plan';
@@ -401,5 +400,3 @@ export function createMigrationPlanCommand(createClient: CreateControlClient) {
     },
   });
 }
-
-export const migrationPlanCommand = createMigrationPlanCommand(createControlClient);

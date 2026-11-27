@@ -6,7 +6,7 @@ Prisma 8 packs for the PostgreSQL contrib modules that PostgreSQL marks trusted,
 pnpm add @prisma/orm-postgres-contrib
 ```
 
-Every trusted contrib module gets its pack here, as one group of entrypoints named after the module. Third-party extensions such as pgvector and PostGIS keep a package each (`@prisma/orm-extension-<name>`), because they release on their own schedule; see [ADR 312](https://github.com/prisma/orm/blob/main/docs/architecture%20docs/adrs/ADR%20312%20-%20Postgres%20extension%20packs%20are%20published%20by%20tier.md).
+Every trusted contrib module gets its pack here, as one group of entrypoints named after the module. Third-party extensions such as pgvector and PostGIS keep a package each (`@prisma/orm-extension-<name>`), because they release on their own schedule; see [ADR 313](https://github.com/prisma/orm/blob/main/docs/architecture%20docs/adrs/ADR%20313%20-%20Postgres%20extension%20packs%20are%20published%20by%20tier.md).
 
 ## Modules
 
