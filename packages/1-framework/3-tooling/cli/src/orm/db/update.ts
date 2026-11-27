@@ -4,7 +4,8 @@ import {
   type MigrationPlannerConflict,
   migrationSubjectJson,
 } from '@internal/framework-components/control';
-import { readMigrationsDir } from '@internal/migration-tools/io';
+import { MigrationToolsError } from '@internal/migration-tools/errors';
+import { readMigrationPackage, readMigrationsDir } from '@internal/migration-tools/io';
 import { reconstructGraph } from '@internal/migration-tools/migration-graph';
 import { readRefs } from '@internal/migration-tools/refs';
 import { spaceMigrationDirectory, spaceRefsDirectory } from '@internal/migration-tools/spaces';
@@ -17,6 +18,7 @@ import {
   notOk,
   ok,
 } from '@prisma/cli-engine/protocol';
+import { join } from 'pathe';
 import { errorFromCaught } from '../../control-api/operations/caught-errors';
 import {
   type ResolveContractRefToSnapshotSuccess,
@@ -594,7 +596,10 @@ async function migrationPlanIfReachable(
   }
   const { client, dbConnection, migrationsDir } = prepared.value;
   const emittedHash = storageHashOf(prepared.value.contractJson);
-  const space = await readPlanSpace(migrationsDir, emittedHash).catch(() => undefined);
+  const space = await readPlanSpace(migrationsDir, emittedHash).catch(
+    (error: unknown) =>
+      `The CLI could not read the migrations: ${MigrationToolsError.is(error) ? error.why : causeText(error)}`,
+  );
   const readMarker = async () => {
     await client.connect(dbConnection, {
       existingDatabaseOnly: true,
@@ -615,16 +620,13 @@ async function migrationPlanIfReachable(
       : read.kind === 'failed'
         ? { kind: 'unknown', reason: `The CLI could not read the database: ${read.cause}` }
         : databasePositionOf(read.marker?.storageHash);
-  if (space !== undefined) {
+  if (typeof space !== 'string') {
     return read?.kind === 'read'
       ? migrationPlanForDatabase(space, read.marker, end)
       : migrationPlanArguments(space, position, end);
   }
   return {
-    from: migrationPlanChoice(
-      undefined,
-      position.kind === 'unknown' ? position.reason : 'The CLI could not read the migrations',
-    ),
+    from: migrationPlanChoice(undefined, space),
     to: migrationPlanTo({ ...NO_MIGRATIONS, ...ifDefined('emittedHash', emittedHash) }, end),
   };
 }
@@ -648,7 +650,11 @@ async function readPlanSpace(
   emittedHash: string | undefined,
 ): Promise<PlanSpace> {
   const appDir = spaceMigrationDirectory(migrationsDir, APP_SPACE_ID);
-  const { packages } = await readMigrationsDir(appDir, { migrationsDir });
+  const { packages, problems } = await readMigrationsDir(appDir, { migrationsDir });
+  const [problem] = problems;
+  if (problem !== undefined) {
+    await readMigrationPackage(join(appDir, problem.dirName), { migrationsDir });
+  }
   return {
     graph: reconstructGraph(packages),
     refs: await readRefs(spaceRefsDirectory(appDir)),
