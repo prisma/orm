@@ -10,7 +10,7 @@ This ADR's worked example is CipherStash as it was on version 2 of its Encrypt Q
 
 ## At a glance
 
-A Prisma Next application's database is the integration point for many parties: the application itself, plus every schema-contributing extension installed in `prisma.config.ts`. This ADR makes each of those parties a **contract space** — a disjoint `(contract.json, migration-graph, head-ref)` tuple — and runs the same per-space planner, runner, and verifier across all of them. The user's repo holds a pinned mirror of every space the application and its extensions own, so apply-time and verify-time flows never need to read an extension package from `node_modules`. One space is the exception: the Prisma space, `_prisma`, holds the tables Prisma keeps for itself, is carried by the target package, and is read from the installed package and applied before anything else is read ([ADR 339](ADR%20339%20-%20Each%20target%20has%20a%20contract%20space%20for%20Prisma%27s%20own%20tables.md)).
+A Prisma Next application's database is the integration point for many parties: the application itself, plus every schema-contributing extension installed in `prisma.config.ts`. This ADR makes each of those parties a **contract space** — a disjoint `(contract.json, migration-graph, head-ref)` tuple — and runs the same per-space planner, runner, and verifier across all of them. The user's repo holds a pinned mirror of every space the application and its extensions own, so apply-time and verify-time flows never need to read an extension package from `node_modules`. One space is the exception: the Prisma space, `_prisma`, holds the tables Prisma keeps for itself, is carried by the target package, and is read from the installed package; on PostgreSQL, every command that changes a database applies it before it reads anything, and commands that only read do not apply it ([ADR 339](ADR%20339%20-%20Each%20target%20has%20a%20contract%20space%20for%20Prisma%27s%20own%20tables.md)).
 
 ```mermaid
 flowchart TB
@@ -197,7 +197,7 @@ Space identifiers are constrained to `[a-z][a-z0-9_-]{0,63}` (filesystem-safe an
 
 ### Marker schema gains a `space` column
 
-The marker table (`_prisma.marker` on PostgreSQL) was a single-row table keyed by `id`. It becomes one row per loaded contract space, primary-keyed by `space`, plus one row for the Prisma space itself. See [ADR 021 — Contract Marker Storage](./ADR%20021%20-%20Contract%20Marker%20Storage.md) for the migration path (idempotent across fresh / legacy single-row / already-migrated databases).
+The marker table (`_prisma.marker` on PostgreSQL) was a single-row table keyed by `id`. It becomes one row per loaded contract space, primary-keyed by `space`, plus one row for the Prisma space itself. Prisma 8 does not convert a marker of the single-row layout: reading one fails; see [ADR 021 — Contract Marker Storage](./ADR%20021%20-%20Contract%20Marker%20Storage.md).
 
 | `space`       | `applied_content_hash` | `applied_invariants`                          |
 | ------------- | ---------------------- | --------------------------------------------- |
