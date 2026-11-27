@@ -44,7 +44,7 @@ const UNCHANGED = 'nothing wrote to or deleted from either collection since the 
 const RERUN_COPIES = (source: string) =>
   source === 'readings'
     ? 'The next run copies every document of collection readings into collection measurements again, then drops collection readings, so before you run it, leave in collection readings only the documents that collection measurements does not hold yet.'
-    : `The next run copies every document of collection ${source} that the copy selects into collection measurements again, then deletes them from collection ${source}, so before you run it, leave in collection ${source} only the documents that collection measurements does not hold yet.`;
+    : `The next run copies every document of collection ${source} that the copy selects into collection measurements again, then deletes them from collection ${source}, so before you run it, leave in collection ${source} every document the copy does not select, and of those it selects only the ones that collection measurements does not hold yet.`;
 const SETTLE_BY_HAND = (source: string) =>
   `delete nothing from either collection, and do not run the command again, until you have compared collections measurements and ${source} by hand and settled which documents each should keep: only you can tell which of their documents are which. ${RERUN_COPIES(source)}`;
 const UNSURE = (source: string) =>
@@ -210,7 +210,7 @@ describe('MongoMigrationPlanner and runner - a move into a time-series collectio
     }
   }
 
-  const counts = `Before the copy, collection measurements held 1 document, and the copy was to add 2 documents of collection events. To tell whether it finished, ${COPY_ENDED} Then count the documents of collection measurements, for example with db.getCollection("measurements").countDocuments() in mongosh. The count shows this only if ${UNCHANGED}. If you cannot be sure of that, ${SETTLE_BY_HAND('events')} If it holds 3, and ${UNCHANGED}, the copy finished. ${WRITES_STOPPED} Before you run the command again, run that delete yourself`;
+  const counts = `Before the copy, collection measurements held 1 document, and the copy was to add 2 documents of collection events. To tell whether it finished, ${COPY_ENDED} Then count the documents of collection measurements that a majority of the replica set has written, which a failover cannot roll back, for example with db.getCollection("measurements").countDocuments({}, { readConcern: { level: "majority" } }) in mongosh. The count shows this only if ${UNCHANGED}. If you cannot be sure of that, ${SETTLE_BY_HAND('events')} If it holds 3, and ${UNCHANGED}, the copy finished. ${WRITES_STOPPED} Before you run the command again, run that delete yourself`;
 
   it(
     'says to delete nothing when the copy stopped before its $out committed, though the target already holds an _id of the source',
@@ -342,6 +342,16 @@ describe('MongoMigrationPlanner and runner - a move into a time-series collectio
       slow: { $function: { body: 'function() { sleep(400); return 1; }', args: [], lang: 'js' } },
     },
   };
+  /**
+   * Holds every write on the server until `release`, so a copy that has started stays running,
+   * waiting to write, while the test looks at it. Reads go on.
+   */
+  const holdWrites = async () => {
+    await live.db().admin().command({ fsync: 1, lock: true });
+  };
+  const releaseWrites = async () => {
+    await live.db().admin().command({ fsyncUnlock: 1 });
+  };
   const currentOps = async (match: Record<string, unknown>): Promise<readonly unknown[]> => {
     const reply = await live
       .db()
@@ -352,6 +362,26 @@ describe('MongoMigrationPlanner and runner - a move into a time-series collectio
         cursor: {},
       });
     return reply['cursor'].firstBatch;
+  };
+  /** A read of collection measurements that sleeps until the test ends it with `killOps`. */
+  const endlessStage = {
+    $addFields: {
+      slow: {
+        $function: { body: 'function() { sleep(60000); return 1; }', args: [], lang: 'js' },
+      },
+    },
+  };
+  const readOfMeasurements = {
+    'command.aggregate': 'measurements',
+    'command.pipeline.0.$unionWith.pipeline.0.$addFields': { $exists: true },
+  };
+  const killOps = async (ops: readonly unknown[]) => {
+    for (const op of ops) {
+      await live
+        .db()
+        .admin()
+        .command({ killOp: 1, op: Reflect.get(Object(op), 'opid') });
+    }
   };
   /** The copies into collection measurements that the server is running, as the advice's $currentOp lists them. */
   const runningCopies = () =>
@@ -379,27 +409,49 @@ describe('MongoMigrationPlanner and runner - a move into a time-series collectio
     'says to check that the copy is no longer running before counting, since MongoDB finishes the $out after the connection drops',
     async () => {
       const { before, after } = await routeAround();
-      const proxy = await outInterruptingClient(live.uri(), 'whileRunning');
-      const first = await live
-        .runOperations([...before, slowCopy, deletion, ...after], from, to, {
-          policy,
-          client: proxy.client,
-        })
-        .finally(() => proxy.close());
-      const read = live
-        .db()
-        .collection('measurements')
-        .aggregate([{ $unionWith: { coll: 'events', pipeline: [slowStage] } }, { $count: 'n' }])
-        .toArray();
-      await new Promise((resolve) => setTimeout(resolve, 100));
-      const onMeasurements = await currentOps({ 'command.aggregate': 'measurements' });
-      const running = await runningCopies();
-      const countWhileRunning = await live.db().collection('measurements').countDocuments();
+      const proxy = await outInterruptingClient(live.uri(), 'whileRunning', holdWrites);
+      let held: {
+        readonly onMeasurements: readonly unknown[];
+        readonly running: readonly unknown[];
+        readonly countWhileRunning: number;
+      };
+      let first: Awaited<ReturnType<typeof live.runOperations>>;
+      try {
+        first = await live
+          .runOperations([...before, slowCopy, deletion, ...after], from, to, {
+            policy,
+            client: proxy.client,
+          })
+          .finally(() => proxy.close());
+        const read = live
+          .db()
+          .collection('measurements')
+          .aggregate([
+            { $unionWith: { coll: 'events', pipeline: [endlessStage] } },
+            { $count: 'n' },
+          ])
+          .toArray()
+          .catch((error: unknown) => error);
+        let reads = await currentOps(readOfMeasurements);
+        for (let attempt = 0; reads.length === 0 && attempt < 100; attempt += 1) {
+          await new Promise((resolve) => setTimeout(resolve, 50));
+          reads = await currentOps(readOfMeasurements);
+        }
+        held = {
+          onMeasurements: await currentOps({ 'command.aggregate': 'measurements' }),
+          running: await runningCopies(),
+          countWhileRunning: await live.db().collection('measurements').countDocuments(),
+        };
+        await killOps(reads);
+        await read;
+      } finally {
+        await releaseWrites();
+      }
+      const { onMeasurements, running, countWhileRunning } = held;
       while ((await runningCopies()).length > 0) {
         await new Promise((resolve) => setTimeout(resolve, 100));
       }
       const countOnceEnded = await live.db().collection('measurements').countDocuments();
-      await read;
       await live.db().collection('events').deleteMany(filter);
       const second = await live.runOperations([...before, slowCopy, deletion, ...after], from, to, {
         policy,
@@ -439,26 +491,33 @@ describe('MongoMigrationPlanner and runner - a move into a time-series collectio
           { at, value: 2 },
         ]);
       const pad = 'x'.repeat(2000);
-      const copying = live
-        .db()
-        .collection('events')
-        .aggregate([
-          { $match: filter },
-          slowStage,
-          { $addFields: { pad } },
-          { $unset: ['slow', 'pad'] },
-          { $out: 'measurements' },
-        ])
-        .toArray();
-      let running = await runningCopies();
-      for (let attempt = 0; running.length === 0 && attempt < 100; attempt += 1) {
-        await new Promise((resolve) => setTimeout(resolve, 50));
+      await holdWrites();
+      let running: readonly unknown[];
+      let inprog: readonly { opid?: unknown; command?: object }[];
+      let copying: Promise<unknown>;
+      try {
+        copying = live
+          .db()
+          .collection('events')
+          .aggregate([
+            { $match: filter },
+            slowStage,
+            { $addFields: { pad } },
+            { $unset: ['slow', 'pad'] },
+            { $out: 'measurements' },
+          ])
+          .toArray();
         running = await runningCopies();
+        for (let attempt = 0; running.length === 0 && attempt < 100; attempt += 1) {
+          await new Promise((resolve) => setTimeout(resolve, 50));
+          running = await runningCopies();
+        }
+        ({ inprog } = await live.db().admin().command({ currentOp: 1, $all: true }));
+      } finally {
+        await releaseWrites();
       }
-      const { inprog } = await live.db().admin().command({ currentOp: 1, $all: true });
-      const cutDown = (inprog as readonly { ns?: string; command?: object }[]).find((op) =>
-        String(op.ns).startsWith(`${live.db().databaseName}.tmp.agg_out.`),
-      );
+      const [copy] = running;
+      const cutDown = inprog.find(({ opid }) => opid === Reflect.get(Object(copy), 'opid'));
       await copying;
 
       expect({
