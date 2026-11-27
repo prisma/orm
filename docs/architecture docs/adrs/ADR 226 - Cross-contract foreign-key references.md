@@ -120,7 +120,7 @@ This is deliberate. The relationship's value today is the database constraint �
 
 ### Referential actions are the author's call
 
-`onDelete` and the rest of the referential-action set are permitted on cross-space FKs, and the framework emits no diagnostic for them. An explicit cascade across a space boundary is no more dangerous than a local one — the risk is identical and the author typed it on purpose. This follows the repo-wide stance in [`explicit-opt-in-over-diagnostics`](../../.agents/rules/explicit-opt-in-over-diagnostics.mdc): the code the author wrote is the audit trail, and a warning on every build is noise.
+`onDelete` and the rest of the referential-action set are permitted on cross-space FKs, and the framework emits no diagnostic for them. An explicit cascade across a space boundary is no more dangerous than a local one — the risk is identical and the author typed it on purpose. This follows the repo-wide stance in [`explicit-opt-in-over-diagnostics`](../../../.agents/rules/explicit-opt-in-over-diagnostics.mdc): the code the author wrote is the audit trail, and a warning on every build is noise.
 
 ## Consequences
 
@@ -143,4 +143,4 @@ This is deliberate. The relationship's value today is the database constraint �
 - [ADR 212 — Contract spaces](./ADR%20212%20-%20Contract%20spaces.md) — the contract-space mechanism this builds on.
 - [ADR 221 — Contract IR two planes](./ADR%20221%20-%20Contract%20IR%20two%20planes%20with%20uniform%20entity%20coordinate%20and%20pack-contributed%20entity%20kinds.md) — the IR coordinate model the carrier extends.
 - [ADR 225 — Three-layer extensibility](./ADR%20225%20-%20Three-layer%20extensibility%20for%20pack-contributed%20entity%20kinds.md) — the extensibility pattern of the surrounding framework.
-- [`explicit-opt-in-over-diagnostics`](../../.agents/rules/explicit-opt-in-over-diagnostics.mdc) — the policy behind emitting no diagnostic on cross-space cascade.
+- [`explicit-opt-in-over-diagnostics`](../../../.agents/rules/explicit-opt-in-over-diagnostics.mdc) — the policy behind emitting no diagnostic on cross-space cascade.

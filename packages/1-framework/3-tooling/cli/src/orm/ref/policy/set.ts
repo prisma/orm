@@ -1,0 +1,84 @@
+import { ormConfigSection } from '@internal/config-loader';
+import { flag, positional } from '@prisma/cli-engine';
+import { notOk, ok } from '@prisma/cli-engine/protocol';
+import {
+  executeRefPolicySet,
+  type RefPolicyChange,
+} from '../../../control-api/operations/ref-policies';
+import { defineOrmCommand } from '../../define-command';
+import { normalizeError } from '../../normalize-error';
+import { editPresentations } from './presentation';
+import { NOT_A_REASON_TO_CHANGE, planCheckSentence, refPositional } from './text';
+
+function closing(ref: string, changes: readonly RefPolicyChange[]): string {
+  return `No database was changed. Deploys to ${ref} refuse while the database's policies differ from these.${planCheckSentence(ref, changes)}`;
+}
+
+export function createRefPolicySetCommand(
+  execute: typeof executeRefPolicySet = executeRefPolicySet,
+) {
+  return defineOrmCommand({
+    help: {
+      summary: 'Declare policies for a ref',
+      description:
+        'Writes the policies field of migrations/app/refs/<ref>.json, changing only\n' +
+        'the settings named. --change replaces the declared list, so --change\n' +
+        'reconcile alone permits only db update. --data-loss and --access-widening\n' +
+        'say whether a change may lose data or widen who can read or write data:\n' +
+        'forbidden refuses such a change; with-consent runs it only with consent:\n' +
+        'db update asks first (--delete, --allow), and db migrate runs a migration\n' +
+        'because the consent was given when it was planned; permitted runs it\n' +
+        'without asking. It never connects to a database.\n\n' +
+        NOT_A_REASON_TO_CHANGE,
+      examples: [
+        'migration ref policy set production --change migrate',
+        'migration ref policy set production --data-loss forbidden',
+        'migration ref policy set staging --change migrate --change reconcile --json',
+      ],
+    },
+    args: {
+      positionals: { ref: positional.string(refPositional) },
+      flags: {
+        change: flag.repeated({
+          brief:
+            'A way the database may change: migrate or reconcile; repeat for both. Replaces the declared list',
+          placeholder: 'strategy',
+        }),
+        dataLoss: flag.string({
+          brief: 'Whether a change may lose data: forbidden, with-consent or permitted',
+          placeholder: 'level',
+        }),
+        accessWidening: flag.string({
+          brief:
+            'Whether a change may widen who can read or write data: forbidden, with-consent or permitted',
+          placeholder: 'level',
+        }),
+      },
+    },
+    needs: { config: ormConfigSection },
+    handler: async (args, ctx) => {
+      const ref = args.positionals.ref;
+      const result = await execute(
+        ref,
+        {
+          change: args.flags.change,
+          dataLoss: args.flags.dataLoss,
+          accessWidening: args.flags.accessWidening,
+        },
+        { config: ctx.config, cwd: ctx.cwd },
+      );
+      if (!result.ok) return notOk(normalizeError(result.failure));
+      return ok(
+        ctx.present(
+          { data: result.value.result },
+          editPresentations(result.value, ctx.cwd, {
+            nothingChanged: 'already declares these policies',
+            closing: (changes) => closing(ref, changes),
+          }),
+        ),
+      );
+    },
+  });
+}
+
+export const refPolicySetCommand = createRefPolicySetCommand();

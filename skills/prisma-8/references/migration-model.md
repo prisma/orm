@@ -37,7 +37,7 @@ Because a migration is an edge, `db migrate` can run it on any database whose ma
 
 ### Refs — version-controlled pointers
 
-A ref is a small committed file, `migrations/<space>/refs/<name>.json` (for your app: `migrations/app/refs/<name>.json`), containing `{ hash, invariants }`. Two roles, by convention:
+A ref is a small committed file, `migrations/<space>/refs/<name>.json` (for your app: `migrations/app/refs/<name>.json`), containing `{ hash, invariants }` and, optionally, `policies`: the change policy and data protection policy its database should have (`references/migrations.md` § *Policies*). Two roles, by convention:
 
 - **The `db` ref** records which contract hash the project's dev database has been brought to. It is a **checkpoint, not a promise**: dev commands write it after the fact so the offline planner knows where dev iteration left off, without opening a database connection.
 - **Environment refs** (`staging`, `production`, …) name **the contract CD will migrate that environment to** — a forward promise the repo makes, consumed at deploy time. See `references/migration-review.md` for the deploy-side workflows.
@@ -51,6 +51,8 @@ pnpm prisma migration ref set <name> <hash-or-ref>
 pnpm prisma migration ref list
 pnpm prisma migration ref delete <name>
 ```
+
+A ref's `policies` are read and written with `migration ref policy show`, `set` and `delete`; `references/migrations.md` § *Policies* says what each does.
 
 `migration ref set` requires the target to be the `to` hash of an on-disk migration. A hash outside the graph is refused (`MIGRATION.HASH_NOT_IN_GRAPH`); a hash that appears in the graph only as a `from` — no bundle produces it — is refused too (`MIGRATION.REF_SET_BUNDLE_NOT_FOUND`). Find node hashes with `migration list`.
 

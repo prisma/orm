@@ -126,6 +126,7 @@ assertCanonicalBase(baseVersion);
 
 console.log(`Event:                 ${eventName}`);
 console.log(`Base version (root):   ${baseVersion}`);
+console.log(`Dev counter anchor:    ${PACKAGE_NAME}`);
 
 let result: VersionResult;
 

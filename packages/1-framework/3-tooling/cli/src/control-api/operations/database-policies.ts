@@ -16,11 +16,6 @@ import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import type { CliStructuredError } from '../../utils/cli-errors';
 import {
-  type DataProtectionSetting,
-  FORBIDDEN_LEVEL,
-  PERMITTED_LEVEL,
-} from '../../utils/data-protection-settings';
-import {
   type ChangePolicyCheckedCommand,
   type DataProtectionCheckedCommand,
   type DataProtectionRefusedOperation,
@@ -29,6 +24,11 @@ import {
   errorPolicyMismatch,
   type PolicySource,
 } from '../../utils/policy-errors';
+import {
+  type DataProtectionKey,
+  FORBIDDEN_LEVEL,
+  PERMITTED_LEVEL,
+} from '../../utils/policy-settings';
 import type { CliInvocation } from '../../utils/printed-command';
 import {
   type MigrationPlanArguments,
@@ -149,17 +149,17 @@ export function dataProtectionOfRun(
 /** The data protection settings a checked run obeys at their `permitted` level: nobody is asked about what they cover. */
 export function permittedSettingsOfRun(
   checked: CheckedDatabasePolicies,
-): readonly DataProtectionSetting[] {
+): readonly DataProtectionKey[] {
   const levels = dataProtectionOfRun(checked);
   return DATA_PROTECTION_KEYS.filter((setting) => levels[setting] === PERMITTED_LEVEL[setting]);
 }
 
 /** Each data protection setting at its `forbidden` level, with where that level is recorded. */
-export type ForbiddingSettings = Partial<Record<DataProtectionSetting, PolicySource>>;
+export type ForbiddingSettings = Partial<Record<DataProtectionKey, PolicySource>>;
 
 function forbiddingSettings(
   levels: DeclaredDatabasePolicies['dataProtection'],
-  sourceOf: (setting: DataProtectionSetting) => PolicySource,
+  sourceOf: (setting: DataProtectionKey) => PolicySource,
 ): ForbiddingSettings {
   return Object.fromEntries(
     DATA_PROTECTION_KEYS.flatMap((setting) =>

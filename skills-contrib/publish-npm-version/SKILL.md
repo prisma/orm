@@ -22,10 +22,10 @@ Maintainers of Prisma 8 who have permission to push branches and open PRs in the
 
 ## Background reading
 
-Read [`docs/oss/versioning.md`](../../docs/oss/versioning.md) before running this skill. It covers:
+Read [`docs/oss/releasing.md`](../../docs/oss/releasing.md) before running this skill. It covers:
 
 - The source-of-truth model (root `package.json` `version`).
-- The lockstep guarantee (every workspace package matches the root).
+- Each published package at the version the release plan gives it (until release 8.0, every package at the root version).
 - The v8 RC line (`8.0.0-rc.N`, with `latest` tracking the newest RC or stable release).
 - The dist-tag convention (`latest` / `dev` / `beta`).
 - The full release procedure (this skill covers steps 1-2 of 3; merging the PR is the publish trigger — there is no separate dispatch step).
@@ -117,7 +117,7 @@ If either precondition is unmet, stop and surface the issue. Do **not** try to a
     The body should:
 
     - State the previous and new version (`<previous> → <new>`).
-    - Link to [`docs/oss/versioning.md`](../../docs/oss/versioning.md) for context.
+    - Link to [`docs/oss/releasing.md`](../../docs/oss/releasing.md) for context.
     - Point reviewers at the committed `docs/releases/v<version>.md` (authored by the `draft-release-notes` skill in step 8) as the human-review surface for the release's user-facing changes.
     - Note that **merging this PR ships the release**: the resulting push to `main` carries the bumped root `version`, the `Publish to npm` workflow detects the change and publishes `<new>` under dist-tag `latest`, and a matching GitHub Release (marked pre-release on the RC line) is created automatically.
 
@@ -142,5 +142,5 @@ If the release branch/worktree already exists, inspect its Git status and diff b
 ## Out of scope
 
 - **Merging the PRs.** The skill stops at "PRs opened" so a human can confirm the release notes. Merging the release PR is what triggers the actual publish, but it remains a human gate by design; the docs PR follows once the publish has succeeded.
-- **Patch releases.** On the RC line there are none (a fix is just the next `rc.N`, which this skill handles). For stable-line patches (`patch+1`), the manual procedure in `docs/oss/versioning.md` applies.
+- **Patch releases.** On the RC line there are none (a fix is just the next `rc.N`, which this skill handles). For stable-line patches (`patch+1`), see `docs/oss/releasing.md`.
 - **Beta tags.** The `beta` dist-tag is hand-cut via a manual `workflow_dispatch` of `Publish to npm`; this skill always advances to the next release version.

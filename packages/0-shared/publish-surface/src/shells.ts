@@ -1,3 +1,5 @@
+// Scripts load this file from source, before the workspace is built, so it may import only types.
+
 /**
  * Canonical mapping of internal workspace packages to public publish shells
  * (ADR 242). Each internal package becomes a subpath entrypoint namespace of
@@ -7,9 +9,9 @@
  */
 
 export type ShellKind =
-  /** Installed directly only by a decomposed application. */
+  /** Listed by every application that uses it, as a peer of the packages that use it. */
   | 'platform'
-  /** The one-package install for a database; carries the platform shells. */
+  /** The package for one database; names the platform shells it uses as peers. */
   | 'facade'
   /** Installed directly alongside whatever else the application uses. */
   | 'extension';
@@ -89,24 +91,13 @@ export interface ShellDefinition {
   /**
    * Surfaces of *other* shells republished under this shell's own
    * entrypoints. Nothing is copied: each generated entry re-exports the
-   * sibling shell's published entrypoint, which the shell declares as an
-   * exact-pinned dependency. Facades carry the contract surfaces this way
-   * so that code generated for an application that installs only the
-   * facade imports nothing but a direct dependency (ADR 242).
+   * sibling shell's published entrypoint, which the shell declares as a peer
+   * dependency at the range the release plan gives it, like every sibling it
+   * reaches. Facades carry the
+   * contract surfaces this way so that code generated for an application
+   * imports them from the facade (ADR 242).
    */
   readonly reexports?: readonly ShellReexportMapping[];
-  /**
-   * Sibling shells this shell requires the installer to provide, declared as
-   * peer dependencies rather than pulled in as its own copy.
-   *
-   * Extension packs use this for the target shell they extend (ADR 242).
-   * A hard dependency would let an application upgrade the facade without
-   * upgrading the extension and end up with two copies of the target — the
-   * codec and operation registries would silently diverge and `instanceof`
-   * would stop holding. As a peer, that combination fails to install
-   * instead.
-   */
-  readonly peerShells?: readonly ShellName[];
   /**
    * Extra dist files to copy into the shell's dist root (globs relative to
    * the repository root), e.g. templates an internal package reads next to
@@ -141,9 +132,10 @@ export type ShellName =
 /**
  * Surfaces every facade republishes regardless of family.
  *
- * An application depends on one facade and nothing else (ADR 242), so
- * everything it reaches — hand-written and generated alike — has to have a
- * name under the facade. These are the target-agnostic ones: the contract and
+ * Application code imports only from its facade and its extensions, never
+ * from a platform shell, even though the application lists the platform
+ * shells (ADR 329), so everything it reaches — hand-written and generated
+ * alike — has to have a name under the facade. These are the target-agnostic ones: the contract and
  * component surfaces emitted files import, the shared helpers, and the Vite
  * plugin.
  *
@@ -855,7 +847,6 @@ export const publicShells: ReadonlyMap<ShellName, ShellDefinition> = new Map<
       packages: [
         { dir: 'packages/3-extensions/postgis', name: '@internal/extension-postgis', entry: '' },
       ],
-      peerShells: ['@prisma/orm-target-postgres'],
     },
   ],
   [
@@ -870,7 +861,6 @@ export const publicShells: ReadonlyMap<ShellName, ShellDefinition> = new Map<
           entry: '',
         },
       ],
-      peerShells: ['@prisma/orm-target-postgres'],
     },
   ],
   [
@@ -885,13 +875,6 @@ export const publicShells: ReadonlyMap<ShellName, ShellDefinition> = new Map<
           entry: '',
         },
       ],
-      // ParadeDB registers its index type against the SQL family rather than
-      // reaching the target at run time, so unlike its siblings it has no
-      // shared registry to keep single-instance. It declares the peer anyway:
-      // every Postgres extension pack states the same install requirement, and
-      // a pack that quietly did not would read as a pack that works without
-      // Postgres.
-      peerShells: ['@prisma/orm-target-postgres'],
     },
   ],
   [
@@ -908,7 +891,6 @@ export const publicShells: ReadonlyMap<ShellName, ShellDefinition> = new Map<
           subpaths: ['codec-types', 'column-types', 'control', 'pack', 'runtime'],
         },
       ],
-      peerShells: ['@prisma/orm-target-postgres'],
     },
   ],
   [
@@ -923,7 +905,6 @@ export const publicShells: ReadonlyMap<ShellName, ShellDefinition> = new Map<
           entry: '',
         },
       ],
-      peerShells: ['@prisma/orm-target-postgres'],
     },
   ],
   [
@@ -938,7 +919,6 @@ export const publicShells: ReadonlyMap<ShellName, ShellDefinition> = new Map<
           entry: '',
         },
       ],
-      peerShells: ['@prisma/orm-target-postgres'],
     },
   ],
   [

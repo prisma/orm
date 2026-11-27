@@ -5,6 +5,10 @@ import { basename, posix } from 'node:path';
 import { argv, cwd, exit, stderr, stdout } from 'node:process';
 import { fileURLToPath } from 'node:url';
 import matter from 'gray-matter';
+import {
+  parseVersion as parseReleaseVersion,
+  rootVersionOfRelease,
+} from '../packages/0-shared/publish-surface/src/release-plan.ts';
 
 export function parseChangesFrontmatter(src) {
   if (!/^---\s*\n[\s\S]*?\n---/.test(src))
@@ -18,15 +22,22 @@ export function parseChangesFrontmatter(src) {
   }
 }
 
+/**
+ * A root version: a release `X.Y.Z` or a release candidate `X.Y.Z-rc.N`, read with the release plan's
+ * parser. A development build reads as the version it was made from, without the release candidate
+ * counter. The root never carries another level, so one stops the check, naming it.
+ */
 export function parseVersion(spec) {
-  const match = /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?$/.exec(spec);
-  if (!match) throw new Error(`unparseable version "${spec}"`);
-  const rc = match[4] ? /^rc\.(\d+)$/.exec(match[4]) : null;
+  const parsed = parseReleaseVersion(spec);
+  if (parsed.level !== undefined && parsed.level.name !== 'rc')
+    throw new Error(
+      `root version "${spec}" carries the ${parsed.level.name} level, which only a package's own version may carry`,
+    );
   return {
-    major: Number(match[1]),
-    minor: Number(match[2]),
-    patch: Number(match[3]),
-    rc: rc ? Number(rc[1]) : null,
+    major: parsed.major,
+    minor: parsed.minor,
+    patch: parsed.patch,
+    rc: parsed.level !== undefined && parsed.dev === undefined ? parsed.level.counter : null,
   };
 }
 export function versionSegment(version) {
@@ -58,11 +69,18 @@ export function publishedTransitionOf(path) {
   return PUBLISHED_TRANSITION.exec(path)?.[1];
 }
 
-/** The inverse of `transitionLabel`: a stable segment `major.minor` reads as `major.minor.0`. */
+/** The inverse of `transitionLabel`: a stable segment `major.minor` reads as that release's root version, `8.0.1` for `8.0`. */
 export function parseTransitionLabel(label) {
   const match = /^(.+)-to-(.+)$/.exec(label);
   if (!match) throw new Error(`unparseable transition label "${label}"`);
-  const segment = (text) => parseVersion(/^\d+\.\d+$/.test(text) ? `${text}.0` : text);
+  const segment = (text) => {
+    const release = /^(\d+)\.(\d+)$/.exec(text);
+    return parseVersion(
+      release
+        ? rootVersionOfRelease({ major: Number(release[1]), minor: Number(release[2]) })
+        : text,
+    );
+  };
   return { from: segment(match[1]), to: segment(match[2]) };
 }
 function publishedGuide(audience, transition) {

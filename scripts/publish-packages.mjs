@@ -16,6 +16,12 @@
  * Env:
  *   PUBLISH_CONCURRENCY  Override the parallelism (default 8).
  *
+ * Tags:
+ *   A `--tag latest` publish is a release: each package goes under the tag
+ *   the release plan gives it for the root version (`latest` for every
+ *   package on the release candidates). Any other tag applies to every
+ *   package.
+ *
  * Failure semantics:
  *   - If any package fails to publish, the script exits non-zero
  *     once all already-started workers have finished. Other workers
@@ -34,9 +40,17 @@
  *     under Actions) so failures are easy to find in interleaved CI logs.
  */
 
-import { execFileSync, spawn } from 'node:child_process';
+import { execFileSync, spawn, spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-import { classifyPublishResult } from './publish-packages-utils.mjs';
+import {
+  classifyPublishResult,
+  ownVersionsAlreadyPublished,
+  publishTagFor,
+  releaseTagsFor,
+} from './publish-packages-utils.mjs';
 
 const args = process.argv.slice(2);
 let tag;
@@ -69,13 +83,45 @@ const listJson = execFileSync('pnpm', ['list', '-r', '--json', '--depth', '-1'],
   encoding: 'utf-8',
   maxBuffer: 64 * 1024 * 1024,
 });
-const packages = JSON.parse(listJson)
+const listed = JSON.parse(listJson)
   .filter((p) => !p.private && p.path && p.name)
-  .map((p) => ({ name: p.name, path: p.path }));
+  .map((p) => ({ name: p.name, path: p.path, version: p.version }));
+const rootDir = dirname(dirname(fileURLToPath(import.meta.url)));
+const rootVersion = JSON.parse(readFileSync(join(rootDir, 'package.json'), 'utf-8')).version;
+const skipped = new Set(
+  ownVersionsAlreadyPublished({ dryRun, rootVersion, packages: listed, publishedVersions }),
+);
+for (const name of skipped) console.log(`  ${name}: skipped, already published at this version`);
+const packages = listed.filter(({ name }) => !skipped.has(name));
+
+const tags =
+  tag === 'latest'
+    ? releaseTagsFor({
+        rootDir,
+        rootVersion,
+        names: packages.map(({ name }) => name),
+        publishedVersions,
+      })
+    : new Map();
+const tagOf = (name) => publishTagFor(tag, tags.get(name));
 
 console.log(
   `Publishing ${packages.length} packages with concurrency=${concurrency}, tag=${tag}${dryRun ? ' (dry-run)' : ''}.`,
 );
+for (const { name } of packages) {
+  if (tagOf(name) !== tag) console.log(`  ${name} goes under ${tagOf(name)}`);
+}
+
+function publishedVersions(name) {
+  const result = spawnSync('pnpm', ['view', name, 'versions', '--json'], { encoding: 'utf-8' });
+  if (result.status !== 0) {
+    if (/E404|404 Not Found/.test(`${result.stdout}${result.stderr}`)) return [];
+    console.error(`Could not read the published versions of ${name}:\n${result.stderr}`);
+    process.exit(1);
+  }
+  const versions = JSON.parse(result.stdout);
+  return Array.isArray(versions) ? versions : [versions];
+}
 
 /**
  * Spawn `pnpm publish` for a single package and resolve with a
@@ -84,7 +130,7 @@ console.log(
  */
 function publishOne({ name, path }) {
   return new Promise((resolve) => {
-    const publishArgs = ['publish', '--access', 'public', '--tag', tag, '--no-git-checks'];
+    const publishArgs = ['publish', '--access', 'public', '--tag', tagOf(name), '--no-git-checks'];
     if (dryRun) publishArgs.push('--dry-run');
 
     const child = spawn('pnpm', publishArgs, { cwd: path, env: process.env });

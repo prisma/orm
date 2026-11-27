@@ -15,9 +15,6 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@prisma/orm-family-mongo": "workspace:8.0.0-rc.25",
-    "@prisma/orm-framework": "workspace:8.0.0-rc.25",
-    "@prisma/orm-toolchain": "workspace:8.0.0-rc.25",
     "arktype": "catalog:",
     "bson": "catalog:",
     "temporal-spec": "1.0.1"
@@ -26,6 +23,9 @@
     "@internal/adapter-mongo": "workspace:8.0.0-rc.25",
     "@internal/driver-mongo": "workspace:8.0.0-rc.25",
     "@internal/target-mongo": "workspace:8.0.0-rc.25",
+    "@prisma/orm-family-mongo": "workspace:8.0.0-rc.25",
+    "@prisma/orm-framework": "workspace:8.0.0-rc.25",
+    "@prisma/orm-toolchain": "workspace:8.0.0-rc.25",
     "@repo/test-utils": "workspace:8.0.0-rc.25",
     "@repo/tsconfig": "workspace:8.0.0-rc.25",
     "@repo/tsdown": "workspace:8.0.0-rc.25",
@@ -34,6 +34,9 @@
     "vitest": "catalog:"
   },
   "peerDependencies": {
+    "@prisma/orm-family-mongo": "workspace:8.0.0-rc.25",
+    "@prisma/orm-framework": "workspace:8.0.0-rc.25",
+    "@prisma/orm-toolchain": "workspace:8.0.0-rc.25",
     "mongodb": "^7.0.0",
     "temporal-polyfill": "^1.0.8",
     "typescript": ">=5.9"

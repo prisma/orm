@@ -1,3 +1,4 @@
+import { compareCodeUnits } from '@internal/contract/hashing-utils';
 import { ifDefined } from '@internal/utils/defined';
 import { EMPTY_CONTRACT_HASH } from './constants';
 import type { MigrationEdge, MigrationGraph } from './graph';
@@ -14,8 +15,10 @@ function forwardNeighbours(graph: MigrationGraph, node: string) {
  * Used by path-finding so the resulting shortest path is stable across runs.
  */
 function sortedForwardNeighbours(graph: MigrationGraph, node: string) {
-  const edges = graph.forwardChain.get(node) ?? [];
-  return [...edges].sort(compareTieBreak).map((edge) => ({ next: edge.to, edge }));
+  return sortedNeighbors(graph.forwardChain.get(node) ?? []).map((edge) => ({
+    next: edge.to,
+    edge,
+  }));
 }
 
 /** Reverse-edge neighbours: edge `e` from `n` visits `e.from` next. */
@@ -69,19 +72,27 @@ export function reconstructGraph(packages: readonly OnDiskMigrationPackage[]): M
 // ---------------------------------------------------------------------------
 // Deterministic tie-breaking for BFS neighbour order.
 // Used by path-finders only; not a general-purpose utility.
-// Ordering: createdAt → to → migrationHash.
+// Ordering: createdAt → to → migrationHash, each by character code, so every
+// machine picks the same route whatever its locale.
 // ---------------------------------------------------------------------------
 
 function compareTieBreak(a: MigrationEdge, b: MigrationEdge): number {
-  const ca = a.createdAt.localeCompare(b.createdAt);
-  if (ca !== 0) return ca;
-  const tc = a.to.localeCompare(b.to);
-  if (tc !== 0) return tc;
-  return a.migrationHash.localeCompare(b.migrationHash);
+  return (
+    compareCodeUnits(a.createdAt, b.createdAt) ||
+    compareCodeUnits(a.to, b.to) ||
+    compareCodeUnits(a.migrationHash, b.migrationHash)
+  );
 }
 
 function sortedNeighbors(edges: readonly MigrationEdge[]): readonly MigrationEdge[] {
   return [...edges].sort(compareTieBreak);
+}
+
+function compareUsefulFirst(
+  a: { readonly useful: boolean },
+  b: { readonly useful: boolean },
+): number {
+  return Number(b.useful) - Number(a.useful);
 }
 
 /**
@@ -128,15 +139,22 @@ export function findPath(
  * path leaves at least one required invariant uncovered). When `required` is
  * empty, delegates to `findPath` so the result is byte-identical for that case.
  *
- * Algorithm: BFS over `(node, coveredSubset)` states with state-level dedup.
- * The covered subset is a `Set<string>` of invariant ids; the state's dedup
- * key is the JSON encoding of `[node, sortedCoveredIds]`, which distinguishes
- * distinct `(node, covered)` tuples for any node name or invariant id.
+ * Algorithm: BFS over `(node, coveredSubset, lastSelfEdgeRank)` states with state-level dedup.
+ * The covered subset is a `Set<string>` of invariant ids; `lastSelfEdgeRank` is the tie-break rank
+ * of the last self-edge taken since arriving at the node, -1 if none. The dedup key is the JSON
+ * encoding of `[node, sortedCoveredIds, lastSelfEdgeRank]`.
  *
- * Neighbour ordering when `required ≠ ∅`: edges covering ≥1 still-needed
- * invariant come first, with `createdAt → to → migrationHash` as the
- * secondary key. The heuristic steers BFS toward the satisfying path;
- * correctness (shortest, deterministic) does not depend on it.
+ * At a node the search takes self-edges only in ascending tie-break order, and only when they
+ * cover a still-needed invariant. It never enqueues a state that provably cannot reach the goal:
+ * its node does not reach `toHash`, or for some invariant it still lacks, it can no longer reach a
+ * migration providing the invariant on a route to the target. A self-edge the state has passed
+ * over is out of reach until the search leaves the node. Neither rule changes the returned path;
+ * ADR 208 gives the argument.
+ *
+ * Neighbour ordering: edges covering a still-needed invariant come first, then `compareTieBreak`.
+ * Whether a route is found, and that it is shortest, does not depend on this order. Which of several
+ * equally short routes is returned does, and it stays the route earlier releases returned only
+ * while `rankSelfEdges` ranks self-edges by the same `compareTieBreak`.
  */
 export function findPathWithInvariants(
   graph: MigrationGraph,
@@ -151,8 +169,27 @@ export function findPathWithInvariants(
   interface InvState {
     readonly node: string;
     readonly covered: ReadonlySet<string>;
+    readonly lastSelfEdgeRank: number;
   }
-  const stateKey = (s: InvState): string => JSON.stringify([s.node, [...s.covered].sort()]);
+  const stateKey = (s: InvState): string =>
+    JSON.stringify([s.node, [...s.covered].sort(), s.lastSelfEdgeRank]);
+
+  const reachesTarget = collectNodesReaching(graph, [toHash]);
+  const selfEdgeRankOf = rankSelfEdges(graph);
+  const reachability = collectProviderReachability(graph, required, reachesTarget, selfEdgeRankOf);
+  const requiredIds = [...required];
+  const canStillReachProvider = (inv: string, s: InvState): boolean =>
+    reachability.reachesProviderAfterLeaving.get(inv)?.has(s.node) === true ||
+    (reachability.lastSelfEdgeProviderRank.get(inv)?.get(s.node) ?? -1) > s.lastSelfEdgeRank;
+  const cannotReachGoal = (s: InvState): boolean =>
+    !reachesTarget.has(s.node) ||
+    requiredIds.some((inv) => !s.covered.has(inv) && !canStillReachProvider(inv, s));
+
+  const start: InvState = { node: fromHash, covered: new Set(), lastSelfEdgeRank: -1 };
+  if (cannotReachGoal(start)) return null;
+
+  const respectsSelfEdgeOrder = (s: InvState, edge: MigrationEdge, useful: boolean): boolean =>
+    edge.from !== edge.to || (useful && (selfEdgeRankOf.get(edge) ?? -1) > s.lastSelfEdgeRank);
 
   const neighbours = (s: InvState): Iterable<{ next: InvState; edge: MigrationEdge }> => {
     const outgoing = graph.forwardChain.get(s.node) ?? [];
@@ -168,26 +205,25 @@ export function findPathWithInvariants(
             useful = true;
           }
         }
-        return { edge, useful, nextCovered: next ?? s.covered };
+        const nextState: InvState = {
+          node: edge.to,
+          covered: next ?? s.covered,
+          lastSelfEdgeRank: selfEdgeRankOf.get(edge) ?? -1,
+        };
+        return { edge, useful, nextState };
       })
-      .sort((a, b) => {
-        if (a.useful !== b.useful) return a.useful ? -1 : 1;
-        return compareTieBreak(a.edge, b.edge);
-      })
-      .map(({ edge, nextCovered }) => ({
-        next: { node: edge.to, covered: nextCovered },
-        edge,
-      }));
+      .filter(
+        ({ edge, useful, nextState }) =>
+          respectsSelfEdgeOrder(s, edge, useful) && !cannotReachGoal(nextState),
+      )
+      .sort((a, b) => compareUsefulFirst(a, b) || compareTieBreak(a.edge, b.edge))
+      .map(({ edge, nextState }) => ({ next: nextState, edge }));
   };
 
   // Path reconstruction is consumer-side, keyed on stateKey, same shape as
   // findPath's parents map.
   const parents = new Map<string, { parentKey: string; edge: MigrationEdge }>();
-  for (const step of bfs<InvState, MigrationEdge>(
-    [{ node: fromHash, covered: new Set() }],
-    neighbours,
-    stateKey,
-  )) {
+  for (const step of bfs<InvState, MigrationEdge>([start], neighbours, stateKey)) {
     const curKey = stateKey(step.state);
     if (step.parent !== null && step.incomingEdge !== null) {
       parents.set(curKey, { parentKey: stateKey(step.parent), edge: step.incomingEdge });
@@ -210,15 +246,79 @@ export function findPathWithInvariants(
 }
 
 /**
- * Reverse-BFS from `toHash` over `reverseChain` to collect every node from
- * which `toHash` is reachable (inclusive of `toHash` itself).
+ * Reverse-BFS over `reverseChain` from `seeds` to collect every node from which some seed is
+ * reachable (inclusive of the seeds themselves).
  */
-function collectNodesReachingTarget(graph: MigrationGraph, toHash: string): Set<string> {
+function collectNodesReaching(graph: MigrationGraph, seeds: Iterable<string>): Set<string> {
   const reached = new Set<string>();
-  for (const step of bfs([toHash], (n) => reverseNeighbours(graph, n))) {
+  for (const step of bfs(seeds, (n) => reverseNeighbours(graph, n))) {
     reached.add(step.state);
   }
   return reached;
+}
+
+/**
+ * Each self-edge's position among its node's self-edges in `compareTieBreak` order, the order in
+ * which `findPathWithInvariants` explores useful neighbours.
+ */
+function rankSelfEdges(graph: MigrationGraph): ReadonlyMap<MigrationEdge, number> {
+  const ranks = new Map<MigrationEdge, number>();
+  for (const [node, edges] of graph.forwardChain) {
+    const selfEdges = sortedNeighbors(edges.filter((edge) => edge.to === node));
+    for (const [rank, edge] of selfEdges.entries()) ranks.set(edge, rank);
+  }
+  return ranks;
+}
+
+interface ProviderReachability {
+  /**
+   * Per invariant, the nodes that have a migration to a different node which either provides the
+   * invariant on a route to the target or leads to a node that can reach such a migration.
+   */
+  readonly reachesProviderAfterLeaving: ReadonlyMap<string, ReadonlySet<string>>;
+  /** Per invariant and node, the highest rank of a self-edge there that provides it. */
+  readonly lastSelfEdgeProviderRank: ReadonlyMap<string, ReadonlyMap<string, number>>;
+}
+
+function collectProviderReachability(
+  graph: MigrationGraph,
+  required: ReadonlySet<string>,
+  reachesTarget: ReadonlySet<string>,
+  selfEdgeRankOf: ReadonlyMap<MigrationEdge, number>,
+): ProviderReachability {
+  const providerSources = new Map<string, string[]>();
+  const lastSelfEdgeProviderRank = new Map<string, Map<string, number>>();
+  for (const edges of graph.forwardChain.values()) {
+    for (const edge of edges) {
+      if (!reachesTarget.has(edge.to)) continue;
+      for (const inv of edge.invariants) {
+        if (!required.has(inv)) continue;
+        const sources = providerSources.get(inv);
+        if (sources) sources.push(edge.from);
+        else providerSources.set(inv, [edge.from]);
+        const rank = selfEdgeRankOf.get(edge);
+        if (rank === undefined) continue;
+        const ranks = lastSelfEdgeProviderRank.get(inv) ?? new Map<string, number>();
+        ranks.set(edge.from, Math.max(rank, ranks.get(edge.from) ?? -1));
+        lastSelfEdgeProviderRank.set(inv, ranks);
+      }
+    }
+  }
+
+  const reachesProviderAfterLeaving = new Map<string, ReadonlySet<string>>();
+  for (const [inv, sources] of providerSources) {
+    const reachesProvider = collectNodesReaching(graph, sources);
+    const nodes = new Set<string>();
+    for (const edges of graph.forwardChain.values()) {
+      for (const edge of edges) {
+        if (edge.from === edge.to) continue;
+        const providesHere = edge.invariants.includes(inv) && reachesTarget.has(edge.to);
+        if (providesHere || reachesProvider.has(edge.to)) nodes.add(edge.from);
+      }
+    }
+    reachesProviderAfterLeaving.set(inv, nodes);
+  }
+  return { reachesProviderAfterLeaving, lastSelfEdgeProviderRank };
 }
 
 export interface PathDecision {
@@ -335,7 +435,7 @@ export function findPathWithDecision(
   // Single reverse BFS marks every node from which `toHash` is reachable.
   // Replaces a per-edge `findPath(e.to, toHash)` call inside the loop below,
   // which made the whole function O(|path| · (V + E)) instead of O(V + E).
-  const reachesTarget = collectNodesReachingTarget(graph, toHash);
+  const reachesTarget = collectNodesReaching(graph, [toHash]);
   const coveragePrefixes = requiredCoveragePrefixes(required, path);
 
   const tieBreakReasons: string[] = [];

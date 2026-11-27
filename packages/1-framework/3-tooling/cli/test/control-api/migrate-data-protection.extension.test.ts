@@ -10,7 +10,7 @@ import {
   removeProjectDirs,
 } from './migrate-data-protection.fixtures';
 
-const KEEP_EXTENSION_DATA = `This database's data protection policy forbids losing data, so these operations cannot run on it. Contract space "${AUDIT_SPACE}" belongs to an extension, so do not edit or delete its migrations; ask the extension's author for a version without the operation. To do it anyway, whoever owns the database must first change its data protection policy.`;
+const KEEP_EXTENSION_DATA = `This database's data protection policy forbids losing data, so these operations cannot run on it. Contract space "${AUDIT_SPACE}" belongs to an extension, so do not edit or delete its migrations; ask the extension's author for a version without the operation.`;
 
 afterEach(removeProjectDirs);
 

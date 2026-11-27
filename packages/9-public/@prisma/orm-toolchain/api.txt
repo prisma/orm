@@ -175,7 +175,7 @@
 (not exported) type ConsentVerb = 'allow' | 'delete'
 (not exported) type ContractEmitDependencies = { readonly emit: typeof emit; }
 (not exported) type CreateControlClient = (options: ControlClientOptions) => ControlClient
-(not exported) type DataProtectionSetting = keyof DatabasePolicies['dataProtection']
+(not exported) type DataProtectionKey = keyof DatabasePolicies['dataProtection']
 (not exported) type DatabasePosition = { readonly kind: 'contract'; readonly hash: string; } | { readonly kind: 'unknown'; readonly reason: string; } | { readonly kind: 'unmarked'; }
 (not exported) type FindPathOutcome = { readonly kind: 'ok'; readonly decision: PathDecision; } | { readonly kind: 'unreachable'; } | { readonly kind: 'unsatisfiable'; readonly structuralPath: readonly MigrationEdge[]; readonly missing: readonly string[]; }
 (not exported) type MigrateResult = Result<MigrateSuccess, CliStructuredError>
@@ -495,7 +495,7 @@
 ./cli/control-api: interface DbUpdateSuccess, readonly optional property migrationPlan?: MigrationPlanArguments
 ./cli/control-api: interface DbUpdateSuccess, readonly optional property namespaces?: MigrationPlanNamespaces
 ./cli/control-api: interface DbUpdateSuccess, readonly optional property perSpace?: ReadonlyArray<PerSpaceExecutionEntry>
-./cli/control-api: interface DbUpdateSuccess, readonly optional property permitted?: readonly DataProtectionSetting[]
+./cli/control-api: interface DbUpdateSuccess, readonly optional property permitted?: readonly DataProtectionKey[]
 ./cli/control-api: interface DbUpdateSuccess, readonly required property appliedStatements: readonly AppliedStatementReport[]
 ./cli/control-api: interface DbUpdateSuccess, readonly required property destination: { readonly storageHash: string; readonly profileHash?: string; }
 ./cli/control-api: interface DbUpdateSuccess, readonly required property mode: 'apply' | 'plan'
@@ -750,7 +750,7 @@
 ./cli/init-contribution: interface ServerRequirement, readonly required property checkCommand: string
 ./cli/init-contribution: interface ServerRequirement, readonly required property minVersion: string
 ./cli/init-contribution: type InitProbeResult = { readonly kind: 'driver-failed'; readonly driver: string; readonly cause: string; } | { readonly kind: 'driver-missing'; readonly driver: string; readonly cause: string; } | { readonly kind: 'server-version'; readonly serverVersion: string; } | { readonly kind: 'version-unreadable'; readonly detail: string; }
-./cli/init-output: const InitOutputSchema: ObjectType<{ ok: true; target: string; package: string; authoring: "prisma7" | "psl" | "typescript"; schemaPath: string; filesWritten: string[]; filesDeleted: string[]; filesRenamed: { from: string; to: string; }[]; packagesInstalled: { status: "failed" | "installed" | "skipped"; deps: string[]; devDeps: string[]; }; contractEmitted: boolean; prisma7: null | { schemaPath: string; configRenamedTo: null | string; scriptsRewritten: string[]; packagesMoved: string[]; }; nextSteps: string[]; warnings: string[]; }, {}>
+./cli/init-output: const InitOutputSchema: ObjectType<{ ok: true; target: string; package: string; authoring: "prisma7" | "psl" | "typescript"; schemaPath: string; filesWritten: string[]; filesDeleted: string[]; filesRenamed: { from: string; to: string; }[]; packagesInstalled: { status: "failed" | "installed" | "skipped"; deps: string[]; devDeps: string[]; requiredPeers: { name: string; version: string; outcome: "already-listed" | "installed" | "left-at-another-version" | "to-install"; }[]; }; contractEmitted: boolean; prisma7: null | { schemaPath: string; configRenamedTo: null | string; scriptsRewritten: string[]; packagesMoved: string[]; }; nextSteps: string[]; warnings: string[]; }, {}>
 ./cli/init-output: type InitOutput = typeof InitOutputSchema.infer
 ./cli/migration-cli: class MigrationCLI
 ./cli/migration-cli: class MigrationCLI, static required method run(importMetaUrl: string, MigrationClass: MigrationConstructor, options?: { readonly argv?: readonly string[]; readonly stdout?: MigrationCliWritable; readonly stderr?: MigrationCliWritable; }): Promise<number>

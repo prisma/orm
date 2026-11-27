@@ -4,6 +4,7 @@ import type { Diagnostic, NextAction } from '@prisma/cli-engine/protocol';
 import { CliStructuredError, notOk, ok } from '@prisma/cli-engine/protocol';
 import { type } from 'arktype';
 import { buildCatalogWarnings } from '../commands/init/catalog-warnings';
+import { quoteSpec } from '../commands/init/detect-package-manager';
 import { errorInitProbeFailed } from '../commands/init/errors';
 import {
   buildNextSteps,
@@ -30,13 +31,23 @@ import {
   type ResolvedInitInputs,
   resolveInitInputs,
 } from './init-inputs';
-import { engineDevDependencySpec, installProjectDependencies } from './init-packages';
+import {
+  ENGINE_PACKAGE,
+  engineDevDependencySpec,
+  installProjectDependencies,
+} from './init-packages';
 import { createPrisma7SourceCheck } from './init-prisma7-check';
+import { requiredPeerSpecifier, requiredPeersForSetup } from './init-required-peers';
 import { resolveScaffoldPackageManager, scaffoldProject } from './init-scaffold';
 import { createTargetPackagePreparation } from './init-target-package';
 import { normalizeError } from './normalize-error';
 import { type ImportFromProject, importFromProject } from './project-modules';
-import { type LookUpRegistryKeywords, lookUpRegistryKeywords } from './registry-keywords';
+import {
+  type LookUpRegistryKeywords,
+  type LookUpRegistryPeers,
+  lookUpRegistryKeywords,
+  lookUpRegistryPeers,
+} from './registry-keywords';
 
 /** Each of these is a finding on a completed run, not an error. */
 const INIT_EXIT_CODES = {
@@ -85,6 +96,7 @@ export interface InitCommandDependencies {
   readonly emitScaffoldedContract: typeof emitScaffoldedContract;
   readonly importFromProject: ImportFromProject;
   readonly lookUpRegistryKeywords: LookUpRegistryKeywords;
+  readonly lookUpRegistryPeers: LookUpRegistryPeers;
 }
 
 export const createInitCommand = (injected: InitCommandDependencies) =>
@@ -121,7 +133,7 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
         // accepted are matched in the handler, where a rejection can name
         // every allowed value.
         target: flag.string({
-          brief: `Database target: ${TARGET_SHORT_NAMES.join(' or ')}, or the name of a target package`,
+          brief: `Database: ${TARGET_SHORT_NAMES.join(' or ')}, or the name of the package to use for it`,
           placeholder: TARGET_FLAG_PLACEHOLDER,
         }),
         authoring: flag.string({
@@ -141,10 +153,10 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
         strictProbe: flag.boolean({ brief: 'Treat a failed --probe-db as fatal' }),
         skipInstall: flag.boolean({
           brief:
-            'Skip dependency installation and contract emission; the target package must already be installed',
+            'Skip dependency installation and contract emission; the package for the database must already be installed',
         }),
         keepPreviousFacade: flag.boolean({
-          brief: 'Keep the previous target package in package.json when switching targets',
+          brief: 'Keep the previous database package in package.json when switching databases',
         }),
         fromPrisma7Schema: flag.string({
           brief: 'Use an existing Prisma 7 schema.prisma as the contract source',
@@ -184,6 +196,13 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
           }),
           warn,
           packageManager,
+          requiredPeersFor: requiredPeersForSetup({
+            cwd: ctx.cwd,
+            installedElsewhere: new Set([ENGINE_PACKAGE]),
+            signal: ctx.signal,
+            readPublished: (name, spec, signal) =>
+              injected.lookUpRegistryPeers(name, spec, { env: ctx.env, signal }),
+          }),
         });
       } catch (error) {
         if (!(error instanceof InitInstallFailedBeforeWriting)) {
@@ -198,7 +217,7 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
           filesWritten: [],
           filesDeleted: [],
           filesRenamed: [],
-          packagesInstalled: { status: 'failed', deps: [], devDeps: [] },
+          packagesInstalled: { status: 'failed', deps: [], devDeps: [], requiredPeers: [] },
           contractEmitted: false,
           prisma7:
             error.authoring === 'prisma7'
@@ -245,10 +264,22 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
       // A client the project never declared, or one it links through a
       // workspace or catalog, is left alone: only a declared major below 7 moves.
       const moveClient = movePackages !== null && clientMajor !== undefined && clientMajor < 7;
+      const peers = inputs.requiredPeers.packages.filter(
+        (peer) => peer.outcome !== 'left-at-another-version',
+      );
+      const ormPeers = peers.filter((peer) => peer.name.startsWith('@prisma/orm-'));
+      const otherPeers = peers.filter((peer) => !peer.name.startsWith('@prisma/orm-'));
+      const drivers = inputs.contribution.peerPackages.filter(
+        (name) => !inputs.requiredPeers.packages.some((peer) => peer.name === name),
+      );
       const deps = [
-        inputs.target.packageName,
+        inputs.requiredPeers.facade,
+        ...ormPeers.map(requiredPeerSpecifier),
         'dotenv',
-        ...inputs.contribution.peerPackages,
+        ...drivers,
+        ...otherPeers.map((peer) =>
+          peer.outcome === 'already-listed' ? peer.name : requiredPeerSpecifier(peer),
+        ),
         ...(moveClient ? ['@prisma/client@7'] : []),
       ];
       const depsToInstall = deps.filter((dep) => !inputs.preinstalled.includes(dep));
@@ -296,6 +327,11 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
             status: packagesInstalled,
             deps: installed ? deps : [...inputs.preinstalled],
             devDeps: installed ? devDeps : [],
+            requiredPeers: inputs.requiredPeers.packages.map(({ name, line, outcome }) => ({
+              name,
+              version: line,
+              outcome,
+            })),
           },
           contractEmitted,
           prisma7: adoptsPrisma7
@@ -368,9 +404,9 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
             warn(warning);
           }
         }
-        const engineSpec = engineDevDependencySpec(ctx.cwd);
+        const secondDevDeps = [engineDevDependencySpec(ctx.cwd)];
         const engineInstall = await ctx.packages.install({
-          packages: [engineSpec],
+          packages: secondDevDeps,
           dev: true,
           cwd: ctx.cwd,
         });
@@ -379,7 +415,7 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
           findings.push(installFailedFinding(engineInstall.failure, scaffold.filesWritten));
           return settle(4);
         }
-        devDeps.push(engineSpec);
+        devDeps.push(...secondDevDeps);
         packagesInstalled = 'installed';
 
         const emitStep = 'Emit the contract';
@@ -396,7 +432,7 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
       } else {
         extraActions.push(
           chooseAction(
-            `Install the project dependencies with your package manager: ${deps.join(', ')} (and ${devDeps.join(', ')} plus @prisma/cli-engine at the version prisma declares as its dependency, as development dependencies)`,
+            `Install the project dependencies with your package manager: ${deps.map(quoteSpec).join(', ')} (and ${devDeps.map(quoteSpec).join(', ')} plus @prisma/cli-engine at the version prisma declares as its dependency, as development dependencies)`,
           ),
         );
       }
@@ -430,4 +466,5 @@ export const initCommand = createInitCommand({
   emitScaffoldedContract,
   importFromProject,
   lookUpRegistryKeywords,
+  lookUpRegistryPeers,
 });
