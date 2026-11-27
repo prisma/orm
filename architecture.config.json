@@ -823,30 +823,6 @@
       "plane": "shared"
     },
     {
-      "glob": "packages/3-targets/postgres/9-facade/src/exports/internal-options.ts",
-      "domain": "extensions",
-      "layer": "adapters",
-      "plane": "runtime"
-    },
-    {
-      "glob": "packages/3-targets/postgres/9-facade/src/exports/internal-transaction-members.ts",
-      "domain": "extensions",
-      "layer": "adapters",
-      "plane": "runtime"
-    },
-    {
-      "glob": "packages/3-targets/postgres/9-facade/src/exports/internal-validate-contract.ts",
-      "domain": "extensions",
-      "layer": "adapters",
-      "plane": "runtime"
-    },
-    {
-      "glob": "packages/3-targets/postgres/9-facade/src/exports/internal-static-context.ts",
-      "domain": "extensions",
-      "layer": "adapters",
-      "plane": "runtime"
-    },
-    {
       "glob": "packages/3-targets/postgres/9-facade/src/exports/contract-types.ts",
       "domain": "extensions",
       "layer": "adapters",

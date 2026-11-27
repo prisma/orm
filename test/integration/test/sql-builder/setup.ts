@@ -3,7 +3,7 @@ import postgresAdapter from '@internal/adapter-postgres/runtime';
 import postgresDriver from '@internal/driver-postgres/runtime';
 import pgvector from '@internal/extension-pgvector/runtime';
 import { instantiateExecutionStack } from '@internal/framework-components/execution';
-import { PostgresRuntimeImpl } from '@internal/postgres/runtime';
+import { Ea_PostgresRuntimeImpl } from '@internal/postgres/runtime';
 import { sql } from '@internal/sql-builder/runtime';
 import type { Adapter, AnyQueryAst, LoweredStatement } from '@internal/sql-relational-core/ast';
 import type { SqlQueryPlan } from '@internal/sql-relational-core/plan';
@@ -151,7 +151,7 @@ export function setupIntegrationTest() {
     >(stackInstance.adapter);
     await driver.connect({ kind: 'pgClient', client, ownedByDriver: false });
 
-    runtime = new PostgresRuntimeImpl({
+    runtime = new Ea_PostgresRuntimeImpl({
       closeRefusal: undefined,
       context,
       adapter: stackInstance.adapter,

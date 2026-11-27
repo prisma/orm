@@ -6,7 +6,7 @@ import type {
 } from '@internal/driver-postgres/runtime';
 import postgresDriver from '@internal/driver-postgres/runtime';
 import { instantiateExecutionStack } from '@internal/framework-components/execution';
-import { PostgresRuntimeImpl } from '@internal/postgres/runtime';
+import { Ea_PostgresRuntimeImpl } from '@internal/postgres/runtime';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import type {
   Log,
@@ -80,7 +80,7 @@ export async function createTestRuntime(
     throw error;
   }
 
-  return new PostgresRuntimeImpl({
+  return new Ea_PostgresRuntimeImpl({
     closeRefusal: undefined,
     context,
     adapter: stackInstance.adapter,

@@ -6,7 +6,7 @@ import {
   instantiateExecutionStack,
   type RuntimeDriverInstance,
 } from '@internal/framework-components/execution';
-import { PostgresRuntimeImpl } from '@internal/postgres/runtime';
+import { Ea_PostgresRuntimeImpl } from '@internal/postgres/runtime';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import {
   createExecutionContext,
@@ -154,7 +154,7 @@ export function useMiddlewareCacheDatabase(): MiddlewareCacheDatabase {
   });
 
   function buildRuntime(middleware: SqlMiddleware[]): Runtime {
-    return new PostgresRuntimeImpl({
+    return new Ea_PostgresRuntimeImpl({
       context,
       adapter: stackInstance.adapter,
       driver,

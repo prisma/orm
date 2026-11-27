@@ -3,7 +3,7 @@ import postgresDriver from '@internal/driver-postgres/runtime';
 import { MongoContractSerializer } from '@internal/family-mongo/ir';
 import { instantiateExecutionStack } from '@internal/framework-components/execution';
 import { mongoOrm } from '@internal/mongo-orm';
-import { PostgresRuntimeImpl } from '@internal/postgres/runtime';
+import { Ea_PostgresRuntimeImpl } from '@internal/postgres/runtime';
 import { orm as sqlOrm } from '@internal/sql-orm-client';
 import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
 import postgresTarget from '@internal/target-postgres/runtime';
@@ -144,7 +144,7 @@ describe('value objects e2e: SQL → real Postgres → typed round-trip', () => 
           if (!driver) throw new Error('Driver missing');
           await driver.connect({ kind: 'pgClient', client, ownedByDriver: false });
 
-          const runtime = new PostgresRuntimeImpl({
+          const runtime = new Ea_PostgresRuntimeImpl({
             closeRefusal: undefined,
             context,
             adapter: stackInstance.adapter,

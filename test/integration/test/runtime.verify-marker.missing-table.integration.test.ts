@@ -2,7 +2,7 @@ import postgresAdapter from '@internal/adapter-postgres/runtime';
 import postgresDriver from '@internal/driver-postgres/runtime';
 import pgvector from '@internal/extension-pgvector/runtime';
 import { instantiateExecutionStack } from '@internal/framework-components/execution';
-import { PostgresRuntimeImpl } from '@internal/postgres/runtime';
+import { Ea_PostgresRuntimeImpl } from '@internal/postgres/runtime';
 import { sql } from '@internal/sql-builder/runtime';
 import type { Log } from '@internal/sql-runtime';
 import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
@@ -73,7 +73,7 @@ describe('runtime verify-marker: missing marker table', {
     const client = new Client({ connectionString });
     await driver.connect({ kind: 'pgClient', client, ownedByDriver: true });
 
-    const runtime = new PostgresRuntimeImpl({
+    const runtime = new Ea_PostgresRuntimeImpl({
       closeRefusal: undefined,
       context,
       adapter: stackInstance.adapter,

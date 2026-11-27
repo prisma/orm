@@ -7,7 +7,7 @@ import {
   instantiateExecutionStack,
   type RuntimeDriverInstance,
 } from '@internal/framework-components/execution';
-import { PostgresRuntimeImpl } from '@internal/postgres/runtime';
+import { Ea_PostgresRuntimeImpl } from '@internal/postgres/runtime';
 import { createRawSql } from '@internal/sql-relational-core/expression';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import {
@@ -104,7 +104,7 @@ describe('integration: prepared whole-query raw statements', {
     driver = resolvedDriver as SqlRuntimeDriverInstance<'postgres'>;
     await driver.connect({ kind: 'pgClient', client, ownedByDriver: false });
 
-    runtime = new PostgresRuntimeImpl({
+    runtime = new Ea_PostgresRuntimeImpl({
       closeRefusal: undefined,
       context,
       adapter: stackInstance.adapter,

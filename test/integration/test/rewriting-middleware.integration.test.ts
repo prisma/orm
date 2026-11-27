@@ -6,7 +6,7 @@ import {
   instantiateExecutionStack,
   type RuntimeDriverInstance,
 } from '@internal/framework-components/execution';
-import { PostgresRuntimeImpl } from '@internal/postgres/runtime';
+import { Ea_PostgresRuntimeImpl } from '@internal/postgres/runtime';
 import { sql } from '@internal/sql-builder/runtime';
 import {
   AndExpr,
@@ -158,7 +158,7 @@ describe('integration: SQL middleware rewriting', { timeout: timeouts.databaseOp
   });
 
   function buildRuntime(middleware: SqlMiddleware[], log?: Log): Runtime {
-    return new PostgresRuntimeImpl({
+    return new Ea_PostgresRuntimeImpl({
       closeRefusal: undefined,
       context,
       adapter: stackInstance.adapter,
