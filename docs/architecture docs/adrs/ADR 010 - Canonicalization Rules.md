@@ -1,6 +1,6 @@
 # ADR 010 — Canonicalization Rules for contract.json
 
-**Revised:** 2026-07-23 — hashes are represented as bare lowercase hex; the former `sha256:` algorithm prefix was dropped before the RC format freeze (TML-2756). The prefix carried no information — the algorithm never varies per hash — and nothing in the hash names the rules that produced it, the same no-in-band-version reasoning [ADR 234](ADR%20234%20-%20Content-addressed%20wire%20names%20for%20Postgres-normalized%20objects.md) records. Examples below use the bare form.
+**Revised:** 2026-07-23 — hashes are represented as bare lowercase hex; the former `sha256:` algorithm prefix was dropped before the RC format freeze. The prefix carried no information — the algorithm never varies per hash — and nothing in the hash names the rules that produced it, the same no-in-band-version reasoning [ADR 234](ADR%20234%20-%20Content-addressed%20wire%20names%20for%20Postgres-normalized%20objects.md) records. Examples below use the bare form.
 
 Hashes cover only `targetFamily`, `target` and their own section, and the rules that compute them do not change within a major version: see [ADR 332](ADR%20332%20-%20A%20hash%20covers%20what%20a%20contract%20means%2C%20by%20rules%20that%20do%20not%20change%20within%20a%20major.md).
 
@@ -13,9 +13,9 @@ Hashes cover only `targetFamily`, `target` and their own section, and the rules 
 
 ## Decision
 
-- Define a strict canonical JSON format for `contract.json`
-- Apply canonicalization in the emitter after validation and normalization and before hashing
-- Compute `storageHash` plus `profileHash` over canonical bytes, and include `executionHash` only when execution defaults are emitted in the canonical artifact
+- Define a strict canonical form for a contract's sections and for `contract.json`
+- Compute each hash when the contract is built, from the parsed sections in canonical form, never from the bytes of a file
+- Compute `storageHash` and `profileHash` for every contract, and `executionHash` only when the contract carries execution defaults
 - Treat any divergence from these rules as an emitter bug
 - State that TS-first and PSL-first must canonicalize to the identical JSON and `storageHash` for equivalent intent
 - The canonicalization rules that hashes use do not change within a major version (ADR 332). A change to them ships only in a major release, with a way to move existing files and databases.
@@ -26,15 +26,14 @@ This project adopts a pragmatic subset inspired by RFC 8785 with additional doma
 
 ### Encoding
 
-The hash input and the written file have the same form: the key-sorted JSON, printed by `JSON.stringify` with a two-space indent.
+A hash is computed from the parsed sections, never from the bytes of a file. Its input is `targetFamily`, `target` and the section, with the section in the family's normal form, every key sorted, printed by `JSON.stringify` with a two-space indent. The indentation is part of the rule: the same JSON printed without it has a different hash.
 
-- UTF-8 without BOM
-- Newlines are `\n`
-- No trailing newline at EOF
-- Two-space indentation, one space after each `:`, as `JSON.stringify(value, null, 2)` prints it
-- Numbers, booleans, `null` and string escapes as `JSON.stringify` prints them
+Prisma writes a contract in two forms, and neither is a hash input:
 
-The indentation is part of the rule: the same JSON printed without it has a different hash.
+- **The emitted `contract.json`** is printed the same way, with its top level in the presentation order below and every other key sorted. UTF-8 without BOM, `\n` newlines, no trailing newline.
+- **A snapshot's copy**, under `migrations/snapshots/<storage hash>/`, is compact JSON with every key sorted and a trailing newline.
+
+A check of a stored contract parses the file and hashes its sections again.
 
 ### Object key ordering
 
@@ -82,7 +81,6 @@ An earlier rule had the framework drop every `false`, `[]` and `{}` unless a pat
 - Capability requirement keys live under `capabilities.<key>`
 - Use shared `capabilities.sql.*` keys for family-wide SQL features, and use target brand keys only for target-specific capabilities
 - Keys within extensions follow the same lexicographic ordering
-- Fields that do not alter logical meaning are included in profileHash only per ADR 004
 
 ### Meta (tooling-only; excluded from hashes)
 
@@ -106,7 +104,7 @@ An earlier rule had the framework drop every `false`, `[]` and `{}` unless a pat
 ## Consumer responsibilities
 
 - Treat `contract.json` as immutable content-addressed data
-- Never reorder or reformat when storing or transmitting
+- Do not edit a stored contract by hand
 - Use `storageHash` for applicability checks and `profileHash` for drift checks
 
 ## Example
@@ -133,14 +131,14 @@ The input of a storage hash, as it is hashed:
 ## Alternatives considered
 
 - **RFC 8785 strict conformance without domain rules**: Insufficient for our defaults and naming requirements
-- **Compact JSON with no whitespace**: what an earlier draft of this record described. The file is written indented so that it can be read and diffed, and the hash input uses the same form so that there is one
+- **Compact JSON with no whitespace as the hash input**: what an earlier draft of this record described. The emitted file is indented so that it can be read and diffed, and the hash input is printed the same way
 - **Protobuf or CBOR canonical formats**: Tighter encoding but worse DX and harder ecosystem interoperability
 
 ## Consequences
 
 ### Positive
 
-- Byte-identical artifacts across OSes and authoring modes
+- Identical artifacts across authoring modes
 - Stable `storageHash` and `profileHash` for CI and PPg
 - Cleaner diffs and lower review noise
 - Deterministic planner inputs and fewer spurious changes
@@ -154,12 +152,9 @@ The input of a storage hash, as it is hashed:
 
 - Golden tests for representative schemas, including edge cases of names, defaults, and extensions
 - Round-trip parse → canonicalize → hash → parse checks
-- Cross-platform CI jobs compare emitted bytes on Linux, macOS, and Windows
-- Contract linter rule to detect non-canonical files committed by mistake
 
 ## Backwards compatibility
 
-- Older contracts without canonicalization are re-emitted on first emit and pick up hashes accordingly
 - The rules do not change within a major version (ADR 332). The one change made before `8.0.0` was handled by the upgrade instructions of that release.
 
 ## Open questions
@@ -170,6 +165,6 @@ The input of a storage hash, as it is hashed:
 
 ## Decision record
 
-- Adopt strict canonicalization rules for `contract.json` and compute all hashes over canonical bytes
-- Emitter enforces and verifies determinism, consumers treat artifacts as immutable data
+- Adopt strict canonicalization rules for a contract's sections and compute every hash from them
+- The emitter refuses to write a storage section that does not hash to the contract's storage hash; consumers treat artifacts as immutable data
 - Domain-specific rules align with our hashing split and deterministic naming to keep artifacts stable and useful
