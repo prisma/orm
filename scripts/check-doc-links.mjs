@@ -19,10 +19,10 @@
  * Links to https://github.com/prisma/orm/(blob|tree)/main/ are checked as repository paths. Other
  * absolute URLs, links pinned to a tag or commit, `...` and `{{placeholder}}` are skipped.
  *
- * Known differences from GitHub's renderer: a code span that wraps lines is not recognised, a
- * list item's own indented code block is read as text, links inside a `<pre>` block are read, an
- * unquoted `href=x` is not read, an `href=` inside another attribute's value is read, and `id`
- * attributes on elements other than `<a>` are not anchors.
+ * Known differences from GitHub's renderer: a code span that wraps lines is not recognised, an
+ * indented code block inside a list item or a blockquote is read as text, links inside a `<pre>`
+ * block are read, an unquoted `href=x` is not read, an `href=` inside another attribute's value
+ * is read, and `id` attributes on elements other than `<a>` are not anchors.
  */
 
 import { execFileSync } from 'node:child_process';
@@ -40,7 +40,7 @@ const MARKDOWN_EXTENSION = /\.mdc?$/;
 const FENCE = /^\s*(`{3,}|~{3,})/;
 const LIST_ITEM = /^\s*([-*+]|\d+[.)])\s/;
 const INDENTED = /^( {4}|\t)/;
-const BLOCKQUOTE = /^ {0,3}(>\s?)+/;
+const BLOCKQUOTE = /^(?: {0,3}>\s?)+/;
 const BLOCK_START = /^(?: {0,3}>\s?)* {0,3}$/;
 const DEFINITION = /^ {0,3}\[(?!\^)(?:[^\]\\]|\\.)+\]:\s*(?:<([^>\n]*)>|(\S+))/;
 const HTML_LINK = /<(?:a|img|source)\b[^>]*?\s(?:href|src)\s*=\s*["']([^"']*)["']/gi;

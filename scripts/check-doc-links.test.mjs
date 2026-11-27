@@ -381,6 +381,17 @@ describe('collectAnchors', () => {
     );
   });
 
+  it('counts nested quote markers written with spaces between them', () => {
+    deepStrictEqual(
+      [
+        '>   > ```\n>   > [example](missing.md)\n>   > ```\n[a](a.md)',
+        '>> ```\n>   > [example](missing.md)\n>> ```\n[b](b.md)',
+        '>> <!-- a\n>   > [example](missing.md)\n>> -->\n[c](c.md)',
+      ].map(targets),
+      [['a.md'], ['b.md'], ['c.md']],
+    );
+  });
+
   it('reads a definition in a blockquote after a quoted blank line', () => {
     deepStrictEqual(targets('> [x][r]\n>\n> [r]: missing.md'), ['missing.md']);
   });
