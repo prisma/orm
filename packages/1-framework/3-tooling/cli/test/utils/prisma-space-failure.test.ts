@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { prismaSpaceRunnerFailureError } from '../../src/utils/prisma-space-failure';
 
 const ownershipCheck =
-  'ensure the current role may rename schema "prisma_contract": run the command as the role that owns it';
+  'The role that runs this command must have the privileges of the role that owns schema "prisma_contract", because renaming a schema needs them.';
 
 function failedPrecheck(databaseUnchanged: boolean): MigrationRunnerFailure {
   return migrationRunnerFailure(
@@ -29,7 +29,7 @@ function failedPrecheck(databaseUnchanged: boolean): MigrationRunnerFailure {
 }
 
 describe('prismaSpaceRunnerFailureError', () => {
-  it("reports a failed check of the _prisma space's migration by the check's own text, without the advice for a user's migration", () => {
+  it("explains a failed check of the _prisma space's migration by the check's own text, without the runner's operation id or the advice for a user's migration", () => {
     const error = prismaSpaceRunnerFailureError(failedPrecheck(true));
 
     expect({
@@ -43,8 +43,8 @@ describe('prismaSpaceRunnerFailureError', () => {
       code: 'MIGRATION.PRECHECK_FAILED',
       message:
         'The records Prisma keeps for itself in this database could not be brought up to date',
-      why: failedPrecheck(true).why,
-      fix: `The database is unchanged. Prisma brings the records it keeps for itself up to date before anything else, and stopped at the check above. The upgrade instructions at ${APP_UPGRADE_GUIDES_URL} say what to do when one of these checks fails; follow them, then run the command again.`,
+      why: ownershipCheck,
+      fix: `The database is unchanged. Prisma brings the records it keeps for itself up to date before anything else, and stopped because this database does not meet the requirement above. Do what it says, or follow the upgrade instructions at ${APP_UPGRADE_GUIDES_URL}, then run the command again.`,
       nextActions: [
         { kind: 'open-url', label: 'Follow the upgrade instructions', url: APP_UPGRADE_GUIDES_URL },
       ],
@@ -54,7 +54,7 @@ describe('prismaSpaceRunnerFailureError', () => {
 
   it('says what stays applied when the target could not roll the failure back', () => {
     expect(prismaSpaceRunnerFailureError(failedPrecheck(false)).fix).toBe(
-      `The operations that ran before the failure stay applied. Prisma brings the records it keeps for itself up to date before anything else, and stopped at the check above. The upgrade instructions at ${APP_UPGRADE_GUIDES_URL} say what to do when one of these checks fails; follow them, then run the command again.`,
+      `The operations that ran before the failure stay applied. Prisma brings the records it keeps for itself up to date before anything else, and stopped because this database does not meet the requirement above. Do what it says, or follow the upgrade instructions at ${APP_UPGRADE_GUIDES_URL}, then run the command again.`,
     );
   });
 
