@@ -1,0 +1,29 @@
+[
+  {
+    "path": "./cli/control-api",
+    "export": "executeMigrateShowPlan",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "48136a521f8b1c82",
+    "reason": "The control client brings the Prisma space up to date with a new required method (prisma/orm#31234)."
+  },
+  {
+    "path": "./migration-tools",
+    "export": "ResolveRecordedPathInputs",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "92993736b5146aba",
+    "reason": "Its `space` now needs only a space's contract, migration graph, head reference and migrations, so the Prisma space, which has no folder on disk, can be passed (prisma/orm#31234)."
+  },
+  {
+    "path": "./migration-tools/aggregate",
+    "export": "ResolveRecordedPathInputs",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "92993736b5146aba",
+    "reason": "Its `space` now needs only a space's contract, migration graph, head reference and migrations, so the Prisma space, which has no folder on disk, can be passed (prisma/orm#31234)."
+  }
+]

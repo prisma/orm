@@ -1,0 +1,128 @@
+[
+  {
+    "path": "./adapter",
+    "export": "PostgresControlAdapter",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "5e68be1913435492",
+    "reason": "It names `_prisma.marker`, so its type is no longer the old literal (prisma/orm#31234)."
+  },
+  {
+    "path": "./adapter",
+    "export": "PostgresControlAdapter",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "5e68be1913435492",
+    "reason": "It names `_prisma.marker`, so its type is no longer the old literal (prisma/orm#31234)."
+  },
+  {
+    "path": "./adapter",
+    "export": "SqlRuntimeAdapter",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "b5a9852fd03d998f",
+    "reason": "A marker read can now report that Prisma's own tables are in a release candidate's schema (prisma/orm#31234)."
+  },
+  {
+    "path": "./adapter",
+    "export": "createPostgresAdapter",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "3c939c108eb548af",
+    "reason": "A marker read can now report that Prisma's own tables are in a release candidate's schema (prisma/orm#31234)."
+  },
+  {
+    "path": "./adapter/adapter",
+    "export": "createPostgresAdapter",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "3c939c108eb548af",
+    "reason": "A marker read can now report that Prisma's own tables are in a release candidate's schema (prisma/orm#31234)."
+  },
+  {
+    "path": "./adapter/control",
+    "export": "PostgresControlAdapter",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "5e68be1913435492",
+    "reason": "It names `_prisma.marker`, so its type is no longer the old literal (prisma/orm#31234)."
+  },
+  {
+    "path": "./adapter/control",
+    "export": "PostgresControlAdapter",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "5e68be1913435492",
+    "reason": "It names `_prisma.marker`, so its type is no longer the old literal (prisma/orm#31234)."
+  },
+  {
+    "path": "./adapter/runtime",
+    "export": "SqlRuntimeAdapter",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "b5a9852fd03d998f",
+    "reason": "A marker read can now report that Prisma's own tables are in a release candidate's schema (prisma/orm#31234)."
+  },
+  {
+    "path": "./adapter/runtime",
+    "export": "default",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "5022763d73c95783",
+    "reason": "A marker read can now report that Prisma's own tables are in a release candidate's schema (prisma/orm#31234)."
+  },
+  {
+    "path": "./target",
+    "export": "buildControlTableBootstrapQueries",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "e3b0c44298fc1c14",
+    "reason": "Prisma's own tables are created by the Prisma space's migration, not by these statements (prisma/orm#31234)."
+  },
+  {
+    "path": "./target",
+    "export": "buildSignMarkerBootstrapQueries",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "e3b0c44298fc1c14",
+    "reason": "Prisma's own tables are created by the Prisma space's migration, not by these statements (prisma/orm#31234)."
+  },
+  {
+    "path": "./target/contract-free",
+    "export": "buildControlTableBootstrapQueries",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "e3b0c44298fc1c14",
+    "reason": "Prisma's own tables are created by the Prisma space's migration, not by these statements (prisma/orm#31234)."
+  },
+  {
+    "path": "./target/contract-free",
+    "export": "buildSignMarkerBootstrapQueries",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "e3b0c44298fc1c14",
+    "reason": "Prisma's own tables are created by the Prisma space's migration, not by these statements (prisma/orm#31234)."
+  },
+  {
+    "path": "./target/control",
+    "export": "default",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "de7236849976d2a0",
+    "reason": "The runner can now refuse because Prisma's own tables do not exist yet (prisma/orm#31234)."
+  }
+]

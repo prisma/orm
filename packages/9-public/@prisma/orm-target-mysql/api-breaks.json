@@ -1,0 +1,110 @@
+[
+  {
+    "path": "./adapter",
+    "export": "MysqlRuntimeAdapterDescriptor",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "945de355ad9a5113",
+    "reason": "A marker read can now report that Prisma's own tables are in a release candidate's schema (prisma/orm#31234)."
+  },
+  {
+    "path": "./adapter",
+    "export": "MysqlRuntimeAdapterInstance",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "ba75e23d47b39c57",
+    "reason": "A marker read can now report that Prisma's own tables are in a release candidate's schema (prisma/orm#31234)."
+  },
+  {
+    "path": "./adapter",
+    "export": "createMysqlRuntimeAdapterDescriptor",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "47a93d347de77f3e",
+    "reason": "A marker read can now report that Prisma's own tables are in a release candidate's schema (prisma/orm#31234)."
+  },
+  {
+    "path": "./adapter/runtime",
+    "export": "MysqlRuntimeAdapterDescriptor",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "945de355ad9a5113",
+    "reason": "A marker read can now report that Prisma's own tables are in a release candidate's schema (prisma/orm#31234)."
+  },
+  {
+    "path": "./adapter/runtime",
+    "export": "MysqlRuntimeAdapterInstance",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "ba75e23d47b39c57",
+    "reason": "A marker read can now report that Prisma's own tables are in a release candidate's schema (prisma/orm#31234)."
+  },
+  {
+    "path": "./adapter/runtime",
+    "export": "createMysqlRuntimeAdapterDescriptor",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "47a93d347de77f3e",
+    "reason": "A marker read can now report that Prisma's own tables are in a release candidate's schema (prisma/orm#31234)."
+  },
+  {
+    "path": "./adapter/runtime",
+    "export": "default",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "4c81cddc972fc276",
+    "reason": "A marker read can now report that Prisma's own tables are in a release candidate's schema (prisma/orm#31234)."
+  },
+  {
+    "path": "./target",
+    "export": "createMysqlControlTargetDescriptor",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "8e6270864a3cbcfb",
+    "reason": "The runner can now refuse because Prisma's own tables do not exist yet (prisma/orm#31234)."
+  },
+  {
+    "path": "./target",
+    "export": "createMysqlMigrationRunner",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "77594cdd46ba987f",
+    "reason": "The runner can now refuse because Prisma's own tables do not exist yet (prisma/orm#31234)."
+  },
+  {
+    "path": "./target/control",
+    "export": "createMysqlControlTargetDescriptor",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "8e6270864a3cbcfb",
+    "reason": "The runner can now refuse because Prisma's own tables do not exist yet (prisma/orm#31234)."
+  },
+  {
+    "path": "./target/control",
+    "export": "default",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "51dfd2677f7d9ef1",
+    "reason": "The runner can now refuse because Prisma's own tables do not exist yet (prisma/orm#31234)."
+  },
+  {
+    "path": "./target/migration",
+    "export": "createMysqlMigrationRunner",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "77594cdd46ba987f",
+    "reason": "The runner can now refuse because Prisma's own tables do not exist yet (prisma/orm#31234)."
+  }
+]

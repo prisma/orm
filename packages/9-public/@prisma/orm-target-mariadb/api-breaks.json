@@ -1,0 +1,20 @@
+[
+  {
+    "path": "./adapter/runtime",
+    "export": "default",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "a7e2459d336c529b",
+    "reason": "A marker read can now report that Prisma's own tables are in a release candidate's schema (prisma/orm#31234)."
+  },
+  {
+    "path": "./target/control",
+    "export": "default",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "48e253ed249d248f",
+    "reason": "The runner can now refuse because Prisma's own tables do not exist yet (prisma/orm#31234)."
+  }
+]

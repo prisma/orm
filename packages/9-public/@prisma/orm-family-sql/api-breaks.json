@@ -52,5 +52,248 @@
     "lastRelease": "8.0.0-rc.25",
     "fingerprint": "709fba59855a0acd",
     "reason": "A column name that several joined tables share must now name its table (prisma/orm#31150)."
+  },
+  {
+    "path": "./family",
+    "export": "SqlControlTargetDescriptor",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "b2637412f6052e44",
+    "reason": "The runner can now refuse because Prisma's own tables do not exist yet (prisma/orm#31234)."
+  },
+  {
+    "path": "./family",
+    "export": "SqlMigrationRunner",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "3e4df1f93e1a9564",
+    "reason": "The runner can now refuse because Prisma's own tables do not exist yet (prisma/orm#31234)."
+  },
+  {
+    "path": "./family",
+    "export": "SqlMigrationRunnerErrorCode",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "177565104c83d24d",
+    "reason": "The runner can now refuse because Prisma's own tables do not exist yet (prisma/orm#31234)."
+  },
+  {
+    "path": "./family",
+    "export": "SqlMigrationRunnerFailure",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "9aca6ffd6ce55ed3",
+    "reason": "The runner can now refuse because Prisma's own tables do not exist yet (prisma/orm#31234)."
+  },
+  {
+    "path": "./family",
+    "export": "SqlMigrationRunnerResult",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "9f1a0fc7b6947262",
+    "reason": "The runner can now refuse because Prisma's own tables do not exist yet (prisma/orm#31234)."
+  },
+  {
+    "path": "./family",
+    "export": "runnerFailure",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "90bf2bd3377e4c09",
+    "reason": "The runner can now refuse because Prisma's own tables do not exist yet (prisma/orm#31234)."
+  },
+  {
+    "path": "./family/control",
+    "export": "SqlControlTargetDescriptor",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "b2637412f6052e44",
+    "reason": "The runner can now refuse because Prisma's own tables do not exist yet (prisma/orm#31234)."
+  },
+  {
+    "path": "./family/control",
+    "export": "SqlMigrationRunner",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "3e4df1f93e1a9564",
+    "reason": "The runner can now refuse because Prisma's own tables do not exist yet (prisma/orm#31234)."
+  },
+  {
+    "path": "./family/control",
+    "export": "SqlMigrationRunnerErrorCode",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "177565104c83d24d",
+    "reason": "The runner can now refuse because Prisma's own tables do not exist yet (prisma/orm#31234)."
+  },
+  {
+    "path": "./family/control",
+    "export": "SqlMigrationRunnerFailure",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "9aca6ffd6ce55ed3",
+    "reason": "The runner can now refuse because Prisma's own tables do not exist yet (prisma/orm#31234)."
+  },
+  {
+    "path": "./family/control",
+    "export": "SqlMigrationRunnerResult",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "9f1a0fc7b6947262",
+    "reason": "The runner can now refuse because Prisma's own tables do not exist yet (prisma/orm#31234)."
+  },
+  {
+    "path": "./family/control",
+    "export": "runnerFailure",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "90bf2bd3377e4c09",
+    "reason": "The runner can now refuse because Prisma's own tables do not exist yet (prisma/orm#31234)."
+  },
+  {
+    "path": "./relational-core",
+    "export": "Adapter",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "a15c80e46b96b343",
+    "reason": "A marker read can now report that Prisma's own tables are in a release candidate's schema (prisma/orm#31234)."
+  },
+  {
+    "path": "./relational-core",
+    "export": "AdapterProfile",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "df3f237bb1741aec",
+    "reason": "A marker read can now report that Prisma's own tables are in a release candidate's schema (prisma/orm#31234)."
+  },
+  {
+    "path": "./relational-core",
+    "export": "MarkerReadResult",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "7d450b39d2c5f902",
+    "reason": "A marker read can now report that Prisma's own tables are in a release candidate's schema (prisma/orm#31234)."
+  },
+  {
+    "path": "./relational-core/ast",
+    "export": "Adapter",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "a15c80e46b96b343",
+    "reason": "A marker read can now report that Prisma's own tables are in a release candidate's schema (prisma/orm#31234)."
+  },
+  {
+    "path": "./relational-core/ast",
+    "export": "AdapterProfile",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "df3f237bb1741aec",
+    "reason": "A marker read can now report that Prisma's own tables are in a release candidate's schema (prisma/orm#31234)."
+  },
+  {
+    "path": "./relational-core/ast",
+    "export": "MarkerReadResult",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "7d450b39d2c5f902",
+    "reason": "A marker read can now report that Prisma's own tables are in a release candidate's schema (prisma/orm#31234)."
+  },
+  {
+    "path": "./runtime",
+    "export": "MarkerReadResult",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "7d450b39d2c5f902",
+    "reason": "A marker read can now report that Prisma's own tables are in a release candidate's schema (prisma/orm#31234)."
+  },
+  {
+    "path": "./runtime",
+    "export": "MarkerReader",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "2ae1e87119a47cd1",
+    "reason": "A marker read can now report that Prisma's own tables are in a release candidate's schema (prisma/orm#31234)."
+  },
+  {
+    "path": "./runtime",
+    "export": "RuntimeFamilyAdapter",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "c9ce980c14cb667b",
+    "reason": "A marker read can now report that Prisma's own tables are in a release candidate's schema (prisma/orm#31234)."
+  },
+  {
+    "path": "./runtime",
+    "export": "RuntimeOptions",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "3a063389cd7daab3",
+    "reason": "A marker read can now report that Prisma's own tables are in a release candidate's schema (prisma/orm#31234)."
+  },
+  {
+    "path": "./runtime",
+    "export": "SqlExecutionStack",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "2421bc3cb2da3fa5",
+    "reason": "A marker read can now report that Prisma's own tables are in a release candidate's schema (prisma/orm#31234)."
+  },
+  {
+    "path": "./runtime",
+    "export": "SqlExecutionStackWithDriver",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "a45b13e9b7594d12",
+    "reason": "A marker read can now report that Prisma's own tables are in a release candidate's schema (prisma/orm#31234)."
+  },
+  {
+    "path": "./runtime",
+    "export": "SqlRuntimeAdapterDescriptor",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "79bb0cb9e667222c",
+    "reason": "A marker read can now report that Prisma's own tables are in a release candidate's schema (prisma/orm#31234)."
+  },
+  {
+    "path": "./runtime",
+    "export": "SqlRuntimeAdapterInstance",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "5d62a916513ea58f",
+    "reason": "A marker read can now report that Prisma's own tables are in a release candidate's schema (prisma/orm#31234)."
+  },
+  {
+    "path": "./runtime",
+    "export": "createSqlExecutionStack",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "e7b998df358fdc31",
+    "reason": "A marker read can now report that Prisma's own tables are in a release candidate's schema (prisma/orm#31234)."
   }
 ]

@@ -1,0 +1,92 @@
+[
+  {
+    "path": "./adapter",
+    "export": "SqliteControlAdapter",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "9dc0aca738d7dc1a",
+    "reason": "A marker read can now report that Prisma's own tables are in a release candidate's schema (prisma/orm#31234)."
+  },
+  {
+    "path": "./adapter",
+    "export": "SqliteControlAdapter",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "9dc0aca738d7dc1a",
+    "reason": "A marker read can now report that Prisma's own tables are in a release candidate's schema (prisma/orm#31234)."
+  },
+  {
+    "path": "./adapter",
+    "export": "SqliteRuntimeAdapterInstance",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "ffad8a0291a49c2f",
+    "reason": "A marker read can now report that Prisma's own tables are in a release candidate's schema (prisma/orm#31234)."
+  },
+  {
+    "path": "./adapter",
+    "export": "createSqliteAdapter",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "e43ef0fcf9834859",
+    "reason": "A marker read can now report that Prisma's own tables are in a release candidate's schema (prisma/orm#31234)."
+  },
+  {
+    "path": "./adapter/adapter",
+    "export": "createSqliteAdapter",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "e43ef0fcf9834859",
+    "reason": "A marker read can now report that Prisma's own tables are in a release candidate's schema (prisma/orm#31234)."
+  },
+  {
+    "path": "./adapter/control",
+    "export": "SqliteControlAdapter",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "9dc0aca738d7dc1a",
+    "reason": "A marker read can now report that Prisma's own tables are in a release candidate's schema (prisma/orm#31234)."
+  },
+  {
+    "path": "./adapter/control",
+    "export": "SqliteControlAdapter",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "9dc0aca738d7dc1a",
+    "reason": "A marker read can now report that Prisma's own tables are in a release candidate's schema (prisma/orm#31234)."
+  },
+  {
+    "path": "./adapter/runtime",
+    "export": "SqliteRuntimeAdapterInstance",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "ffad8a0291a49c2f",
+    "reason": "A marker read can now report that Prisma's own tables are in a release candidate's schema (prisma/orm#31234)."
+  },
+  {
+    "path": "./adapter/runtime",
+    "export": "default",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "88fa43bb8cf91ee3",
+    "reason": "A marker read can now report that Prisma's own tables are in a release candidate's schema (prisma/orm#31234)."
+  },
+  {
+    "path": "./target/control",
+    "export": "default",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "26ba3a7b6420185b",
+    "reason": "The runner can now refuse because Prisma's own tables do not exist yet (prisma/orm#31234)."
+  }
+]
