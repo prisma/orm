@@ -138,7 +138,7 @@ function parameterizedPlaces(contract: Contract<SqlStorage>): readonly Parameter
   ];
 }
 
-/** Each place whose type parameters its codec's parameter schema refuses, as the runtime refuses them when it builds the codec. A codec the stack does not register, or one without a parameter schema, is not checked here. */
+/** Each place whose type parameters its codec's parameter schema refuses, as the runtime refuses them when it builds the codec. A codec without a parameter schema takes no parameters. A codec the stack does not register is not checked here. */
 function typeParamsProblems(
   contract: Contract<SqlStorage>,
   codecLookup: CodecLookupWithDescriptors,
@@ -146,7 +146,7 @@ function typeParamsProblems(
   return parameterizedPlaces(contract).flatMap(({ path, codecId, typeParams }) => {
     if (typeParams === undefined) return [];
     const descriptor = codecLookup.descriptorFor(codecId);
-    if (descriptor?.paramsSchema === undefined) return [];
+    if (descriptor === undefined) return [];
     try {
       validateCodecTypeParams(descriptor, {
         codecId,

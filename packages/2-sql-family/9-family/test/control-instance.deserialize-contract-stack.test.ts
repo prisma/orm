@@ -68,6 +68,12 @@ const codecDataTypes: Readonly<Record<string, AnyCodecDescriptor['dataType']>> =
   'sql/raw@1': sqlRawDataType.id,
 };
 
+const codecParams: Readonly<Record<string, AnyCodecDescriptor['paramsSchema']>> = {
+  't/varchar@1': varcharParams,
+  't/numeric@1': type({ '+': 'reject', 'precision?': 'number', 'scale?': 'number' }),
+  'sql/raw@1': type({ '+': 'reject', sql: 'string' }),
+};
+
 const codecLookup: CodecLookupWithDescriptors = {
   get: () => undefined,
   renderOutputTypeFor: () => undefined,
@@ -78,8 +84,8 @@ const codecLookup: CodecLookupWithDescriptors = {
       codecId,
       dataType,
       traits: [],
-      paramsSchema: codecId === 't/varchar@1' ? varcharParams : undefined,
-      isParameterized: codecId === 't/varchar@1',
+      paramsSchema: codecParams[codecId],
+      isParameterized: codecParams[codecId] !== undefined,
       factory: () => () => {
         throw new Error('not used');
       },
@@ -221,6 +227,33 @@ describe('deserializeContract checks each column against the stack', () => {
       );
     });
 
+    it('are refused on a column whose codec takes no parameters, as the client refuses them', () => {
+      const contract = contractWith({
+        user: table({
+          id: col('t/int4', 't/int4@1'),
+          bio: { ...col('t/text', 't/text@1'), typeParams: { zzz: 1 } } as never,
+        }),
+      });
+
+      expect(() => familyInstance('Jsonb').deserializeContract(contract)).toThrow(
+        expect.objectContaining({
+          code: 'CONTRACT.VALIDATION_FAILED',
+          message: `${columnsPath}.bio.typeParams: Invalid typeParams for codec 't/text@1': unexpected typeParams for non-parameterized codec`,
+        }),
+      );
+    });
+
+    it('are accepted empty on a column whose codec takes no parameters', () => {
+      const contract = contractWith({
+        user: table({
+          id: col('t/int4', 't/int4@1'),
+          bio: { ...col('t/text', 't/text@1'), typeParams: {} } as never,
+        }),
+      });
+
+      expect(() => familyInstance('Jsonb').deserializeContract(contract)).not.toThrow();
+    });
+
     it('are refused on a storage type when one is a key the codec does not define', () => {
       const contract = contractWith(
         { user: table({ id: col('t/int4', 't/int4@1') }) },
@@ -316,7 +349,11 @@ describe('deserializeContract checks each column against the stack', () => {
     it('is not read when the column type refuses the column parameters, which the parameters check reports', () => {
       expect(() =>
         familyInstance('Jsonb').deserializeContract(priced('1.5', { precision: 'ten', scale: 2 })),
-      ).not.toThrow();
+      ).toThrow(
+        expect.objectContaining({
+          message: `${columnsPath}.price.typeParams: Invalid typeParams for codec 't/numeric@1': precision must be a number (was a string)`,
+        }),
+      );
     });
 
     it('is accepted when it is null, which is SQL NULL', () => {
