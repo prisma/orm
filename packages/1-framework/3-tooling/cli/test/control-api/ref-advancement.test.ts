@@ -258,6 +258,31 @@ describe('preflightRefAdvancement', () => {
     }
   });
 
+  it('advises a stored snapshot the family rejects as a snapshot, not by emitting the contract', async () => {
+    const client = fakeClient(
+      notOk({
+        code: 'CONTRACT_VALIDATION_FAILED',
+        summary: 'Contract validation failed',
+        why: 'zzz must be removed',
+      }),
+    );
+
+    const result = await preflightRefAdvancement({
+      name: 'db',
+      contractJson,
+      contractJsonPath,
+      config,
+      client,
+      snapshot: { rewrittenBy: undefined },
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.failure.fix).toContain('follow the app upgrade instructions');
+      expect(result.failure.fix).not.toContain('contract emit');
+    }
+  });
+
   it('reports a contract the emitter refuses with a contract emit fix', async () => {
     const client = fakeClient(
       notOk({

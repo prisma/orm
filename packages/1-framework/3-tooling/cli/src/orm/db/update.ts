@@ -421,6 +421,13 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
       const { client, contractPath, dbConnection, migrationsDir, refsDir } = prepared.value;
       const contractJson = destination?.contractJson ?? prepared.value.contractJson;
       const snapshotContractPath = destination?.contractJsonPath ?? contractPath;
+      const destinationRewrite = (snapshot: ResolveContractRefToSnapshotSuccess) =>
+        snapshot.hash === storageHashOf(prepared.value.contractJson)
+          ? snapshotRewriteAt(
+              APP_SPACE_ID,
+              relative(process.cwd(), dirname(snapshot.contractJsonPath)),
+            )
+          : undefined;
 
       const refName = computeRefAdvancementName({
         ...ifDefined('advanceRef', args.flags.advanceRef),
@@ -434,6 +441,9 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
           contractJsonPath: snapshotContractPath,
           config: ctx.config,
           client,
+          ...(destination?.source === 'snapshot'
+            ? { snapshot: { rewrittenBy: destinationRewrite(destination) } }
+            : {}),
         });
         if (!preflight.ok) {
           return notOk(normalizeError(preflight.failure));
@@ -532,14 +542,7 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
                   ...(destination?.source === 'snapshot'
                     ? {
                         artifact: 'snapshot' as const,
-                        ...(destination.hash === storageHashOf(prepared.value.contractJson)
-                          ? {
-                              rewrittenBy: snapshotRewriteAt(
-                                APP_SPACE_ID,
-                                relative(process.cwd(), dirname(snapshotContractPath)),
-                              ),
-                            }
-                          : {}),
+                        ...ifDefined('rewrittenBy', destinationRewrite(destination)),
                       }
                     : {}),
                 },
