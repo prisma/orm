@@ -6,7 +6,7 @@ For each step, record the commands, the output as printed, and a judgement: did 
 
 ## Setup
 
-- Servers: Homebrew has PostgreSQL 15 and 17 (`/opt/homebrew/opt/postgresql@15/bin`, `/opt/homebrew/opt/postgresql@17/bin`). Create a cluster for each with `initdb` under `wip/qa/`, and start each with `pg_ctl` on its own port (for example 54315 and 54317). Stop both at the end. No PostgreSQL 14 is installed, so a server older than the supported range cannot be shown; record that.
+- Servers: Homebrew has PostgreSQL 15 and 17 (`/opt/homebrew/opt/postgresql@15/bin`, `/opt/homebrew/opt/postgresql@17/bin`). Create a cluster for each with `initdb` under `wip/qa/`, and start each with `pg_ctl` on its own port (for example 54315 and 54317). Stop both at the end. For a server older than the supported range, run the official `postgres:14-alpine` image in Docker (OrbStack), and remove that container at the end.
 - Projects: each step works in its own folder under `wip/qa/`, using the repository's built packages the way the repository's own `init` end-to-end tests do (`test/integration/test/cli.init*.e2e.test.ts` shows how). Read those tests to find the cheapest way; do not invent a packaging mechanism.
 
 ## Steps
