@@ -171,7 +171,7 @@ describe('readSqliteOperations', () => {
     expect(readSqliteOperations(written)).toEqual(written);
   });
 
-  it('reads the recording of what the SQLite planner wrote before 8.0.0-rc.20', () => {
+  it('reads the recording of what the SQLite planner wrote up to 8.0.0-rc.20', () => {
     const golden = JSON.parse(
       readFileSync(
         join(repoRoot, 'test/integration/test/planner-golden/fixtures/sqlite/planned.golden.json'),
