@@ -1,6 +1,6 @@
 # Capabilities Reference
 
-A capability is a fact that a database version or a connection provides, and that a contract requires, such as `RETURNING` or interactive transactions. The author lists the capabilities the contract requires as keys, such as `sql.returning`, and `contract.json` stores them in `contract.capabilities`, as flags grouped by namespace:
+A capability is a fact that a database version or a connection provides, and that a contract requires, such as `RETURNING` or interactive transactions. On PostgreSQL the author lists the capabilities the contract requires as keys, such as `sql.returning`; on MySQL, MariaDB and SQLite the contract takes its adapter's fixed list at emit, and a MongoDB contract lists none. `contract.json` stores them in `contract.capabilities`, as flags grouped by namespace:
 
 ```json
 {
@@ -69,7 +69,7 @@ The author writes the list of every capability the contract requires, where the 
 - A Prisma 7 schema lists them in `prisma7Schema('prisma/schema.prisma', { requiredCapabilities: [...postgres18, ...postgresDriver] })`.
 - A config that builds its contract source itself, with `prismaContract` or `prisma7Contract`, passes `capabilities: postgresContractCapabilities([...postgres18, ...postgresDriver])` to the source.
 
-The list must be present and not empty. To leave a capability out, filter it out or write the keys yourself:
+The list must be present, a list, not empty, and each entry a capability key; otherwise `CONTRACT.ARGUMENT_INVALID` says which of the four it is. To leave a capability out, filter it out or write the keys yourself:
 
 ```typescript
 requiredCapabilities: [

@@ -76,9 +76,19 @@ export const contract = defineContract(
 );
 ```
 
-Without the list, `defineContract` is a type error. A list that is missing or empty throws at run time:
+Without the list, `defineContract` is a type error, and at run time it throws:
 
-> State the capabilities your contract requires in requiredCapabilities in defineContract. The list is missing or empty.
+> State the capabilities your contract requires in requiredCapabilities in defineContract. The list is missing.
+
+An empty list throws the same message ending `The list is empty.` A capability set, the form the removed `capabilities` option took, is refused as not a list:
+
+> requiredCapabilities in defineContract is not a list. State the capabilities your contract requires as a list of capability keys.
+
+An entry that is not a capability key is refused by name, for example:
+
+> requiredCapabilities in defineContract lists "returning", which is not a capability key. A key is a namespace and a flag joined by a dot, as error messages print it.
+
+The config and `prisma7Schema` refuse the same four cases, naming where they take the list.
 
 A contract written in the Prisma schema language, whose config builds the source with `prismaContract` from `@prisma/orm-family-sql/contract-psl/provider`, passes the source its capabilities. The target, adapter and driver in the config no longer add any, so a source given no `capabilities` writes a contract that lists none. Take them from `postgresContractCapabilities` in `@prisma/orm-postgres/config`, which takes the same list. Before:
 
@@ -128,7 +138,7 @@ contract: {
 
 Without it, loading the config fails with:
 
-> State the capabilities your contract requires in requiredCapabilities beside the contract path './prisma/contract.prisma' in the config. The list is missing or empty.
+> State the capabilities your contract requires in requiredCapabilities beside the contract path './prisma/contract.prisma' in the config. The list is missing.
 
 A `.ts` contract path in that entry does not change, and the config refuses `requiredCapabilities` beside it. A Prisma 7 schema read with `prisma7Schema` takes the list in a second argument: `prisma7Schema('prisma/schema.prisma')` becomes `prisma7Schema('prisma/schema.prisma', { requiredCapabilities: [...postgres15, ...postgresDriver] })`.
 
