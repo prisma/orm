@@ -27,11 +27,14 @@ export function versionChangesReport(changes, version) {
     ...changes.map(
       ({ name, committed, planned }) => `  ${name}: committed ${committed}, planned ${planned}`,
     ),
-    `The release pull request must commit the versions set-version.ts writes: run node scripts/set-version.ts ${version} on its branch and commit the result.`,
+    'A release publishes only the versions its commit holds.',
+    `If this is a release pull request before it merges: run node scripts/set-version.ts ${version} on its branch and commit the result.`,
+    `If the release pull request has merged: open a pull request that commits the versions node scripts/set-version.ts ${version} writes, merge it, then run the Publish to npm workflow by hand from main with dist-tag=latest.`,
+    'If this branch is not a release, and this is a dry run to check the release tooling: run the dry run with dist-tag=beta, which skips this check.',
   ].join('\n');
 }
 
-function main(root, version) {
+export function checkReleaseVersions(root, version) {
   const files = execFileSync('git', ['ls-files', '--', `${PUBLISHED}/*/package.json`], {
     cwd: root,
     encoding: 'utf8',
@@ -48,7 +51,11 @@ function main(root, version) {
     committed[atHead.name] = atHead.version;
     planned[atHead.name] = JSON.parse(readFileSync(join(root, file), 'utf8')).version;
   }
-  const report = versionChangesReport(versionChanges(committed, planned), version);
+  return versionChangesReport(versionChanges(committed, planned), version);
+}
+
+function main(root, version) {
+  const report = checkReleaseVersions(root, version);
   if (report === undefined) return 0;
   console.error(report);
   return 1;
