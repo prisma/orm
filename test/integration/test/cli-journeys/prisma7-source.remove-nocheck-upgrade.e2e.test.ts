@@ -95,7 +95,8 @@ withTempDir(({ createTempDir }) => {
         );
         const refused = await runDbVerify(ctx);
         expect(refused.exitCode, `db verify before the upgrade\n${output(refused)}`).not.toBe(0);
-        expect(output(refused)).toContain('[CONTRACT.FORMAT_VERSION_MISSING]');
+        expect(output(refused)).toContain('[CONTRACT.VALIDATION_FAILED]');
+        expect(output(refused)).toContain('contracts no longer store check waivers in "noCheck"');
 
         const removeNoCheck = spawnSync(process.execPath, [appScript], {
           cwd: ctx.testDir,
