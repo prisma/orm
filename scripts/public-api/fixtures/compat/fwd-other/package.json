@@ -1,0 +1,8 @@
+{
+  "name": "fixture-fwd-other",
+  "version": "1.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./lib/index.mjs"
+  }
+}

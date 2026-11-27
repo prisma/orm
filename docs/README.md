@@ -7,6 +7,7 @@ This directory contains the primary documentation for the repository.
 - [Architecture Overview](./Architecture%20Overview.md) — high-level design and layering
 - [Getting Started](./onboarding/Getting-Started.md) — build, test, and run the demo
 - [Testing Guide](./Testing%20Guide.md) — testing philosophy and commands
+- [Public API compatibility checks](./Public%20API%20Compatibility.md) — what CI checks against the last release, and how to record a deliberate break
 
 ## Deploying
 
