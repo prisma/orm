@@ -266,11 +266,6 @@ const expectedRefusals: ReadonlyMap<string, ExpectedRefusal> = new Map<string, E
     'packages/3-targets/postgres/9-facade/test/fixtures/generated/contract.json',
     { reason: 'has no foreign key in storage', meta: { model: 'Post', field: 'author' } },
   ],
-  // Release candidate 25 emitted it with the same domain and storage as the entry above.
-  [
-    'packages/3-targets/postgres/9-facade/test/fixtures/emitted-before-capabilities-by-version/contract.json',
-    { reason: 'has no foreign key in storage', meta: { model: 'Post', field: 'author' } },
-  ],
   [
     'packages/3-extensions/sql-orm-client/test/fixtures/generated/contract.json',
     { reason: 'has no foreign key in storage', meta: { model: 'Article', field: 'reviewer' } },
@@ -316,11 +311,6 @@ const expectedRefusals: ReadonlyMap<string, ExpectedRefusal> = new Map<string, E
   ],
   [
     'test/e2e/framework/test/fixtures/generated/contract.json',
-    { reason: 'has no foreign key in storage', meta: { model: 'Comment', field: 'post' } },
-  ],
-  // Release candidate 25 emitted it with the same domain and storage as the entry above.
-  [
-    'test/e2e/framework/test/fixtures/release-candidate/typescript/generated/contract.json',
     { reason: 'has no foreign key in storage', meta: { model: 'Comment', field: 'post' } },
   ],
   [
