@@ -28,8 +28,8 @@ export function versionChangesReport(changes, version) {
       ({ name, committed, planned }) => `  ${name}: committed ${committed}, planned ${planned}`,
     ),
     'A release publishes only the versions its commit holds.',
-    `If this is a release pull request before it merges: run node scripts/set-version.ts ${version} on its branch and commit the result.`,
-    `If the release pull request has merged: open a pull request that commits the versions node scripts/set-version.ts ${version} writes, merge it, then run the Publish to npm workflow by hand from main with dist-tag=latest and dry-run=false.`,
+    `If this is a release pull request before it merges: run node scripts/set-version.ts ${version} and pnpm install --lockfile-only on its branch, and commit the result.`,
+    `If the release pull request has merged: open a pull request that runs node scripts/set-version.ts ${version} and pnpm install --lockfile-only and commits the result, merge it, then run the Publish to npm workflow by hand from main with dist-tag=latest and dry-run=false.`,
     'If this branch is not a release, and this is a dry run to check the release tooling: run the dry run with dist-tag=beta, which skips this check.',
   ].join('\n');
 }
