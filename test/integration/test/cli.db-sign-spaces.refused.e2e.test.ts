@@ -1,5 +1,5 @@
 import { existsSync, readdirSync } from 'node:fs';
-import { PRISMA_SPACE_ID } from '@prisma/orm-framework/components/control';
+import { PRISMA_SPACE_ID } from '@internal/framework-components/control';
 import { withClient, withDevDatabase } from '@repo/test-utils';
 import { join } from 'pathe';
 import { describe, expect, it } from 'vitest';
