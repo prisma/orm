@@ -124,7 +124,7 @@ export async function writeTestPackage(
   return { metadata, ops };
 }
 
-export function pkgWithHash(
+export function createSameTimePackage(
   from: string,
   to: string,
   dirName: string,

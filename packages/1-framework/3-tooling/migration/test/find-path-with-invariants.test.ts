@@ -5,7 +5,7 @@ import { computeMigrationHash } from '../src/hash';
 import { findPath, findPathWithInvariants, reconstructGraph } from '../src/migration-graph';
 import type { OnDiskMigrationPackage } from '../src/package';
 import { collateAsDanishInEachTest } from './danish-collation';
-import { createTestMetadata, createTestOps, pkgWithHash } from './fixtures';
+import { createSameTimePackage, createTestMetadata, createTestOps } from './fixtures';
 
 let migrationCounter = 0;
 
@@ -412,9 +412,9 @@ describe('findPathWithInvariants tie-break on a machine whose locale reorders he
 
   it('runs data-only migrations on one contract in character-code order', () => {
     const graph = reconstructGraph([
-      pkgWithHash(E, 'H1', 'm0', 'sha256:00'),
-      pkgWithHash('H1', 'H1', 'data_b', 'sha256:b0', ['Y']),
-      pkgWithHash('H1', 'H1', 'data_aa', 'sha256:aa', ['X']),
+      createSameTimePackage(E, 'H1', 'm0', 'sha256:00'),
+      createSameTimePackage('H1', 'H1', 'data_b', 'sha256:b0', ['Y']),
+      createSameTimePackage('H1', 'H1', 'data_aa', 'sha256:aa', ['X']),
     ]);
     expect(dirNames(findPathWithInvariants(graph, E, 'H1', new Set(['X', 'Y'])))).toEqual([
       'm0',
