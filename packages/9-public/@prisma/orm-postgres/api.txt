@@ -25,6 +25,13 @@
 (not exported) interface PostgresLifecycleMembers
 (not exported) interface PostgresLifecycleMembers, required method [Symbol.asyncDispose](): Promise<void>
 (not exported) interface PostgresLifecycleMembers, required method close(): Promise<void>
+(not exported) interface PostgresQueryMembersOptions, readonly required property collections: TCollections | undefined
+(not exported) interface PostgresQueryMembersOptions, readonly required property context: ExecutionContext<TContract>
+(not exported) interface PostgresQueryMembersOptions, readonly required property prepareRuntime: Pick<Runtime, 'prepare'>
+(not exported) interface PostgresQueryMembersOptions, readonly required property raw: RawLane<TContract>
+(not exported) interface PostgresQueryMembersOptions, readonly required property sql: Db<TContract>
+(not exported) interface PostgresQueryMembersOptions, readonly required property toSql: ToSqlMember['toSql']
+(not exported) interface PostgresQueryMembersOptions<TContract extends Contract<SqlStorage>, TCollections extends CollectionClasses>
 (not exported) interface PostgresRuntimeBoundMembers, readonly required property orm: OrmClient<TContract, TCollections>
 (not exported) interface PostgresRuntimeBoundMembers, required method runtime(): Runtime
 (not exported) interface PostgresRuntimeBoundMembers, required method transaction<R>(fn: PostgresTransactionCallback<TContract, TCollections, R>, options?: PostgresTransactionOptions): Promise<R>
@@ -313,7 +320,7 @@
 ./runtime: export type InteractiveTransactionsCapability from @prisma/orm-family-sql/runtime
 ./runtime: export type PostgresFullTextMethods from @prisma/orm-target-postgres/target/full-text
 ./runtime: function buildNamespacedNativeEnums(storage: SqlStorage, domain: Contract['domain']): Record<string, Record<string, EnumAccessor>>
-./runtime: function ea_buildPostgresQueryMembers<TContract extends Contract<SqlStorage>, TCollections extends CollectionClasses>(options: Ea_PostgresQueryMembersOptions<TContract, TCollections>, txCtx: TransactionContext): Omit<PostgresQueryMembers<TContract, TCollections>, keyof RuntimeScope>
+./runtime: function ea_buildPostgresQueryMembers<TContract extends Contract<SqlStorage>, TCollections extends CollectionClasses>(options: PostgresQueryMembersOptions<TContract, TCollections>, txCtx: TransactionContext): Omit<PostgresQueryMembers<TContract, TCollections>, keyof RuntimeScope>
 ./runtime: function ea_connectWithBinding(driver: { connect(binding: @prisma/orm-target-postgres.PostgresBinding): Promise<void>; }, binding: PostgresBinding, options: { readonly poolOptions?: PostgresPoolOptions | undefined; }): Promise<void>
 ./runtime: function ea_resolveOptionalPostgresBinding(options: PostgresBindingFields, rules: Ea_PostgresBindingRules): PostgresBinding | undefined
 ./runtime: function ea_toDriverCursorOptions(cursor: PostgresCursorOptions | undefined): PostgresDriverCursorOptions
@@ -322,13 +329,6 @@
 ./runtime: interface Ea_PostgresBindingRules
 ./runtime: interface Ea_PostgresBindingRules, readonly required property extension: string
 ./runtime: interface Ea_PostgresBindingRules, readonly required property kinds: Readonly<Partial<Record<BindingKind, true>>>
-./runtime: interface Ea_PostgresQueryMembersOptions, readonly required property collections: TCollections | undefined
-./runtime: interface Ea_PostgresQueryMembersOptions, readonly required property context: ExecutionContext<TContract>
-./runtime: interface Ea_PostgresQueryMembersOptions, readonly required property prepareRuntime: Pick<Runtime, 'prepare'>
-./runtime: interface Ea_PostgresQueryMembersOptions, readonly required property raw: RawLane<TContract>
-./runtime: interface Ea_PostgresQueryMembersOptions, readonly required property sql: Db<TContract>
-./runtime: interface Ea_PostgresQueryMembersOptions, readonly required property toSql: ToSqlMember['toSql']
-./runtime: interface Ea_PostgresQueryMembersOptions<TContract extends Contract<SqlStorage>, TCollections extends CollectionClasses>
 ./runtime: interface PostgresBindingOptions
 ./runtime: interface PostgresBindingOptions, readonly optional property binding?: PostgresBinding
 ./runtime: interface PostgresBindingOptions, readonly optional property pg?: Client | Pool
