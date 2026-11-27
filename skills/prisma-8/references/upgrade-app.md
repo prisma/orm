@@ -2,13 +2,35 @@
 
 This reference upgrades a project that **consumes** Prisma 8 via the public package API (a database package, `@prisma/orm-postgres`, `@prisma/orm-mongo`, `@prisma/orm-sqlite`, `@prisma/orm-mysql` or `@prisma/orm-mariadb`, the contract files in `prisma/`, etc.). Package names below are the published `@prisma/orm-*` names, which is what `package.json`, the lockfile, and the registry use. The other references in this skill use the same names. If the project is itself a Prisma 8 *extension*, use [`upgrade-extension.md`](upgrade-extension.md) instead — or both, if the repo contains both an app and an extension package.
 
-The per-transition instructions this reference reads live under [`../upgrading/app/upgrades/`](../upgrading/app/upgrades/).
+Each step's guide is under `upgrading/app/upgrades/` in the copy of this skill that [Step 0](#step-0--fetch-the-newest-copy-of-this-skill-and-continue-from-it) fetches.
 
-## Step 0 — Upgrade to the newest instructions, then re-read
+## Step 0 — Fetch the newest copy of this skill, and continue from it
 
-The upgrade instructions ship inside the installed Prisma packages, so the copy on disk describes the version currently installed — not the version being upgraded *to*. Bug fixes to *old* per-transition instructions ship with each release as part of the cumulative set, so the newest copy is the one to run.
+This skill is installed with the Prisma packages, so the copy you are reading belongs to the release that is installed now. That copy is not the one to follow, for this reason. Each step of an upgrade has a guide: a file `instructions.md` in a folder named `<from>-to-<to>`. Every Prisma release carries the guides for every step so far, and a guide is sometimes corrected after its release. A published package never changes, so the corrected guide exists only in later releases. The whole upgrade is therefore run from the newest published copy of the skill.
 
-Do the version bump first (step 1 of the per-step flow below), re-sync the skills from the newly installed packages (`prisma skills sync`), and re-read this reference and the per-transition instructions before applying any code translation. If the agent runtime supports an in-session refresh, perform it after the sync; otherwise finish the session's reasoning against the re-read files.
+From the project root, the folder whose `package.json` lists the Prisma packages, run:
+
+```bash
+node <installed skill>/scripts/fetch-upgrade-guides.mjs <database package>
+```
+
+- `<installed skill>` is the `prisma-8` folder that holds this file's `references/` folder.
+- `<database package>` is the application's own: `@prisma/orm-postgres`, `@prisma/orm-mongo`, `@prisma/orm-sqlite`, `@prisma/orm-mysql` or `@prisma/orm-mariadb`.
+
+The script downloads the newest published release of that package without installing it. It does not change `package.json`, the lockfile or any installed package. It extracts that release's copy of this skill into a folder `.prisma-upgrade-guides/` in the project root, which git ignores, and prints one line: the path of the extracted `prisma-8` folder.
+
+From here on, `<skill>` means the folder the script printed.
+
+1. Open `<skill>/references/upgrade-app.md` and continue from its section "Pre-flight — extension compatibility". Do not run Step 0 again.
+2. Read every step's guide from `<skill>/upgrading/app/upgrades/<from>-to-<to>/instructions.md`.
+3. When a guide names a script as `<skill>/...`, as `<guide>/...` or as a path beside the guide, run the one in the fetched copy, never the installed one.
+
+If `.prisma-upgrade-guides/` is deleted during the upgrade, run the script again. Delete the folder when the upgrade is finished.
+
+**If the script fails,** tell the user why, and ask whether to continue with the installed copy. With the installed copy, a guide that was corrected after its release may be followed in its uncorrected form. If the user agrees:
+
+- `<skill>` is the installed copy, which `prisma skills sync` refreshes from the installed packages;
+- a step's guide exists only after that step's install, so in the per-step flow do the bump and the install first, run `prisma skills sync`, and then read the guide.
 
 ## Pre-flight — extension compatibility
 
@@ -69,9 +91,9 @@ If the from-to delta spans more than one release (e.g. `0.6 → 0.8`), build the
 0.6 → 0.7 → 0.8
 ```
 
-The [`../upgrading/app/upgrades/`](../upgrading/app/upgrades/) directories name the steps — read the chain off the directory names rather than deriving it arithmetically. Each directory is `<from>-to-<to>`. A step normally spans one stable minor (`0.7-to-0.8`) or one release candidate (`8.0.0-rc.1-to-8.0.0-rc.2`). When intermediate versions were not published, a guide may span a larger hop; follow the available directory chain rather than inventing missing steps. Moving onto the RC line from the last stable minor is a single step of its own (`0.17-to-8.0.0-rc.1`).
+The folders in `<skill>/upgrading/app/upgrades/` name the steps. Read the chain off the folder names rather than deriving it arithmetically. Each directory is `<from>-to-<to>`. A step normally spans one stable minor (`0.7-to-0.8`) or one release candidate (`8.0.0-rc.1-to-8.0.0-rc.2`). When intermediate versions were not published, a guide may span a larger hop; follow the available directory chain rather than inventing missing steps. Moving onto the RC line from the last stable minor is a single step of its own (`0.17-to-8.0.0-rc.1`).
 
-Apply each step in order, fully: bump, install, run instructions, validate, commit — before moving to the next. Halt the chain on the first failed step; do not skip ahead.
+Apply each step in order, fully: read the guide, bump, install, apply the changes, validate, commit — before moving to the next. Halt the chain on the first failed step; do not skip ahead.
 
 The chain order does not depend on which extensions are installed; the pre-flight has already worked out how far it can go.
 
@@ -79,7 +101,9 @@ The chain order does not depend on which extensions are installed; the pre-fligh
 
 For each `(from, to)` step in the chain:
 
-1. **Bump the app's Prisma packages.** Change these entries in the project's `package.json`, under both `dependencies` and `devDependencies`:
+1. **Read the step's guide,** `<skill>/upgrading/app/upgrades/<from>-to-<to>/instructions.md`, before changing anything. Parse the YAML frontmatter and pay particular attention to its `changes[]` array. Reading first matters: a guide may say to change `package.json` in a particular way before the install.
+
+2. **Bump the app's Prisma packages.** Change these entries in the project's `package.json`, under both `dependencies` and `devDependencies`:
    - the database package, such as `@prisma/orm-postgres`;
    - the platform packages that the database package lists as peer dependencies;
    - every extension or library integration published from the Prisma repository: `@prisma/orm-extension-*`, `@prisma/orm-postgres-contrib` and `@prisma/orm-better-auth`. `@prisma/orm-extension-paradedb` is the exception, covered below.
@@ -92,20 +116,22 @@ For each `(from, to)` step in the chain:
    - beside a GA database package, a GA entry gets a caret and an entry below GA gets a tilde;
    - beside a database package below GA, every entry gets a tilde.
 
+   Write those ranges at the last step of the chain only. At an earlier step, write each entry as its exact version, with no caret and no tilde. A caret written at an earlier step would let the install take a later release than the step's.
+
    **`@prisma/orm-extension-paradedb`** has version numbers of its own. Set it to the release the pre-flight noted for this step, as for an extension published by someone else.
 
    **A peer dependency the project does not list.** If the database package at `<to>` lists an `@prisma/orm-*` peer dependency that the project's `package.json` does not have, add it, written as that package's entry for `<to>` would be. The application lists every one of them, so that it has one copy of each. A monorepo whose applications are on different Prisma releases can still get two copies under npm workspaces and under Bun's hoisted linker; keep such applications on one release, or use pnpm, Yarn or Bun's isolated linker.
 
    **Extensions published by someone else.** Set each one to the release the pre-flight noted for this step: the one whose every Prisma entry accepts that package's version at the step. If an extension has no such release, halt before this step's install. The project stays at the last step that worked, and the user gets the pre-flight's message for that extension and step.
 
+   **A database package below GA, moving to the next minor.** No range follows a package below GA into the next minor, so edit every Prisma line by hand: `~8.3.0-ea.0` becomes `~8.4.0-ea.0`, and `~8.3.0` becomes `~8.4.0`. Do not use the package manager's update command for this. `pnpm update` rewrites a tilde on a pre-release as an exact version, and Yarn's command that updates to the latest version writes a caret. If a line was rewritten like that earlier, restore the tilde.
+
    The skill itself ships inside the Prisma packages, so bumping them is what updates it. There is no separate skill package to bump.
 
-2. **Install.** Run `pnpm install` (or the project's lockfile-managing command). The project's code is now broken against the new types — the upgrade instructions for `<from> → <to>` exist to fix it.
-
-3. **Read the upgrade instructions.** Re-sync the skills (`prisma skills sync`) so the tree matches the version just installed, then load `../upgrading/app/upgrades/<from>-to-<to>/instructions.md`. Parse the YAML frontmatter and pay particular attention to its `changes[]` array.
+3. **Install.** Run `pnpm install` (or the project's lockfile-managing command). The project's code is now broken against the new types — the upgrade instructions for `<from> → <to>` exist to fix it.
 
 4. **Apply each change.** When the guide's body has a section that orders the steps, such as `Order of the steps`, apply the changes in that order: it says which script runs before which, and when to sign the databases and when to plan and apply a migration. Where an entry's prose says to sign or migrate, do it at the step that section names. Otherwise take the entries in the order of `changes[]`. For each entry in `changes[]`:
-   - If the entry has a `detection` block (glob + content predicate), run it; skip the change if no files match. No `detection` → apply unconditionally. Run the glob over the project's own files: skip `node_modules`, and build output such as `dist`, `build`, `.next` or `out` (whatever directories the project's build writes). A match there is generated code, which the next build rewrites; editing it changes nothing. Migration snapshots under `migrations/snapshots/` are committed files, not build output, so keep them.
+   - If the entry has a `detection` block (glob + content predicate), run it; skip the change if no files match. No `detection` → apply unconditionally. Run the glob over the project's own files: skip `node_modules`, `.prisma-upgrade-guides`, and build output such as `dist`, `build`, `.next` or `out` (whatever directories the project's build writes). A match there is generated code, which the next build rewrites; editing it changes nothing. Migration snapshots under `migrations/snapshots/` are committed files, not build output, so keep them.
    - How a `detection` block runs: `glob` selects files relative to the project root. Each `matches` entry, once read from the YAML, is a JavaScript regular expression, built as `new RegExp(pattern)` with no flags and tested against the whole content of one file at a time; each `contains` entry is a plain substring. A file is a hit when any entry matches it. Patterns may span lines, and some look at the whole file (for example, to skip a file that declares something elsewhere in it), so a line-by-line search such as `grep` or `rg` without `-U` is not the same test and can report files the pattern excludes. From a shell, `rg -U --pcre2 -l -e '<pattern>' <files>` tests whole files and gives the same hits.
    - If the entry names a `script:` (a relative path next to `instructions.md`), invoke it from the project root:
      - `*.ts` → the command the guide's prose gives, such as `node <script>` (Node 24 or later runs TypeScript directly); with no command in the prose, `pnpm exec tsx <skill>/upgrading/app/upgrades/<from>-to-<to>/<script>`
@@ -128,9 +154,22 @@ For each `(from, to)` step in the chain:
 
 Then move on to the next step.
 
+## When the project cannot install the releases in between
+
+Use this section only in one case: a package that is not an extension requires one exact Prisma release, so the releases between the project's release and the target cannot be installed beside it. A deployment tool that lists `@prisma/orm-postgres` as a peer dependency at an exact version is an example. The project then moves in one install from the release that tool's current version requires to the release its new version requires.
+
+In that case, replace the per-step flow with this:
+
+1. Read the guide of every step in the chain.
+2. Bump every Prisma entry once, to the last release of the chain, together with the package that requires it, and install once. For an extension published by someone else, write the release the pre-flight noted for the last step.
+3. Apply each step's guide in order. Commit after each one. Do not install again between them.
+4. A typecheck after a guide that is not the last may fail, because the installed types are those of the last release. Go on to the next guide. After the last guide, run the full validation from the per-step flow; that one must pass.
+
+Tell the user that the releases in between were never installed, so a failure may come from any of the guides.
+
 ## When the chain is done
 
-Report back to the user: the number of steps applied, the SHAs of the commits you made, and any open follow-ups (e.g. tests that were already red before the upgrade and still are).
+Report back to the user: the number of steps applied, the SHAs of the commits you made, the release whose copy of the skill you followed (the script printed it), and any open follow-ups (e.g. tests that were already red before the upgrade and still are).
 
 ## Failure surfaces
 
