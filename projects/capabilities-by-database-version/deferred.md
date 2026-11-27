@@ -4,7 +4,7 @@ Work this project found and did not do. Each item says what is wrong today and w
 
 ## Docs that still describe capabilities as negotiated when the client connects
 
-ADR 335 decides that each capability is declared by the component that knows the fact, that signing checks the database, and that the client checks only its adapter and driver. These files still say an adapter reports or negotiates capabilities at connect time, or show a PostgreSQL contract or config with no `databaseVersion`. Each needs its body edited in place to say what is true now.
+ADR 335 decides that a contract lists the capabilities it requires, that signing checks the database, and that the client checks only its connection. These files still say an adapter reports or negotiates capabilities at connect time, or show a PostgreSQL contract or config with no `requiredCapabilities`. Each needs its body edited in place to say what is true now.
 
 - Decision records: ADR 010, 016, 105, 114, 115, 116, 117, 118, 123, 157, 202, 210, 252, 261, 313.
 - Subsystem docs: `3. Query Lanes.md`, `6. Ecosystem Extensions & Packs.md`, and the parts of `5. Adapters & Targets.md` outside "Adapter capabilities and discovery".
@@ -23,7 +23,7 @@ MySQL, MariaDB, SQLite and MongoDB contracts take a fixed capability list from t
 
 ## `init` writes the newest version, not the server's
 
-Spec section 4.2 asks `init` to write the version it reads from the database. It writes the newest version in the PostgreSQL table instead, because `--probe-db` is optional and runs after the files are written and the driver installed. All four versions give the same contract today, and a user on an older server gets a refusal at signing that names the version to state. Done is `init` writing the probed version when `--probe-db` is given, which needs the probe to run before the config is written or the config to be rewritten after it.
+`init` writes the newest PostgreSQL version's list into a new project, because `--probe-db` is optional and runs after the files are written and the driver installed. All four versions' lists are equal today. When they differ, a user on an older server gets a refusal at signing that names the capabilities to remove. Done is `init` writing the list for the server's version when `--probe-db` is given, which needs the probe to run before the config is written or the config to be rewritten after it.
 
 ## The CLI's general advice after a drift guesses the workflow
 

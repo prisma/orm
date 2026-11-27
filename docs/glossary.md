@@ -67,7 +67,7 @@ The compiled form of a query. Before anything touches the database, Prisma 8 com
 
 ### Adapter
 
-The piece that connects Prisma 8 to a specific database. For SQL targets, the adapter translates queries into the correct dialect. For MongoDB, the adapter dispatches commands to the `mongodb` Node.js driver. Adapters also report what features the database supports, so Prisma 8 can check at startup whether your contract's requirements are met.
+The piece that connects Prisma 8 to a specific database. For SQL targets, the adapter translates queries into the correct dialect. For MongoDB, the adapter dispatches commands to the `mongodb` Node.js driver. On PostgreSQL the adapter provides no [capabilities](#capability): the target says what each database version provides, and the driver what its connection provides. The other databases' adapters still declare a fixed list.
 
 ### Driver
 
