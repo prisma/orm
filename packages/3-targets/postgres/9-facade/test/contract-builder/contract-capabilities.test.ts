@@ -192,3 +192,26 @@ describe('an entry that is not a capability key', () => {
     );
   });
 });
+
+describe('a retired capability in the list', () => {
+  it.each(['postgres.orderBy', 'postgres.pgvector.cosine', 'sql.enums'] as const)(
+    'is refused: %s',
+    (key) => {
+      expect(() => defineContract({ requiredCapabilities: [...postgres18, key] })).toThrow(
+        expect.objectContaining({
+          code: 'CONTRACT.ARGUMENT_INVALID',
+          message: `requiredCapabilities in defineContract lists "${key}", which is a retired capability: nothing reads it any more. Remove it from the list.`,
+        }),
+      );
+    },
+  );
+
+  it('is refused by postgresContractCapabilities too', () => {
+    expect(() => postgresContractCapabilities([...postgresDriver, 'postgres.limit'])).toThrow(
+      expect.objectContaining({
+        message:
+          'requiredCapabilities given to postgresContractCapabilities lists "postgres.limit", which is a retired capability: nothing reads it any more. Remove it from the list.',
+      }),
+    );
+  });
+});

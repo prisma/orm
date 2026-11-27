@@ -5,7 +5,10 @@ import {
   capabilitiesFromKeys,
   capabilityKeysOf,
 } from '@internal/sql-contract-ts/contract-builder';
-import { postgresCapabilitiesByVersion } from '@internal/target-postgres/server-version';
+import {
+  postgresCapabilitiesByVersion,
+  postgresRetiredCapabilities,
+} from '@internal/target-postgres/server-version';
 import { postgresError } from '../errors';
 import { defaultRequiredCapabilityLists } from './default-required-capability-lists';
 
@@ -42,7 +45,7 @@ const contractsWithDefaultKey = Symbol.for(
   'prisma.orm.postgres.contractsWithDefaultRequiredCapabilities',
 );
 
-// Kept on `globalThis`, as `validateContractOnce` keeps its record, because the contract file and the config import this package through different entrypoints.
+// Kept on `globalThis`, as `validateContractOnce` keeps its record, so that two copies of this package in one process, such as the workspace's and an installed one, share it.
 function contractsWithDefault(): WeakSet<object> {
   const existing: unknown = Reflect.get(globalThis, contractsWithDefaultKey);
   if (existing instanceof WeakSet) return existing;
@@ -76,6 +79,12 @@ function isCapabilityKey(key: unknown): key is CapabilityKey {
   return dot > 0 && dot < key.length - 1;
 }
 
+function isRetired(key: CapabilityKey): boolean {
+  const dot = key.indexOf('.');
+  const flags: unknown = Reflect.get(postgresRetiredCapabilities, key.slice(0, dot));
+  return typeof flags === 'object' && flags !== null && Object.hasOwn(flags, key.slice(dot + 1));
+}
+
 function describeEntry(entry: unknown): string {
   switch (typeof entry) {
     case 'string':
@@ -104,7 +113,7 @@ function refuseList(message: string): never {
 }
 
 /**
- * The capabilities a contract records for `required`, refusing a list that is missing, empty, not a list, or holds an entry that is not a capability key. `where` names where the author writes the list, for the refusal.
+ * The capabilities a contract records for `required`, refusing a list that is missing, empty, not a list, or holds an entry that is not a capability key or is a retired one. `where` names where the author writes the list, for the refusal.
  */
 export function requiredCapabilitiesFor<const Required extends RequiredCapabilities>(
   required: Required | undefined,
@@ -129,6 +138,12 @@ export function requiredCapabilitiesFor<const Required extends RequiredCapabilit
   if (notAKey >= 0) {
     refuseList(
       `requiredCapabilities ${where} lists ${describeEntry(required[notAKey])}, which is not a capability key. A key is a namespace and a flag joined by a dot, as error messages print it.`,
+    );
+  }
+  const retired = required.find(isRetired);
+  if (retired !== undefined) {
+    refuseList(
+      `requiredCapabilities ${where} lists ${JSON.stringify(retired)}, which is a retired capability: nothing reads it any more. Remove it from the list.`,
     );
   }
   return capabilitiesFromKeys<Required[number]>(required);
