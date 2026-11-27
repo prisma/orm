@@ -7,6 +7,18 @@ changes:
       glob: "**/*"
       contains:
         - "prisma_contract"
+  - id: prisma-tables-api-breaks
+    summary: |
+      `@prisma/orm-target-postgres` no longer exports `buildControlTableBootstrapQueries` or `buildSignMarkerBootstrapQueries`, and `PostgresControlAdapter.markerLocation` is typed `string`. A marker read (`MarkerReadResult`) can return the new kind `earlier-release`, the runner's error codes include `MIGRATION.PRISMA_TABLES_MISSING`, and `ControlClient` has a new required method, `bringPrismaSpaceUpToDate`.
+    detection:
+      glob: "**/*.{ts,tsx,mts,cts}"
+      contains:
+        - "buildControlTableBootstrapQueries"
+        - "buildSignMarkerBootstrapQueries"
+        - "markerLocation"
+        - "MarkerReadResult"
+        - "SqlMigrationRunnerErrorCode"
+        - "ControlClient"
 ---
 
 # Prisma's own tables are in the `_prisma` schema
@@ -38,3 +50,13 @@ Search the extension's code, scripts and tests for `prisma_contract`, outside `n
   ```
 
 - A test that creates Prisma's tables by hand must create them in `_prisma`. A test that runs the migration runner directly, without the commands above, now fails with `MIGRATION.PRISMA_TABLES_MISSING` until Prisma's tables exist. Create only Prisma's tables first, with the control client's `bringPrismaSpaceUpToDate()`, or with `applyInstalledContractSpace` from `@prisma/orm-toolchain/migration-tools/spaces` when the test has no control client. Do not use `prisma db init` or `dbInit` for this: they also bring the application's or the extension's own space to its contract, so a test of that space's first migration no longer starts from an empty database.
+
+## `prisma-tables-api-breaks`
+
+These changes reach code that builds on the platform packages directly. Code that only uses a facade such as `@prisma/orm-postgres` is not affected.
+
+- **`buildControlTableBootstrapQueries` and `buildSignMarkerBootstrapQueries` are removed.** Prisma's own tables are now created by the Prisma space's migration. Code that ran these statements to prepare a database calls `bringPrismaSpaceUpToDate()` on the control client instead, or `applyInstalledContractSpace` from `@prisma/orm-toolchain/migration-tools/spaces` without a client.
+- **`PostgresControlAdapter.markerLocation` is typed `string`.** It was the literal type `"prisma_contract.marker"`. Code that compared it with that literal compares with `"_prisma.marker"`, or uses the value it holds.
+- **`MarkerReadResult` has a new kind, `earlier-release`.** A marker read returns it when Prisma's own tables are still in a release candidate's schema. Code that switches over the kinds exhaustively handles it, for example by reporting that the database needs `prisma db migrate`.
+- **`SqlMigrationRunnerErrorCode` includes `MIGRATION.PRISMA_TABLES_MISSING`.** The runner returns it when asked to apply a space before Prisma's own tables exist. Code that switches over the codes exhaustively handles it.
+- **`ControlClient` has a new required method, `bringPrismaSpaceUpToDate`.** Code that only calls a control client is not affected. Code that implements `ControlClient` itself, such as a test double, adds the method; it may return `undefined` when the target carries no Prisma space.
