@@ -3,10 +3,7 @@ import type { Contract } from '@internal/contract/types';
 import { blindCast } from '@internal/utils/casts';
 import type { JsonObject } from '@internal/utils/json';
 import { describe, expect, it } from 'vitest';
-import {
-  mongoContractCanonicalizationHooks,
-  normalMongoDomain,
-} from '../src/canonicalization-hooks';
+import { normalizeMongoDomain, normalizeMongoStorage } from '../src/canonicalization-hooks';
 
 const storageWith = (
   collection: Record<string, unknown>,
@@ -26,7 +23,7 @@ const hashOf = (storage: Record<string, unknown>): string =>
     target: 'mongo',
     targetFamily: 'mongo',
     storage,
-    ...mongoContractCanonicalizationHooks,
+    normalizeStorage: normalizeMongoStorage,
   });
 
 const contractWith = (storage: Record<string, unknown>, domain: unknown = { namespaces: {} }) =>
@@ -46,7 +43,7 @@ const canonicalize = (contract: Contract) =>
   canonicalizeContractToObject(contract, {
     serializeContract: (c) =>
       blindCast<JsonObject, 'test contract literal is already plain JSON data'>(c),
-    ...mongoContractCanonicalizationHooks,
+    normalizeStorage: normalizeMongoStorage,
   });
 
 const written = (storage: Record<string, unknown>): unknown =>
@@ -71,9 +68,19 @@ describe('MongoDB storage values the family does not own', () => {
         storageWith({}),
       ],
       [
-        'change stream images that are off',
-        storageWith({ options: { changeStreamPreAndPostImages: { enabled: false } } }),
-        storageWith({ options: { changeStreamPreAndPostImages: { enabled: true } } }),
+        "an index collation's backwards: false for a locale whose default is true",
+        storageWith({ indexes: [index({ collation: { locale: 'fr_CA', backwards: false } })] }),
+        storageWith({ indexes: [index({ collation: { locale: 'fr_CA' } })] }),
+      ],
+      [
+        "an index collation's normalization: false for a locale whose default is true",
+        storageWith({ indexes: [index({ collation: { locale: 'vi', normalization: false } })] }),
+        storageWith({ indexes: [index({ collation: { locale: 'vi' } })] }),
+      ],
+      [
+        "a collection collation's backwards: false for a locale whose default is true",
+        storageWith({ options: { collation: { locale: 'fr_CA', backwards: false } } }),
+        storageWith({ options: { collation: { locale: 'fr_CA' } } }),
       ],
       [
         'storage engine options holding an empty object',
@@ -103,13 +110,25 @@ describe('MongoDB storage values the family does not own', () => {
         }),
       ],
       [
-        'a closed validator schema',
+        'a validator tuple that allows no further items',
         storageWith({
           validator: {
-            jsonSchema: { bsonType: 'object', properties: { a: {} }, additionalProperties: false },
+            jsonSchema: {
+              bsonType: 'object',
+              properties: {
+                pair: { bsonType: 'array', items: [{ bsonType: 'int' }], additionalItems: false },
+              },
+            },
           },
         }),
-        storageWith({ validator: { jsonSchema: { bsonType: 'object', properties: { a: {} } } } }),
+        storageWith({
+          validator: {
+            jsonSchema: {
+              bsonType: 'object',
+              properties: { pair: { bsonType: 'array', items: [{ bsonType: 'int' }] } },
+            },
+          },
+        }),
       ],
       [
         'a value set member that is an object holding false',
@@ -126,12 +145,14 @@ describe('MongoDB storage values the family does not own', () => {
     expect(written(left)).toEqual(left);
   });
 
-  it('keeps an empty collection and the empty schema of an unconstrained field', () => {
+  it('keeps an empty collection, change stream images that are off, a closed schema and the empty schema of an unconstrained field', () => {
     const storage = storageWith({
+      options: { changeStreamPreAndPostImages: { enabled: false } },
       validator: {
         jsonSchema: {
           bsonType: 'object',
           properties: { raw: {}, list: { bsonType: 'array', items: {} } },
+          additionalProperties: false,
         },
       },
     });
@@ -154,22 +175,90 @@ describe('MongoDB storage defaults the family leaves out', () => {
         storageWith({
           indexes: [
             index({
-              collation: {
-                locale: 'en',
-                caseLevel: false,
-                numericOrdering: false,
-                backwards: false,
-                normalization: false,
-              },
+              collation: { locale: 'fr_CA', caseLevel: false, numericOrdering: false },
             }),
           ],
         }),
-        storageWith({ indexes: [index({ collation: { locale: 'en' } })] }),
+        storageWith({ indexes: [index({ collation: { locale: 'fr_CA' } })] }),
       ],
       [
         "a collection's collation flags of false",
-        storageWith({ options: { collation: { locale: 'en', backwards: false } } }),
-        storageWith({ options: { collation: { locale: 'en' } } }),
+        storageWith({ options: { collation: { locale: 'vi', numericOrdering: false } } }),
+        storageWith({ options: { collation: { locale: 'vi' } } }),
+      ],
+      [
+        'indexes in another order',
+        storageWith({ indexes: [index({ name: 'z_idx' }), index({ name: 'a_idx' })] }),
+        storageWith({ indexes: [index({ name: 'a_idx' }), index({ name: 'z_idx' })] }),
+      ],
+      [
+        'an empty required in a pattern, dependency or further-items schema',
+        storageWith({
+          validator: {
+            jsonSchema: {
+              bsonType: 'object',
+              patternProperties: { '^x_': { bsonType: 'object', required: [] } },
+              dependencies: { a: { required: [] }, b: ['a'] },
+              properties: {
+                pair: { bsonType: 'array', items: [{}], additionalItems: { required: [] } },
+              },
+            },
+          },
+        }),
+        storageWith({
+          validator: {
+            jsonSchema: {
+              bsonType: 'object',
+              patternProperties: { '^x_': { bsonType: 'object' } },
+              dependencies: { a: {}, b: ['a'] },
+              properties: { pair: { bsonType: 'array', items: [{}], additionalItems: {} } },
+            },
+          },
+        }),
+      ],
+      [
+        "a value-object field's empty typeParams",
+        storageWith(
+          {},
+          {
+            valueObject: {
+              Address: {
+                fields: {
+                  city: {
+                    nullable: false,
+                    type: { kind: 'scalar', codecId: 'mongo/string@1', typeParams: {} },
+                  },
+                  tag: {
+                    nullable: false,
+                    type: {
+                      kind: 'union',
+                      members: [{ kind: 'scalar', codecId: 'mongo/string@1', typeParams: {} }],
+                    },
+                  },
+                },
+              },
+            },
+          },
+        ),
+        storageWith(
+          {},
+          {
+            valueObject: {
+              Address: {
+                fields: {
+                  city: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
+                  tag: {
+                    nullable: false,
+                    type: {
+                      kind: 'union',
+                      members: [{ kind: 'scalar', codecId: 'mongo/string@1' }],
+                    },
+                  },
+                },
+              },
+            },
+          },
+        ),
       ],
       [
         "a validator schema's empty required and properties at any level",
@@ -236,7 +325,7 @@ describe('MongoDB storage defaults the family leaves out', () => {
   });
 });
 
-describe('normalMongoDomain', () => {
+describe('normalizeMongoDomain', () => {
   it("leaves out a model field's many: false and keeps the empty fields of a variant", () => {
     const domain = {
       namespaces: {
@@ -263,7 +352,7 @@ describe('normalMongoDomain', () => {
         },
       },
     };
-    expect(normalMongoDomain(domain)).toEqual({
+    expect(normalizeMongoDomain(domain)).toEqual({
       namespaces: {
         app: {
           models: {

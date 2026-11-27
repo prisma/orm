@@ -1,12 +1,18 @@
 import type { NormalizeStorage } from '@internal/contract/hashing';
+import { createStorageSort } from '@internal/contract/hashing-utils';
 import { isPlainRecord } from '@internal/contract/is-plain-record';
 
 type JsonRecord = Readonly<Record<string, unknown>>;
 
-const COLLATION_FLAGS = new Set(['caseLevel', 'numericOrdering', 'backwards', 'normalization']);
+const COLLATION_FLAGS = new Set(['caseLevel', 'numericOrdering']);
 const INDEX_FLAGS = new Set(['unique', 'sparse']);
-const SUBSCHEMA_KEYWORDS = new Set(['items', 'not', 'additionalProperties']);
+const SUBSCHEMA_KEYWORDS = new Set(['items', 'not', 'additionalProperties', 'additionalItems']);
 const SUBSCHEMA_LIST_KEYWORDS = new Set(['oneOf', 'anyOf', 'allOf', 'items']);
+const SUBSCHEMA_MAP_KEYWORDS = new Set(['properties', 'patternProperties', 'dependencies']);
+
+const sortIndexes = createStorageSort([
+  { path: ['namespaces', '*', 'entries', 'collection', '*'], arrayKeys: ['indexes'] },
+]);
 
 const isEmptyRecord = (value: unknown): boolean =>
   isPlainRecord(value) && Object.keys(value).length === 0;
@@ -32,8 +38,23 @@ function mapList(value: unknown, map: (entry: JsonRecord) => JsonRecord): unknow
   return value.map((entry: unknown) => (isPlainRecord(entry) ? map(entry) : entry));
 }
 
-const withoutSingleValueMany = (field: JsonRecord): JsonRecord =>
+const withoutManyFalse = (field: JsonRecord): JsonRecord =>
   without(field, (key, value) => key === 'many' && value === false);
+
+const withoutEmptyTypeParams = (record: JsonRecord): JsonRecord =>
+  without(record, (key, value) => key === 'typeParams' && isEmptyRecord(value));
+
+function normalFieldType(fieldType: JsonRecord): JsonRecord {
+  const kept = withoutEmptyTypeParams(fieldType);
+  return Array.isArray(kept['members'])
+    ? { ...kept, members: mapList(kept['members'], withoutEmptyTypeParams) }
+    : kept;
+}
+
+function normalValueObjectField(field: JsonRecord): JsonRecord {
+  const kept = withoutManyFalse(field);
+  return isPlainRecord(kept['type']) ? { ...kept, type: normalFieldType(kept['type']) } : kept;
+}
 
 const normalCollation = (collation: JsonRecord): JsonRecord =>
   without(collation, (key, value) => COLLATION_FLAGS.has(key) && value === false);
@@ -53,7 +74,7 @@ function normalJsonSchema(schema: JsonRecord): JsonRecord {
   );
   return Object.fromEntries(
     Object.entries(kept).map(([key, value]) => {
-      if (key === 'properties') return [key, mapValues(value, normalJsonSchema)];
+      if (SUBSCHEMA_MAP_KEYWORDS.has(key)) return [key, mapValues(value, normalJsonSchema)];
       if (SUBSCHEMA_LIST_KEYWORDS.has(key) && Array.isArray(value))
         return [key, mapList(value, normalJsonSchema)];
       if (SUBSCHEMA_KEYWORDS.has(key) && isPlainRecord(value))
@@ -88,7 +109,7 @@ function normalCollection(collection: JsonRecord): JsonRecord {
 function normalValueObject(valueObject: JsonRecord): JsonRecord {
   return valueObject['fields'] === undefined
     ? valueObject
-    : { ...valueObject, fields: mapValues(valueObject['fields'], withoutSingleValueMany) };
+    : { ...valueObject, fields: mapValues(valueObject['fields'], normalValueObjectField) };
 }
 
 function normalEntries(entries: JsonRecord): JsonRecord {
@@ -111,18 +132,18 @@ function normalNamespace(namespace: JsonRecord): JsonRecord {
 }
 
 /**
- * The MongoDB family's normal form of `storage`. It leaves out the fields the family defines as equal to their absence, each named here: a collection's empty `indexes`, an index's `unique` and `sparse` of `false`, the collation flags `caseLevel`, `numericOrdering`, `backwards` and `normalization` of `false` (on an index and in a collection's options), the empty `required` and `properties` of a validator's schema at any level, `many: false` on a value-object field, and a namespace's empty entity-kind slot other than `collection`. Every other value, including partial filter expressions, clustered index, storage engine and change stream options, and the values of a value set, is kept as given.
+ * The MongoDB family's normal form of `storage`. It leaves out the fields the family defines as equal to their absence, each named here: a collection's empty `indexes`, an index's `unique` and `sparse` of `false`, the collation flags `caseLevel` and `numericOrdering` of `false` (on an index and in a collection's options; `false` is their default for every locale), the empty `required` and `properties` of a validator's schema at any level, `many: false` on a value-object field, an empty `typeParams` on a value-object field's type, and a namespace's empty entity-kind slot other than `collection`. Every other value, including the collation flags `backwards` and `normalization` (whose default depends on the locale), partial filter expressions, clustered index, storage engine and change stream options, and the values of a value set, is kept as given. It then orders each collection's `indexes` by name.
  */
-const normalizeStorage: NormalizeStorage = (storage) => {
+export const normalizeMongoStorage: NormalizeStorage = (storage) => {
   const plain: unknown = storage === undefined ? storage : JSON.parse(JSON.stringify(storage));
   if (!isPlainRecord(plain) || plain['namespaces'] === undefined) return plain;
-  return { ...plain, namespaces: mapValues(plain['namespaces'], normalNamespace) };
+  return sortIndexes({ ...plain, namespaces: mapValues(plain['namespaces'], normalNamespace) });
 };
 
 /**
  * The MongoDB family's normal form of the domain section: a model field's `many: false` is left out, as the family's readers restore it.
  */
-export function normalMongoDomain(domain: unknown): unknown {
+export function normalizeMongoDomain(domain: unknown): unknown {
   if (!isPlainRecord(domain)) return domain;
   return {
     ...domain,
@@ -134,15 +155,9 @@ export function normalMongoDomain(domain: unknown): unknown {
             models: mapValues(namespace['models'], (model) =>
               model['fields'] === undefined
                 ? model
-                : { ...model, fields: mapValues(model['fields'], withoutSingleValueMany) },
+                : { ...model, fields: mapValues(model['fields'], withoutManyFalse) },
             ),
           },
     ),
   };
 }
-
-export const mongoContractCanonicalizationHooks: {
-  readonly normalizeStorage: NormalizeStorage;
-} = {
-  normalizeStorage,
-};
