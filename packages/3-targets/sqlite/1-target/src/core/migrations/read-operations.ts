@@ -8,6 +8,8 @@ export const SqliteTargetDetailsJson = type({
   objectType: "'table' | 'column' | 'primaryKey' | 'unique' | 'index' | 'foreignKey'",
   name: 'string',
   'table?': 'string',
+  /** Written by releases up to 8.0.0-rc.19, always as `main`. */
+  'schema?': "'main'",
 });
 
 export const readSqliteOperations = createSqlOperationsReader<SqlitePlanTargetDetails>({

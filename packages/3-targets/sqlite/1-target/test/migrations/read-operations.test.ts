@@ -52,6 +52,29 @@ describe('readSqliteOperations', () => {
     expect(readSqliteOperations([rebuild])).toEqual([rebuild]);
   });
 
+  it('reads the schema name that releases up to 8.0.0-rc.19 wrote into target details', () => {
+    const op = structuredClone(rebuild);
+    Reflect.set(op.target.details, 'schema', 'main');
+    expect(readSqliteOperations([op])).toEqual([op]);
+  });
+
+  it('refuses a schema name other than main', () => {
+    const op = structuredClone(rebuild);
+    Reflect.set(op.target.details, 'schema', 'other');
+    expect(reasonOf(() => readSqliteOperations([op]))).toMatch(
+      /^Operation 0 \("table\.User\.rebuild"\) is not in a format this release of Prisma reads: target\.details\.schema /,
+    );
+  });
+
+  it('refuses a key beside the schema name that target details do not define', () => {
+    const op = structuredClone(rebuild);
+    Reflect.set(op.target.details, 'schema', 'main');
+    Reflect.set(op.target.details, 'unexpected', 1);
+    expect(reasonOf(() => readSqliteOperations([op]))).toBe(
+      'Operation 0 ("table.User.rebuild") is not in a format this release of Prisma reads: target.details.unexpected must be removed.',
+    );
+  });
+
   it.each([
     [
       'the target details',
