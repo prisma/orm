@@ -41,14 +41,25 @@ function readJson(side: Side, relative: string): unknown {
   return JSON.parse(readFileSync(path(side, relative), 'utf8'));
 }
 
+function nonEmpty(list: string[], what: string): string[] {
+  if (list.length === 0) throw new Error(`The fixture has no ${what}`);
+  return list;
+}
+
 function migrationDirs(side: Side, spaceDir: string): string[] {
-  return readdirSync(path(side, spaceDir), { withFileTypes: true })
-    .filter((entry) => entry.isDirectory() && /^\d{8}T\d{4}_/.test(entry.name))
-    .map((entry) => entry.name);
+  return nonEmpty(
+    readdirSync(path(side, spaceDir), { withFileTypes: true })
+      .filter((entry) => entry.isDirectory() && /^\d{8}T\d{4}_/.test(entry.name))
+      .map((entry) => entry.name),
+    `migration packages in ${side}/${spaceDir}`,
+  );
 }
 
 function snapshotHashes(side: Side, migrationsDir: string): string[] {
-  return readdirSync(path(side, join(migrationsDir, 'snapshots')));
+  return nonEmpty(
+    readdirSync(path(side, join(migrationsDir, 'snapshots'))),
+    `snapshots in ${side}/${migrationsDir}`,
+  );
 }
 
 describe.each(Object.entries(projects))('the %s project after the script', (_name, project) => {
@@ -59,9 +70,7 @@ describe.each(Object.entries(projects))('the %s project after the script', (_nam
   });
 
   it('has migration packages this release reads, each with its unchanged migrationHash verified', async () => {
-    const dirs = migrationDirs('after', project.spaceDir);
-    expect(dirs.length).toBeGreaterThan(0);
-    for (const dir of dirs) {
+    for (const dir of migrationDirs('after', project.spaceDir)) {
       const pkg = await readMigrationPackage(path('after', join(project.spaceDir, dir)), {
         migrationsDir: path('after', project.migrationsDir),
       });
@@ -198,6 +207,7 @@ describe.each(Object.entries(GUIDE_PATHS))('the %s guide detection', (_audience,
 
   it('finds every stored file the script rewrites', () => {
     const rewritten = Object.keys(after).filter((file) => after[file] !== before[file]);
+    expect(rewritten.length).toBeGreaterThan(0);
     expect(rewritten.filter((file) => !detects(before[file] ?? ''))).toEqual([]);
   });
 
