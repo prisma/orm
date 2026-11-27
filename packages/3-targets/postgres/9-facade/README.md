@@ -379,7 +379,7 @@ flowchart TD
     Lazy --> Bind[Resolve binding: url or pg]
     Bind --> Pool[pg.Pool for url binding]
     Bind --> Reuse[Reuse Pool or Client for pg binding]
-    Lazy --> Runtime[new PostgresRuntimeImpl]
+    Lazy --> Runtime[new PostgresRuntimeImpl, exported as Ea_PostgresRuntimeImpl]
 
     Runtime --> Target[@internal/target-postgres]
     Runtime --> Adapter[@internal/adapter-postgres]
