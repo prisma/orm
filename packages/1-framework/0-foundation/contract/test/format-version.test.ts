@@ -128,7 +128,7 @@ describe('readFormatVersion', () => {
         }),
       );
 
-    it('advises a contract snapshot no release wrote to be restored, not emitted', () => {
+    it('advises a contract snapshot no release wrote to be restored, or deleted and written again by the command that writes it', () => {
       expect(
         caught(() =>
           convertContractDocument(
@@ -139,7 +139,9 @@ describe('readFormatVersion', () => {
       ).toMatchObject({
         code: 'CONTRACT.FORMAT_VERSION_MISSING',
         message: 'The contract snapshot "/m/snapshots/abc/contract.json" has no format version',
-        fix: 'No release of Prisma wrote this file. Restore it from version control; `{bin} contract emit` does not rewrite a snapshot.',
+        fix: expect.stringMatching(
+          /^No release of Prisma wrote this file\. Restore it from version control\. A command writes a contract snapshot only where none exists, so emitting the contract again does not change it\. If it is the snapshot of the emitted contract, you can instead delete its folder .*`\{bin\} db migrate --advance-ref db` .*after applying any pending migrations.*`\{bin\} db sign` .*`\{bin\} contract emit`/,
+        ),
         nextActions: [{ kind: 'user-choice', label: 'Restore the snapshot from version control' }],
       });
     });

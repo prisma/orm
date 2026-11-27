@@ -38,7 +38,7 @@ import {
 import { closeQuietly, maskConnectionUrl } from '../../utils/command-helpers';
 import { RECORDED_CONTRACT_REF_FORMS } from '../../utils/contract-ref-forms';
 import { contractValidationMeta } from '../../utils/contract-validation-meta';
-import { snapshotRewriteAt } from '../../utils/next-actions';
+import { type SnapshotHead, snapshotRewriteAt } from '../../utils/next-actions';
 import { type CliInvocation, cliCommand, cliInvocation } from '../../utils/printed-command';
 import { dataLine } from '../data-lines';
 import { defineOrmCommand } from '../define-command';
@@ -406,7 +406,7 @@ function hydrateContract(
   config: PrismaConfig,
   json: unknown,
   path: string,
-  snapshot: { readonly atHead: boolean } | undefined,
+  snapshot: { readonly head: SnapshotHead | undefined } | undefined,
 ): Result<Contract, CliStructuredError> {
   try {
     return okResult(config.family.create(createControlStack(config)).deserializeContract(json));
@@ -423,14 +423,14 @@ function hydrateContract(
             ? {}
             : {
                 artifact: 'snapshot' as const,
-                ...(snapshot.atHead
-                  ? {
+                ...(snapshot.head === undefined
+                  ? {}
+                  : {
                       rewrittenBy: snapshotRewriteAt(
-                        APP_SPACE_ID,
+                        snapshot.head,
                         relative(process.cwd(), dirname(path)),
                       ),
-                    }
-                  : {}),
+                    }),
               }),
         },
       ),
@@ -604,7 +604,15 @@ export function createDbSignCommand(
           resolvedRef.value.contractJson,
           resolvedRef.value.contractJsonPath,
           resolvedRef.value.source === 'snapshot'
-            ? { atHead: resolvedRef.value.hash === emitted.value.contract.storage.storageHash }
+            ? {
+                head:
+                  resolvedRef.value.hash === emitted.value.contract.storage.storageHash
+                    ? {
+                        spaceId: APP_SPACE_ID,
+                        reachedByMigration: true,
+                      }
+                    : undefined,
+              }
             : undefined,
         );
         if (!hydrated.ok) {

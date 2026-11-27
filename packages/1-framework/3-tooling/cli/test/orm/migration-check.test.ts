@@ -254,8 +254,9 @@ describe('migration check', () => {
         { kind: 'user-choice', label: 'Restore the migration package from version control' },
         {
           kind: 'run-command',
-          label: 'Or write migration.json and ops.json again from its migration.ts',
-          command: 'node "migrations/app/20250102T0000_broken/migration.ts"',
+          label:
+            'Or, if no database has applied this migration, delete the folder migrations/app/20250102T0000_broken and the folders of the migrations that start where it ends, and plan again',
+          command: 'prisma-test migration plan',
         },
       ]);
     });

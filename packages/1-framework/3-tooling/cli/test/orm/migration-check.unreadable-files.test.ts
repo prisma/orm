@@ -174,13 +174,13 @@ describe('migration check on a file it cannot read', () => {
         why: `Migration "20250101T0000_initial" ends at the contract snapshot ${snapshotPath}, which this release of Prisma cannot read: zzz must be removed`,
         nextActions: [
           {
+            kind: 'user-choice',
+            label: 'If the file was edited by hand, restore it from version control',
+          },
+          {
             kind: 'open-url',
             label: 'If an earlier release wrote the snapshot, follow the app upgrade instructions',
             url: APP_UPGRADE_GUIDES_URL,
-          },
-          {
-            kind: 'user-choice',
-            label: 'If the file was edited by hand, restore it from version control',
           },
         ],
       },
@@ -200,16 +200,15 @@ describe('migration check on a file it cannot read', () => {
     }
   }
 
-  it('reads strictly the snapshot a ref names, though another migration starts from it, and advises moving the ref', async () => {
+  it('reads strictly the snapshot a ref names, though another migration starts from it, and advises moving each ref but db', async () => {
     const dir = await projectDir();
     const migrationsDir = join(dir, 'migrations');
     await seedMigration(migrationsDir);
     await seedMigration(migrationsDir, { dirName: '20250102T0000_next', from: HASH_A, to: HASH_B });
     await seedSnapshots(migrationsDir, [HASH_A, HASH_B]);
-    await writeRef(join(migrationsDir, 'app', 'refs'), 'production', {
-      hash: HASH_A,
-      invariants: [],
-    });
+    for (const name of ['db', 'production']) {
+      await writeRef(join(migrationsDir, 'app', 'refs'), name, { hash: HASH_A, invariants: [] });
+    }
     await addUnknownKey(join(contractSnapshotDir(migrationsDir, HASH_A), 'contract.json'));
 
     const run = await harness(strictFamilyConfig()).run(['migration', 'check', '--json'], {
@@ -221,15 +220,15 @@ describe('migration check on a file it cannot read', () => {
       {
         code: 'MIGRATION.CHECK_SNAPSHOT_UNPARSEABLE',
         nextActions: [
+          {
+            kind: 'user-choice',
+            label: 'If the file was edited by hand, restore it from version control',
+          },
           expect.objectContaining({ kind: 'open-url' }),
           {
             kind: 'run-command',
             label: 'Or point the ref "production" at a migration whose snapshot this release reads',
             command: '{bin} migration ref set production <hash>',
-          },
-          {
-            kind: 'user-choice',
-            label: 'If the file was edited by hand, restore it from version control',
           },
         ],
       },

@@ -73,6 +73,7 @@ import {
   dbUpdateRerun,
   rerunFlags,
 } from '../../utils/printed-command';
+import { snapshotVerifierFor } from '../../utils/snapshot-content-verification';
 import { defineOrmCommand } from '../define-command';
 import { dbFlag, permitPolicyChangeFlag } from '../flags';
 import { displayPath, migrationsDirFor } from '../migration/paths';
@@ -83,6 +84,7 @@ import { dbUpdateStatementVerbs } from '../statement-verbs';
 import { migrationResultBlocks, migrationResultNextActions } from './migration-blocks';
 import { plannerWarningsCollector } from './planner-warnings';
 import { prepareMigrationRun } from './prepare';
+import { warnUnrecordedSnapshots } from './unrecorded-snapshots';
 
 function updatePresentations(inputs: {
   readonly document: MigrationCommandResult;
@@ -421,11 +423,15 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
       const { client, contractPath, dbConnection, migrationsDir, refsDir } = prepared.value;
       const contractJson = destination?.contractJson ?? prepared.value.contractJson;
       const snapshotContractPath = destination?.contractJsonPath ?? contractPath;
-      const destinationRewrite = (snapshot: ResolveContractRefToSnapshotSuccess) =>
-        snapshot.hash === storageHashOf(prepared.value.contractJson)
+      const destinationRewrite =
+        destination?.source === 'snapshot' &&
+        destination.hash === storageHashOf(prepared.value.contractJson)
           ? snapshotRewriteAt(
-              APP_SPACE_ID,
-              relative(process.cwd(), dirname(snapshot.contractJsonPath)),
+              {
+                spaceId: APP_SPACE_ID,
+                reachedByMigration: true,
+              },
+              relative(process.cwd(), dirname(destination.contractJsonPath)),
             )
           : undefined;
 
@@ -442,7 +448,7 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
           config: ctx.config,
           client,
           ...(destination?.source === 'snapshot'
-            ? { snapshot: { rewrittenBy: destinationRewrite(destination) } }
+            ? { snapshot: { rewrittenBy: destinationRewrite } }
             : {}),
         });
         if (!preflight.ok) {
@@ -457,6 +463,13 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
       try {
         await client.connect(dbConnection);
 
+        await warnUnrecordedSnapshots({
+          report: ctx.report,
+          migrationsDir,
+          verifySnapshotContent: snapshotVerifierFor(ctx.config),
+          command: 'db update',
+          cwd: ctx.cwd,
+        });
         const plannerWarnings = plannerWarningsCollector(ctx.report);
         const statementArgs = [
           ...planned,
@@ -482,7 +495,7 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
             ctx.report({
               kind: 'message',
               severity: 'warn',
-              text: `Could not read the contract snapshot ${displayPath(path, ctx.cwd)}, which holds the contract the database is at: ${reason}. db update plans without it, so the questions about data it would lose name tables and columns by their storage names, and a rename statement cannot be resolved.`,
+              text: `Could not read the contract snapshot ${displayPath(path, ctx.cwd)}, which holds the contract the database is at: ${reason}. db update plans without it, so the questions about data it would lose name what they remove by its storage name, and a rename statement cannot be resolved.`,
             }),
           onProgress: controlProgressReporter(ctx.report),
         });
@@ -542,7 +555,7 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
                   ...(destination?.source === 'snapshot'
                     ? {
                         artifact: 'snapshot' as const,
-                        ...ifDefined('rewrittenBy', destinationRewrite(destination)),
+                        ...ifDefined('rewrittenBy', destinationRewrite),
                       }
                     : {}),
                 },

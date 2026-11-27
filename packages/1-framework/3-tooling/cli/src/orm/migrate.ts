@@ -85,6 +85,7 @@ import { snapshotVerifierFor } from '../utils/snapshot-content-verification';
 import { dataLine } from './data-lines';
 import { perSpaceBlocks } from './db/migration-blocks';
 import { prepareMigrationRun } from './db/prepare';
+import { warnUnrecordedSnapshots } from './db/unrecorded-snapshots';
 import { defineOrmCommand } from './define-command';
 import { dbFlag, permitPolicyChangeFlag } from './flags';
 import { displayPath, migrationsDirFor } from './migration/paths';
@@ -660,7 +661,7 @@ export function createMigrateCommand(
               const mapped = mapContractAtError(error, {
                 artifactRole: 'to',
                 ...(refEntry.hash === appContract.storage.storageHash
-                  ? { atHeadOf: aggregate.app.spaceId }
+                  ? { atHeadOf: { spaceId: aggregate.app.spaceId, reachedByMigration: true } }
                   : {}),
               });
               if (!mapped.ok) {
@@ -722,6 +723,13 @@ export function createMigrateCommand(
           }
         }
 
+        await warnUnrecordedSnapshots({
+          report: ctx.report,
+          migrationsDir,
+          verifySnapshotContent: snapshotVerifierFor(ctx.config),
+          command: 'db migrate',
+          cwd: ctx.cwd,
+        });
         const applied = await client.migrate({
           contract: applyContract,
           migrationsDir,

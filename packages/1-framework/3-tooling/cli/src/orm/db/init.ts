@@ -19,6 +19,7 @@ import { closeQuietly } from '../../utils/command-helpers';
 import { contractValidationMeta } from '../../utils/contract-validation-meta';
 import type { MigrationCommandResult } from '../../utils/formatters/migrations';
 import { type CliInvocation, cliCommand, cliInvocation } from '../../utils/printed-command';
+import { snapshotVerifierFor } from '../../utils/snapshot-content-verification';
 import { defineOrmCommand } from '../define-command';
 import { dbFlag } from '../flags';
 import { normalizeError } from '../normalize-error';
@@ -26,6 +27,7 @@ import { controlProgressReporter } from '../progress';
 import { migrationResultBlocks, migrationResultNextActions } from './migration-blocks';
 import { plannerWarningsCollector } from './planner-warnings';
 import { prepareMigrationRun } from './prepare';
+import { warnUnrecordedSnapshots } from './unrecorded-snapshots';
 
 function initPresentations(inputs: {
   readonly document: MigrationCommandResult;
@@ -178,6 +180,13 @@ export function createDbInitCommand(createClient: CreateControlClient) {
       try {
         await client.connect(dbConnection);
 
+        await warnUnrecordedSnapshots({
+          report: ctx.report,
+          migrationsDir,
+          verifySnapshotContent: snapshotVerifierFor(ctx.config),
+          command: 'db init',
+          cwd: ctx.cwd,
+        });
         const plannerWarnings = plannerWarningsCollector(ctx.report);
         const result = await client.dbInit({
           contract: contractJson,

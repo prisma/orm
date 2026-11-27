@@ -63,7 +63,7 @@ import {
   runCommandAction,
   snapshotRepairActions,
 } from '../../utils/next-actions';
-import { formatVersionFailure } from './caught-errors';
+import { formatVersionFailure, reasonOf } from './caught-errors';
 import { mapContractAtError } from './contract-at-errors';
 import { unreadableFiles } from './contract-space-aggregate-loader';
 
@@ -146,6 +146,7 @@ async function checkSnapshotConsistency(
       spaceId,
       hash: pkg.metadata.to,
       headHash: space.headHash,
+      headReachedByMigration: true,
       migrationsDir,
       cwd: space.cwd,
     },
@@ -172,14 +173,7 @@ async function checkSnapshotConsistency(
       code: 'MIGRATION.CHECK_SNAPSHOT_HASH_MISMATCH',
       where: migrationPathRelative(space.cwd, pkg.dirPath),
       why: `Migration "${pkg.dirName}" declares to=${pkg.metadata.to} but its contract snapshot has storageHash=${snapshotHash}`,
-      nextActions: [
-        chooseAction('Restore migrations/snapshots/ from version control'),
-        ...migrationPackageRepairActions({
-          spaceId: space.spaceId,
-          packageDir: pkg.dirPath,
-          cwd: space.cwd,
-        }),
-      ],
+      nextActions: repairActions.filter((action) => action.kind !== 'open-url'),
     };
   }
   if (space.verifySnapshotContent !== undefined) {
@@ -213,11 +207,6 @@ async function checkSnapshotConsistency(
     return unreadable(reasonOf(error), repairActions);
   }
   return null;
-}
-
-function reasonOf(error: unknown): string {
-  if (MigrationToolsError.is(error)) return error.why;
-  return error instanceof Error ? error.message : String(error);
 }
 
 /**
@@ -274,7 +263,7 @@ export interface EnumerateCheckSpacesInputs {
  * contract-space directory, in the aggregate's `app`-first ordering. Mirrors
  * `migration list`'s `migrationSpaceListEntriesFromAggregate`: space
  * membership matches the on-disk directories, package / ref / graph data come
- * from `aggregate.space(id)`. Load the aggregate with `onUnreadableFile: 'report'`, so each migration it could not read is reported here.
+ * from `aggregate.space(id)`. Load the aggregate with `whenFileUnreadable: 'report'`, so each migration it could not read is reported here.
  */
 export async function enumerateCheckSpaces(
   inputs: EnumerateCheckSpacesInputs,

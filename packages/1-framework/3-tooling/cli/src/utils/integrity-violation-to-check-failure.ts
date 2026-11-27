@@ -184,6 +184,7 @@ export function integrityViolationToCheckFailure(
                 spaceId: violation.spaceId,
                 hash: violation.hash,
                 headHash: violation.hash,
+                headReachedByMigration: false,
                 migrationsDir,
                 cwd,
               }),

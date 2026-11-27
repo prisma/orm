@@ -374,7 +374,7 @@ describe('errorContractSnapshotContentMismatch', () => {
     });
 
     expect(error.fix).toBe(
-      'Restore the snapshot from version control. A command writes a snapshot only where none exists, so to write it again, delete its folder first: `{bin} db migrate --advance-ref db` then writes the snapshot of the emitted contract from contract.json, and `{bin} contract emit` writes the head snapshot of each extension from the installed extension.',
+      'Restore the snapshot from version control. If it is the snapshot of the emitted contract or the head snapshot of an extension, you can instead delete its folder and write it again, since a command writes a snapshot only where none exists. For the emitted contract, run `{bin} db migrate --advance-ref db` when a migration ends at it, which first applies any pending migrations to the configured database, or `{bin} db sign` when none does, which first checks that the configured database matches contract.json and records that in the database; each then moves the db ref to contract.json and writes the snapshot from it. For an extension, run `{bin} contract emit`, which also emits contract.json from the contract source.',
     );
   });
 });

@@ -9,14 +9,14 @@ import {
   errorUnexpected,
 } from '../../utils/cli-errors';
 import { contractValidationMeta } from '../../utils/contract-validation-meta';
-import { snapshotRewriteAt } from '../../utils/next-actions';
+import { type SnapshotHead, snapshotRewriteAt } from '../../utils/next-actions';
 
 export function mapContractAtError(
   error: unknown,
   options?: {
     readonly artifactRole?: 'from' | 'to';
     /** The space whose head the snapshot is at, when it is: a command writes that snapshot again once it is deleted. */
-    readonly atHeadOf?: string;
+    readonly atHeadOf?: SnapshotHead;
   },
 ): Result<never, CliStructuredError> {
   const rewrittenBy = (filePath: string) =>

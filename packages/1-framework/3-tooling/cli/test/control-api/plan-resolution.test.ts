@@ -549,7 +549,7 @@ describe('resolveFromForPlan', () => {
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.failure.fix).toContain(
-        `/snapshots/${HASH_A} and run \`{bin} db migrate --advance-ref db\`, which writes it again from contract.json.`,
+        `/snapshots/${HASH_A} and run \`{bin} db migrate --advance-ref db\`, which applies any pending migrations to the configured database, then moves the db ref to contract.json and writes the snapshot again from it.`,
       );
     }
   });

@@ -154,7 +154,7 @@ export interface StoredFileLocation {
 }
 
 export interface ContractFileLocation extends StoredFileLocation {
-  /** Whether the file is a contract snapshot in the migrations folder, which no command rewrites once it exists. */
+  /** Whether the file is a contract snapshot in the migrations folder, which a command writes only where none exists. */
   readonly snapshot?: boolean | undefined;
 }
 
@@ -386,7 +386,7 @@ const BOTH_FIELDS_ADVICE: Pick<StructuredError, 'fix' | 'nextActions'> = {
 };
 
 const SNAPSHOT_REMAKE_ADVICE: Pick<StructuredError, 'fix' | 'nextActions'> = {
-  fix: 'No release of Prisma wrote this file. Restore it from version control; `{bin} contract emit` does not rewrite a snapshot.',
+  fix: 'No release of Prisma wrote this file. Restore it from version control. A command writes a contract snapshot only where none exists, so emitting the contract again does not change it. If it is the snapshot of the emitted contract, you can instead delete its folder and write it again: `{bin} db migrate --advance-ref db` writes it when a migration ends at that contract, after applying any pending migrations to the configured database, and `{bin} db sign` writes it when none does, after checking that the configured database matches contract.json and recording that in the database; each also moves the db ref to that contract. If it is the head snapshot of an extension, delete its folder and run `{bin} contract emit`, which writes it again from the installed extension and also emits contract.json from the contract source.',
   nextActions: [{ kind: 'user-choice', label: 'Restore the snapshot from version control' }],
 };
 
