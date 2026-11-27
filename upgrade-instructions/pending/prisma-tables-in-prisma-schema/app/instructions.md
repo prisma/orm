@@ -2,7 +2,7 @@
 changes:
   - id: prisma-tables-move-to-prisma-schema
     summary: |
-      On PostgreSQL, Prisma's own tables (`marker`, `ledger` and `contract`) move from the schema `prisma_contract` to the schema `_prisma`. The first command that changes the database (`prisma db init`, `db update`, `db migrate` or `db sign`) renames the schema and keeps every row. Run one of them against each database once, with the new release, before the application on the new release reads it. After that, only the new release may change the database: a release candidate's command applies every migration again. The command stops without changing anything when the role that runs it does not own the schema and its tables, when `_prisma` already exists beside `prisma_contract` and is not empty or is owned by another role, or when one of Prisma's tables is in a form this release does not bring up to date.
+      On PostgreSQL, Prisma's own tables (`marker`, `ledger` and `contract`) move from the schema `prisma_contract` to the schema `_prisma`. The first command that changes the database (`prisma db init`, `db update`, `db migrate` or `db sign`) renames the schema and keeps every row. Run one of them against each database once, with the new release, before the application on the new release reads it. After that, only the new release may change the database: a release candidate's command applies every migration again. The command stops without changing anything when the role that runs it does not own the schema and its tables or may not create in the database, when `_prisma` already exists beside `prisma_contract` and is not empty or is owned by another role, or when one of Prisma's tables is in a form this release does not bring up to date.
     detection:
       glob: "**/package.json"
       matches:
@@ -50,7 +50,7 @@ The command checks the following before it renames, and stops without changing a
 
 ```sql
 SELECT nspowner::regrole FROM pg_namespace WHERE nspname = 'prisma_contract';
-SELECT relname, relowner::regrole FROM pg_class WHERE relnamespace = to_regnamespace('prisma_contract');
+SELECT relname, relowner::regrole FROM pg_class WHERE relnamespace = to_regnamespace('prisma_contract') AND relkind = 'r';
 ```
 
 Give the schema and its three tables to the role that runs migrations, then run the command as usual. This needs a person with the administrator role, so ask the user first:
@@ -83,7 +83,16 @@ The command checks two things first, and stops without changing anything if eith
   DROP SCHEMA "_prisma";
   ```
 
-When `_prisma` is not empty, do not drop either schema before you know which holds the records. First list the tables in each:
+When `_prisma` is not empty, first list everything in it, as the check sees it. This lists every kind of object, including functions, types, sequences and extensions, which a list of tables does not show:
+
+```sql
+SELECT pg_describe_object(classid, objid, objsubid) FROM pg_depend
+WHERE refclassid = 'pg_namespace'::regclass AND refobjid = to_regnamespace('_prisma') AND deptype = 'n';
+```
+
+If `_prisma` holds none of the tables `marker`, `ledger` and `contract`, what it holds is the project's own, not Prisma's records. Stop and ask the user, then either move each object to another schema (for example `ALTER FUNCTION "_prisma"."<function>"(<argument types>) SET SCHEMA <other schema>` or `ALTER TYPE "_prisma"."<type>" SET SCHEMA <other schema>`) and change the project's code that names it, or drop it. Then run the command again: it drops the now empty `_prisma` and renames `prisma_contract`.
+
+If `_prisma` holds any of those tables, do not drop either schema before you know which holds the records. First list the tables in each:
 
 ```sql
 SELECT table_schema, table_name FROM information_schema.tables
