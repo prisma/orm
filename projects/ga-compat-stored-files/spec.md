@@ -56,7 +56,7 @@ Today none of this is guaranteed. Only `contract.json` carries a format version,
 ## Not in this project
 
 - Prisma's own tables in the database (the marker, the ledger and the contract table) and how they are brought up to date. That is project 7 of the stream. The marker and ledger get no format version.
-- Any reader for a file a release candidate wrote.
+- Reading a file a release candidate wrote, from `8.0.0` on. Until `8.0.0` such a file is read as format version 0 and converted in memory.
 - `contract.d.ts`. It is TypeScript and is covered by the API compatibility projects.
 - A second format version of any file.
 
