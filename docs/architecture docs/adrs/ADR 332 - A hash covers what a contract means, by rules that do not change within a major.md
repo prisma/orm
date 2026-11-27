@@ -49,9 +49,13 @@ A release that writes different `storage` content for a contract produces a diff
 
 ### The capability list does not change within a major
 
-Within a major version, the capability list Prisma writes for an unchanged contract source and the same configuration does not change either, so the profile hash of an unchanged contract does not change. A release may add a capability only to a list that no existing contract was emitted with.
+From `8.0.0`, the capability list of an unchanged contract source with the same configuration does not change within a major version, so its profile hash does not change. The list a contract requires is the one its author wrote ([ADR 335](ADR%20335%20-%20A%20contract%20lists%20the%20capabilities%20it%20requires.md)), and the lists Prisma publishes for an author to write, one for each supported database version and one for the driver, do not change within a major. A feature that needs a new capability arrives in a minor release only with a new version's list, which no existing contract was emitted with.
 
-This binds every component that declares capabilities, inside or outside this repository: a target, an adapter, an extension or a driver. A component that adds a capability on a database version already supported changes the list of every contract that uses it, so that change ships only in a major release: a Prisma major for Prisma's own components, and a major release of the component itself for one built outside this repository. This is the cost of the rule: a feature that needs a new capability flag on a database version already supported waits for the next major, even when the database has always offered it.
+This binds every component that publishes a list of capabilities, inside or outside this repository: a target, a driver or an extension. It ships a change to a published list only in a major release: a Prisma major for Prisma's own components, and a major release of the component itself for one built outside this repository. This is the cost of the rule: a feature that needs a new capability on a database version already supported waits for the next major, even when the database has always offered it.
+
+In PostgreSQL, a test pins each version's list and the driver's as literals. A target without such a test relies on review.
+
+Before `8.0.0` the rule does not yet hold for a contract that lists no capabilities. Such a contract gets a default list, the newest supported version's and the driver's, and that default grows when a newer version is added (ADR 335). From `8.0.0` there is no default.
 
 ## Why
 
@@ -64,7 +68,7 @@ Each hash covers only what it identifies, so that nothing else can move it. A ha
 ## Consequences
 
 - An upgrade within a major changes no hash, so it needs no change to a user's files or databases.
-- A mistake in the rules, and a capability a supported database version lacks in its list, both wait for the next major. No test pins a target's whole capability list, so a change to one is caught by review.
+- A mistake in the rules, and a capability a supported database version lacks in its list, both wait for the next major.
 - A family or target built outside this repository carries the same obligation for its part of the rules, and has the same test to hold it.
 - A project whose hashes were computed by other rules, such as one created by a Prisma 8 pre-release, cannot be moved by the migration system, which has no mechanism for changing a hash. The upgrade instructions move it: a script rewrites the hashes in its files, and each database is signed again with `prisma db sign`.
 - `prisma db sign --force` exists for that move. A database whose change policy allows only migrations refuses `db sign` ([ADR 320](ADR%20320%20-%20Databases%20record%20a%20change%20policy%20and%20a%20data%20protection%20policy.md)), and `--force` overrides that one refusal. It changes no schema, still checks that the database satisfies the contract before it writes the marker, and leaves the database's policies as they were. No error or advice offers the flag; the upgrade instructions do.
