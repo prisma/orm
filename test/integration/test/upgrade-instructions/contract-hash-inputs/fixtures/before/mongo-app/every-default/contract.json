@@ -4,7 +4,7 @@
   "targetFamily": "mongo",
   "profileHash": "251b3ce23f6c9f561892e7c1af9d2cc941a13d64ba1aa7226b90036b09568cc3",
   "storage": {
-    "storageHash": "aa367e8797097bb36d35ac39e0558ce28c83d680d4c98e80e5b2dcff7e574368",
+    "storageHash": "88dd7327de49a75527fcc8e2a09140535b7de2a97eeb4001669e851cf8341e0b",
     "namespaces": {
       "app": {
         "id": "app",
@@ -86,6 +86,10 @@
                       "items": [
                         {
                           "bsonType": "int"
+                        },
+                        {
+                          "bsonType": "object",
+                          "properties": {}
                         }
                       ],
                       "additionalItems": false
@@ -97,6 +101,80 @@
                           "bsonType": "object",
                           "required": []
                         }
+                      }
+                    },
+                    "choice": {
+                      "oneOf": [
+                        {
+                          "bsonType": "null"
+                        },
+                        {
+                          "bsonType": "object",
+                          "properties": {}
+                        }
+                      ]
+                    },
+                    "either": {
+                      "anyOf": [
+                        {
+                          "bsonType": "string"
+                        },
+                        {
+                          "bsonType": "object",
+                          "required": []
+                        }
+                      ]
+                    },
+                    "both": {
+                      "allOf": [
+                        {
+                          "bsonType": "object",
+                          "required": []
+                        }
+                      ]
+                    },
+                    "notThis": {
+                      "not": {
+                        "bsonType": "object",
+                        "properties": {}
+                      }
+                    },
+                    "list": {
+                      "bsonType": "array",
+                      "items": {
+                        "bsonType": "object",
+                        "required": []
+                      }
+                    },
+                    "tuple": {
+                      "bsonType": "array",
+                      "items": [
+                        {
+                          "bsonType": "int"
+                        }
+                      ],
+                      "additionalItems": {
+                        "bsonType": "object",
+                        "properties": {}
+                      }
+                    },
+                    "open": {
+                      "bsonType": "object",
+                      "additionalProperties": {
+                        "bsonType": "object",
+                        "required": []
+                      }
+                    },
+                    "linked": {
+                      "bsonType": "object",
+                      "dependencies": {
+                        "a": {
+                          "bsonType": "object",
+                          "properties": {}
+                        },
+                        "b": [
+                          "a"
+                        ]
                       }
                     }
                   },
@@ -137,6 +215,23 @@
                     "typeParams": {}
                   },
                   "many": false
+                },
+                "contact": {
+                  "nullable": true,
+                  "type": {
+                    "kind": "union",
+                    "members": [
+                      {
+                        "kind": "scalar",
+                        "codecId": "mongo/string@1",
+                        "typeParams": {}
+                      },
+                      {
+                        "kind": "scalar",
+                        "codecId": "mongo/int32@1"
+                      }
+                    ]
+                  }
                 }
               }
             }

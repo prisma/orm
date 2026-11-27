@@ -78,6 +78,9 @@
                       "items": [
                         {
                           "bsonType": "int"
+                        },
+                        {
+                          "bsonType": "object"
                         }
                       ],
                       "additionalItems": false
@@ -88,6 +91,70 @@
                         "^x_": {
                           "bsonType": "object"
                         }
+                      }
+                    },
+                    "choice": {
+                      "oneOf": [
+                        {
+                          "bsonType": "null"
+                        },
+                        {
+                          "bsonType": "object"
+                        }
+                      ]
+                    },
+                    "either": {
+                      "anyOf": [
+                        {
+                          "bsonType": "string"
+                        },
+                        {
+                          "bsonType": "object"
+                        }
+                      ]
+                    },
+                    "both": {
+                      "allOf": [
+                        {
+                          "bsonType": "object"
+                        }
+                      ]
+                    },
+                    "notThis": {
+                      "not": {
+                        "bsonType": "object"
+                      }
+                    },
+                    "list": {
+                      "bsonType": "array",
+                      "items": {
+                        "bsonType": "object"
+                      }
+                    },
+                    "tuple": {
+                      "bsonType": "array",
+                      "items": [
+                        {
+                          "bsonType": "int"
+                        }
+                      ],
+                      "additionalItems": {
+                        "bsonType": "object"
+                      }
+                    },
+                    "open": {
+                      "bsonType": "object",
+                      "additionalProperties": {
+                        "bsonType": "object"
+                      }
+                    },
+                    "linked": {
+                      "bsonType": "object",
+                      "dependencies": {
+                        "a": {
+                          "bsonType": "object"
+                        },
+                        "b": ["a"]
                       }
                     }
                   },
@@ -121,6 +188,22 @@
                   "type": {
                     "kind": "scalar",
                     "codecId": "mongo/string@1"
+                  }
+                },
+                "contact": {
+                  "nullable": true,
+                  "type": {
+                    "kind": "union",
+                    "members": [
+                      {
+                        "kind": "scalar",
+                        "codecId": "mongo/string@1"
+                      },
+                      {
+                        "kind": "scalar",
+                        "codecId": "mongo/int32@1"
+                      }
+                    ]
                   }
                 }
               }

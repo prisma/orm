@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { assertContractHashes } from '@internal/contract/hashing';
 import { describe, expect, it } from 'vitest';
-import { normalizeMongoStorage } from '../src/canonicalization-hooks';
+import { normalizeMongoStorage } from '../src/normal-form';
 
 const savedContract = (name: string) =>
   JSON.parse(readFileSync(new URL(`fixtures/hash-rules/${name}.json`, import.meta.url), 'utf8'));
@@ -21,13 +21,13 @@ describe('Mongo contract hashes', () => {
           {
             name: 'mongo, with every default the family leaves out written out and its ordered lists out of order',
             contract: savedContract('mongo-every-default-written'),
-            storageHash: '0a7a968a58bbd1bab72a504c43c77f9154385d85d3de45da2d666e13fb299b14',
+            storageHash: '5a00b01ab9c54acd0ee8dfa14dcaee9ef6e410cd199ae6ae6aecaab98c9c987c',
             profileHash: '8fe2b3350db5a83e2473520e59e52262982215115e17bb22a76239170eee6e69',
           },
           {
             name: 'mongo, with every default the family leaves out absent and its ordered lists in order',
             contract: savedContract('mongo-every-default-absent'),
-            storageHash: '0a7a968a58bbd1bab72a504c43c77f9154385d85d3de45da2d666e13fb299b14',
+            storageHash: '5a00b01ab9c54acd0ee8dfa14dcaee9ef6e410cd199ae6ae6aecaab98c9c987c',
             profileHash: '8fe2b3350db5a83e2473520e59e52262982215115e17bb22a76239170eee6e69',
           },
         ],
