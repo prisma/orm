@@ -63,7 +63,7 @@ What the check does not cover still fails with `SqlConnectionError`: a connectio
 The [project intent](../../design/00-purpose/project-intent.md) promises "no hidden extra round-trips, fallbacks or guesses", and [ADR 003](ADR%20003%20-%20One%20Query%20One%20Statement.md) promises one statement per query. The check is a trade-off against the first promise, and this record accepts it on these terms:
 
 - **It is one extra round trip, documented, on a connection idle for a second or more.** A connection used within the last second is used without one, so a busy application pays nothing. The Postgres driver's README describes it and lists every statement the driver sends that the user did not write.
-- **It sends no user statement twice.** The caller's statement is sent once, as ADR 003 says, whatever the check finds.
+- **It sends no user statement twice.** The caller's statement is compiled to one statement, as ADR 003 says, and is sent once, whatever the check finds.
 - **Taking another connection happens before any user statement is sent.** The caller asked for its statement to run on a live connection, and that is what it gets. The driver does not fall back to a second attempt after the caller's statement failed; that is the resend this record declines.
 
 ## Prior art

@@ -27,7 +27,7 @@ export interface PoolLastUse {
   recordFailedCheck(startedAt: Instant): void;
 }
 
-interface PoolUseEvents {
+interface PoolEvents {
   on(event: 'connect', listener: (client: object) => void): unknown;
   on(event: 'release', listener: (error: unknown, client: object) => void): unknown;
 }
@@ -36,16 +36,20 @@ class PoolLastUseRecord implements PoolLastUse {
   readonly #clock: Clock;
   readonly #lastUsed = new WeakMap<object, Instant>();
   #evictionCutoff: number | undefined;
+  #seenConnect = false;
 
-  constructor(pool: PoolUseEvents, clock: Clock) {
+  constructor(pool: PoolEvents, clock: Clock) {
     this.#clock = clock;
-    pool.on('connect', (client) => this.#lastUsed.set(client, clock.now()));
+    pool.on('connect', (client) => {
+      this.#seenConnect = true;
+      this.#lastUsed.set(client, clock.now());
+    });
     pool.on('release', (_error, client) => this.#lastUsed.set(client, clock.now()));
   }
 
   verdict(client: object): CheckoutVerdict {
     const lastUsed = this.#lastUsed.get(client);
-    if (lastUsed === undefined) return 'check';
+    if (lastUsed === undefined) return this.#predatesRecord() ? 'evict' : 'check';
     if (this.#evictionCutoff !== undefined && lastUsed.monotonic < this.#evictionCutoff)
       return 'evict';
     const now = this.#clock.now();
@@ -56,6 +60,11 @@ class PoolLastUseRecord implements PoolLastUse {
 
   now(): Instant {
     return this.#clock.now();
+  }
+
+  /** A pool that emitted `connect` while the record listened gives every client it opens since a record, so a client without one was last used before the record existed, and so before any cutoff. */
+  #predatesRecord(): boolean {
+    return this.#seenConnect && this.#evictionCutoff !== undefined;
   }
 
   recordFailedCheck(startedAt: Instant): void {
@@ -70,10 +79,10 @@ function isRecent(idleMillis: number): boolean {
   return idleMillis >= 0 && idleMillis < livenessCheckLimits.checkAfterIdleMillis;
 }
 
-const records = new WeakMap<PoolUseEvents, PoolLastUse>();
+const records = new WeakMap<PoolEvents, PoolLastUse>();
 
 /** The record of when each client of `pool` was last used. One per pool, however many drivers share it. */
-export function poolLastUse(pool: PoolUseEvents, clock: Clock = systemClock): PoolLastUse {
+export function poolLastUse(pool: PoolEvents, clock: Clock = systemClock): PoolLastUse {
   let record = records.get(pool);
   if (record === undefined) {
     record = new PoolLastUseRecord(pool, clock);

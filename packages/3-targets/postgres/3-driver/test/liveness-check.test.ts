@@ -128,9 +128,24 @@ describe('the record of when each pooled client was last used', () => {
     expect(use.verdict(client)).toBe('use');
   });
 
-  it('checks a client it has no record of, even once a check failed', () => {
+  it('checks a client it has no record of, once a check failed, on a pool that has emitted no connect', () => {
     const { use } = setUp();
     use.recordFailedCheck(use.now());
+
+    expect(use.verdict({})).toBe('check');
+  });
+
+  it('evicts a client it has no record of, once a check failed, on a pool that has emitted connect', () => {
+    const { pool, use } = setUp();
+    pool.emit('connect', {});
+    use.recordFailedCheck(use.now());
+
+    expect(use.verdict({})).toBe('evict');
+  });
+
+  it('checks a client it has no record of on a pool that has emitted connect, while no check has failed', () => {
+    const { pool, use } = setUp();
+    pool.emit('connect', {});
 
     expect(use.verdict({})).toBe('check');
   });
