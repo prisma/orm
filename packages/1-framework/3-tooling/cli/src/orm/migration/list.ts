@@ -90,7 +90,7 @@ export const migrationListCommand = defineOrmCommand({
 
     const loaded = await buildReadAggregate(ctx.config, {
       migrationsDir,
-      onUnreadableFile: 'report',
+      whenFileUnreadable: 'report',
     });
     if (!loaded.ok) {
       return notOk(normalizeError(loaded.failure));

@@ -221,15 +221,15 @@ export interface DbInitOptions extends PlannerWarningsListener {
   readonly onProgress?: OnControlProgress;
 }
 
-/**
- * Options for the dbUpdate operation.
- */
 /** A stored file a run could not read and went on without, and why. */
 export interface UnreadableStoredFile {
   readonly path: string;
   readonly reason: string;
 }
 
+/**
+ * Options for the dbUpdate operation.
+ */
 export interface DbUpdateOptions extends PlannerWarningsListener {
   /** Called when the contract snapshot the database's marker names cannot be read: the run plans on without the contract the database is at. */
   readonly onUnreadableOrigin?: (unreadable: UnreadableStoredFile) => void;
