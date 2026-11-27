@@ -20,7 +20,7 @@ import type {
 import type { QueryOperationTypes as PgTargetQueryOps } from '@internal/target-postgres/operation-types';
 
 export type StorageHash =
-  StorageHashBase<'d752388e8e54d1a28b24d83b1119167ac439261e1ab041d6dbc1c1deea371bac'>;
+  StorageHashBase<'e21c9ae02ebd56a7ecfc07a12497a339ef175d8174dfe1b87346a2c1a16e10ac'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'833bc812933db0423c719a4f649ef81d804884470e61736e4e3bc8eb4acda174'>;
@@ -790,11 +790,11 @@ type ContractBase = Omit<
                   readonly source: {
                     readonly namespaceId: 'public' & NamespaceId;
                     readonly tableName: 'task_labels';
-                    readonly columns: readonly ['task_id'];
+                    readonly columns: readonly ['label_id'];
                   };
                   readonly target: {
                     readonly namespaceId: 'public' & NamespaceId;
-                    readonly tableName: 'tasks';
+                    readonly tableName: 'labels';
                     readonly columns: readonly ['id'];
                   };
                 },
@@ -802,11 +802,11 @@ type ContractBase = Omit<
                   readonly source: {
                     readonly namespaceId: 'public' & NamespaceId;
                     readonly tableName: 'task_labels';
-                    readonly columns: readonly ['label_id'];
+                    readonly columns: readonly ['task_id'];
                   };
                   readonly target: {
                     readonly namespaceId: 'public' & NamespaceId;
-                    readonly tableName: 'labels';
+                    readonly tableName: 'tasks';
                     readonly columns: readonly ['id'];
                   };
                 },
@@ -894,6 +894,18 @@ type ContractBase = Omit<
                   readonly source: {
                     readonly namespaceId: 'public' & NamespaceId;
                     readonly tableName: 'tasks';
+                    readonly columns: readonly ['bug_assignee_person_id'];
+                  };
+                  readonly target: {
+                    readonly namespaceId: 'public' & NamespaceId;
+                    readonly tableName: 'people';
+                    readonly columns: readonly ['id'];
+                  };
+                },
+                {
+                  readonly source: {
+                    readonly namespaceId: 'public' & NamespaceId;
+                    readonly tableName: 'tasks';
                     readonly columns: readonly ['project_id'];
                   };
                   readonly target: {
@@ -919,18 +931,6 @@ type ContractBase = Omit<
                     readonly namespaceId: 'public' & NamespaceId;
                     readonly tableName: 'tasks';
                     readonly columns: readonly ['pinned_by_id'];
-                  };
-                  readonly target: {
-                    readonly namespaceId: 'public' & NamespaceId;
-                    readonly tableName: 'people';
-                    readonly columns: readonly ['id'];
-                  };
-                },
-                {
-                  readonly source: {
-                    readonly namespaceId: 'public' & NamespaceId;
-                    readonly tableName: 'tasks';
-                    readonly columns: readonly ['bug_assignee_person_id'];
                   };
                   readonly target: {
                     readonly namespaceId: 'public' & NamespaceId;

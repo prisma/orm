@@ -28,8 +28,7 @@
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "updatedAt": {
                 "type": {
@@ -39,8 +38,7 @@
                     "precision": 3
                   }
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "updatedAtTz": {
                 "type": {
@@ -50,8 +48,7 @@
                     "precision": 6
                   }
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               }
             },
             "relations": {}

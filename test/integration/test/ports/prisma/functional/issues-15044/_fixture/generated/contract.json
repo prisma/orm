@@ -278,25 +278,6 @@
               "foreignKeys": [
                 {
                   "index": {
-                    "name": "walletLink_walletId_idx_2e003173"
-                  },
-                  "source": {
-                    "columns": [
-                      "walletId"
-                    ],
-                    "namespaceId": "public",
-                    "tableName": "walletLink"
-                  },
-                  "target": {
-                    "columns": [
-                      "id"
-                    ],
-                    "namespaceId": "public",
-                    "tableName": "wallet"
-                  }
-                },
-                {
-                  "index": {
                     "name": "walletLink_userId_idx_a489d58a"
                   },
                   "source": {
@@ -312,6 +293,25 @@
                     ],
                     "namespaceId": "public",
                     "tableName": "user"
+                  }
+                },
+                {
+                  "index": {
+                    "name": "walletLink_walletId_idx_2e003173"
+                  },
+                  "source": {
+                    "columns": [
+                      "walletId"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "walletLink"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "wallet"
                   }
                 }
               ],
@@ -346,7 +346,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "aee8b4e12a1bdc2c3a5f9a52ba6c31852f0ef372c9b0b68c1edac713aede19ba"
+    "storageHash": "24f529f572320f20cee1f1507a757783c0e97cc9d93da26723e2f249320497f6"
   },
   "execution": {
     "executionHash": "d9a7516498735dfabd083bd369c45a833eaedb49b76d7815ac6c0e0ac4d0cc6d",

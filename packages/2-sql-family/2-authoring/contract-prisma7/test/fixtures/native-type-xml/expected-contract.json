@@ -28,24 +28,21 @@
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "value": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/xml@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "optional": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/xml@1"
                 },
-                "nullable": true,
-                "many": false
+                "nullable": true
               }
             },
             "relations": {}

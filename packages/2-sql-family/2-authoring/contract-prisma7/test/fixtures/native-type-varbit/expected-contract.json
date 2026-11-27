@@ -28,8 +28,7 @@
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "value": {
                 "type": {
@@ -39,16 +38,14 @@
                     "length": 8
                   }
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "unbounded": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/varbit@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               }
             },
             "relations": {}

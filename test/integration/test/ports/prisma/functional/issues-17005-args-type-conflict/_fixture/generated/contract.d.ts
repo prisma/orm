@@ -18,7 +18,7 @@ import type {
 } from '@internal/postgres/contract-types';
 
 export type StorageHash =
-  StorageHashBase<'2e784992cf38cd0525832a926aae68344a8723080d37882e6f8597ccd2e6a0cd'>;
+  StorageHashBase<'74a404328fe665cfe2a54ce926149ac445e10ff91dd5cb2144632dbfeb226e5c'>;
 export type ExecutionHash =
   ExecutionHashBase<'f6b60b220ac2fa14f80b38e1ee72dd489abeac37ca28a1769504a153fc694e02'>;
 export type ProfileHash =
@@ -420,11 +420,11 @@ type ContractBase = Omit<
                   readonly source: {
                     readonly namespaceId: 'public' & NamespaceId;
                     readonly tableName: 'postMedia';
-                    readonly columns: readonly ['postId'];
+                    readonly columns: readonly ['mediaId'];
                   };
                   readonly target: {
                     readonly namespaceId: 'public' & NamespaceId;
-                    readonly tableName: 'post';
+                    readonly tableName: 'media';
                     readonly columns: readonly ['id'];
                   };
                 },
@@ -432,11 +432,11 @@ type ContractBase = Omit<
                   readonly source: {
                     readonly namespaceId: 'public' & NamespaceId;
                     readonly tableName: 'postMedia';
-                    readonly columns: readonly ['mediaId'];
+                    readonly columns: readonly ['postId'];
                   };
                   readonly target: {
                     readonly namespaceId: 'public' & NamespaceId;
-                    readonly tableName: 'media';
+                    readonly tableName: 'post';
                     readonly columns: readonly ['id'];
                   };
                 },

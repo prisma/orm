@@ -580,27 +580,6 @@
               "foreignKeys": [
                 {
                   "index": {
-                    "primaryKey": true
-                  },
-                  "onDelete": "cascade",
-                  "onUpdate": "cascade",
-                  "source": {
-                    "columns": [
-                      "A"
-                    ],
-                    "namespaceId": "public",
-                    "tableName": "_PostToTag"
-                  },
-                  "target": {
-                    "columns": [
-                      "id"
-                    ],
-                    "namespaceId": "public",
-                    "tableName": "Post"
-                  }
-                },
-                {
-                  "index": {
                     "name": "_PostToTag_B_index"
                   },
                   "onDelete": "cascade",
@@ -618,6 +597,27 @@
                     ],
                     "namespaceId": "public",
                     "tableName": "Tag"
+                  }
+                },
+                {
+                  "index": {
+                    "primaryKey": true
+                  },
+                  "onDelete": "cascade",
+                  "onUpdate": "cascade",
+                  "source": {
+                    "columns": [
+                      "A"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "_PostToTag"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "Post"
                   }
                 }
               ],
@@ -654,7 +654,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "966c83cd339572a551667f433f598fd1888f7ba18720631c1432668f48d8cce6"
+    "storageHash": "535869f81a046c5c9c57919367d118b73711713bc9c9467a8dd434556b1643d8"
   },
   "execution": {
     "executionHash": "3206424282cb1f018bb335db1e66910dc4044f412360239c64edd0ca06c209c4",

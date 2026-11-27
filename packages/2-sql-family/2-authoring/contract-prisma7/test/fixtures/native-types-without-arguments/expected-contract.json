@@ -43,8 +43,7 @@
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "char": {
                 "type": {
@@ -54,56 +53,49 @@
                     "length": 1
                   }
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "varChar": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "sql/varchar@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "decimal": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/numeric@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "timestamp": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/timestamp-date@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "timestamptz": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/timestamptz-date@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "time": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/time-string@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "timetz": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/timetz@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               }
             },
             "relations": {}

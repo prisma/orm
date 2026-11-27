@@ -67,8 +67,7 @@
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "leadingZeros": {
                 "type": {
@@ -79,8 +78,7 @@
                     "scale": 30
                   }
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "negativeZero": {
                 "type": {
@@ -91,8 +89,7 @@
                     "scale": 30
                   }
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "leadingZeroFraction": {
                 "type": {
@@ -103,56 +100,49 @@
                     "scale": 30
                   }
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "bareLeadingZeros": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/numeric@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "bareNegativeZero": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/numeric@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "bareLeadingZeroFraction": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/numeric@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "long": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/numeric@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "tiny": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/numeric@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "zerosBare": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/numeric@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "zerosScaled": {
                 "type": {
@@ -163,32 +153,28 @@
                     "scale": 2
                   }
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "bigLong": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/int8@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "bigNegativeZero": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/int8@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "bigLeadingZeros": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/int8@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "mixed": {
                 "type": {

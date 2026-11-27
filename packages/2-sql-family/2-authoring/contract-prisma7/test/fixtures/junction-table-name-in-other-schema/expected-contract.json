@@ -22,8 +22,7 @@
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               }
             },
             "relations": {
@@ -66,16 +65,14 @@
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "B": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               }
             },
             "relations": {
@@ -125,8 +122,7 @@
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               }
             },
             "relations": {
@@ -169,16 +165,14 @@
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "extra": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/text@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               }
             },
             "relations": {}
@@ -240,7 +234,7 @@
   "profileHash": "833bc812933db0423c719a4f649ef81d804884470e61736e4e3bc8eb4acda174",
   "meta": {},
   "storage": {
-    "storageHash": "c79d38185257cc6e805a75647cefc0b8f6f49d3af1c6a60522fcfe64146b8249",
+    "storageHash": "b28571337d7cfc2aaa09ed5c920e253302b3938016ad842b53753b5bd0d39716",
     "namespaces": {
       "one": {
         "id": "one",

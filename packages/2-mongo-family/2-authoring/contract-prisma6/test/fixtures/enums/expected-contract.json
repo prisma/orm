@@ -19,8 +19,7 @@
                   "kind": "scalar",
                   "codecId": "mongo/objectId@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "status": {
                 "type": {
@@ -28,7 +27,6 @@
                   "codecId": "mongo/string@1"
                 },
                 "nullable": false,
-                "many": false,
                 "valueSet": {
                   "plane": "domain",
                   "entityKind": "enum",
@@ -42,7 +40,6 @@
                   "codecId": "mongo/string@1"
                 },
                 "nullable": true,
-                "many": false,
                 "valueSet": {
                   "plane": "domain",
                   "entityKind": "enum",

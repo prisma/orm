@@ -70,8 +70,7 @@
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "tsZ": {
                 "type": {
@@ -81,8 +80,7 @@
                     "precision": 3
                   }
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "tsMs": {
                 "type": {
@@ -92,8 +90,7 @@
                     "precision": 3
                   }
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "tsPlus": {
                 "type": {
@@ -103,8 +100,7 @@
                     "precision": 3
                   }
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "tsMinus": {
                 "type": {
@@ -114,8 +110,7 @@
                     "precision": 3
                   }
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "tsMicro": {
                 "type": {
@@ -125,8 +120,7 @@
                     "precision": 6
                   }
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "tzZ": {
                 "type": {
@@ -136,8 +130,7 @@
                     "precision": 6
                   }
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "tzPlus": {
                 "type": {
@@ -147,32 +140,28 @@
                     "precision": 6
                   }
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "dZ": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/date-string@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "dMidnight": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/date-string@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "dMinus": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/date-string@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "tZ": {
                 "type": {
@@ -182,8 +171,7 @@
                     "precision": 6
                   }
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "tMs": {
                 "type": {
@@ -193,8 +181,7 @@
                     "precision": 6
                   }
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "tPlus": {
                 "type": {
@@ -204,8 +191,7 @@
                     "precision": 6
                   }
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "ttzZ": {
                 "type": {
@@ -215,8 +201,7 @@
                     "precision": 6
                   }
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "ttzPlus": {
                 "type": {
@@ -226,16 +211,14 @@
                     "precision": 6
                   }
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "bytes": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/bytea@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               }
             },
             "relations": {}

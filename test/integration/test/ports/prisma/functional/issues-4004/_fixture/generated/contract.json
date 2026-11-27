@@ -263,25 +263,6 @@
               "foreignKeys": [
                 {
                   "index": {
-                    "name": "studentClass_studentId_idx_bf255322"
-                  },
-                  "source": {
-                    "columns": [
-                      "studentId"
-                    ],
-                    "namespaceId": "public",
-                    "tableName": "studentClass"
-                  },
-                  "target": {
-                    "columns": [
-                      "id"
-                    ],
-                    "namespaceId": "public",
-                    "tableName": "student"
-                  }
-                },
-                {
-                  "index": {
                     "name": "studentClass_classId_idx_0089e5e7"
                   },
                   "source": {
@@ -297,6 +278,25 @@
                     ],
                     "namespaceId": "public",
                     "tableName": "class"
+                  }
+                },
+                {
+                  "index": {
+                    "name": "studentClass_studentId_idx_bf255322"
+                  },
+                  "source": {
+                    "columns": [
+                      "studentId"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "studentClass"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "student"
                   }
                 }
               ],
@@ -331,7 +331,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "534fd72363de94963444f77f269b1315bc24a6716767f4609b455db1387dc17f"
+    "storageHash": "1b613e50151c2e73dde74e12b9ab8231848dd1f7debb77e12a0e8c4aa7033da8"
   },
   "execution": {
     "executionHash": "6b295223463ec2a8b160495f73129d08f397dbbab6929e76f726a9cef0ba3847",

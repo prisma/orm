@@ -108,22 +108,22 @@
                   "keys": [
                     {
                       "direction": 1,
-                      "field": "name"
-                    }
-                  ],
-                  "kind": "mongo-index",
-                  "name": "name_1"
-                },
-                {
-                  "keys": [
-                    {
-                      "direction": 1,
                       "field": "email"
                     }
                   ],
                   "kind": "mongo-index",
                   "name": "email_1",
                   "unique": true
+                },
+                {
+                  "keys": [
+                    {
+                      "direction": 1,
+                      "field": "name"
+                    }
+                  ],
+                  "kind": "mongo-index",
+                  "name": "name_1"
                 }
               ],
               "kind": "mongo-collection",
@@ -176,7 +176,7 @@
         "kind": "mongo-database"
       }
     },
-    "storageHash": "11fff91fb9658a8d7c685a4cefa4d67524d883a596326c8187ae1fc71305cae6"
+    "storageHash": "32a70a21708b9fe0e57dba7ea56ee263faafa766452b4ffc8c135c3380d16e85"
   },
   "capabilities": {},
   "extensions": {},

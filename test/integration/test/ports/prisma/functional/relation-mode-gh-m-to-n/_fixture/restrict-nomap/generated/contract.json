@@ -204,27 +204,6 @@
               "foreignKeys": [
                 {
                   "index": {
-                    "name": "categoriesOnPostsManyToMany_postId_idx_a7a72715"
-                  },
-                  "onDelete": "restrict",
-                  "onUpdate": "restrict",
-                  "source": {
-                    "columns": [
-                      "postId"
-                    ],
-                    "namespaceId": "public",
-                    "tableName": "categoriesOnPostsManyToMany"
-                  },
-                  "target": {
-                    "columns": [
-                      "id"
-                    ],
-                    "namespaceId": "public",
-                    "tableName": "postManyToMany"
-                  }
-                },
-                {
-                  "index": {
                     "name": "categoriesOnPostsManyToMany_categoryId_idx_15c304f2"
                   },
                   "onDelete": "restrict",
@@ -242,6 +221,27 @@
                     ],
                     "namespaceId": "public",
                     "tableName": "categoryManyToMany"
+                  }
+                },
+                {
+                  "index": {
+                    "name": "categoriesOnPostsManyToMany_postId_idx_a7a72715"
+                  },
+                  "onDelete": "restrict",
+                  "onUpdate": "restrict",
+                  "source": {
+                    "columns": [
+                      "postId"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "categoriesOnPostsManyToMany"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "postManyToMany"
                   }
                 }
               ],
@@ -321,7 +321,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "9988e772f41a8930c2ff20b840c42ea047e2fe7ccebac4a470f1dd5de0b0a09e"
+    "storageHash": "11bd035900aa94415e14acba818b0328ceec6bb81e89dd6a89a12bd3d5301897"
   },
   "capabilities": {
     "postgres": {

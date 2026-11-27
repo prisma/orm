@@ -369,25 +369,6 @@
               "foreignKeys": [
                 {
                   "index": {
-                    "name": "userToObjective_userId_idx_a489d58a"
-                  },
-                  "source": {
-                    "columns": [
-                      "userId"
-                    ],
-                    "namespaceId": "public",
-                    "tableName": "userToObjective"
-                  },
-                  "target": {
-                    "columns": [
-                      "id"
-                    ],
-                    "namespaceId": "public",
-                    "tableName": "user"
-                  }
-                },
-                {
-                  "index": {
                     "name": "userToObjective_objectiveId_idx_c2dde538"
                   },
                   "source": {
@@ -403,6 +384,25 @@
                     ],
                     "namespaceId": "public",
                     "tableName": "objective"
+                  }
+                },
+                {
+                  "index": {
+                    "name": "userToObjective_userId_idx_a489d58a"
+                  },
+                  "source": {
+                    "columns": [
+                      "userId"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "userToObjective"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "user"
                   }
                 }
               ],
@@ -462,25 +462,6 @@
               "foreignKeys": [
                 {
                   "index": {
-                    "name": "vote_userId_idx_a489d58a"
-                  },
-                  "source": {
-                    "columns": [
-                      "userId"
-                    ],
-                    "namespaceId": "public",
-                    "tableName": "vote"
-                  },
-                  "target": {
-                    "columns": [
-                      "id"
-                    ],
-                    "namespaceId": "public",
-                    "tableName": "user"
-                  }
-                },
-                {
-                  "index": {
                     "name": "vote_objectiveId_followerId_idx_84a17adf"
                   },
                   "source": {
@@ -498,6 +479,25 @@
                     ],
                     "namespaceId": "public",
                     "tableName": "userToObjective"
+                  }
+                },
+                {
+                  "index": {
+                    "name": "vote_userId_idx_a489d58a"
+                  },
+                  "source": {
+                    "columns": [
+                      "userId"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "vote"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "user"
                   }
                 }
               ],
@@ -534,7 +534,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "a3f54e1004062611d9fd0f671dbd80e8ce8a776d92b81e36708456e84c04ea87"
+    "storageHash": "0e83aecc0354b6e958f5cdb166890534b070f4f5b2f2f82c123b0a569b825bb3"
   },
   "capabilities": {
     "postgres": {

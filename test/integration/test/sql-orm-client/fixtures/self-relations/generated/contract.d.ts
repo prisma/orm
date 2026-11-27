@@ -18,7 +18,7 @@ import type {
 } from '@internal/postgres/contract-types';
 
 export type StorageHash =
-  StorageHashBase<'5741a9e629f94fecd215d846a3c5128da476282c9bd9aed1bc3363d89b7d3ac7'>;
+  StorageHashBase<'21d73865e3cd087b26429b7ba7457bcfb0a3348109ebea70eebdbe4ea0f8e208'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'833bc812933db0423c719a4f649ef81d804884470e61736e4e3bc8eb4acda174'>;
@@ -544,7 +544,7 @@ type ContractBase = Omit<
                   readonly source: {
                     readonly namespaceId: 'public' & NamespaceId;
                     readonly tableName: 'person_follows';
-                    readonly columns: readonly ['follower_id'];
+                    readonly columns: readonly ['followee_id'];
                   };
                   readonly target: {
                     readonly namespaceId: 'public' & NamespaceId;
@@ -556,7 +556,7 @@ type ContractBase = Omit<
                   readonly source: {
                     readonly namespaceId: 'public' & NamespaceId;
                     readonly tableName: 'person_follows';
-                    readonly columns: readonly ['followee_id'];
+                    readonly columns: readonly ['follower_id'];
                   };
                   readonly target: {
                     readonly namespaceId: 'public' & NamespaceId;

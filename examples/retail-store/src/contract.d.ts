@@ -18,7 +18,7 @@ import type {
 } from '@prisma/orm-mongo/contract-types';
 
 export type StorageHash =
-  StorageHashBase<'928c3f2ba5154177dfa601d7ede1557dfc66ef1c93472d6feab47d4dd06345a7'>;
+  StorageHashBase<'ff958ad30f036a7d4c5c3efd677924abd8169aa1516278419a5621204af31c35'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'8fe2b3350db5a83e2473520e59e52262982215115e17bb22a76239170eee6e69'>;
@@ -285,18 +285,18 @@ type ContractBase = Omit<
             readonly events: {
               readonly indexes: readonly [
                 {
+                  readonly expireAfterSeconds: 7776000;
+                  readonly keys: readonly [{ readonly direction: 1; readonly field: 'timestamp' }];
+                  readonly kind: 'mongo-index';
+                  readonly name: 'timestamp_1';
+                },
+                {
                   readonly keys: readonly [
                     { readonly direction: 1; readonly field: 'userId' },
                     { readonly direction: -1; readonly field: 'timestamp' },
                   ];
                   readonly kind: 'mongo-index';
                   readonly name: 'userId_1_timestamp_-1';
-                },
-                {
-                  readonly expireAfterSeconds: 7776000;
-                  readonly keys: readonly [{ readonly direction: 1; readonly field: 'timestamp' }];
-                  readonly kind: 'mongo-index';
-                  readonly name: 'timestamp_1';
                 },
               ];
               readonly kind: 'mongo-collection';
@@ -362,15 +362,15 @@ type ContractBase = Omit<
             readonly invoices: {
               readonly indexes: readonly [
                 {
-                  readonly keys: readonly [{ readonly direction: 1; readonly field: 'orderId' }];
-                  readonly kind: 'mongo-index';
-                  readonly name: 'orderId_1';
-                },
-                {
                   readonly keys: readonly [{ readonly direction: -1; readonly field: 'issuedAt' }];
                   readonly kind: 'mongo-index';
                   readonly name: 'issuedAt_-1';
                   readonly sparse: true;
+                },
+                {
+                  readonly keys: readonly [{ readonly direction: 1; readonly field: 'orderId' }];
+                  readonly kind: 'mongo-index';
+                  readonly name: 'orderId_1';
                 },
               ];
               readonly kind: 'mongo-collection';
@@ -542,6 +542,21 @@ type ContractBase = Omit<
               readonly indexes: readonly [
                 {
                   readonly keys: readonly [
+                    { readonly direction: 1; readonly field: 'brand' },
+                    { readonly direction: 1; readonly field: 'subCategory' },
+                  ];
+                  readonly kind: 'mongo-index';
+                  readonly name: 'brand_1_subCategory_1';
+                },
+                {
+                  readonly keys: readonly [
+                    { readonly direction: 'hashed'; readonly field: 'code' },
+                  ];
+                  readonly kind: 'mongo-index';
+                  readonly name: 'code_hashed';
+                },
+                {
+                  readonly keys: readonly [
                     { readonly direction: 'text'; readonly field: 'name' },
                     { readonly direction: 'text'; readonly field: 'description' },
                   ];
@@ -551,26 +566,11 @@ type ContractBase = Omit<
                 },
                 {
                   readonly keys: readonly [
-                    { readonly direction: 1; readonly field: 'brand' },
-                    { readonly direction: 1; readonly field: 'subCategory' },
-                  ];
-                  readonly kind: 'mongo-index';
-                  readonly name: 'brand_1_subCategory_1';
-                },
-                {
-                  readonly keys: readonly [
                     { readonly direction: 1; readonly field: 'primaryCategory' },
                     { readonly direction: 1; readonly field: 'articleType' },
                   ];
                   readonly kind: 'mongo-index';
                   readonly name: 'primaryCategory_1_articleType_1';
-                },
-                {
-                  readonly keys: readonly [
-                    { readonly direction: 'hashed'; readonly field: 'code' },
-                  ];
-                  readonly kind: 'mongo-index';
-                  readonly name: 'code_hashed';
                 },
               ];
               readonly kind: 'mongo-collection';

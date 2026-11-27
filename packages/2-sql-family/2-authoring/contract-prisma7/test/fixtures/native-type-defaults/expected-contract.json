@@ -46,8 +46,7 @@
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "bit": {
                 "type": {
@@ -57,8 +56,7 @@
                     "length": 8
                   }
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "varBit": {
                 "type": {
@@ -68,56 +66,49 @@
                     "length": 8
                   }
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "xml": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/xml@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "oid": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/oid@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "oidMax": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/oid@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "money": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/money@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "moneyNeg": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/money@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "moneyInt": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/money@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               }
             },
             "relations": {}

@@ -204,25 +204,6 @@
               "foreignKeys": [
                 {
                   "index": {
-                    "name": "categoriesOnPostsManyToMany_postId_idx_a7a72715"
-                  },
-                  "source": {
-                    "columns": [
-                      "postId"
-                    ],
-                    "namespaceId": "public",
-                    "tableName": "categoriesOnPostsManyToMany"
-                  },
-                  "target": {
-                    "columns": [
-                      "id"
-                    ],
-                    "namespaceId": "public",
-                    "tableName": "postManyToMany"
-                  }
-                },
-                {
-                  "index": {
                     "name": "categoriesOnPostsManyToMany_categoryId_idx_15c304f2"
                   },
                   "source": {
@@ -238,6 +219,25 @@
                     ],
                     "namespaceId": "public",
                     "tableName": "categoryManyToMany"
+                  }
+                },
+                {
+                  "index": {
+                    "name": "categoriesOnPostsManyToMany_postId_idx_a7a72715"
+                  },
+                  "source": {
+                    "columns": [
+                      "postId"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "categoriesOnPostsManyToMany"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "postManyToMany"
                   }
                 }
               ],
@@ -317,7 +317,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "5f6eda4c50fe5ed50f37631b96168d6f0a152e41a760d65c4b531e417d23666d"
+    "storageHash": "f7670000d88666d9ee1e54d66cb1735548f02d2d5af07d67a77c5bbcf2341a38"
   },
   "capabilities": {
     "postgres": {

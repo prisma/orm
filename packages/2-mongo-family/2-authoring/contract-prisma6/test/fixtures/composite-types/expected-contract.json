@@ -19,8 +19,7 @@
                   "kind": "scalar",
                   "codecId": "mongo/objectId@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "address": {
                 "type": {
@@ -30,8 +29,7 @@
                   "entityKind": "valueObject",
                   "entityName": "Address"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "history": {
                 "type": {
@@ -54,8 +52,7 @@
                   "entityKind": "valueObject",
                   "entityName": "Address"
                 },
-                "nullable": true,
-                "many": false
+                "nullable": true
               }
             },
             "relations": {},

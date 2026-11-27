@@ -377,26 +377,6 @@
               "foreignKeys": [
                 {
                   "index": {
-                    "name": "postCategory_postId_idx_a7a72715"
-                  },
-                  "onDelete": "cascade",
-                  "source": {
-                    "columns": [
-                      "postId"
-                    ],
-                    "namespaceId": "public",
-                    "tableName": "postCategory"
-                  },
-                  "target": {
-                    "columns": [
-                      "id"
-                    ],
-                    "namespaceId": "public",
-                    "tableName": "post"
-                  }
-                },
-                {
-                  "index": {
                     "name": "postCategory_categoryId_idx_15c304f2"
                   },
                   "onDelete": "cascade",
@@ -413,6 +393,26 @@
                     ],
                     "namespaceId": "public",
                     "tableName": "category"
+                  }
+                },
+                {
+                  "index": {
+                    "name": "postCategory_postId_idx_a7a72715"
+                  },
+                  "onDelete": "cascade",
+                  "source": {
+                    "columns": [
+                      "postId"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "postCategory"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "post"
                   }
                 }
               ],
@@ -448,7 +448,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "d0298f2ac9aa1faae0cdcb816f5dd6ff555abc07349079fca9db8bea8309fe3f"
+    "storageHash": "738ad27b9e45076b9ecb19dea30d23f7ce4fe078e7519eb6a15633ac5bcf46ef"
   },
   "capabilities": {
     "postgres": {

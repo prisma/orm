@@ -167,11 +167,14 @@
                   "keys": [
                     {
                       "direction": 1,
-                      "field": "title"
+                      "field": "priority"
                     }
                   ],
                   "kind": "mongo-index",
-                  "name": "title_1"
+                  "name": "priority_1",
+                  "partialFilterExpression": {
+                    "type": "feature"
+                  }
                 },
                 {
                   "keys": [
@@ -190,14 +193,11 @@
                   "keys": [
                     {
                       "direction": 1,
-                      "field": "priority"
+                      "field": "title"
                     }
                   ],
                   "kind": "mongo-index",
-                  "name": "priority_1",
-                  "partialFilterExpression": {
-                    "type": "feature"
-                  }
+                  "name": "title_1"
                 }
               ],
               "kind": "mongo-collection",
@@ -296,7 +296,7 @@
         "kind": "mongo-database"
       }
     },
-    "storageHash": "5d31138539453c0716b655286ceb57a527dcb05dde96edb9e8e02d55ddc283a2"
+    "storageHash": "28cb38277eabba63608d813d11c6da8060ff18cacfde91cbb500d3db9991911b"
   },
   "capabilities": {},
   "extensions": {},

@@ -19,48 +19,42 @@
                   "kind": "scalar",
                   "codecId": "mongo/objectId@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "slug": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "mongo/string@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "rank": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "mongo/int64Number@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "title": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "mongo/string@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "authorId": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "mongo/objectId@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "createdAt": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "mongo/date@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               }
             },
             "relations": {},
@@ -97,7 +91,7 @@
   "profileHash": "8fe2b3350db5a83e2473520e59e52262982215115e17bb22a76239170eee6e69",
   "meta": {},
   "storage": {
-    "storageHash": "b24a0df1d68947a207ee5cdd90cf05c0641f5fbe81706634173529fbc011862a",
+    "storageHash": "5758a85de5c2104637d1d4a6db1fdbd4a4006e39e557e90efd0ed93c44f5fcd5",
     "namespaces": {
       "__unbound__": {
         "id": "__unbound__",

@@ -136,19 +136,25 @@
                   "unique": true
                 },
                 {
+                  "expireAfterSeconds": 3600,
                   "keys": [
                     {
                       "direction": 1,
-                      "field": "tenantId"
-                    },
-                    {
-                      "direction": 1,
-                      "field": "email"
+                      "field": "expiresAt"
                     }
                   ],
                   "kind": "mongo-index",
-                  "name": "tenantId_1_email_1",
-                  "unique": true
+                  "name": "expiresAt_1"
+                },
+                {
+                  "keys": [
+                    {
+                      "direction": 1,
+                      "field": "metadata.$**"
+                    }
+                  ],
+                  "kind": "mongo-index",
+                  "name": "metadata.$**_1"
                 },
                 {
                   "keys": [
@@ -164,22 +170,14 @@
                   "keys": [
                     {
                       "direction": 1,
-                      "field": "metadata.$**"
+                      "field": "name"
                     }
                   ],
                   "kind": "mongo-index",
-                  "name": "metadata.$**_1"
-                },
-                {
-                  "expireAfterSeconds": 3600,
-                  "keys": [
-                    {
-                      "direction": 1,
-                      "field": "expiresAt"
-                    }
-                  ],
-                  "kind": "mongo-index",
-                  "name": "expiresAt_1"
+                  "name": "name_1",
+                  "partialFilterExpression": {
+                    "status": "active"
+                  }
                 },
                 {
                   "collation": {
@@ -199,14 +197,16 @@
                   "keys": [
                     {
                       "direction": 1,
-                      "field": "name"
+                      "field": "tenantId"
+                    },
+                    {
+                      "direction": 1,
+                      "field": "email"
                     }
                   ],
                   "kind": "mongo-index",
-                  "name": "name_1",
-                  "partialFilterExpression": {
-                    "status": "active"
-                  }
+                  "name": "tenantId_1_email_1",
+                  "unique": true
                 },
                 {
                   "keys": [
@@ -293,7 +293,7 @@
         "kind": "mongo-database"
       }
     },
-    "storageHash": "5a21c226829f5601def6daa36aa0bd31dc407f7a032567ffbf4420425dde0a64"
+    "storageHash": "f7e016e250134d53a83ea2daefd7222592bf6ce23010729a8fc90638372428e3"
   },
   "capabilities": {},
   "extensions": {},

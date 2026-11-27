@@ -456,25 +456,6 @@
               "foreignKeys": [
                 {
                   "index": {
-                    "name": "userGroup_userId_idx_a489d58a"
-                  },
-                  "source": {
-                    "columns": [
-                      "userId"
-                    ],
-                    "namespaceId": "public",
-                    "tableName": "userGroup"
-                  },
-                  "target": {
-                    "columns": [
-                      "id"
-                    ],
-                    "namespaceId": "public",
-                    "tableName": "user"
-                  }
-                },
-                {
-                  "index": {
                     "name": "userGroup_groupId_idx_e2fb5578"
                   },
                   "source": {
@@ -490,6 +471,25 @@
                     ],
                     "namespaceId": "public",
                     "tableName": "group"
+                  }
+                },
+                {
+                  "index": {
+                    "name": "userGroup_userId_idx_a489d58a"
+                  },
+                  "source": {
+                    "columns": [
+                      "userId"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "userGroup"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "user"
                   }
                 }
               ],
@@ -525,7 +525,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "2bc9e9acb7a2c7e370638019069bae714c25286950209034d153143d13d2b91c"
+    "storageHash": "ef6ba5caa4c2219782898fecc78a13e2a7ffa7846b3dfa4ebde5bc089a13efd7"
   },
   "capabilities": {
     "postgres": {

@@ -73,16 +73,14 @@
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "bigSequence": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/int8@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "createdAt": {
                 "type": {
@@ -92,8 +90,7 @@
                     "precision": 3
                   }
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "createdAtTz": {
                 "type": {
@@ -103,48 +100,42 @@
                     "precision": 6
                   }
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "generated": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/uuid@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "stringLiteral": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/text@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "intLiteral": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "bigIntLiteral": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/int8@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "floatLiteral": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/float8@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "decimalLiteral": {
                 "type": {
@@ -155,16 +146,14 @@
                     "scale": 30
                   }
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "booleanLiteral": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/bool@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "dateTimeLiteral": {
                 "type": {
@@ -174,24 +163,21 @@
                     "precision": 3
                   }
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "jsonLiteral": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/jsonb@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "bytesLiteral": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/bytea@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "stringList": {
                 "type": {
@@ -221,8 +207,7 @@
                     "typeName": "user_role"
                   }
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "enumList": {
                 "type": {

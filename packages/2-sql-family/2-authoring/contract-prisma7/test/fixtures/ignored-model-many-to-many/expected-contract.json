@@ -22,8 +22,7 @@
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               }
             },
             "relations": {}
@@ -73,7 +72,7 @@
   "profileHash": "833bc812933db0423c719a4f649ef81d804884470e61736e4e3bc8eb4acda174",
   "meta": {},
   "storage": {
-    "storageHash": "a06e0217da16574d340bffffa8cd9fa2f38ae49a41a52c36c9ba91bd7910a68a",
+    "storageHash": "f8cfe17ee0e155251a7ff32f4e896a7b61c3141f16a193d81ee9446fb28420d8",
     "namespaces": {
       "public": {
         "id": "public",

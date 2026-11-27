@@ -18,7 +18,7 @@ import type {
 } from '@internal/postgres/contract-types';
 
 export type StorageHash =
-  StorageHashBase<'aee8b4e12a1bdc2c3a5f9a52ba6c31852f0ef372c9b0b68c1edac713aede19ba'>;
+  StorageHashBase<'24f529f572320f20cee1f1507a757783c0e97cc9d93da26723e2f249320497f6'>;
 export type ExecutionHash =
   ExecutionHashBase<'d9a7516498735dfabd083bd369c45a833eaedb49b76d7815ac6c0e0ac4d0cc6d'>;
 export type ProfileHash =
@@ -441,11 +441,11 @@ type ContractBase = Omit<
                   readonly source: {
                     readonly namespaceId: 'public' & NamespaceId;
                     readonly tableName: 'walletLink';
-                    readonly columns: readonly ['walletId'];
+                    readonly columns: readonly ['userId'];
                   };
                   readonly target: {
                     readonly namespaceId: 'public' & NamespaceId;
-                    readonly tableName: 'wallet';
+                    readonly tableName: 'user';
                     readonly columns: readonly ['id'];
                   };
                 },
@@ -453,11 +453,11 @@ type ContractBase = Omit<
                   readonly source: {
                     readonly namespaceId: 'public' & NamespaceId;
                     readonly tableName: 'walletLink';
-                    readonly columns: readonly ['userId'];
+                    readonly columns: readonly ['walletId'];
                   };
                   readonly target: {
                     readonly namespaceId: 'public' & NamespaceId;
-                    readonly tableName: 'user';
+                    readonly tableName: 'wallet';
                     readonly columns: readonly ['id'];
                   };
                 },

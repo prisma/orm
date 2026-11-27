@@ -286,26 +286,6 @@
               "foreignKeys": [
                 {
                   "index": {
-                    "name": "categoryBrand_categoryId_idx_15c304f2"
-                  },
-                  "onDelete": "cascade",
-                  "source": {
-                    "columns": [
-                      "categoryId"
-                    ],
-                    "namespaceId": "public",
-                    "tableName": "categoryBrand"
-                  },
-                  "target": {
-                    "columns": [
-                      "id"
-                    ],
-                    "namespaceId": "public",
-                    "tableName": "category"
-                  }
-                },
-                {
-                  "index": {
                     "name": "categoryBrand_brandId_idx_02e95397"
                   },
                   "onDelete": "cascade",
@@ -322,6 +302,26 @@
                     ],
                     "namespaceId": "public",
                     "tableName": "brand"
+                  }
+                },
+                {
+                  "index": {
+                    "name": "categoryBrand_categoryId_idx_15c304f2"
+                  },
+                  "onDelete": "cascade",
+                  "source": {
+                    "columns": [
+                      "categoryId"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "categoryBrand"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "category"
                   }
                 }
               ],
@@ -357,7 +357,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "de8db887eae4706ef600abc7fc0b3f1d868d204e9fb7dd1ac925efde27a8aeb9"
+    "storageHash": "602c0bfc7d22304655bcfd35732e1ac9315f250883451f6e0366ec0ad3f92049"
   },
   "capabilities": {
     "postgres": {

@@ -574,11 +574,11 @@
               "foreignKeys": [
                 {
                   "index": {
-                    "name": "person_follows_follower_id_idx_e343d705"
+                    "name": "person_follows_followee_id_idx_c86a372f"
                   },
                   "source": {
                     "columns": [
-                      "follower_id"
+                      "followee_id"
                     ],
                     "namespaceId": "public",
                     "tableName": "person_follows"
@@ -593,11 +593,11 @@
                 },
                 {
                   "index": {
-                    "name": "person_follows_followee_id_idx_c86a372f"
+                    "name": "person_follows_follower_id_idx_e343d705"
                   },
                   "source": {
                     "columns": [
-                      "followee_id"
+                      "follower_id"
                     ],
                     "namespaceId": "public",
                     "tableName": "person_follows"
@@ -643,7 +643,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "5741a9e629f94fecd215d846a3c5128da476282c9bd9aed1bc3363d89b7d3ac7"
+    "storageHash": "21d73865e3cd087b26429b7ba7457bcfb0a3348109ebea70eebdbe4ea0f8e208"
   },
   "capabilities": {
     "postgres": {

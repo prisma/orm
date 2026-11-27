@@ -40,16 +40,14 @@
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "day": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/date-string@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "time": {
                 "type": {
@@ -59,8 +57,7 @@
                     "precision": 6
                   }
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "zoned": {
                 "type": {
@@ -70,24 +67,21 @@
                     "precision": 6
                   }
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "optional": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/date-string@1"
                 },
-                "nullable": true,
-                "many": false
+                "nullable": true
               },
               "defaulted": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/date-string@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "optionalDefaulted": {
                 "type": {
@@ -97,8 +91,7 @@
                     "precision": 6
                   }
                 },
-                "nullable": true,
-                "many": false
+                "nullable": true
               }
             },
             "relations": {}

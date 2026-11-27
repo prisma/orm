@@ -18,7 +18,7 @@ import type {
 } from '@internal/postgres/contract-types';
 
 export type StorageHash =
-  StorageHashBase<'534fd72363de94963444f77f269b1315bc24a6716767f4609b455db1387dc17f'>;
+  StorageHashBase<'1b613e50151c2e73dde74e12b9ab8231848dd1f7debb77e12a0e8c4aa7033da8'>;
 export type ExecutionHash =
   ExecutionHashBase<'6b295223463ec2a8b160495f73129d08f397dbbab6929e76f726a9cef0ba3847'>;
 export type ProfileHash =
@@ -434,11 +434,11 @@ type ContractBase = Omit<
                   readonly source: {
                     readonly namespaceId: 'public' & NamespaceId;
                     readonly tableName: 'studentClass';
-                    readonly columns: readonly ['studentId'];
+                    readonly columns: readonly ['classId'];
                   };
                   readonly target: {
                     readonly namespaceId: 'public' & NamespaceId;
-                    readonly tableName: 'student';
+                    readonly tableName: 'class';
                     readonly columns: readonly ['id'];
                   };
                 },
@@ -446,11 +446,11 @@ type ContractBase = Omit<
                   readonly source: {
                     readonly namespaceId: 'public' & NamespaceId;
                     readonly tableName: 'studentClass';
-                    readonly columns: readonly ['classId'];
+                    readonly columns: readonly ['studentId'];
                   };
                   readonly target: {
                     readonly namespaceId: 'public' & NamespaceId;
-                    readonly tableName: 'class';
+                    readonly tableName: 'student';
                     readonly columns: readonly ['id'];
                   };
                 },

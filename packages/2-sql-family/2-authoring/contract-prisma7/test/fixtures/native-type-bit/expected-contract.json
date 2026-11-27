@@ -28,8 +28,7 @@
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "value": {
                 "type": {
@@ -39,8 +38,7 @@
                     "length": 8
                   }
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "single": {
                 "type": {
@@ -50,8 +48,7 @@
                     "length": 1
                   }
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               }
             },
             "relations": {}

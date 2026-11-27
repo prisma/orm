@@ -18,7 +18,7 @@ import type {
 } from '@internal/postgres/contract-types';
 
 export type StorageHash =
-  StorageHashBase<'5f1b7e777fa6f722a7204170cfcff3a8dfb9bc8d456a663c7348e73a81bb40fd'>;
+  StorageHashBase<'1789749a54b7ac08f38e58d30bb2b9aad885dc3d2ddb951d216e138a31491c6a'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'833bc812933db0423c719a4f649ef81d804884470e61736e4e3bc8eb4acda174'>;
@@ -463,11 +463,11 @@ type ContractBase = Omit<
                   readonly source: {
                     readonly namespaceId: 'public' & NamespaceId;
                     readonly tableName: 'mnp_task_tags';
-                    readonly columns: readonly ['task_id'];
+                    readonly columns: readonly ['tag_id'];
                   };
                   readonly target: {
                     readonly namespaceId: 'public' & NamespaceId;
-                    readonly tableName: 'mnp_tasks';
+                    readonly tableName: 'mnp_tags';
                     readonly columns: readonly ['id'];
                   };
                 },
@@ -475,11 +475,11 @@ type ContractBase = Omit<
                   readonly source: {
                     readonly namespaceId: 'public' & NamespaceId;
                     readonly tableName: 'mnp_task_tags';
-                    readonly columns: readonly ['tag_id'];
+                    readonly columns: readonly ['task_id'];
                   };
                   readonly target: {
                     readonly namespaceId: 'public' & NamespaceId;
-                    readonly tableName: 'mnp_tags';
+                    readonly tableName: 'mnp_tasks';
                     readonly columns: readonly ['id'];
                   };
                 },

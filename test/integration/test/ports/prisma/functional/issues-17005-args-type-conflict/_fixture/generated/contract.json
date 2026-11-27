@@ -233,25 +233,6 @@
               "foreignKeys": [
                 {
                   "index": {
-                    "name": "postMedia_postId_idx_a7a72715"
-                  },
-                  "source": {
-                    "columns": [
-                      "postId"
-                    ],
-                    "namespaceId": "public",
-                    "tableName": "postMedia"
-                  },
-                  "target": {
-                    "columns": [
-                      "id"
-                    ],
-                    "namespaceId": "public",
-                    "tableName": "post"
-                  }
-                },
-                {
-                  "index": {
                     "name": "postMedia_mediaId_idx_6b06655c"
                   },
                   "source": {
@@ -267,6 +248,25 @@
                     ],
                     "namespaceId": "public",
                     "tableName": "media"
+                  }
+                },
+                {
+                  "index": {
+                    "name": "postMedia_postId_idx_a7a72715"
+                  },
+                  "source": {
+                    "columns": [
+                      "postId"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "postMedia"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "post"
                   }
                 }
               ],
@@ -308,7 +308,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "2e784992cf38cd0525832a926aae68344a8723080d37882e6f8597ccd2e6a0cd"
+    "storageHash": "74a404328fe665cfe2a54ce926149ac445e10ff91dd5cb2144632dbfeb226e5c"
   },
   "execution": {
     "executionHash": "f6b60b220ac2fa14f80b38e1ee72dd489abeac37ca28a1769504a153fc694e02",

@@ -1200,25 +1200,6 @@
               "foreignKeys": [
                 {
                   "index": {
-                    "name": "task_labels_task_id_idx_5d5ac774"
-                  },
-                  "source": {
-                    "columns": [
-                      "task_id"
-                    ],
-                    "namespaceId": "public",
-                    "tableName": "task_labels"
-                  },
-                  "target": {
-                    "columns": [
-                      "id"
-                    ],
-                    "namespaceId": "public",
-                    "tableName": "tasks"
-                  }
-                },
-                {
-                  "index": {
                     "name": "task_labels_label_id_idx_c7720d3e"
                   },
                   "source": {
@@ -1234,6 +1215,25 @@
                     ],
                     "namespaceId": "public",
                     "tableName": "labels"
+                  }
+                },
+                {
+                  "index": {
+                    "name": "task_labels_task_id_idx_5d5ac774"
+                  },
+                  "source": {
+                    "columns": [
+                      "task_id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "task_labels"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "tasks"
                   }
                 }
               ],
@@ -1326,6 +1326,25 @@
               "foreignKeys": [
                 {
                   "index": {
+                    "name": "tasks_bug_assignee_person_id_idx_ce44cebc"
+                  },
+                  "source": {
+                    "columns": [
+                      "bug_assignee_person_id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "tasks"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "people"
+                  }
+                },
+                {
+                  "index": {
                     "name": "tasks_project_id_idx_6ad92603"
                   },
                   "source": {
@@ -1371,25 +1390,6 @@
                   "source": {
                     "columns": [
                       "pinned_by_id"
-                    ],
-                    "namespaceId": "public",
-                    "tableName": "tasks"
-                  },
-                  "target": {
-                    "columns": [
-                      "id"
-                    ],
-                    "namespaceId": "public",
-                    "tableName": "people"
-                  }
-                },
-                {
-                  "index": {
-                    "name": "tasks_bug_assignee_person_id_idx_ce44cebc"
-                  },
-                  "source": {
-                    "columns": [
-                      "bug_assignee_person_id"
                     ],
                     "namespaceId": "public",
                     "tableName": "tasks"
@@ -1618,7 +1618,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "d752388e8e54d1a28b24d83b1119167ac439261e1ab041d6dbc1c1deea371bac"
+    "storageHash": "e21c9ae02ebd56a7ecfc07a12497a339ef175d8174dfe1b87346a2c1a16e10ac"
   },
   "capabilities": {
     "postgres": {

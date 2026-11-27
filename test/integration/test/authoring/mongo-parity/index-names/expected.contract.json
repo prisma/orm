@@ -72,8 +72,7 @@
                     }
                   ],
                   "kind": "mongo-index",
-                  "name": "User_email_key",
-                  "unique": true
+                  "name": "User_email_idx"
                 },
                 {
                   "keys": [
@@ -83,7 +82,8 @@
                     }
                   ],
                   "kind": "mongo-index",
-                  "name": "User_email_idx"
+                  "name": "User_email_key",
+                  "unique": true
                 },
                 {
                   "keys": [
@@ -136,7 +136,7 @@
         "kind": "mongo-database"
       }
     },
-    "storageHash": "7048793e9fc8776dee3c0db5c4e60848d029f8301f8e26ece6a3b41008107158"
+    "storageHash": "9393aab9b88afa8aa0d15b66b69da1036a1faef74636e35aaa62a5b4e2a4142a"
   },
   "capabilities": {},
   "extensions": {},

@@ -18,7 +18,7 @@ import type {
 } from '@internal/postgres/contract-types';
 
 export type StorageHash =
-  StorageHashBase<'d569b4be5c20256fe9d8cc4b8764b7c8ae9e729ac56fd972cea89f598f52e3d8'>;
+  StorageHashBase<'af1fe52f8c8abe77a967e2d62391f424845855872bca0d53393c783e8d8dd1ad'>;
 export type ExecutionHash =
   ExecutionHashBase<'4cc5af8338517c2ab9aa0e32ddc6af03a31af3f45e8274ad9c78a4f5734017e6'>;
 export type ProfileHash =
@@ -466,9 +466,9 @@ type ContractBase = Omit<
               };
               primaryKey: { readonly columns: readonly ['id'] };
               uniques: readonly [
-                { readonly columns: readonly ['userId'] },
-                { readonly columns: readonly ['email'] },
                 { readonly columns: readonly ['alias'] },
+                { readonly columns: readonly ['email'] },
+                { readonly columns: readonly ['userId'] },
               ];
               indexes: readonly [];
               foreignKeys: readonly [
@@ -509,8 +509,8 @@ type ContractBase = Omit<
               };
               primaryKey: { readonly columns: readonly ['id'] };
               uniques: readonly [
-                { readonly columns: readonly ['referralId'] },
                 { readonly columns: readonly ['paymentId'] },
+                { readonly columns: readonly ['referralId'] },
               ];
               indexes: readonly [];
               foreignKeys: readonly [

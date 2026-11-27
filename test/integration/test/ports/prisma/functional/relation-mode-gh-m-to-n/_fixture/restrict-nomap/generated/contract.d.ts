@@ -18,7 +18,7 @@ import type {
 } from '@internal/postgres/contract-types';
 
 export type StorageHash =
-  StorageHashBase<'9988e772f41a8930c2ff20b840c42ea047e2fe7ccebac4a470f1dd5de0b0a09e'>;
+  StorageHashBase<'11bd035900aa94415e14acba818b0328ceec6bb81e89dd6a89a12bd3d5301897'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'833bc812933db0423c719a4f649ef81d804884470e61736e4e3bc8eb4acda174'>;
@@ -386,11 +386,11 @@ type ContractBase = Omit<
                   readonly source: {
                     readonly namespaceId: 'public' & NamespaceId;
                     readonly tableName: 'categoriesOnPostsManyToMany';
-                    readonly columns: readonly ['postId'];
+                    readonly columns: readonly ['categoryId'];
                   };
                   readonly target: {
                     readonly namespaceId: 'public' & NamespaceId;
-                    readonly tableName: 'postManyToMany';
+                    readonly tableName: 'categoryManyToMany';
                     readonly columns: readonly ['id'];
                   };
                 },
@@ -398,11 +398,11 @@ type ContractBase = Omit<
                   readonly source: {
                     readonly namespaceId: 'public' & NamespaceId;
                     readonly tableName: 'categoriesOnPostsManyToMany';
-                    readonly columns: readonly ['categoryId'];
+                    readonly columns: readonly ['postId'];
                   };
                   readonly target: {
                     readonly namespaceId: 'public' & NamespaceId;
-                    readonly tableName: 'categoryManyToMany';
+                    readonly tableName: 'postManyToMany';
                     readonly columns: readonly ['id'];
                   };
                 },

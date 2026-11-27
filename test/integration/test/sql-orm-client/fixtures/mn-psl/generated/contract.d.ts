@@ -18,7 +18,7 @@ import type {
 } from '@internal/postgres/contract-types';
 
 export type StorageHash =
-  StorageHashBase<'5e741cddee0dfe78dc7367594e5ddde0dd4139d8deba26e36b51e4297def90e8'>;
+  StorageHashBase<'59b900b16529d48eb0cf023c791549e02e3d522facfc0fda59a68b3a1077d786'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'833bc812933db0423c719a4f649ef81d804884470e61736e4e3bc8eb4acda174'>;
@@ -407,11 +407,11 @@ type ContractBase = Omit<
                   readonly source: {
                     readonly namespaceId: 'public' & NamespaceId;
                     readonly tableName: 'user_tags';
-                    readonly columns: readonly ['user_id'];
+                    readonly columns: readonly ['tag_id'];
                   };
                   readonly target: {
                     readonly namespaceId: 'public' & NamespaceId;
-                    readonly tableName: 'users';
+                    readonly tableName: 'tags';
                     readonly columns: readonly ['id'];
                   };
                 },
@@ -419,11 +419,11 @@ type ContractBase = Omit<
                   readonly source: {
                     readonly namespaceId: 'public' & NamespaceId;
                     readonly tableName: 'user_tags';
-                    readonly columns: readonly ['tag_id'];
+                    readonly columns: readonly ['user_id'];
                   };
                   readonly target: {
                     readonly namespaceId: 'public' & NamespaceId;
-                    readonly tableName: 'tags';
+                    readonly tableName: 'users';
                     readonly columns: readonly ['id'];
                   };
                 },
