@@ -1,6 +1,7 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import type { ContractSourceProvider } from '@internal/config/config-types';
+import type { NormalizeStorage } from '@internal/contract/hashing';
 import type { Contract, LedgerEntryRecord } from '@internal/contract/types';
 import type {
   ControlFamilyDescriptor,
@@ -1174,15 +1175,13 @@ describe('ControlClient progress emission', () => {
 
     it("canonicalises with the target's normalizeStorage hook before the family re-reads the contract", async () => {
       const { mockFamily, mockTarget, mockAdapter, mockFamilyInstance } = createMockComponents();
+      const markNormalized: NormalizeStorage = (storage) => ({
+        ...(storage as Record<string, unknown>),
+        normalized: true,
+      });
       const target = {
         ...mockTarget,
-        contractSerializer: {
-          ...mockTarget.contractSerializer,
-          normalizeStorage: (storage: unknown) => ({
-            ...(storage as Record<string, unknown>),
-            normalized: true,
-          }),
-        },
+        contractSerializer: { ...mockTarget.contractSerializer, normalizeStorage: markNormalized },
       } as unknown as typeof mockTarget;
       const readStorages: unknown[] = [];
       mockFamilyInstance.deserializeContract = (json: unknown) => {
@@ -1192,7 +1191,7 @@ describe('ControlClient progress emission', () => {
       const client = createControlClient({ family: mockFamily, target, adapter: mockAdapter });
 
       const rendered = await client.renderContractDts({
-        contract: emittableContract(),
+        contract: emittableContract(markNormalized),
         typesModule: TYPES_MODULE,
       });
       await client.close();

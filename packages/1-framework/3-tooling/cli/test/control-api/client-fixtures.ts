@@ -1,4 +1,5 @@
 import type { ContractSourceProvider } from '@internal/config/config-types';
+import { computeStorageHash, type NormalizeStorage } from '@internal/contract/hashing';
 import type { Contract } from '@internal/contract/types';
 import type {
   ControlAdapterDescriptor,
@@ -15,20 +16,28 @@ import type { EmissionSpi } from '@internal/framework-components/emission';
 import { ifDefined } from '@internal/utils/defined';
 import { ok } from '@internal/utils/result';
 
+export const storageAsGiven: NormalizeStorage = (storage) => storage;
+
 /**
- * The smallest contract the real emitter accepts: a storage envelope with a
- * hash and no models. No module mocks — the emit tests run the real
+ * The smallest contract the real emitter accepts: a storage envelope with no models, whose storage hash is computed with the `normalizeStorage` the emit is given. No module mocks — the emit tests run the real
  * `@internal/emitter` over this, so they hold regardless of which test file
  * warmed the module registry first (`isolate: false` shares it).
  */
-export function emittableContract(): Contract {
+export function emittableContract(normalizeStorage: NormalizeStorage = storageAsGiven): Contract {
+  const storage = { namespaces: { app: { tables: {} } } };
+  const storageHash = computeStorageHash({
+    target: 'postgres',
+    targetFamily: 'sql',
+    storage,
+    normalizeStorage,
+  });
   return {
     formatVersion: 1,
     target: 'postgres',
     targetFamily: 'sql',
     roots: {},
     domain: { namespaces: { app: { models: {} } } },
-    storage: { storageHash: 'test-storage-hash', namespaces: { app: { tables: {} } } },
+    storage: { ...storage, storageHash },
     extensions: {},
     capabilities: {},
     meta: {},
@@ -114,7 +123,7 @@ export function createMockComponents() {
     contractSerializer: {
       serializeContract: (contract: unknown) => contract,
       deserializeContract: (json: unknown) => json,
-      normalizeStorage: (storage: unknown) => storage,
+      normalizeStorage: storageAsGiven,
     },
     // biome-ignore lint/suspicious/noExplicitAny: required for mock flexibility
   } as unknown as ControlTargetDescriptor<any, any, any>;
