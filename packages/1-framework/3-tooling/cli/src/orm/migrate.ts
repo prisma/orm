@@ -660,6 +660,7 @@ export function createMigrateCommand(
             } catch (error) {
               const mapped = mapContractAtError(error, {
                 artifactRole: 'to',
+                invocation: cliInvocation(ctx, args.flags.db),
                 ...(refEntry.hash === appContract.storage.storageHash
                   ? { atHeadOf: { spaceId: aggregate.app.spaceId, reachedByMigration: true } }
                   : {}),

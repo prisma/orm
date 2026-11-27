@@ -432,6 +432,7 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
                 reachedByMigration: true,
               },
               relative(process.cwd(), dirname(destination.contractJsonPath)),
+              cliInvocation(ctx, args.flags.db),
             )
           : undefined;
 

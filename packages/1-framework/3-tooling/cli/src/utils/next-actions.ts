@@ -4,6 +4,7 @@ import { contractSnapshotDir } from '@internal/migration-tools/contract-snapshot
 import { APP_UPGRADE_GUIDES_URL } from '@internal/utils/upgrade-guides';
 import type { NextAction } from '@prisma/cli-engine/protocol';
 import { join, relative } from 'pathe';
+import { type CliInvocation, cliCommand } from './printed-command';
 
 /**
  * The typed remediation the CLI attaches to its own errors and findings.
@@ -108,8 +109,12 @@ export interface SnapshotHead {
   readonly reachedByMigration: boolean;
 }
 
-/** How the snapshot at the head of a space, in `snapshotDirectory`, is written again once deleted. */
-export function snapshotRewriteAt(head: SnapshotHead, snapshotDirectory: string): SnapshotRewrite {
+/** How the snapshot at the head of a space, in `snapshotDirectory`, is written again once deleted. The command repeats the `--config` and `--db` of `invocation`, so it acts on the same database. */
+export function snapshotRewriteAt(
+  head: SnapshotHead,
+  snapshotDirectory: string,
+  invocation?: CliInvocation,
+): SnapshotRewrite {
   if (head.spaceId !== APP_SPACE_ID) {
     return {
       snapshotDirectory,
@@ -118,18 +123,18 @@ export function snapshotRewriteAt(head: SnapshotHead, snapshotDirectory: string)
         'emits contract.json from the contract source and writes the snapshot again from the installed extension',
     };
   }
+  const database =
+    invocation?.dbGiven === true ? 'the database --db names' : 'the configured database';
   return head.reachedByMigration
     ? {
         snapshotDirectory,
-        command: '{bin} db migrate --advance-ref db',
-        effect:
-          'applies any pending migrations to the configured database, then moves the db ref to contract.json and writes the snapshot again from it',
+        command: cliCommand(invocation, 'db migrate', ['--advance-ref', 'db']),
+        effect: `applies any pending migrations to ${database}, then moves the db ref to contract.json and writes the snapshot again from it`,
       }
     : {
         snapshotDirectory,
-        command: '{bin} db sign',
-        effect:
-          'checks that the configured database matches contract.json and records that in the database, then moves the db ref to contract.json and writes the snapshot again from it',
+        command: cliCommand(invocation, 'db sign'),
+        effect: `checks that ${database} matches contract.json and records that in the database, then moves the db ref to contract.json and writes the snapshot again from it`,
       };
 }
 

@@ -406,7 +406,9 @@ function hydrateContract(
   config: PrismaConfig,
   json: unknown,
   path: string,
-  snapshot: { readonly head: SnapshotHead | undefined } | undefined,
+  snapshot:
+    | { readonly head: SnapshotHead | undefined; readonly invocation: CliInvocation }
+    | undefined,
 ): Result<Contract, CliStructuredError> {
   try {
     return okResult(config.family.create(createControlStack(config)).deserializeContract(json));
@@ -429,6 +431,7 @@ function hydrateContract(
                       rewrittenBy: snapshotRewriteAt(
                         snapshot.head,
                         relative(process.cwd(), dirname(path)),
+                        snapshot.invocation,
                       ),
                     }),
               }),
@@ -612,6 +615,7 @@ export function createDbSignCommand(
                         reachedByMigration: true,
                       }
                     : undefined,
+                invocation: cliInvocation(ctx, args.flags.db),
               }
             : undefined,
         );

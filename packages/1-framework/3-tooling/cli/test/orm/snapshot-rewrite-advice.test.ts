@@ -154,15 +154,25 @@ const SIGN_REWRITE = {
   command: 'prisma-test db sign',
 };
 
+const MIGRATE_REWRITE_ON_GIVEN_DB = {
+  kind: 'run-command',
+  label: expect.stringMatching(
+    new RegExp(
+      `migrations/snapshots/${HEAD} and run this command, which applies any pending migrations to the database --db names, then moves the db ref to contract\\.json and writes the snapshot again from it$`,
+    ),
+  ),
+  command: 'prisma-test db migrate --advance-ref db --db <url>',
+};
+
 describe('advice for the unreadable snapshot of the emitted contract', () => {
   it.each([
     ['db sign <ref>', ['db', 'sign', 'db', '--db', DB_URL]],
     ['db update --to', ['db', 'update', '--to', 'db', '--dry-run', '--db', DB_URL]],
   ])(
-    "%s, which reads a ref's snapshot only when a migration ends there, names db migrate and says it applies pending migrations",
+    "%s, which reads a ref's snapshot only when a migration ends there, names db migrate on the database --db names and says it applies pending migrations",
     async (_, args) => {
       const dir = await projectWithUnreadableHeadSnapshot({ migrationEndsAtHead: true });
-      expect(await rewriteAction(dir, args)).toEqual(MIGRATE_REWRITE);
+      expect(await rewriteAction(dir, args)).toEqual(MIGRATE_REWRITE_ON_GIVEN_DB);
     },
   );
 
