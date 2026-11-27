@@ -41,22 +41,33 @@ describe('cross-shell tarball chain (target-postgres -> family-sql -> framework,
     expect(runInScratch(scratch, script)).toContain(`resolved ${imports.length}`);
   });
 
-  it('resolves the prepared-query bridge used by the Supabase extension', () => {
+  it('exports the Early Access prepared-query names used by the Supabase extension from the public runtime entry', () => {
     const script = `
-      const preparedQuery = await import('@prisma/orm-family-sql/runtime/internal/prepared-query');
-      if (typeof preparedQuery.preparedStatementQuery !== 'symbol') {
-        throw new Error('prepared-query bridge is not exported');
-      }
-      console.log('prepared-query bridge ok');
+      import { strict as assert } from 'node:assert';
+      const runtime = await import('@prisma/orm-family-sql/runtime');
+      assert.deepEqual(
+        {
+          ea_preparedStatementQuery: typeof runtime.ea_preparedStatementQuery,
+          ea_preparedStatementExecute: typeof runtime.ea_preparedStatementExecute,
+          ea_transactionStart: typeof runtime.ea_transactionStart,
+          ea_createTransactionStart: typeof runtime.ea_createTransactionStart,
+        },
+        {
+          ea_preparedStatementQuery: 'symbol',
+          ea_preparedStatementExecute: 'symbol',
+          ea_transactionStart: 'symbol',
+          ea_createTransactionStart: 'function',
+        },
+      );
+      console.log('prepared-query names ok');
     `;
-    expect(runInScratch(scratch, script)).toContain('prepared-query bridge ok');
+    expect(runInScratch(scratch, script)).toContain('prepared-query names ok');
   });
 
   it('exports the activity-starting functions from the public runtime entry', () => {
     const script = `
       import { strict as assert } from 'node:assert';
       const runtime = await import('@prisma/orm-family-sql/runtime');
-      const preparedQuery = await import('@prisma/orm-family-sql/runtime/internal/prepared-query');
       assert.deepEqual(
         {
           startActivityOn: typeof runtime.startActivityOn,
@@ -64,7 +75,6 @@ describe('cross-shell tarball chain (target-postgres -> family-sql -> framework,
           findActivitySource: typeof runtime.findActivitySource,
           delegatingActivitySource: typeof runtime.delegatingActivitySource,
           activitySource: typeof runtime.activitySource,
-          internalActivitySource: typeof preparedQuery.activitySource,
         },
         {
           startActivityOn: 'function',
@@ -72,7 +82,6 @@ describe('cross-shell tarball chain (target-postgres -> family-sql -> framework,
           findActivitySource: 'function',
           delegatingActivitySource: 'function',
           activitySource: 'symbol',
-          internalActivitySource: 'undefined',
         },
       );
       console.log('activity exports ok');

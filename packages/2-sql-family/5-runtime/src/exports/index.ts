@@ -50,6 +50,14 @@ export type { LintsOptions } from '../middleware/lints';
 export { lints } from '../middleware/lints';
 export type { SqlMiddleware, SqlMiddlewareContext } from '../middleware/sql-middleware';
 export {
+  type PreparedStatementExecuteTarget as Ea_PreparedStatementExecuteTarget,
+  preparedStatementExecute as ea_preparedStatementExecute,
+} from '../prepared/prepared-execute';
+export {
+  type PreparedStatementQueryTarget as Ea_PreparedStatementQueryTarget,
+  preparedStatementQuery as ea_preparedStatementQuery,
+} from '../prepared/prepared-query';
+export {
   PreparedExecutionImpl,
   PreparedStatementImpl,
   type PreparedStatementInternals,
@@ -117,3 +125,8 @@ export {
   warnOfCapabilitiesNotProvided,
 } from '../stack-capabilities';
 export { createToSql, type RenderedSql, type ToSqlMember } from '../to-sql';
+export {
+  createTransactionStart as ea_createTransactionStart,
+  type TransactionStartTarget as Ea_TransactionStartTarget,
+  transactionStart as ea_transactionStart,
+} from '../transaction-state';
