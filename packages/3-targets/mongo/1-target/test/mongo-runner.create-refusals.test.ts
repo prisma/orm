@@ -120,4 +120,38 @@ describe('MongoMigrationRunner, a create whose collection already exists', () =>
       `${EXTENSION_FIRST_TWO_WAYS} ${EXTENSION_MOVED_ASIDE} The failed apply changed nothing.`,
     );
   });
+
+  it('names every other collection this migration creates that already exists, so the run does not stop again at the next one', async () => {
+    const harness = makeHarness();
+    harness.inspectionExecutor.collections = [
+      { name: 'orders' },
+      { name: 'items' },
+      { name: 'archive' },
+    ];
+    const unchecked = (name: string) => ({ ...createCollection(name), postcheck: [] });
+    const plan = makePlan([
+      unchecked('orders'),
+      unchecked('users'),
+      unchecked('items'),
+      unchecked('archive'),
+    ]);
+    const [edge] = synthEdges(plan);
+    if (edge === undefined) throw new Error('synthEdges made no edge');
+
+    const result = await harness.runner.execute({
+      plan,
+      migrationEdges: [
+        { ...edge, dirName: '20261127T0000_orders', operationCount: 3 },
+        { ...edge, dirName: '20261127T0001_archive', operationCount: 1 },
+      ],
+      destinationContract: makeContract('dest'),
+      policy: ALL_POLICY,
+      frameworkComponents: [],
+      policiesInForce: { ...DEFAULT_DATABASE_POLICIES, change: ['migrate'] },
+    });
+
+    expect(failureFields(result.assertNotOk()).why).toBe(
+      `${FIRST_TWO_WAYS} ${MOVED_ASIDE('20261127T0000_orders').replace(` ${SECTION}`, '')} This migration also creates collection items, which already exists too: before you run db migrate --to 20261127T0000_orders, move it aside the same way if it holds documents you need, or drop it if it holds nothing you need, so the run does not stop again at it. ${SECTION} The failed apply changed nothing.`,
+    );
+  });
 });

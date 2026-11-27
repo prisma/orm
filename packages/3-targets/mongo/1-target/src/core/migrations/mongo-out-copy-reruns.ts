@@ -154,9 +154,17 @@ function settleByHandText(copy: UnionCopy): string {
   return `delete nothing from either collection, and do not run the command again, until you have compared collections ${into} and ${source} by hand and settled which documents each should keep: only you can tell which of their documents are which. ${rerun}, so before you run it, leave in collection ${source} only the documents that collection ${into} does not hold yet.`;
 }
 
-/** How to tell that a copy whose connection dropped has ended: MongoDB keeps running an aggregate that writes with `$out` after its client goes. */
+/**
+ * The `mongosh` command that lists the aggregates of the current database whose last stage, `$out` or
+ * `$merge`, writes into `into`: the copy, and not the application's reads or another database's copy.
+ */
+function runningCopyQuery(into: string): string {
+  return `db.getSiblingDB("admin").aggregate([{ $currentOp: { allUsers: true } }, { $match: { "command.$db": db.getName(), $expr: { $let: { vars: { last: { $arrayElemAt: [{ $objectToArray: { $last: "$command.pipeline" } }, 0] } }, in: { $and: [{ $in: ["$$last.k", [{ $literal: "$out" }, { $literal: "$merge" }]] }, { $in: [${JSON.stringify(into)}, ["$$last.v", "$$last.v.coll", "$$last.v.into", "$$last.v.into.coll"]] }] } } } } }])`;
+}
+
+/** How to tell that a copy whose connection dropped has ended: MongoDB keeps running an aggregate that writes with `$out` after its client goes, and `killOp` only marks it to end. */
 function copyEndedText(into: string): string {
-  return `first check that it is no longer running: MongoDB keeps running an aggregate that ends in $out after the connection that sent it drops. In mongosh, db.getSiblingDB("admin").aggregate([{ $currentOp: { allUsers: true } }, { $match: { "command.aggregate": ${JSON.stringify(into)} } }]) lists the copy while it runs. Wait until it lists nothing, or end the copy with db.killOp(<the opid it lists>). Then count`;
+  return `first check that it is no longer running: MongoDB keeps running an aggregate that ends in $out after the connection that sent it drops. In mongosh, connected to this database, ${runningCopyQuery(into)} lists the copy while it runs. Wait until it lists nothing, or end the copy with db.killOp(<the opid it lists>) and run the query again until it lists nothing: killOp only marks the copy to end, and it can run on for a moment.`;
 }
 
 const UNCHANGED = 'nothing wrote to or deleted from either collection since the apply stopped';
@@ -212,7 +220,7 @@ function interruptedCopyText(
   const whole = copy.filters.length === 0;
   const stopped = `Operation ${id} was copying ${whole ? 'the documents' : 'documents'} of collection ${source} into collection ${into} with an $out stage when the apply stopped.`;
   if (counts.selected === 0) {
-    return `${stopped} Collection ${source} held no document for it to copy, so the command can run again as it is.`;
+    return `${stopped} Collection ${source} held no document for it to copy when it started. Before you run the command again, ${copyEndedText(into)} Then, if ${UNCHANGED}, run the command again as it is. If you cannot be sure of that, ${settleByHandText(copy)}`;
   }
   const one = removalIds.length === 1;
   const removals = whole
@@ -225,7 +233,7 @@ function interruptedCopyText(
     : one
       ? `run that delete yourself, on collection ${source} with the filter of its deleteDocuments call in the migration's migration.ts`
       : `run those deletes yourself, on collection ${source}, each with the filter of its deleteDocuments call in the migration's migration.ts`;
-  return `${stopped} The error does not show whether the copy finished. ${removals}. Before the copy, collection ${into} held ${documentsText(counts.target)}, and the copy was to add ${documentsText(counts.selected)} of collection ${source}. To tell whether it finished, ${copyEndedText(into)} the documents of collection ${into}, for example with db.getCollection(${JSON.stringify(into)}).countDocuments() in mongosh. The count shows this only if ${UNCHANGED}. If you cannot be sure of that, ${settleByHandText(copy)} If it holds ${counts.target + counts.selected}, and ${UNCHANGED}, the copy finished. ${writesStoppedText(copy, one)} Before you run the command again, ${finish}. The copy has no check, so it runs again, and it would add ${whole ? 'the documents of' : 'the documents still in'} collection ${source} to collection ${into} a second time. Do not delete documents from collection ${into} instead. If it holds ${counts.target}, and ${UNCHANGED}, the copy did not finish: delete nothing, and run the command again as it is. If it holds any other number, something else wrote to or deleted from collection ${into}, or the command was already run again: ${settleByHandText(copy)} If the command was already run again after the copy finished, collection ${into} holds some of the moved documents two or more times, under the same _id. ${duplicatesText(into)}`;
+  return `${stopped} The error does not show whether the copy finished. ${removals}. Before the copy, collection ${into} held ${documentsText(counts.target)}, and the copy was to add ${documentsText(counts.selected)} of collection ${source}. To tell whether it finished, ${copyEndedText(into)} Then count the documents of collection ${into}, for example with db.getCollection(${JSON.stringify(into)}).countDocuments() in mongosh. The count shows this only if ${UNCHANGED}. If you cannot be sure of that, ${settleByHandText(copy)} If it holds ${counts.target + counts.selected}, and ${UNCHANGED}, the copy finished. ${writesStoppedText(copy, one)} Before you run the command again, ${finish}. The copy has no check, so it runs again, and it would add ${whole ? 'the documents of' : 'the documents still in'} collection ${source} to collection ${into} a second time. Do not delete documents from collection ${into} instead. If it holds ${counts.target}, and ${UNCHANGED}, the copy did not finish: delete nothing, and run the command again as it is. If it holds any other number, something else wrote to or deleted from collection ${into}, or the command was already run again: ${settleByHandText(copy)} If the command was already run again after the copy finished, collection ${into} holds some of the moved documents two or more times, under the same _id. ${duplicatesText(into)}`;
 }
 
 /**

@@ -462,7 +462,7 @@ describe('MongoMigrationRunner database policies', () => {
   it("guards the application space's marker with the policies in force, and leaves an extension space's marker unguarded", async () => {
     const appStore = new MarkerStore(markerAt('start', { policies: MIGRATE_ONLY }));
     const extensionStore = new MarkerStore(markerAt('start', {}));
-    const runWith = (store: MarkerStore, spaceId?: string) =>
+    const runWith = (store: MarkerStore, policiesInForce: DatabasePolicies, spaceId?: string) =>
       makeRunner(store).execute({
         plan: {
           ...makePlan([createCollection('items')], 'start'),
@@ -474,11 +474,11 @@ describe('MongoMigrationRunner database policies', () => {
         frameworkComponents: [],
         strictVerification: false,
         executionChecks: { prechecks: false, postchecks: false, idempotencyChecks: false },
-        policiesInForce: DEFAULT_DATABASE_POLICIES,
+        policiesInForce,
       });
 
-    const app = await runWith(appStore);
-    const extension = await runWith(extensionStore, 'audit');
+    const app = await runWith(appStore, DEFAULT_DATABASE_POLICIES);
+    const extension = await runWith(extensionStore, MIGRATE_ONLY, 'audit');
 
     expect({
       app: app.ok ? 'applied' : app.failure.meta?.['reason'],
