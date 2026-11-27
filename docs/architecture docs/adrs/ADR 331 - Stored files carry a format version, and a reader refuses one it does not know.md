@@ -77,11 +77,13 @@ A reader refuses a field the format does not define. Because every reader is str
 
 The rule covers everything Prisma interprets. It stops at content Prisma carries for someone else, where any key is accepted. These are the open places:
 
-- **In a contract:** `meta`; each extension's own section under `extensions`; `capabilities`, a map of flags a later release may add a name to (ADR 335), so a reader meets names it does not know and treats each as its own rules say; `_generated`; the parameters of a generator; the value of a literal default; an index's `options`, which belong to the index type; and the MongoDB documents a contract hands to the database as they are, such as a collection's validator and an index's partial filter. A type's parameters belong to its codec, whose own schema refuses a key it does not define.
+- **In a contract:** `meta`; each extension's own section under `extensions`; `capabilities`, a map of flags a later release may add a name to (ADR 335), so a reader meets names it does not know and treats each as its own rules say; `_generated`; the parameters of a generator; the value of a literal default; an index's `options`, which belong to the index type; and the MongoDB documents a contract hands to the database as they are, such as a collection's validator and an index's partial filter. A type's parameters belong to its codec, whose own schema refuses a key it does not define; that schema is applied when a command reads a contract and when a client builds the codec.
 - **In a SQL operation:** a step's `params`, which are values handed to the database driver; the operation's `meta`; the entries of a step's `meta` that no reader acts on; and a codec's `typeParams` inside a mark, which belong to the codec. The entries of a step's `meta` that a reader acts on are strict.
 - **In a MongoDB operation:** the documents handed to the database as they are, such as a filter, an update and a pipeline; a query plan's `resultShape`; and the entries of a plan's `meta` that no reader acts on, `annotations` among them.
 
 So a release that makes a reader act on something inside one of these, for example a new entry in a step's `meta`, must raise the format version, because an earlier reader would not notice the entry.
+
+A contract or a snapshot is read strictly by whatever interprets its content: planning, applying, verifying, signing and showing. A command that uses only a file's hash does not read its content: `migration status`, `list`, `graph` and `ref set`. `migration status` warns when the contract would be refused. A command never hides a file it could not read; it reports the file and the reason, and goes on with the rest.
 
 Operations are read strictly by everything that acts on their statements or commands: the runners, the statement preview, and the checks a recorded path gets before it is applied. `migration status`, `list`, `graph` and `check` read the fields every target shares and do not read a target's own fields. For `status`, `list` and `graph` that is all they use. `migration check` is meant to say whether a migration is sound, but it can pass one that `db migrate` then refuses for a target's own field.
 
@@ -134,7 +136,7 @@ Git treats a repository's format version this way, and Cargo refuses a lock file
 - A hand-edited file with a stray key is refused, in a contract, a migration or a ref.
 - An index's `type` and `options` are checked when a contract is built, not when it is read, so an option an index type does not define is accepted from a stored contract.
 - The open places depend on the author of a change knowing that a reader now acts on something inside one. No test finds that.
-- `migration check` can pass a migration whose operations `db migrate` then refuses for a target's own field, and that refusal names the operation but not the migration file, because the framework loads `ops.json` and reads only the fields every target shares.
+- `migration check` can pass a migration whose operations `db migrate` then refuses for a target's own field, because the framework loads `ops.json` and reads only the fields every target shares. The refusal names the migration and the operation.
 
 ## Alternatives considered
 
