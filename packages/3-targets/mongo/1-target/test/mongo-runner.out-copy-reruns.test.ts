@@ -360,6 +360,49 @@ describe('MongoMigrationRunner, a stop after a copy that ends in $out', () => {
     });
   });
 
+  it('says a copy that threw while it ran may have finished, and how to tell, when its delete has not run', async () => {
+    const harness = makeHarness();
+    harness.driver.failAggregateWith(new Error('connection 3 to 127.0.0.1:27017 closed'));
+
+    const result = await execute(harness, [unionCopy, deletion]);
+
+    expect(failureFields(result.assertNotOk())).toMatchObject({
+      code: 'MIGRATION.EXECUTION_FAILED',
+      message: `Operation ${unionCopy.id} failed: connection 3 to 127.0.0.1:27017 closed`,
+      why: `Fix what the error names, then run the command again; operations that already ran are skipped. Operation ${unionCopy.id} was copying documents into collection measurements with an $out stage when the apply stopped, and the copy may have finished: the error does not show whether the $out stage replaced collection measurements. Operation ${deletion.id}, which deletes them from collection events, has not run. To tell, look in collection measurements for the _id of a document of collection events that the filter of its deleteDocuments call selects. If the copy finished, before you run the command again, run that delete yourself, on collection events with the filter of its deleteDocuments call in the migration's migration.ts: the copy has no check, so it runs again, and it would add the documents still in collection events to collection measurements a second time. Do not delete documents from collection measurements instead. If the copy did not finish, run the command again as it is. If the copy finished and the command was already run again before the delete finished, collection measurements holds some of the moved documents two or more times, under the same _id. ${DUPLICATES} The operations that ran before the failure stay applied.`,
+      meta: { operationId: unionCopy.id, databaseUnchanged: false },
+    });
+  });
+
+  it('says a copy of the whole source that threw while it ran may have finished, when its drop has not run', async () => {
+    const harness = makeHarness();
+    harness.driver.failAggregateWith(new Error('connection 3 to 127.0.0.1:27017 closed'));
+    const drop = dropCollection('readings');
+
+    const result = await execute(harness, [renameCopy, drop]);
+
+    expect(failureFields(result.assertNotOk()).why).toContain(
+      `Operation ${renameCopy.id} was copying the documents of collection readings into collection measurements with an $out stage when the apply stopped, and the copy may have finished: the error does not show whether the $out stage replaced collection measurements. Operation ${drop.id}, which drops collection readings, has not run. To tell, look in collection measurements for the _id of a document of collection readings. If the copy finished, before you run the command again, delete the documents of collection readings or drop it yourself:`,
+    );
+  });
+
+  it('keeps the advice for a copy that finished when the callback after it throws', async () => {
+    const harness = makeHarness();
+    const broke = new Error('the progress display broke');
+
+    const result = await execute(harness, [unionCopy, deletion], undefined, {
+      onOperationComplete: (operation) => {
+        if (operation.id === unionCopy.id) throw broke;
+      },
+    });
+
+    expect(failureFields(result.assertNotOk())).toMatchObject({
+      code: 'MIGRATION.EXECUTION_FAILED',
+      message: `The apply stopped after operation ${unionCopy.id} finished: the progress display broke`,
+      why: `Fix what the error names, then run the command again. An operation whose check shows it already ran is skipped; an operation with no check, such as a copy in a dataTransform, runs again. ${unfinished} The operations that ran before the failure stay applied.`,
+    });
+  });
+
   it('calls a failed $out copy a copy, which wrote nothing', async () => {
     const harness = makeHarness();
     harness.driver.failAggregateWith(badValue);

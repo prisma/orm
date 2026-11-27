@@ -40,7 +40,10 @@ import type {
   AnyMongoWireCommand,
 } from '@internal/mongo-wire';
 import { serializeMongoOps } from '../src/core/migrations/mongo-ops-serializer';
-import { MongoMigrationRunner } from '../src/core/migrations/mongo-runner';
+import {
+  MongoMigrationRunner,
+  type MongoMigrationRunnerExecuteOptions,
+} from '../src/core/migrations/mongo-runner';
 
 export type Row = Record<string, unknown>;
 export type WireCommand = AnyMongoWireCommand;
@@ -294,6 +297,7 @@ export async function execute(
   harness: Harness,
   ops: readonly AnyMongoMigrationOperation[],
   executionChecks?: MigrationRunnerExecutionChecks,
+  callbacks?: MongoMigrationRunnerExecuteOptions['callbacks'],
 ) {
   const plan = makePlan(ops);
   return harness.runner.execute({
@@ -303,5 +307,6 @@ export async function execute(
     policy: ALL_POLICY,
     frameworkComponents: [],
     ...(executionChecks ? { executionChecks } : {}),
+    ...(callbacks ? { callbacks } : {}),
   });
 }

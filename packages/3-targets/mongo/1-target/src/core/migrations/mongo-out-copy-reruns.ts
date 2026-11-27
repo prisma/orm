@@ -144,24 +144,65 @@ function undroppedText(copy: UnionCopy, dropId: string): string {
   return `Operation ${id} copied the documents of collection ${source} into collection ${into} with an $out stage, and operation ${dropId}, which drops collection ${source}, has not run. Before you run the command again, delete the documents of collection ${source} or drop it yourself: the copy has no check, so it runs again, and it would add the documents of collection ${source} to collection ${into} a second time. Do not delete documents from collection ${into} instead. If the command was already run again before collection ${source} was dropped, its documents are in collection ${into} more than once: each of them is there two or more times, under the same _id. ${duplicatesText(into)}`;
 }
 
+function interruptedDeleteText(copy: UnionCopy, deleteIds: readonly string[]): string {
+  const { id, into, source } = copy;
+  const one = deleteIds.length === 1;
+  const deletes = one
+    ? `Operation ${deleteIds[0]}, which deletes them from collection ${source}, has not run`
+    : `Operations ${joinedList(deleteIds)}, which delete them from collection ${source}, have not run`;
+  const calls = one ? 'its deleteDocuments call' : 'one of their deleteDocuments calls';
+  const finish = one
+    ? `run that delete yourself, on collection ${source} with the filter of its deleteDocuments call in the migration's migration.ts`
+    : `run those deletes yourself, on collection ${source}, each with the filter of its deleteDocuments call in the migration's migration.ts`;
+  return `Operation ${id} was copying documents into collection ${into} with an $out stage when the apply stopped, and the copy may have finished: the error does not show whether the $out stage replaced collection ${into}. ${deletes}. To tell, look in collection ${into} for the _id of a document of collection ${source} that the filter of ${calls} selects. If the copy finished, before you run the command again, ${finish}: the copy has no check, so it runs again, and it would add the documents still in collection ${source} to collection ${into} a second time. Do not delete documents from collection ${into} instead. If the copy did not finish, run the command again as it is. If the copy finished and the command was already run again before the ${one ? 'delete' : 'deletes'} finished, collection ${into} holds some of the moved documents two or more times, under the same _id. ${duplicatesText(into)}`;
+}
+
+function interruptedDropText(copy: UnionCopy, dropId: string): string {
+  const { id, into, source } = copy;
+  return `Operation ${id} was copying the documents of collection ${source} into collection ${into} with an $out stage when the apply stopped, and the copy may have finished: the error does not show whether the $out stage replaced collection ${into}. Operation ${dropId}, which drops collection ${source}, has not run. To tell, look in collection ${into} for the _id of a document of collection ${source}. If the copy finished, before you run the command again, delete the documents of collection ${source} or drop it yourself: the copy has no check, so it runs again, and it would add the documents of collection ${source} to collection ${into} a second time. Do not delete documents from collection ${into} instead. If the copy did not finish, run the command again as it is. If the copy finished and the command was already run again before collection ${source} was dropped, its documents are in collection ${into} more than once: each of them is there two or more times, under the same _id. ${duplicatesText(into)}`;
+}
+
+/**
+ * How the operation an apply stopped at ended: `refused` when it returned a failure or never
+ * started, `interrupted` when it threw while it ran, so its commands may or may not have taken
+ * effect, and `finished` when it ran to its end and the apply stopped after it, as when the
+ * callback after it throws.
+ */
+export type StopOutcome = 'refused' | 'interrupted' | 'finished';
+
+/** Where an apply stopped: the index of the operation, the count of operations once it ran them all, and how that operation ended. */
+export interface ApplyStop {
+  readonly at: number;
+  readonly outcome: StopOutcome;
+}
+
 /**
  * What to do before a re-run about a copy the planner prints for a move into a time-series
- * collection, when the apply stopped after it and before the delete or the drop that follows it.
- * The copy has no check, so a re-run adds the documents still in its source a second time. Any
- * other copy gets no text: the runner cannot tell what its re-run does.
+ * collection, when the apply stopped after it, or while it ran, and before the delete or the drop
+ * that follows it. The copy has no check, so a re-run adds the documents still in its source a
+ * second time. Any other copy gets no text: the runner cannot tell what its re-run does.
  */
 export function outCopyRerunText(
   operations: readonly AnyMongoMigrationOperation[],
-  stoppedAt: number,
+  stop: ApplyStop,
 ): string | undefined {
-  const texts = operations.slice(0, stoppedAt).flatMap((operation, index) => {
+  const ran = stop.outcome === 'finished' ? stop.at + 1 : stop.at;
+  const end = stop.outcome === 'interrupted' ? stop.at + 1 : ran;
+  const texts = operations.slice(0, end).flatMap((operation, index) => {
     const copy = unionCopyOf(operation);
     if (copy === undefined) return [];
     const pending = (removalsOf(operations, index, copy) ?? [])
-      .filter((removalIndex) => removalIndex >= stoppedAt)
+      .filter((removalIndex) => removalIndex >= ran)
       .flatMap((removalIndex) => operations[removalIndex]?.id ?? []);
     const [first] = pending;
     if (first === undefined) return [];
+    if (index >= ran) {
+      return [
+        copy.filters.length === 0
+          ? interruptedDropText(copy, first)
+          : interruptedDeleteText(copy, pending),
+      ];
+    }
     return [
       copy.filters.length === 0 ? undroppedText(copy, first) : unfinishedDeleteText(copy, pending),
     ];

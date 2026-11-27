@@ -34,4 +34,15 @@ describe('MongoMigrationRunner, a create whose collection already exists', () =>
       "If orders holds nothing you need, drop it, then run the command again; operations that already ran are skipped. Otherwise give it the options the createCollection call of this migration's migration.ts sets, its validator among them, and run the command again: the creation is then skipped. The failed apply changed nothing.",
     );
   });
+
+  it('says to write ops.json again for a create written before creations had an after-check, since no run skips it', async () => {
+    const harness = makeHarness();
+    harness.inspectionExecutor.collections = [{ name: 'orders' }];
+
+    const result = await execute(harness, [{ ...createCollection('orders'), postcheck: [] }]);
+
+    expect(failureFields(result.assertNotOk()).why).toBe(
+      "If orders holds nothing you need, drop it, then run the command again; operations that already ran are skipped. Otherwise run this migration's migration.ts with node, which writes its ops.json again: it was written before a creation had the after-check that lets a run skip it, so no run skips this one. Do that only if no other database has applied this migration, since it changes the migration's hash. Then give orders the options the createCollection call of this migration's migration.ts sets, and no validator, since that call sets none, and run the command again: the creation is then skipped. The failed apply changed nothing.",
+    );
+  });
 });

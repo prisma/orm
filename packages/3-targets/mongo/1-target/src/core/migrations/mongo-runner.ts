@@ -97,7 +97,7 @@ import {
   unrewritableKeyReason,
 } from './migration-factories';
 import { deserializeMongoOps } from './mongo-ops-serializer';
-import { outCopyRerunText } from './mongo-out-copy-reruns';
+import { outCopyRerunText, type StopOutcome } from './mongo-out-copy-reruns';
 import { byHandRenamePlacement } from './mongo-plan-text';
 import { type RewriteCollection, rewriteRefusals } from './mongo-rewrite-refusals';
 import { storedKeyFieldAt } from './mongo-stored-key-fills';
@@ -213,10 +213,11 @@ export type MongoMigrationRunnerResult = Result<
   MongoMigrationRunnerFailure
 >;
 
-/** The operations of an apply, and the index of the one it stopped at: the count of operations when it stopped after them all. */
+/** The operations of an apply, the index of the one it stopped at (the count of operations when it stopped after them all), and how that one ended. */
 interface ApplyProgress {
   operations: readonly AnyMongoMigrationOperation[];
   stoppedAt: number;
+  outcome: StopOutcome;
 }
 
 /** The same failure, with `advice` at the end of its why. */
@@ -255,16 +256,22 @@ function withStructuredAdvice(error: StructuredError, advice: string): Structure
   return advised;
 }
 
-/** The failure for an error an operation threw, such as a dropped connection, so the re-run text reaches the user. */
+/**
+ * The failure for an error thrown while an operation ran, such as a dropped connection, or right
+ * after it finished, so the re-run text reaches the user.
+ */
 function thrownFailure(
   operation: AnyMongoMigrationOperation,
   error: unknown,
+  finished: boolean,
   before: Ran,
 ): MongoMigrationRunnerFailure {
   const reason = error instanceof Error ? error.message : String(error);
   return migrationRunnerFailure(
     'MIGRATION.EXECUTION_FAILED',
-    `Operation ${operation.id} failed: ${reason}`,
+    finished
+      ? `The apply stopped after operation ${operation.id} finished: ${reason}`
+      : `Operation ${operation.id} failed: ${reason}`,
     {
       why: rerunText('Fix what the error names, then run the command again', before),
       meta: { operationId: operation.id },
@@ -429,11 +436,16 @@ function createTargetExistsRefusal(
     return undefined;
   }
   const name = create.collection;
+  const options = `the options the createCollection call of this migration's migration.ts sets, ${create.validator === undefined ? 'and no validator, since that call sets none' : 'its validator among them'}`;
+  const otherwise =
+    op.postcheck.length === 0
+      ? `Otherwise run this migration's migration.ts with node, which writes its ops.json again: it was written before a creation had the after-check that lets a run skip it, so no run skips this one. Do that only if no other database has applied this migration, since it changes the migration's hash. Then give ${name} ${options}, and run the command again${before.skips ? ': the creation is then skipped.' : ' with postchecks and idempotency checks on: only they skip the creation.'}`
+      : `Otherwise give it ${options}, ${before.skips ? 'and run the command again: the creation is then skipped.' : 'and run the command again with postchecks and idempotency checks on: only they skip the creation.'}`;
   return runnerFailure(
     'MIGRATION.PRECHECK_FAILED',
     `Operation ${op.id} stopped: collection ${name} already exists without the options this migration creates it with`,
     {
-      why: `${rerunText(`If ${name} holds nothing you need, drop it, then run the command again`, before)} Otherwise give it the options the createCollection call of this migration's migration.ts sets, ${create.validator === undefined ? 'and no validator, since that call sets none' : 'its validator among them'}, ${before.skips ? 'and run the command again: the creation is then skipped.' : 'and run the command again with postchecks and idempotency checks on: only they skip the creation.'}`,
+      why: `${rerunText(`If ${name} holds nothing you need, drop it, then run the command again`, before)} ${otherwise}`,
       meta: { operationId: op.id },
     },
   );
@@ -1642,8 +1654,10 @@ export class MongoMigrationRunner {
 
   async execute(options: MongoMigrationRunnerExecuteOptions): Promise<MongoMigrationRunnerResult> {
     let changedDatabase = false;
-    const progress: ApplyProgress = { operations: [], stoppedAt: 0 };
-    const advice = () => outCopyRerunText(progress.operations, progress.stoppedAt);
+    const progress: ApplyProgress = { operations: [], stoppedAt: 0, outcome: 'refused' };
+    const advice = () =>
+      outCopyRerunText(progress.operations, { at: progress.stoppedAt, outcome: progress.outcome });
+    let interrupted = false;
     let result: Result<MigrationRunnerPerSpaceSuccessValue, MongoMigrationRunnerFailure>;
     try {
       result = await this.apply(
@@ -1659,9 +1673,11 @@ export class MongoMigrationRunner {
       const stopped = progress.operations[progress.stoppedAt];
       if (text === undefined || stopped === undefined) throw error;
       if (isStructuredError(error)) throw withStructuredAdvice(error, text);
+      const finished = progress.outcome === 'finished';
+      interrupted = progress.outcome === 'interrupted';
       result = notOk(
-        thrownFailure(stopped, error, {
-          operations: progress.operations.slice(0, progress.stoppedAt),
+        thrownFailure(stopped, error, finished, {
+          operations: progress.operations.slice(0, progress.stoppedAt + (finished ? 1 : 0)),
           skips: runSkips(options.executionChecks),
         }),
       );
@@ -1671,7 +1687,7 @@ export class MongoMigrationRunner {
       : notOk(
           withDatabaseUnchanged(
             withAdvice(result.failure, advice()),
-            options.databaseChangedBefore !== true && !changedDatabase,
+            options.databaseChangedBefore !== true && !changedDatabase && !interrupted,
           ),
         );
   }
@@ -1716,6 +1732,7 @@ export class MongoMigrationRunner {
 
     for (const [operationIndex, operation] of operations.entries()) {
       progress.stoppedAt = operationIndex;
+      progress.outcome = 'refused';
       options.callbacks?.onOperationStart?.(operation);
       try {
         if (isMongoDmlOperation(operation)) {
@@ -1732,6 +1749,7 @@ export class MongoMigrationRunner {
           );
           if (result.failure) return result.failure;
           if (result.executed) operationsExecuted += 1;
+          progress.outcome = 'finished';
           continue;
         }
 
@@ -1741,7 +1759,10 @@ export class MongoMigrationRunner {
             inspectionExecutor,
             filterEvaluator,
           );
-          if (allSatisfied) continue;
+          if (allSatisfied) {
+            progress.outcome = 'finished';
+            continue;
+          }
         }
 
         if (runPrechecks) {
@@ -1817,6 +1838,10 @@ export class MongoMigrationRunner {
         }
 
         operationsExecuted += 1;
+        progress.outcome = 'finished';
+      } catch (error) {
+        progress.outcome = 'interrupted';
+        throw error;
       } finally {
         options.callbacks?.onOperationComplete?.(operation);
       }
