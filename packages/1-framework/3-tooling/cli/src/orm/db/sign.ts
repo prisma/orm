@@ -412,7 +412,7 @@ function hydrateContract(
     if (formatFailure !== undefined) return notOkResult(formatFailure);
     return notOkResult(
       errorContractValidationFailed(
-        `Contract JSON is invalid: ${error instanceof Error ? error.message : String(error)}`,
+        `Contract at ${path} failed to deserialize: ${error instanceof Error ? error.message : String(error)}`,
         { where: { path }, meta: contractValidationMeta(error) },
       ),
     );

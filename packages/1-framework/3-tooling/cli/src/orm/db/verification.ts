@@ -93,7 +93,7 @@ export async function readEmittedContract(inputs: {
     return notOk(
       normalizeError(
         errorContractValidationFailed(
-          `Contract JSON is invalid: ${error instanceof Error ? error.message : String(error)}`,
+          `Contract at ${path} failed to deserialize: ${error instanceof Error ? error.message : String(error)}`,
           { where: { path }, meta: contractValidationMeta(error) },
         ),
       ),
