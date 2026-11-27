@@ -59,7 +59,9 @@ import {
 } from '../../utils/migration-path-target';
 import {
   chooseAction,
+  DATABASE_REF,
   migrationPackageRepairActions,
+  REF_MOVE_EFFECT,
   runCommandAction,
   snapshotRepairActions,
 } from '../../utils/next-actions';
@@ -349,7 +351,10 @@ function checkReachability(space: CheckSpace): readonly CheckFailure[] {
         where: migrationPathRelative(space.cwd, pkg.dirPath),
         why: `Migration "${pkg.dirName}" starts from ${pkg.metadata.from} which no other migration produces`,
         nextActions: [
-          chooseAction('Delete the unreachable migration'),
+          chooseAction(
+            `Restore from version control the migration that ends at ${pkg.metadata.from}, if one was deleted`,
+          ),
+          chooseAction('Or, if no database has applied it, delete the unreachable migration'),
           chooseAction('Or re-emit a migration that connects it to the graph'),
         ],
       });
@@ -368,10 +373,17 @@ function checkDanglingRefs(space: CheckSpace): readonly CheckFailure[] {
         where: relative(space.cwd, join(space.refsDir, `${name}.json`)),
         why: `Ref "${name}" points at ${entry.hash} which does not exist in the migration graph`,
         nextActions: [
-          runCommandAction(
-            'Point the ref at a graph node',
-            `{bin} migration ref set ${name} <valid-hash>`,
+          chooseAction(
+            `Restore from version control the migration that ends at ${entry.hash}, if one was deleted`,
           ),
+          ...(name === DATABASE_REF
+            ? []
+            : [
+                runCommandAction(
+                  `Or point the ref at a graph node. ${REF_MOVE_EFFECT}`,
+                  `{bin} migration ref set ${name} <valid-hash>`,
+                ),
+              ]),
           chooseAction('Or delete the ref'),
         ],
       });

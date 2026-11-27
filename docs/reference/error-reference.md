@@ -1688,7 +1688,7 @@ A `migration check` finding, carried as an `error` diagnostic on a completed run
 
 ### MIGRATION.CHECK_DANGLING_REF
 
-A `migration check` finding, carried as an `error` diagnostic on a completed run that exits `4`: a ref file points at a contract hash that does not exist in the space's migration graph. Update the ref with `prisma migration ref set <name> <valid-hash>` or delete it. Not reported in a space that has a migration package `migration check` could not load (`MIGRATION.CHECK_PACKAGE_UNLOADABLE`).
+A `migration check` finding, carried as an `error` diagnostic on a completed run that exits `4`: a ref file points at a contract hash that does not exist in the space's migration graph. The advice restores first, from version control, the migration that ends at that hash, in case one was deleted. For a ref other than `db` it also offers `prisma migration ref set <name> <valid-hash>`, and says that the ref then names a different contract, so whatever uses it, such as a deploy that migrates a database to it, changes with it; for the `db` ref, which records the contract the database is at, it never names a contract by hand. Or delete the ref. Not reported in a space that has a migration package `migration check` could not load (`MIGRATION.CHECK_PACKAGE_UNLOADABLE`) or a migration folder missing a file (`MIGRATION.CHECK_FILE_MISSING`).
 
 ### MIGRATION.CHECK_DECLARED_BUT_UNMIGRATED
 
@@ -1700,7 +1700,7 @@ A `migration check` finding, carried as an `error` diagnostic on a completed run
 
 ### MIGRATION.CHECK_FILE_MISSING
 
-A `migration check` finding, carried as an `error` diagnostic on a completed run that exits `4`: a required file (`migration.json` or `ops.json`) is missing from a migration package directory. Restore the package from version control, or write the files again with `node "<package>/migration.ts"`.
+A `migration check` finding, carried as an `error` diagnostic on a completed run that exits `4`: a required file (`migration.json` or `ops.json`) is missing from a migration package directory. While a space has such a folder, `migration check` does not report unreachable migrations or dangling refs in that space, since they may only follow from the missing file. Restore the package from version control, or write the files again with `node "<package>/migration.ts"`. With `migration.json` missing, that gives the migration a new hash, so the advice offers it only where no database has applied the migration; see `MIGRATION.CHECK_PACKAGE_UNLOADABLE`.
 
 ### MIGRATION.CHECK_HASH_MISMATCH
 
@@ -1756,7 +1756,7 @@ A `migration check` finding, carried as an `error` diagnostic on a completed run
 
 ### MIGRATION.CHECK_UNREACHABLE_MIGRATION
 
-A `migration check` finding, carried as an `error` diagnostic on a completed run that exits `4`: a migration's `from` hash is not produced by any other migration (and is not the empty state), so the migration is unreachable in the graph. Delete it or re-emit a connecting migration. Not reported in a space that has a migration package `migration check` could not load (`MIGRATION.CHECK_PACKAGE_UNLOADABLE`).
+A `migration check` finding, carried as an `error` diagnostic on a completed run that exits `4`: a migration's `from` hash is not produced by any other migration (and is not the empty state), so the migration is unreachable in the graph. The advice restores first, from version control, the migration that ends at that hash, in case one was deleted; or, if no database has applied the unreachable migration, delete it; or re-emit a connecting migration. Not reported in a space that has a migration package `migration check` could not load (`MIGRATION.CHECK_PACKAGE_UNLOADABLE`) or a migration folder missing a file (`MIGRATION.CHECK_FILE_MISSING`).
 
 ### MIGRATION.COLUMN_RENAME_UNMATCHED
 
