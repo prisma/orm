@@ -247,6 +247,7 @@ withTempDir(({ createTempDir }) => {
         const log = await runMigrationLog(ctx, ['--json']);
         const initDryRun = await runDbInit(ctx, ['--dry-run', '--json']);
         const updateDryRun = await runDbUpdate(ctx, ['--dry-run', '--json']);
+        const migrateShow = await runMigrate(ctx, ['--show', '--json']);
 
         for (const [name, run] of Object.entries({
           verify,
@@ -254,6 +255,7 @@ withTempDir(({ createTempDir }) => {
           log,
           initDryRun,
           updateDryRun,
+          migrateShow,
         })) {
           expect(engineError(run), name).toMatchObject({
             code: EARLIER_RELEASE,
