@@ -77,6 +77,14 @@ const PACKAGES = {
       ['8.1.0', release('8.1.0', 'newest withdrawn\n'), { deprecated: 'bad' }],
     ]),
   },
+  '@fake/orm-ea-only': {
+    tags: { latest: '8.0.0-ea.0' },
+    versions: versions([['8.0.0-ea.0', release('8.0.0-ea.0', 'early access text\n')]]),
+  },
+  '@fake/orm-ea-untagged': {
+    tags: { ea: '8.0.0-ea.0' },
+    versions: versions([['8.0.0-ea.0', release('8.0.0-ea.0', 'untagged early access text\n')]]),
+  },
   '@fake/orm-single': {
     tags: { latest: '8.1.0' },
     versions: versions([['8.1.0', release('8.1.0', 'single text\n')]]),
@@ -182,6 +190,12 @@ function serve(request, response) {
 const packageManager = findPackageManager(process.env, process.platform);
 const PM = ['n', 'pm'].join('');
 
+function commandFolder(found) {
+  return process.platform === 'win32'
+    ? dirname(dirname(dirname(dirname(found.args[0]))))
+    : dirname(found.command);
+}
+
 const FAKE_COMMAND = `
 const { copyFileSync, writeFileSync } = require('node:fs');
 const { join } = require('node:path');
@@ -198,6 +212,10 @@ else if (mode === 'crash') {
 } else if (subcommand === 'pack' && mode === 'single') {
   const destination = rest.find((arg) => arg.startsWith('--pack-destination=')).split('=')[1];
   copyFileSync(process.env.FAKE_TARBALL, join(destination, 'fake-orm-db-8.1.0.tgz'));
+  process.stdout.write(JSON.stringify([{ filename: 'fake-orm-db-8.1.0.tgz' }]));
+} else if (subcommand === 'pack' && mode === 'bad-filename') {
+  process.stdout.write(JSON.stringify([{ filename: '../escape.tgz' }]));
+} else if (subcommand === 'pack' && mode === 'no-pack') {
   process.stdout.write(JSON.stringify([{ filename: 'fake-orm-db-8.1.0.tgz' }]));
 } else if (subcommand === 'pack') {
   writeFileSync('fake-orm-db-8.1.0.tgz', 'not really a tarball');
@@ -276,7 +294,7 @@ describe('fetch-upgrade-guides', () => {
   async function fetchGuides(how, args, extra = {}) {
     const path =
       how === 'command'
-        ? [dirname(process.execPath), dirname(packageManager.command)].join(delimiter)
+        ? [dirname(process.execPath), commandFolder(packageManager)].join(delimiter)
         : join(sandbox, 'empty');
     const timeout = how === 'fake' ? 30_000 : 0;
     try {
@@ -479,11 +497,34 @@ describe('fetch-upgrade-guides', () => {
           strictEqual(result.stdout, `${join(out, `${FOLDER}-8.2.0-ea.0`, 'prisma-8')}\n`);
         }));
 
+      for (const [name, tags] of [
+        ['@fake/orm-ea-only', 'under latest'],
+        ['@fake/orm-ea-untagged', 'with no latest tag'],
+      ]) {
+        it(`finds a package whose only release is a pre-release, ${tags}`, () =>
+          inProject({}, async () => {
+            const result = await fetchGuides(how, [name, '--registry', origin]);
+            strictEqual(result.code, 0, result.stderr);
+            match(await readFile(join(result.stdout.trim(), STEP), 'utf-8'), /early access text/);
+          }));
+      }
+
+      it("uses --registry over a scoped registry in the project's .npmrc", () =>
+        inProject({ 'project/.npmrc': `@fake:registry=${DEAD}/\n` }, async () => {
+          const result = await fetchGuides(how, [PACKAGE, '--registry', origin]);
+          strictEqual(result.code, 0, result.stderr);
+        }));
+
       it('fails clearly when the registry does not have the package', () =>
         inProject({}, async () => {
           const result = await fetchGuides(how, ['@fake/orm-missing', '--registry', origin]);
           deepStrictEqual({ code: result.code, stdout: result.stdout }, { code: 1, stdout: '' });
-          match(result.stderr, /^fetch-upgrade-guides: .*@fake\/orm-missing.*not found/);
+          match(
+            result.stderr,
+            how === 'command'
+              ? /^fetch-upgrade-guides: @fake\/orm-missing was not found on the registry: /
+              : /^fetch-upgrade-guides: @fake\/orm-missing was not found at http/,
+          );
           strictEqual(result.stderr.includes('    at '), false);
         }));
 
@@ -605,6 +646,14 @@ describe('fetch-upgrade-guides', () => {
   });
 
   describe('through the command only', () => {
+    it('downloads although a dry run is configured', () =>
+      inProject({}, async () => {
+        const result = await fetchGuides('command', [PACKAGE, '--registry', origin], {
+          npm_config_dry_run: 'true',
+        });
+        strictEqual(result.code, 0, result.stderr);
+      }));
+
     it("gives up on a registry that does not answer, within the command's own fetch timeout", () =>
       inProject({}, async () => {
         const result = await fetchGuides('command', [
@@ -629,9 +678,15 @@ describe('fetch-upgrade-guides', () => {
     async function fakeCommand(mode, args) {
       const bin = join(sandbox, 'fake-bin');
       await mkdir(bin, { recursive: true });
-      const path = join(bin, PM);
-      await writeFile(path, `#!${process.execPath}\n${FAKE_COMMAND}`);
-      await chmod(path, 0o755);
+      if (process.platform === 'win32') {
+        await writeFile(join(bin, `${PM}.cmd`), '@echo off\r\n');
+        await mkdir(join(bin, 'node_modules', PM, 'bin'), { recursive: true });
+        await writeFile(join(bin, 'node_modules', PM, 'bin', `${PM}-cli.js`), FAKE_COMMAND);
+      } else {
+        const path = join(bin, PM);
+        await writeFile(path, `#!${process.execPath}\n${FAKE_COMMAND}`);
+        await chmod(path, 0o755);
+      }
       const tarballPath = join(bin, 'release.tgz');
       await writeFile(tarballPath, release('8.1.0', 'single string text\n'));
       return fetchGuides('fake', args, { FAKE_MODE: mode, PATH: bin, FAKE_TARBALL: tarballPath });
@@ -659,6 +714,22 @@ describe('fetch-upgrade-guides', () => {
         const result = await fakeCommand('crash', [PACKAGE]);
         deepStrictEqual({ code: result.code, stdout: result.stdout }, { code: 1, stdout: '' });
         match(result.stderr, /exit code 139.*Segmentation fault/);
+      }));
+
+    it('refuses a pack file name that is not the expected tarball name', () =>
+      inProject({}, async () => {
+        const result = await fakeCommand('bad-filename', [PACKAGE]);
+        deepStrictEqual({ code: result.code, stdout: result.stdout }, { code: 1, stdout: '' });
+        match(result.stderr, /unexpected tarball name/);
+      }));
+
+    it("keeps a project file that has the tarball's name when the command writes nothing", () =>
+      inProject({ 'project/fake-orm-db-8.1.0.tgz': 'the project owns this' }, async (project) => {
+        const before = await snapshot(project);
+        const result = await fakeCommand('no-pack', [PACKAGE]);
+        deepStrictEqual({ code: result.code, stdout: result.stdout }, { code: 1, stdout: '' });
+        match(result.stderr, /wrote no tarball/);
+        deepStrictEqual(await snapshot(project), before);
       }));
 
     it('reports a command too old to write to the pack destination, and removes its tarball', () =>

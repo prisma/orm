@@ -1,4 +1,5 @@
 import { deepStrictEqual, doesNotThrow, rejects, strictEqual, throws } from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { chmod, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -11,6 +12,7 @@ import {
   extractSkill,
   FetchUpgradeGuidesError,
   findPackageManager,
+  putInPlace,
   releaseCandidates,
   tarFiles,
 } from '../skills/prisma-8/scripts/fetch-upgrade-guides.mjs';
@@ -187,6 +189,16 @@ describe('tarFiles', () => {
     );
   });
 
+  it('refuses a negative size', () => {
+    const header = tarHeader({ name: 'package/a' });
+    header.write('-0000000001\0', 124);
+    let sum = 0;
+    header.write('        ', 148);
+    for (const byte of header) sum += byte;
+    header.write(`${sum.toString(8).padStart(6, '0')}\0 `, 148);
+    throws(() => [...tarFiles(archive([header, fileEntry('package/b', 'b')]))], /unreadable/);
+  });
+
   it('refuses an entry cut short', () => {
     const whole = archive([fileEntry('package/a', 'x'.repeat(2000))]);
     throws(() => [...tarFiles(whole.subarray(0, 1024))], FetchUpgradeGuidesError);
@@ -223,10 +235,34 @@ describe('extractSkill', () => {
       deepStrictEqual(await readdir(folder), []);
     }));
 
+  it('refuses a skill without SKILL.md', () =>
+    withFolder(async (folder) => {
+      const tgz = gzipSync(
+        archive([fileEntry('package/skills/prisma-8/references/upgrade-app.md', 'ref')]),
+      );
+      await rejects(extractSkill(tgz, join(folder, 'out')), /SKILL\.md/);
+      deepStrictEqual(await readdir(folder), []);
+    }));
+
   it('refuses a tarball without the skill', () =>
     withFolder(async (folder) => {
       const tgz = gzipSync(archive([fileEntry('package/package.json', '{}')]));
       await rejects(extractSkill(tgz, join(folder, 'out')), /no skills\/prisma-8/);
+    }));
+});
+
+describe('putInPlace', () => {
+  it('puts the earlier copy back when the new one cannot be moved in', () =>
+    withFolder(async (folder) => {
+      await write(folder, { 'pkg-8.1.0/prisma-8/SKILL.md': 'earlier' });
+      await rejects(putInPlace(folder, 'pkg-8.1.0', join(folder, 'missing')));
+      deepStrictEqual(
+        {
+          entries: await readdir(folder),
+          skill: await readFile(join(folder, 'pkg-8.1.0', 'prisma-8', 'SKILL.md'), 'utf-8'),
+        },
+        { entries: ['pkg-8.1.0'], skill: 'earlier' },
+      );
     }));
 });
 
@@ -238,7 +274,12 @@ describe('configuredRegistry', () => {
         packageName: '@prisma/orm-postgres',
         projectDir: join(folder, 'project'),
         homeDir: join(folder, 'home'),
-        env,
+        env: Object.fromEntries(
+          Object.entries(env).map(([key, value]) => [
+            key,
+            value === 'ELSEWHERE' ? join(folder, 'elsewhere', 'npmrc') : value,
+          ]),
+        ),
       });
     });
 
@@ -301,6 +342,32 @@ describe('configuredRegistry', () => {
     );
   });
 
+  it('reads a .yarnrc.yml value followed by a comment', async () => {
+    strictEqual(
+      await resolveIn({
+        'project/.yarnrc.yml': 'npmRegistryServer: "http://yarn/" # internal mirror\n',
+      }),
+      'http://yarn/',
+    );
+    strictEqual(
+      await resolveIn({ 'project/.yarnrc.yml': 'npmRegistryServer: http://yarn/ # mirror\n' }),
+      'http://yarn/',
+    );
+  });
+
+  it('reads the user config file that npm_config_userconfig names', async () => {
+    strictEqual(
+      await resolveIn(
+        {
+          'elsewhere/npmrc': 'registry=http://userconfig/\n',
+          'home/.npmrc': 'registry=http://home/\n',
+        },
+        { NPM_CONFIG_USERCONFIG: 'ELSEWHERE' },
+      ),
+      'http://userconfig/',
+    );
+  });
+
   it('reads a scope in .yarnrc.yml', async () => {
     strictEqual(
       await resolveIn({
@@ -331,6 +398,15 @@ describe('checkIntegrity', () => {
     doesNotThrow(() => checkIntegrity(content, { integrity: sha1 }, 'p@1'));
   });
 
+  it('compares only the strongest algorithm given', () => {
+    const sha256 = `sha256-${createHash('sha256').update(content).digest('base64')}`;
+    throws(
+      () =>
+        checkIntegrity(content, { integrity: `${integrityOf(Buffer.from('x'))} ${sha256}` }, 'p@1'),
+      /does not match/,
+    );
+  });
+
   it('refuses a mismatch', () => {
     throws(
       () => checkIntegrity(content, { integrity: integrityOf(Buffer.from('x')) }, 'p@1'),
@@ -351,7 +427,7 @@ describe('checkIntegrity', () => {
 });
 
 describe('findPackageManager', () => {
-  it('finds the command on PATH', () =>
+  it('finds the command on PATH', { skip: process.platform === 'win32' }, () =>
     withFolder(async (folder) => {
       await write(folder, { [`bin/${PM}`]: '#!/bin/sh\n' });
       await chmod(join(folder, 'bin', PM), 0o755);
@@ -359,7 +435,8 @@ describe('findPackageManager', () => {
         findPackageManager({ PATH: `${join(folder, 'none')}:${join(folder, 'bin')}` }, 'darwin'),
         { command: join(folder, 'bin', PM), args: [] },
       );
-    }));
+    }),
+  );
 
   it('gives nothing when it is not on PATH', () =>
     withFolder(async (folder) => {

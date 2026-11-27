@@ -121,6 +121,13 @@ function npmrcSettings(text) {
   return settings;
 }
 
+function yamlScalar(raw) {
+  const trimmed = raw.trim();
+  const quoted = /^(["'])(.*?)\1/.exec(trimmed);
+  if (quoted !== null) return quoted[2];
+  return trimmed.replace(/\s+#.*$/, '').replace(/^#.*$/, '');
+}
+
 function yarnSettings(text, scope) {
   let plain;
   let scoped;
@@ -129,7 +136,8 @@ function yarnSettings(text, scope) {
   for (const line of text.split(/\r?\n/)) {
     const entry = /^(\s*)["']?([^"':#]+)["']?\s*:\s*(.*?)\s*$/.exec(line);
     if (entry === null) continue;
-    const [, indent, key, value] = entry;
+    const [, indent, key, rawValue] = entry;
+    const value = yamlScalar(rawValue);
     if (indent.length === 0) {
       inScopes = key === 'npmScopes';
       currentScope = undefined;
@@ -171,7 +179,8 @@ export async function configuredRegistry({ packageName, projectDir, homeDir, env
     if (value !== undefined && value.trim() !== '') environment.set(key, value);
   }
   const sources = [environment];
-  for (const path of [join(projectDir, '.npmrc'), join(homeDir, '.npmrc')]) {
+  const userconfig = lookUp(env, 'npm_config_userconfig') ?? join(homeDir, '.npmrc');
+  for (const path of [join(projectDir, '.npmrc'), userconfig]) {
     const text = await readIfExists(path);
     if (text !== undefined) sources.push(npmrcSettings(text));
   }
@@ -191,9 +200,13 @@ export function checkIntegrity(content, dist, label) {
   const known = entries
     .map((entry) => /^(sha512|sha384|sha256|sha1)-(.+)$/.exec(entry))
     .filter((parts) => parts !== null);
-  if (known.length > 0) {
+  const strongest = ['sha512', 'sha384', 'sha256', 'sha1'].find((algorithm) =>
+    known.some(([, given]) => given === algorithm),
+  );
+  if (strongest !== undefined) {
     const matches = known.some(
       ([, algorithm, expected]) =>
+        algorithm === strongest &&
         createHash(algorithm).update(content).digest('base64') === expected,
     );
     if (!matches) {
@@ -241,8 +254,13 @@ export function* tarFiles(archive) {
   while (offset + 512 <= archive.length) {
     const block = archive.subarray(offset, offset + 512);
     if (block.every((byte) => byte === 0)) return;
-    const size = Number.parseInt(text(block, 124, 12).trim() || '0', 8);
-    if (!Number.isSafeInteger(size) || offset + 512 + size > archive.length) {
+    const sizeField = text(block, 124, 12).trim();
+    const size = Number.parseInt(sizeField || '0', 8);
+    if (
+      !/^[0-7]*$/.test(sizeField) ||
+      !Number.isSafeInteger(size) ||
+      offset + 512 + size > archive.length
+    ) {
       throw new FetchUpgradeGuidesError('the tarball has an entry that is cut short or unreadable');
     }
     const type = text(block, 156, 1);
@@ -293,6 +311,9 @@ export async function extractSkill(tarball, destination) {
   }
   if (files.length === 0) {
     throw new FetchUpgradeGuidesError(`the tarball has no skills/${SKILL_NAME}/ folder`);
+  }
+  if (!files.some(({ target }) => target === join(root, 'SKILL.md'))) {
+    throw new FetchUpgradeGuidesError(`the tarball has no skills/${SKILL_NAME}/SKILL.md`);
   }
   for (const { target, content } of files) {
     await mkdir(dirname(target), { recursive: true });
@@ -383,7 +404,11 @@ function commandSource(tool, { packageName, registry, projectDir, timeoutSeconds
     '--fetch-retry-mintimeout=1000',
     '--fetch-retry-maxtimeout=1000',
   ];
-  if (registry !== undefined) common.push(`--registry=${registry}`);
+  if (registry !== undefined) {
+    common.push(`--registry=${registry}`);
+    const scope = scopeOf(packageName);
+    if (scope !== undefined) common.push(`--${scope}:registry=${registry}`);
+  }
   const runTool = (subcommand, args, what) =>
     new Promise((resolvePromise, reject) => {
       execFile(
@@ -439,11 +464,33 @@ function commandSource(tool, { packageName, registry, projectDir, timeoutSeconds
   };
   return {
     async versions() {
-      const listed = parse(
-        await runTool('view', [packageName, 'versions', '--json', '--prefer-online'], packageName),
-        packageName,
+      const list = (listed) =>
+        Array.isArray(listed) ? listed : listed === undefined ? [] : [String(listed)];
+      const all = list(
+        parse(
+          await runTool(
+            'view',
+            [packageName, 'versions', '--json', '--prefer-online'],
+            packageName,
+          ),
+          packageName,
+        ),
       );
-      return Array.isArray(listed) ? listed : listed === undefined ? [] : [String(listed)];
+      if (all.length > 0) return all;
+      for (const tag of ['rc', 'preview', 'ea', 'dev']) {
+        try {
+          const tagged = list(
+            parse(
+              await runTool('view', [`${packageName}@${tag}`, 'versions', '--json'], packageName),
+              packageName,
+            ),
+          );
+          if (tagged.length > 0) return tagged;
+        } catch (error) {
+          if (!(error instanceof FetchUpgradeGuidesError)) throw error;
+        }
+      }
+      return [];
     },
     async deprecatedAmong(versions) {
       const spec = `${packageName}@${versions.join(' || ')}`;
@@ -459,18 +506,30 @@ function commandSource(tool, { packageName, registry, projectDir, timeoutSeconds
     },
     async tarball(version, folder) {
       const label = `${packageName}@${version}`;
+      const expected = `${folderBase(packageName)}-${version}.tgz`;
+      const misplaced = join(projectDir, expected);
+      const existedBefore = isFile(misplaced);
       const output = await runTool(
         'pack',
-        [label, `--pack-destination=${folder}`, '--json', '--ignore-scripts', '--prefer-online'],
+        [
+          label,
+          `--pack-destination=${folder}`,
+          '--json',
+          '--ignore-scripts',
+          '--prefer-online',
+          '--dry-run=false',
+        ],
         label,
       );
       const reported = parse(output, label)?.[0]?.filename;
-      const filename =
-        typeof reported === 'string' ? reported : `${folderBase(packageName)}-${version}.tgz`;
-      const packed = join(folder, filename);
+      if (reported !== undefined && reported !== expected) {
+        throw new FetchUpgradeGuidesError(
+          `\`${PACKAGE_MANAGER} pack\` reported an unexpected tarball name for ${label}: ${JSON.stringify(reported)}`,
+        );
+      }
+      const packed = join(folder, expected);
       if (isFile(packed)) return readFile(packed);
-      const misplaced = join(projectDir, filename);
-      if (isFile(misplaced)) {
+      if (!existedBefore && isFile(misplaced)) {
         await rm(misplaced, { force: true });
         throw new FetchUpgradeGuidesError(
           `\`${PACKAGE_MANAGER} pack\` did not write to its --pack-destination, so the command is too old; update it (version 7.18 or later) and run this again`,
@@ -614,12 +673,16 @@ async function moveAsideAndRename(root, name, partial) {
   }
   try {
     await rename(partial, folder);
+  } catch (error) {
+    await rename(aside, folder).catch(() => {});
+    throw error;
   } finally {
     await rm(aside, { recursive: true, force: true });
   }
 }
 
-async function putInPlace(root, name, partial) {
+/** Moves the extracted `partial` folder to `<root>/<name>`, replacing an earlier copy. */
+export async function putInPlace(root, name, partial) {
   for (let attempt = 1; ; attempt++) {
     try {
       await moveAsideAndRename(root, name, partial);
