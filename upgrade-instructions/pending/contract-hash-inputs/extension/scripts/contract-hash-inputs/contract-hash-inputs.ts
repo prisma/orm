@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Gives every stored contract hash in a project the value this release computes. A contract's storage, profile and execution hashes used to cover a stand-in contract: the section, plus `schemaVersion: "1"` and blank `profileHash`, `roots`, `domain`, `extensions`, `meta` and `capabilities`. They now cover only the target, the family and their own section. The canonicalization also used to leave out every `false`, empty list and empty object outside a list of kept paths; it now leaves out no value except the defaults each family names in its storage, so a value such as a restrictive policy's `permissive: false`, which the file kept and the hash left out, is now in the hash.
+ * Gives every stored contract hash in a project the value this release computes. A contract's storage, profile and execution hashes used to cover a stand-in contract: the section, plus `schemaVersion: "1"` and blank `profileHash`, `roots`, `domain`, `extensions`, `meta` and `capabilities`. They now cover only the target, the family and their own section. The canonicalization also used to leave out every `false`, empty list and empty object outside a list of kept paths; it now leaves out no value except the defaults each family names in its storage, so a value such as a restrictive policy's `permissive: false`, which the file kept and the hash left out, is now in the hash. Each family also orders the storage lists whose order has no meaning, by name and then by content: a SQL table's checks, foreign keys, indexes and uniques, and a MongoDB collection's indexes. So two contracts that list them in another order now have one storage hash.
  *
  * Usage: node contract-hash-inputs.ts [project-root]
  *
@@ -12,7 +12,7 @@
  *
  * Otherwise it rewrites: the three hashes in every contract; the same hashes in the `contract.d.ts` beside it; each snapshot directory's name; `from`, `to` and `migrationHash` in every `migration.json`, and the storage hashes in the `ops.json` beside it; `hash` in every ref file; and every old storage hash in every `migration.ts` (snapshot import paths and hash literals). It edits each file's text, so every other byte stays, including a leading byte order mark, and replaces each file in one rename, so a run that stops partway can be run again to finish. It prints what it changed and each hash it replaced. A `contract.d.ts` whose hashes it cannot match with its contract, or a migration or ref naming a hash it cannot tell the new value of, is reported, left unchanged, and makes it exit 1. A second run changes nothing.
  *
- * The hash rules, old and new, the families' canonicalization hooks and the migration hash rule are copied from Prisma's packages, because a project's strict `node_modules` does not expose them.
+ * The hash rules, old and new, the families' normal forms of storage and the migration hash rule are copied from Prisma's packages, because a project's strict `node_modules` does not expose them.
  */
 import { createHash } from 'node:crypto';
 import {
@@ -462,8 +462,8 @@ function sqlNormalStorage(storage: JsonRecord): JsonRecord {
   );
 }
 
-const MONGO_COLLATION_FLAGS = new Set(['caseLevel', 'numericOrdering']);
-const MONGO_INDEX_FLAGS = new Set(['unique', 'sparse']);
+const MONGO_FALSE_BY_DEFAULT_COLLATION_FLAGS = new Set(['caseLevel', 'numericOrdering']);
+const MONGO_FALSE_BY_DEFAULT_INDEX_FLAGS = new Set(['unique', 'sparse']);
 const MONGO_SUBSCHEMA_KEYWORDS = new Set([
   'items',
   'not',
@@ -474,10 +474,16 @@ const MONGO_SUBSCHEMA_LIST_KEYWORDS = new Set(['oneOf', 'anyOf', 'allOf', 'items
 const MONGO_SUBSCHEMA_MAP_KEYWORDS = new Set(['properties', 'patternProperties', 'dependencies']);
 
 const mongoCollation: Normalize = (collation) =>
-  without(collation, (key, value) => MONGO_COLLATION_FLAGS.has(key) && value === false);
+  without(
+    collation,
+    (key, value) => MONGO_FALSE_BY_DEFAULT_COLLATION_FLAGS.has(key) && value === false,
+  );
 
 function mongoIndex(index: JsonRecord): JsonRecord {
-  const kept = without(index, (key, value) => MONGO_INDEX_FLAGS.has(key) && value === false);
+  const kept = without(
+    index,
+    (key, value) => MONGO_FALSE_BY_DEFAULT_INDEX_FLAGS.has(key) && value === false,
+  );
   return isRecord(kept['collation'])
     ? withEntry(kept, 'collation', mongoCollation(kept['collation']))
     : kept;
@@ -504,7 +510,7 @@ function mongoJsonSchema(schema: JsonRecord): JsonRecord {
 function mongoCollection(collection: JsonRecord): JsonRecord {
   let next = without(collection, (key, value) => key === 'indexes' && isEmptyList(value));
   next = withEntry(next, 'indexes', mapListItems(next['indexes'], mongoIndex));
-  next = sortListsOf(next, ['indexes'], compareByName);
+  next = sortListsOf(next, ['indexes'], compareByNameThenContent);
   const validator = next['validator'];
   if (isRecord(validator) && isRecord(validator['jsonSchema'])) {
     next = withEntry(
