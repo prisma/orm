@@ -75,25 +75,25 @@ Until `8.0.0` the content of format 1 is not final. A pre-release may still chan
 
 A reader refuses a field the format does not define. Because every reader is strict, a release cannot add a field to a format without raising its version.
 
-The rule covers everything Prisma interprets. It stops at content Prisma carries for someone else, where any key is accepted:
+The rule covers everything Prisma interprets. It stops at content Prisma carries for someone else, where any key is accepted. These are the open places:
 
-- **In a contract:** `meta`; each extension's own section under `extensions`; `capabilities`, a list a later release may add a name to (ADR 335), so a reader meets names it does not know and treats each as its own rules say; `_generated`; the parameters of a generator; the value of a literal default; an index's `options`, which belong to the index type; and the MongoDB documents a contract hands to the database as they are, such as a collection's validator and an index's partial filter. A type's parameters belong to its codec, whose own schema refuses a key it does not define.
+- **In a contract:** `meta`; each extension's own section under `extensions`; `capabilities`, a map of flags a later release may add a name to (ADR 335), so a reader meets names it does not know and treats each as its own rules say; `_generated`; the parameters of a generator; the value of a literal default; an index's `options`, which belong to the index type; and the MongoDB documents a contract hands to the database as they are, such as a collection's validator and an index's partial filter. A type's parameters belong to its codec, whose own schema refuses a key it does not define.
 - **In a SQL operation:** a step's `params`, which are values handed to the database driver; the operation's `meta`; the entries of a step's `meta` that no reader acts on; and a codec's `typeParams` inside a mark, which belong to the codec. The entries of a step's `meta` that a reader acts on are strict.
-- **In a MongoDB operation:** the documents handed to the database as they are, such as a filter, an update and a pipeline; a query plan's `resultShape` and `annotations`; and the entries of a plan's `meta` that no reader acts on.
+- **In a MongoDB operation:** the documents handed to the database as they are, such as a filter, an update and a pipeline; a query plan's `resultShape`; and the entries of a plan's `meta` that no reader acts on, `annotations` among them.
 
 So a release that makes a reader act on something inside one of these, for example a new entry in a step's `meta`, must raise the format version, because an earlier reader would not notice the entry.
 
-Operations are read strictly by everything that acts on their statements or commands: the runners, the statement preview, and the checks a recorded path gets before it is applied. `migration status`, `list`, `graph` and `check` read the fields every target shares and do not read a target's own fields. For `status`, `list` and `graph` that is all they use. `migration check` is meant to say whether a migration is sound, so it can pass one that `db migrate` then refuses for a target's own field.
+Operations are read strictly by everything that acts on their statements or commands: the runners, the statement preview, and the checks a recorded path gets before it is applied. `migration status`, `list`, `graph` and `check` read the fields every target shares and do not read a target's own fields. For `status`, `list` and `graph` that is all they use. `migration check` is meant to say whether a migration is sound, but it can pass one that `db migrate` then refuses for a target's own field.
 
 ### Format 1 of `ops.json` reads every shape a pre-release wrote
 
-From `8.0.0` no release may change a migration's hash, and `ops.json` is covered by that hash. So from `8.0.0` an earlier shape of an operation in a migration can only be read, never rewritten, and format 1 must read it for the whole major. Before `8.0.0` the shapes pre-releases wrote could still have been rewritten by an upgrade script, because the hash rules change once before `8.0.0` ([ADR 332](ADR%20332%20-%20A%20hash%20covers%20what%20a%20contract%20means%2C%20by%20rules%20that%20do%20not%20change%20within%20a%20major.md)). They are read instead, because that is small and needs no step from a user.
+From `8.0.0` no release may change a migration's hash, and `ops.json` is covered by that hash. So from `8.0.0` an earlier shape of an operation in a migration can only be read, never rewritten, and format 1 must read it for the whole major. Before `8.0.0` the shapes pre-releases wrote could still have been rewritten by an upgrade script, because the rules that compute a contract's hashes change once before `8.0.0`, and every migration hash with them. They are read instead, because that is small and needs no step from a user.
 
-The reader turns each such shape into the current one before it checks the operation, so nothing after the reader sees an earlier shape. The migration hash is computed from the file as stored.
+Where a shape differs from the current one, the reader turns it into the current one before it checks the operation, so nothing after the reader sees an earlier shape. The migration hash is computed from the file as stored.
 
 - SQLite: a `schema` of `"main"` in an operation's target details is dropped. Any other `schema` is refused.
 - PostgreSQL and SQLite: a `rowsHoldingValue` mark that has only `enumValue`, `value` and `codecRef` gets its table and column from the operation's target details and its stored value from the check's first parameter. A mark that cannot be completed this way is dropped.
-- MongoDB: the `sort` and `returnDocument` of a raw find-and-update command and the `sort` of a raw find-and-delete command are read and passed to the command. Readers before this rule dropped them, so a migration that carries one now changes the document its author chose.
+- MongoDB: the `sort` and `returnDocument` of a raw find-and-update command and the `sort` of a raw find-and-delete command are read and applied. A pre-release dropped them when it read the migration, so a migration it applied without them can change a different document when it is applied again.
 
 ### What a writer does
 
@@ -115,14 +115,14 @@ For each version of each kind of file there is one unit of code. The newest vers
 
 ### What an author outside this repository owes
 
-The rule binds whoever defines a stored shape. A family reads a stored contract through `convertContractDocument`, which reads the version and converts an earlier one, and writes `NEWEST_CONTRACT_FORMAT_VERSION` into the contracts it prints; both are published at `@prisma/orm-framework/contract/format-version`. A family's contract parser and operation reader refuse a key they do not define, outside the open places they declare. A SQL target supplies `readOperations` with a schema for its own fields. An extension pack's schemas for its entry kinds, its codecs' parameters and its index options refuse a key they do not define. Nothing in the framework checks this for them.
+The rule binds whoever defines a stored shape. A family reads a stored contract through `convertContractDocument`, which reads the version and converts an earlier one, and writes into the contracts it prints the version this release writes, which while there is one written version is `NEWEST_CONTRACT_FORMAT_VERSION`; both are published at `@prisma/orm-framework/contract/format-version`. An author of a SQL target can check its operation reader with `probeUnknownKeys`, which the SQL family publishes: it adds an unknown key at every place of a saved operation and expects a refusal outside the open places. A family's contract parser and operation reader refuse a key they do not define, outside the open places they declare. A SQL target supplies `readOperations` with a schema for its own fields. An extension pack's schemas for its entry kinds, its codecs' parameters and its index options refuse a key they do not define. Nothing in the framework checks this for them.
 
 ## Why
 
 - **The version field and the refusal of a higher version have to be in `8.0.0`.** An `8.0.0` reader stays in use for the life of the major, so it must already know how to recognise a file it cannot read. Neither can be added later. The same holds for strictness: a reader that ignores an unknown key in `8.0.0` ignores it for the whole major.
 - **A reader is strict because a migration is an instruction to change a database.** Acting on one that is only partly understood is the failure the rule prevents. A reader that skipped unknown fields would apply a migration while ignoring part of it.
 - **A writer chooses the oldest version that holds the data so that newer tooling does not force an upgrade on everyone who reads its files.** An extension author who upgrades their tooling does not make every application that uses the extension upgrade, unless the extension uses something new.
-- **Pre-release files are read as version 0, not left to the upgrade instructions alone,** so that a pre-release user rewrites nothing while pre-releases continue, and so that conversion runs on real files before the first change to a format after `8.0.0` depends on it.
+- **Pre-release files are read as version 0, not left to the upgrade instructions alone,** so that a pre-release user rewrites nothing for the format version, and so that conversion runs on real files before the first change to a format after `8.0.0` depends on it.
 
 Git treats a repository's format version this way, and Cargo refuses a lock file in a format it does not know and keeps an existing lock file in its old format when nothing needs the new one.
 
