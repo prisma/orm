@@ -914,7 +914,7 @@
 (not exported) type ContributedMember = ContributedNamespaceSymbol | ContributedTypeSymbol
 (not exported) type ContributedTypeDescriptor = AuthoringTypeAliasDescriptor | AuthoringTypeChoiceDescriptor | AuthoringTypeConstructorDescriptor
 (not exported) type ContributedTypeSymbol = (ContributedTypeSymbolBase & { readonly descriptor: Exclude<ContributedTypeDescriptor, AuthoringTypeChoiceDescriptor>; }) | ContributedTypeChoiceSymbol
-(not exported) type ControlTargetKeysMysqlBuilds = 'accessChangesOf' | 'classifyEntityKind' | 'classifySubjectGranularity' | 'contractSerializer' | 'create' | 'createPlanner' | 'createRunner' | 'diffSchema' | 'migrations' | 'schemaVerifier'
+(not exported) type ControlTargetKeysMysqlBuilds = 'accessChangesOf' | 'classifyEntityKind' | 'classifySubjectGranularity' | 'contractSerializer' | 'create' | 'createPlanner' | 'createRunner' | 'diffSchema' | 'migrations' | 'readOperations' | 'schemaVerifier'
 (not exported) type CurrentValue = typeof MYSQL_DATE_NOW | typeof MYSQL_INSTANT_NOW | typeof MYSQL_TIME_NOW
 (not exported) type DatetimeParams = typeof mysqlDatetimeParams.infer
 (not exported) type DecimalParams = typeof mysqlDecimalParams.infer

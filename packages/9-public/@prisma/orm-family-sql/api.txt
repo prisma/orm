@@ -2751,6 +2751,7 @@
 ./family/control: function convertedColumnMeta(table: string, column: string, by: ConvertedColumn['by']): { readonly convertedColumn: ConvertedColumn; }
 ./family/control: function convertedColumnOf(step: SqlMigrationPlanOperationStep): ConvertedColumn | undefined
 ./family/control: function createMigrationPlan<TTargetDetails>(options: CreateSqlMigrationPlanOptions<TTargetDetails>): SqlMigrationPlan<TTargetDetails>
+./family/control: function createSqlOperationsReader<TTargetDetails>(format: SqlOperationsFormat): SqlOperationsReader<TTargetDetails>
 ./family/control: function createSqlTextSources(moduleSpecifier: string): SqlTextSources
 ./family/control: function detectDestructiveChanges(from: SqlStorage | null, to: SqlStorage): readonly MigrationPlannerConflict[]
 ./family/control: function detectTableNameCaseChanges(input: { readonly issues: readonly SchemaDiffIssue[]; readonly tableOf: (issue: SchemaDiffIssue) => TableNameCaseGuardTable | undefined; readonly namespaceIdOf: (issue: SchemaDiffIssue) => string; readonly renameByHandStatements: (rename: TableRename) => readonly string[]; readonly renameTableCall: (rename: TableRenameRequest) => string; readonly contract: Contract<SqlStorage>; readonly defaultNamespaceId: string; }): SqlPlannerConflict[]
@@ -2999,6 +3000,7 @@
 ./family/control: interface SqlControlTargetDescriptor, readonly required property classifySubjectGranularity: (nodeKind: string) => DiffSubjectGranularity
 ./family/control: interface SqlControlTargetDescriptor, readonly required property contractSerializer: ContractSerializer<TContract>
 ./family/control: interface SqlControlTargetDescriptor, readonly required property diffSchema: SqlSchemaDiffFn
+./family/control: interface SqlControlTargetDescriptor, readonly required property readOperations: SqlOperationsReader<TTargetDetails>
 ./family/control: interface SqlControlTargetDescriptor, readonly required property schemaVerifier: SchemaVerifier<TContract, SqlSchemaIR>
 ./family/control: interface SqlControlTargetDescriptor, required method createPlanner(adapter: SqlControlAdapter<TTargetId>): SqlMigrationPlanner<TTargetDetails>
 ./family/control: interface SqlControlTargetDescriptor, required method createRunner(family: SqlControlFamilyInstance): SqlMigrationRunner<TTargetDetails>
@@ -3067,6 +3069,12 @@
 ./family/control: interface SqlMigrationRunnerFailure extends MigrationRunnerFailure
 ./family/control: interface SqlMigrationRunnerFailure, readonly required property code: SqlMigrationRunnerErrorCode
 ./family/control: interface SqlMigrationRunnerSuccessValue extends MigrationRunnerPerSpaceSuccessValue
+./family/control: interface SqlOperationsFormat
+./family/control: interface SqlOperationsFormat, readonly optional property stepMeta?: Type<unknown>
+./family/control: interface SqlOperationsFormat, readonly required property targetDetails: Type<unknown>
+./family/control: interface SqlOperationsSource
+./family/control: interface SqlOperationsSource, readonly optional property migrations?: readonly { readonly dirName: string; readonly operationCount: number; }[]
+./family/control: interface SqlOperationsSource, readonly optional property space?: string
 ./family/control: interface SqlPlanTargetDetails
 ./family/control: interface SqlPlanTargetDetails, readonly optional property schema?: string
 ./family/control: interface SqlPlanTargetDetails, readonly required property name: string
@@ -3233,6 +3241,7 @@
 ./family/control: type SqlDefaultFunctionName = 'autoincrement' | 'now'
 ./family/control: type SqlMigrationRunnerErrorCode = 'MIGRATION.DESTINATION_CONTRACT_MISMATCH' | 'MIGRATION.EXECUTION_FAILED' | 'MIGRATION.FOREIGN_KEY_VIOLATION' | 'MIGRATION.MARKER_CAS_FAILURE' | 'MIGRATION.MARKER_ORIGIN_MISMATCH' | 'MIGRATION.POLICY_VIOLATION' | 'MIGRATION.POSTCHECK_FAILED' | 'MIGRATION.PRECHECK_FAILED' | 'MIGRATION.SCHEMA_VERIFY_FAILED'
 ./family/control: type SqlMigrationRunnerResult = Result<SqlMigrationRunnerSuccessValue, SqlMigrationRunnerFailure>
+./family/control: type SqlOperationsReader<TTargetDetails> = (operations: readonly unknown[], source?: SqlOperationsSource) => readonly SqlMigrationPlanOperation<TTargetDetails>[]
 ./family/control: type SqlPlannerConflictKind = 'controlPolicySuppressedCall' | 'foreignKeyConflict' | 'indexIncompatible' | 'missingButNonAdditive' | 'nullabilityConflict' | 'rlsPolicyIncompatible' | 'statementRefused' | 'tableNameCaseChanged' | 'typeMismatch' | 'unsupportedOperation'
 ./family/control: type SqlPlannerResult<TTargetDetails> = SqlPlannerFailureResult | SqlPlannerSuccessResult<TTargetDetails>
 ./family/control: type SqlQuotingRules = readonly SqlQuote[]
@@ -3460,6 +3469,7 @@
 ./family: function convertedColumnMeta(table: string, column: string, by: ConvertedColumn['by']): { readonly convertedColumn: ConvertedColumn; }
 ./family: function convertedColumnOf(step: SqlMigrationPlanOperationStep): ConvertedColumn | undefined
 ./family: function createMigrationPlan<TTargetDetails>(options: CreateSqlMigrationPlanOptions<TTargetDetails>): SqlMigrationPlan<TTargetDetails>
+./family: function createSqlOperationsReader<TTargetDetails>(format: SqlOperationsFormat): SqlOperationsReader<TTargetDetails>
 ./family: function createSqlTextSources(moduleSpecifier: string): SqlTextSources
 ./family: function deriveBackRelationFieldName(childModelName: string, isOneToOne: boolean): string
 ./family: function deriveRelationFieldName(fkColumns: readonly string[], referencedTableName: string): string
@@ -3782,6 +3792,7 @@
 ./family: interface SqlControlTargetDescriptor, readonly required property classifySubjectGranularity: (nodeKind: string) => DiffSubjectGranularity
 ./family: interface SqlControlTargetDescriptor, readonly required property contractSerializer: ContractSerializer<TContract>
 ./family: interface SqlControlTargetDescriptor, readonly required property diffSchema: SqlSchemaDiffFn
+./family: interface SqlControlTargetDescriptor, readonly required property readOperations: SqlOperationsReader<TTargetDetails>
 ./family: interface SqlControlTargetDescriptor, readonly required property schemaVerifier: SchemaVerifier<TContract, SqlSchemaIR>
 ./family: interface SqlControlTargetDescriptor, required method createPlanner(adapter: SqlControlAdapter<TTargetId>): SqlMigrationPlanner<TTargetDetails>
 ./family: interface SqlControlTargetDescriptor, required method createRunner(family: SqlControlFamilyInstance): SqlMigrationRunner<TTargetDetails>
@@ -3859,6 +3870,12 @@
 ./family: interface SqlMigrationRunnerFailure extends MigrationRunnerFailure
 ./family: interface SqlMigrationRunnerFailure, readonly required property code: SqlMigrationRunnerErrorCode
 ./family: interface SqlMigrationRunnerSuccessValue extends MigrationRunnerPerSpaceSuccessValue
+./family: interface SqlOperationsFormat
+./family: interface SqlOperationsFormat, readonly optional property stepMeta?: Type<unknown>
+./family: interface SqlOperationsFormat, readonly required property targetDetails: Type<unknown>
+./family: interface SqlOperationsSource
+./family: interface SqlOperationsSource, readonly optional property migrations?: readonly { readonly dirName: string; readonly operationCount: number; }[]
+./family: interface SqlOperationsSource, readonly optional property space?: string
 ./family: interface SqlPlanTargetDetails
 ./family: interface SqlPlanTargetDetails, readonly optional property schema?: string
 ./family: interface SqlPlanTargetDetails, readonly required property name: string
@@ -4054,6 +4071,7 @@
 ./family: type SqlEntityHydrationFactory = (entry: unknown) => unknown
 ./family: type SqlMigrationRunnerErrorCode = 'MIGRATION.DESTINATION_CONTRACT_MISMATCH' | 'MIGRATION.EXECUTION_FAILED' | 'MIGRATION.FOREIGN_KEY_VIOLATION' | 'MIGRATION.MARKER_CAS_FAILURE' | 'MIGRATION.MARKER_ORIGIN_MISMATCH' | 'MIGRATION.POLICY_VIOLATION' | 'MIGRATION.POSTCHECK_FAILED' | 'MIGRATION.PRECHECK_FAILED' | 'MIGRATION.SCHEMA_VERIFY_FAILED'
 ./family: type SqlMigrationRunnerResult = Result<SqlMigrationRunnerSuccessValue, SqlMigrationRunnerFailure>
+./family: type SqlOperationsReader<TTargetDetails> = (operations: readonly unknown[], source?: SqlOperationsSource) => readonly SqlMigrationPlanOperation<TTargetDetails>[]
 ./family: type SqlPlannerConflictKind = 'controlPolicySuppressedCall' | 'foreignKeyConflict' | 'indexIncompatible' | 'missingButNonAdditive' | 'nullabilityConflict' | 'rlsPolicyIncompatible' | 'statementRefused' | 'tableNameCaseChanged' | 'typeMismatch' | 'unsupportedOperation'
 ./family: type SqlPlannerResult<TTargetDetails> = SqlPlannerFailureResult | SqlPlannerSuccessResult<TTargetDetails>
 ./family: type SqlQuotingRules = readonly SqlQuote[]
