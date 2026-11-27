@@ -58,3 +58,19 @@ The design says the space's row records the hash of its contract and that within
 ## 6. Renaming the schema needs its owner
 
 `ALTER SCHEMA … RENAME` needs ownership of the schema, which creating tables if absent never needed. A database whose `prisma_contract` schema was created by an administrator role, with a migrating role that only has grants, cannot be renamed by that role. The first migration checks this before it renames and says which role must run the command. This is the one case where a release-candidate database needs a person, and the upgrade instructions say so.
+
+## 7. Found by the review of the whole slice
+
+- **Names.** In the framework and the shared command line the concept is "the Prisma space" (`PRISMA_SPACE_ID`, `bringPrismaSpaceUpToDate`, `CONTRACT.PRISMA_SPACE_BEHIND`), because MongoDB has collections, not tables. One function answers "is this the Prisma space", and every special case asks it. Inside the PostgreSQL packages and the SQL family, "tables" stays.
+- **A later major.** The rule in section 5 could not tell a later release of this major from a release of the next major, which may change the tables incompatibly. The rule gains a second condition from data the row already holds: the database is accepted as ahead only when its row records no invariant the installed package does not know. So a migration of this space provides an invariant exactly when an earlier release must stop, and a migration within a major provides none.
+- **Two commands at once on a later migration.** The function read the row before the runner took its lock, so the second command failed on a stale origin. It now reads the row again once when the runner reports that, and carries on if the row is up to date.
+- **The phase commits before the command's own checks.** A command that the change policy then refuses, or that the user cancels, has still brought Prisma's own tables up to date. This cannot be reordered, because the policies are in the tables the phase renames. The decision record on policies is updated in place to say so.
+- **One code for "not up to date".** A database in a release candidate's schema and a database at an older contract of the space both report `CONTRACT.PRISMA_SPACE_BEHIND`, and `db verify` classifies a row with the same function the phase uses.
+- **`migration log` does not show the space's rows,** and no flag was added to show them. The design's "shows it when asked" is dropped: a user can read the table.
+- **Framework changes beyond section 1's list,** all in the command-line tooling: the `db verify` check that the space is behind, with its option; the helper that turns a failed phase into a command-line error; the filter in `migration log`; one line of output when the phase applied something.
+
+## 8. Deferred
+
+- A user's contract may declare a namespace named `_prisma`; nothing refuses it yet.
+- A test that pins the space's hashes, once the one-time hash change has merged and the files have been emitted for the last time.
+- A client typed from the space's contract for the adapter's own reads and writes, which would remove the hand-written table definitions.

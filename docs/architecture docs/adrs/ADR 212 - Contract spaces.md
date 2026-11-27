@@ -10,7 +10,7 @@ This ADR's worked example is CipherStash as it was on version 2 of its Encrypt Q
 
 ## At a glance
 
-A Prisma Next application's database is the integration point for many parties: the application itself, plus every schema-contributing extension installed in `prisma.config.ts`. This ADR makes each of those parties a **contract space** — a disjoint `(contract.json, migration-graph, head-ref)` tuple — and runs the same per-space planner, runner, and verifier across all of them. The user's repo holds a pinned mirror of every space the database depends on, so apply-time and verify-time flows never need to read an extension package from `node_modules`.
+A Prisma Next application's database is the integration point for many parties: the application itself, plus every schema-contributing extension installed in `prisma.config.ts`. This ADR makes each of those parties a **contract space** — a disjoint `(contract.json, migration-graph, head-ref)` tuple — and runs the same per-space planner, runner, and verifier across all of them. The user's repo holds a pinned mirror of every space the application and its extensions own, so apply-time and verify-time flows never need to read an extension package from `node_modules`. One space is the exception: the Prisma space, `_prisma`, holds the tables Prisma keeps for itself, is carried by the target package, and is read from the installed package and applied before anything else is read ([ADR 337](ADR%20337%20-%20Each%20target%20has%20a%20contract%20space%20for%20Prisma%27s%20own%20tables.md)).
 
 ```mermaid
 flowchart TB
@@ -193,11 +193,11 @@ App-space's current `contract.json` continues to live at the project root (today
 
 The framework owns the pinned files: every `migrate` invocation overwrites them from each loaded extension's descriptor `contractSpace` values, alongside materialising any new migration directories. The user reviews the resulting diff in their PR.
 
-Space identifiers are constrained to `[a-z][a-z0-9_-]{0,63}` (filesystem-safe and round-trippable through path manipulation).
+Space identifiers are constrained to `[a-z][a-z0-9_-]{0,63}` (filesystem-safe and round-trippable through path manipulation). The Prisma space's name, `_prisma`, is outside that pattern and never names a folder: it is not in the user's repository ([ADR 337](ADR%20337%20-%20Each%20target%20has%20a%20contract%20space%20for%20Prisma%27s%20own%20tables.md)).
 
 ### Marker schema gains a `space` column
 
-`prisma_contract.marker` was a single-row table keyed by `id`. It becomes one row per loaded contract space, primary-keyed by `space`. See [ADR 021 — Contract Marker Storage](./ADR%20021%20-%20Contract%20Marker%20Storage.md) for the migration path (idempotent across fresh / legacy single-row / already-migrated databases).
+The marker table (`_prisma.marker` on PostgreSQL) was a single-row table keyed by `id`. It becomes one row per loaded contract space, primary-keyed by `space`, plus one row for the Prisma space itself. See [ADR 021 — Contract Marker Storage](./ADR%20021%20-%20Contract%20Marker%20Storage.md) for the migration path (idempotent across fresh / legacy single-row / already-migrated databases).
 
 | `space`       | `applied_content_hash` | `applied_invariants`                          |
 | ------------- | ---------------------- | --------------------------------------------- |
@@ -208,7 +208,7 @@ Space identifiers are constrained to `[a-z][a-z0-9_-]{0,63}` (filesystem-safe an
 Three properties hold:
 
 1. **The marker is the truth-of-record** for the live database's per-space applied state.
-2. **The set of marker rows must equal the set of loaded spaces** (`'app'` plus every entry in `extensions`). Mismatches surface as verifier errors with clear remediation.
+2. **The set of marker rows must equal the set of loaded spaces** (`'app'` plus every entry in `extensions`), with the Prisma space's row counted as declared. Mismatches surface as verifier errors with clear remediation.
 3. **A marker never records migrations that did not apply.** On a target whose DDL is transactional, a multi-space apply runs in one outer transaction, so either every marker advances or none does. On a target whose DDL is not, a space's marker advances only after its operations ran and its schema verified.
 
 ### Per-space planner, runner, verifier
@@ -232,7 +232,7 @@ The runner's `execute({ driver, perSpaceOptions })` takes every space's plan in 
 
 Either way the failure's payload names the space that failed (`failingSpace`) and says whether the database changed (`databaseUnchanged`). The CLI's `why` names the space when it is not the application's own.
 
-**Cross-space ordering**: extension spaces alphabetical-by-spaceId first, app-space last. The convention is sufficient for v1 (a formal cross-space dependency graph is deferred), and matches the implicit dependency direction — application schema may reference extension-provided types (`Encrypted<String>` → `eql_v2_encrypted`), so extension types must exist before the app's `CREATE TABLE` runs.
+**Cross-space ordering**: extension spaces alphabetical-by-spaceId first, app-space last. The Prisma space is not in this order: it is brought up to date in a phase of its own before the command reads any row ([ADR 337](ADR%20337%20-%20Each%20target%20has%20a%20contract%20space%20for%20Prisma%27s%20own%20tables.md)). The convention is sufficient for v1 (a formal cross-space dependency graph is deferred), and matches the implicit dependency direction — application schema may reference extension-provided types (`Encrypted<String>` → `eql_v2_encrypted`), so extension types must exist before the app's `CREATE TABLE` runs.
 
 ### Disjoint per-space ownership: schema-prune
 
@@ -261,7 +261,7 @@ At family-create time the framework asserts `hash(canonicalize(descriptor.contra
 
 ### What apply-time does not need
 
-Once `migrate` has run, the user's repo carries everything `db init` / `db apply` / `db verify` need: app-space `contract.json` at the project root, plus pinned per-space `contract.json` / `contract.d.ts` / `refs/head.json` and migration directories under `migrations/<space-id>/`. Apply-time and verify-time paths read **only** the user's repo — they never import an extension descriptor module. This is what makes the system work in CI / production environments where the extension package may not even be installed:
+Once `migrate` has run, the user's repo carries everything `db init` / `db apply` / `db verify` need: app-space `contract.json` at the project root, plus pinned per-space `contract.json` / `contract.d.ts` / `refs/head.json` and migration directories under `migrations/<space-id>/`. Apply-time and verify-time paths read **only** the user's repo for these spaces — they never import an extension descriptor module. The Prisma space is read from the target descriptor, which is always loaded when migrations are applied because the runner is in the target package. This is what makes the system work in CI / production environments where the extension package may not even be installed:
 
 ```bash
 $ rm -rf node_modules/@internal/extension-cipherstash
