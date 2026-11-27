@@ -36,3 +36,7 @@ Verification reports a database that lacks capabilities as one more issue in its
 ## "Capability" also names an optional family feature
 
 ADR 207 calls an optional method on a family instance a capability (`SchemaViewCapable`, `PslContractInferCapable`), a different concept from the capabilities a contract requires. One user-facing message carries it: `contract infer`'s refusal says "The configured family does not implement the PslContractInferCapable capability". Found in [terminology-review.md](terminology-review.md); outside this project, which is about what a contract requires.
+
+## ADR 065's schema and the subsystem docs' older capability examples
+
+ADR 065's "Capability schema" section and its profile hash formula describe an earlier design: a versioned schema with `schemaVersion` and enum and number values. A contract stores `Record<string, Record<string, boolean>>`, and the profile hash is ADR 004's. `5. Adapters & Targets.md` still lists keys that exist nowhere (`join.lateral`, `index.partial` and others, in its examples after the capability list) and a "Capability stability contract" with reserved namespaces that the code does not have. Done is each describing what the code does, edited in place. Found by the review of this project's documentation; outside what this project changes.

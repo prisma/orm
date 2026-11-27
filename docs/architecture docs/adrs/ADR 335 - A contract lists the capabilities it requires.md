@@ -69,7 +69,7 @@ The list belongs in the contract's own source. `defineContract` takes it for a T
 
 `prisma orm init` writes the whole list into a new project, from the newest version's list and the driver's.
 
-On PostgreSQL the control descriptors of the target, adapter and driver declare no capabilities. The framework still merges the capabilities of the config's components into a contract at emit, and with nothing declared that merge adds nothing. The config's adapter and driver are the stack that migrates, not the stack the application runs on, so they have no say in what the application requires.
+On PostgreSQL the control descriptors of the target, adapter and driver declare no capabilities. The framework still merges the capabilities of the config's components into a contract at emit, and with nothing declared that merge adds nothing. The config's adapter and driver are the stack that migrates, not the stack the application runs on, so on PostgreSQL they have no say in what the application requires. On MySQL, MariaDB and SQLite that merge still writes the adapter's fixed list into the contract, until each target is rebuilt this way.
 
 ### Signing checks the database
 
