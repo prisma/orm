@@ -84,7 +84,12 @@ async function authorContract(directory: string) {
   const contract = sql
     .create(stack)
     .deserializeContract(
-      enrichContract(result.value, [sqliteTargetControl, sqliteControlAdapter]),
+      sqliteTargetControl.contractSerializer.serializeContract(
+        enrichContract(result.value, [
+          sqliteTargetControl,
+          sqliteControlAdapter,
+        ]) as Contract<SqlStorage>,
+      ),
     ) as Contract<SqlStorage>;
   return { contract, namespaceId: stack.target.defaultNamespaceId };
 }

@@ -1,5 +1,5 @@
 /**
- * The upgrade of a project with migrations, applied by the previous release, past the removal of `noCheck`. The project is the remove-nocheck fixture's "before" tree. The database holds what the previous release left after `db migrate`: the tables, a marker with the old storage hash, and one ledger row and one stored contract per migration, under the old migration and storage hashes. The ledger rows have the shape a run of the previous release's CLI wrote. The test then follows the app upgrade fragment: the script, `prisma db sign --db "$DATABASE_URL"`, the source rewrite to `T?[]`, and `prisma contract emit`.
+ * The upgrade of a project with migrations, applied by the previous release, past the removal of `noCheck`. The project is the remove-nocheck fixture's "before" tree. The database holds what the previous release left after `db migrate`: the tables, a marker with the old storage hash, and one ledger row and one stored contract per migration, under the old migration and storage hashes. The ledger rows have the shape a run of the previous release's CLI wrote. The test then follows the app upgrade fragment: the script, the script of the pending `stored-files-format-version` guide, `prisma db sign --db "$DATABASE_URL"`, the source rewrite to `T?[]`, and `prisma contract emit`.
  *
  * It records what the upgrade leaves: `db migrate` applies nothing and `db verify` passes, but `migration status` no longer marks the two migrations applied before the upgrade as applied, because the script gave them new migration hashes and the ledger keeps the old ones.
  */
@@ -14,6 +14,7 @@ import {
   fixtureTree,
   writeTree,
 } from '../upgrade-instructions/remove-nocheck/test-helpers';
+import { runScript as runFormatVersionScript } from '../upgrade-instructions/stored-files-format-version/test-helpers';
 import { withTempDir } from '../utils/cli-test-helpers';
 import {
   runContractEmit,
@@ -122,6 +123,12 @@ withTempDir(({ createTempDir }) => {
           encoding: 'utf8',
         });
         expect({ status: script.status, stderr: script.stderr }).toEqual({ status: 0, stderr: '' });
+
+        const formatVersion = runFormatVersionScript(ctx.testDir);
+        expect({ status: formatVersion.status, stderr: formatVersion.stderr }).toEqual({
+          status: 0,
+          stderr: '',
+        });
 
         const sign = await runDbSign(ctx, ['--db', db.connectionString]);
         expect(sign.exitCode, `db sign\n${output(sign)}`).toBe(0);

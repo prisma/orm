@@ -1,3 +1,9 @@
+import {
+  CONTRACT_FORMAT,
+  NEWEST_CONTRACT_FORMAT_VERSION,
+  type NewestContractFormatVersion,
+  readStoredDocument,
+} from '@internal/contract/internal/format-version';
 import type { ContractModel } from '@internal/contract/types';
 import {
   removedDomainKeyProblems,
@@ -25,27 +31,12 @@ import type { JsonObject } from '@internal/utils/json';
 import { structuredError } from '@internal/utils/structured-error';
 import { type as arktypeType, type Type } from 'arktype';
 
-/**
- * Mongo family `ContractSerializer` abstract base. Owns the family-shared
- * deserialization pipeline:
- *
- * 1. Structural validation against the Mongo contract arktype schema
- *    (`MongoContractSchema`).
- * 2. Framework-shared domain validation (`validateContractDomain`).
- * 3. Family-shared storage validation (`validateMongoStorage`).
- *
- * The validated value is handed to the target via the
- * `constructTargetContract` hook, which wraps the plain-JSON shape in
- * the family-layer `MongoStorage` class instance (carrying the
- * target-supplied `namespaces` map). Targets that need to add
- * structural checks beyond the family default can override
- * `parseMongoContractStructure`.
- *
- * Default `serializeContract` is identity over the contract — Mongo
- * target classes carry JSON-clean fields by construction, so the value
- * can be `JSON.stringify`'d directly. Targets that need on-the-way-out
- * canonicalization override `serializeContract`.
- */
+/** One version of the `contract.json` format: its parser and its printer. The in-memory contract is the same for every version. */
+interface MongoContractFormat<TContract> {
+  parse(document: unknown): TContract;
+  print(contract: TContract): JsonObject;
+}
+
 /**
  * A `contract.json` written before to-one relations recorded `nullable` (rc.9 and earlier)
  * loads with the flag derived from the model: nullable when any local field is nullable or is
@@ -68,6 +59,29 @@ function withMongoToOneRelationNullability(contract: MongoContract): MongoContra
   return { ...contract, domain };
 }
 
+/**
+ * Mongo family `ContractSerializer` abstract base. Owns the family-shared
+ * deserialization pipeline:
+ *
+ * 1. Structural validation against the Mongo contract arktype schema
+ *    (`MongoContractSchema`).
+ * 2. Framework-shared domain validation (`validateContractDomain`).
+ * 3. Family-shared storage validation (`validateMongoStorage`).
+ *
+ * The validated value is handed to the target via the
+ * `constructTargetContract` hook, which wraps the plain-JSON shape in
+ * the family-layer `MongoStorage` class instance (carrying the
+ * target-supplied `namespaces` map). Targets that need to add
+ * structural checks beyond the family default can override
+ * `parseMongoContractStructure`.
+ *
+ * `deserializeContract` reads the file's format version first and hands the
+ * file to the unit for that version; `serializeContract` prints the
+ * version this release writes. The version 1 printer is identity over the
+ * contract — Mongo target classes carry JSON-clean fields by construction,
+ * so the value can be `JSON.stringify`'d directly. Targets that need
+ * on-the-way-out canonicalization override `printContractV1`.
+ */
 export abstract class MongoContractSerializerBase<TContract>
   implements ContractSerializer<TContract>
 {
@@ -85,16 +99,39 @@ export abstract class MongoContractSerializerBase<TContract>
         : undefined;
   }
 
+  private readonly contractFormats: Readonly<
+    Record<NewestContractFormatVersion, MongoContractFormat<TContract>>
+  > = {
+    1: {
+      parse: (document) => this.parseContractV1(document),
+      print: (contract) => ({ formatVersion: 1, ...this.printContractV1(contract) }),
+    },
+  };
+
   deserializeContract<T extends TContract = TContract>(json: unknown): T {
-    const validated = this.parseMongoContractStructure(json);
-    return this.constructTargetContract(validated) as T;
+    const { formatVersion, document } = readStoredDocument(json, CONTRACT_FORMAT);
+    return blindCast<T, 'targets construct the contract subtype their callers request'>(
+      this.contractFormats[formatVersion].parse(document),
+    );
   }
 
   serializeContract(contract: TContract): JsonObject {
-    // Mongo contract class fields are JSON-clean by construction; the
-    // cast asserts that. Targets that need to canonicalize on the way
-    // out override this method.
-    return contract as unknown as JsonObject;
+    return this.contractFormats[NEWEST_CONTRACT_FORMAT_VERSION].print(contract);
+  }
+
+  protected parseContractV1(document: unknown): TContract {
+    const { formatVersion: _, ...contract } = blindCast<
+      Record<string, unknown>,
+      'readFormatVersion accepted the document, so it is a plain object'
+    >(document);
+    return this.constructTargetContract(this.parseMongoContractStructure(contract));
+  }
+
+  /** The contract in version 1 of the file format, without the `formatVersion` field. */
+  protected printContractV1(contract: TContract): JsonObject {
+    return blindCast<JsonObject, 'Mongo contract class fields are JSON-clean by construction'>(
+      contract,
+    );
   }
 
   /**

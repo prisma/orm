@@ -4,12 +4,13 @@ import {
 } from '@internal/migration-tools/contract-snapshot-store';
 import { errorInvalidRefName, MigrationToolsError } from '@internal/migration-tools/errors';
 import { advanceRef, validateRefName } from '@internal/migration-tools/refs';
+import { ifDefined } from '@internal/utils/defined';
 import { isInternalError } from '@internal/utils/internal-error';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import type { CliStructuredError } from '../../utils/cli-errors';
 import { contractTypesModuleOf } from '../../utils/command-helpers';
 import type { ControlClient } from '../types';
-import { renderSnapshotDeclarations } from './snapshot-declarations';
+import { renderSnapshotDeclarations, type StoredSnapshotSource } from './snapshot-declarations';
 
 /** A contract snapshot's two halves: the JSON and the declarations rendered from it. */
 export interface ContractIR {
@@ -53,6 +54,8 @@ export async function preflightRefAdvancement(args: {
   readonly contractJsonPath: string;
   readonly config: { readonly contract?: { readonly typesModule?: string } };
   readonly client: Pick<ControlClient, 'renderContractDts'>;
+  /** Set when the contract is a stored snapshot rather than the emitted contract. */
+  readonly snapshot?: StoredSnapshotSource;
 }): Promise<Result<ContractIR, CliStructuredError>> {
   if (!validateRefName(args.name)) {
     return notOk(errorInvalidRefName(args.name));
@@ -66,6 +69,7 @@ export async function preflightRefAdvancement(args: {
     contractJson: args.contractJson,
     contractJsonPath: args.contractJsonPath,
     typesModule: typesModule.value,
+    ...ifDefined('snapshot', args.snapshot),
   });
   if (!rendered.ok) {
     return rendered;

@@ -28,7 +28,7 @@ const app = asNamespaceId('app');
 
 function contractWithModels(storageHash: string, models: readonly string[]): Contract {
   return {
-    schemaVersion: '1',
+    formatVersion: 1,
     target: 'postgres',
     targetFamily: 'sql',
     storage: { storageHash, tables: {}, namespaces: {} },

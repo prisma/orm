@@ -1,3 +1,4 @@
+import { isFormatVersionError } from '@internal/contract/format-version';
 import type { Contract } from '@internal/contract/types';
 import { ifDefined } from '@internal/utils/defined';
 import type { SnapshotContentVerifier } from '../contract-snapshot-store';
@@ -162,14 +163,18 @@ async function loadExtensionSpace(
     ...ifDefined('verifySnapshotContent', verifySnapshotContent),
   });
   const { refs, problems: refProblems } = await readRefsTolerant(spaceRefsDirectory(spaceDir));
-  const { headRef, problem: headRefProblem } = await readHeadRefTolerant(migrationsDir, spaceId);
-
-  const rawContract = await readRawContractDeferred(
-    migrationsDir,
-    spaceId,
+  const {
     headRef,
-    verifySnapshotContent,
-  );
+    problem: headRefProblem,
+    error: headRefError,
+  } = await readHeadRefTolerant(migrationsDir, spaceId);
+
+  const rawContract =
+    headRefError === undefined
+      ? await readRawContractDeferred(migrationsDir, spaceId, headRef, verifySnapshotContent)
+      : () => {
+          throw headRefError;
+        };
 
   const space = createAggregateContractSpace({
     spaceId,
@@ -188,12 +193,13 @@ async function loadExtensionSpace(
 
 /**
  * The result of resolving an extension's `refs/head.json`: the parsed
- * head ref (or `null` when the file is absent or corrupt) plus a problem
- * when the file exists but cannot be parsed.
+ * head ref (or `null` when the file is absent or refused), plus, when the
+ * file exists but is refused, the problem and the error that refused it.
  */
 interface HeadRefReadResult {
   readonly headRef: Awaited<ReturnType<typeof readContractSpaceHeadRef>>;
   readonly problem: RefLoadProblem | null;
+  readonly error?: unknown;
 }
 
 /**
@@ -225,6 +231,7 @@ async function readHeadRefTolerant(
     }
     return {
       headRef: null,
+      error,
       problem: {
         refName: HEAD_REF_NAME,
         path: contractSpaceHeadRefPath(migrationsDir, spaceId),
@@ -234,7 +241,12 @@ async function readHeadRefTolerant(
   }
 }
 
+/** Why the head ref was refused: the reason a refusal records, else the error's message. */
 function detailOf(error: unknown): string {
+  if (MigrationToolsError.is(error)) {
+    const reason = error.meta?.['reason'];
+    if (typeof reason === 'string') return reason;
+  }
   return error instanceof Error ? error.message : String(error);
 }
 
@@ -262,6 +274,7 @@ async function readRawContractDeferred(
     const raw = await readContractSnapshotJson(migrationsDir, headRef.hash, verifySnapshotContent);
     return () => raw;
   } catch (error) {
+    if (isFormatVersionError(error)) throw error;
     return () => {
       throw error;
     };

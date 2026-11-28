@@ -74,6 +74,7 @@ import {
 import { paradedbPackMeta, paradedbQueryOperations } from '../core/descriptor-meta';
 
 const paradedbContractSpace = contractSpaceFromJson<Contract<SqlStorage>>({
+  spaceId: PARADEDB_SPACE_ID,
   contractJson,
   migrations: [
     { dirName: PARADEDB_BASELINE_MIGRATION_NAME, metadata: baselineMetadata, ops: baselineOps },

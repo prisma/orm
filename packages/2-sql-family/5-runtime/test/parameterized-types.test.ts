@@ -1,4 +1,4 @@
-import type { Contract } from '@internal/contract/types';
+import type { Contract, ContractModel } from '@internal/contract/types';
 import { coreHash, profileHash } from '@internal/contract/types';
 import type { CodecDescriptor, CodecInstanceContext } from '@internal/framework-components/codec';
 import { dataTypeId } from '@internal/framework-components/codec';
@@ -34,6 +34,7 @@ function vectorCodecInstance(meta?: Record<string, unknown>): Codec {
 function createParamTypesTestContract(
   options?: Partial<{
     types: Record<string, SqlStorageTypeEntry>;
+    models: Record<string, ContractModel>;
     tableColumns: Record<
       string,
       {
@@ -49,7 +50,7 @@ function createParamTypesTestContract(
     targetFamily: 'sql',
     target: 'postgres',
     profileHash: profileHash('test'),
-    domain: applicationDomainOf({ models: {} }),
+    domain: applicationDomainOf({ models: options?.models ?? {} }),
     roots: {},
     storage: new SqlStorage({
       storageHash: coreHash('test'),
@@ -271,6 +272,40 @@ describe('parameterized types', () => {
           columnName: 'embedding',
         },
       });
+    });
+    it('rejects invalid model field typeParams, naming the model and field', () => {
+      const contract = createParamTypesTestContract({
+        tableColumns: {
+          id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
+          embedding: {
+            dataType: 'pgvector/vector',
+            codecId: 'pg/vector@1',
+            nullable: false,
+            typeParams: { length: 3 },
+          },
+        },
+        models: {
+          Test: {
+            fields: {
+              embedding: {
+                nullable: false,
+                type: { kind: 'scalar', codecId: 'pg/vector@1', typeParams: { length: 'invalid' } },
+              },
+            },
+          } as unknown as ContractModel,
+        },
+      });
+
+      expect(() =>
+        createTestContext(contract, createStubAdapter(), {
+          extensions: [createBasicVectorExt()],
+        }),
+      ).toThrow(
+        expect.objectContaining({
+          code: 'RUNTIME.TYPE_PARAMS_INVALID',
+          details: expect.objectContaining({ model: 'Test', field: 'embedding' }),
+        }),
+      );
     });
   });
 

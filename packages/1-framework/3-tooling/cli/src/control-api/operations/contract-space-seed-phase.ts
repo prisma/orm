@@ -1,3 +1,4 @@
+import { MigrationToolsError } from '@internal/migration-tools/errors';
 import { materialiseExtensionMigrationPackageIfMissing } from '@internal/migration-tools/io';
 import type { MigrationMetadata } from '@internal/migration-tools/metadata';
 import type { MigrationOps } from '@internal/migration-tools/package';
@@ -149,8 +150,7 @@ export async function runContractSpaceSeedPhase(
     if (descriptor === undefined) continue;
 
     inputs.signal?.throwIfAborted();
-    const onDiskHeadRef = await readContractSpaceHeadRef(inputs.migrationsDir, space.spaceId);
-    const priorHash = onDiskHeadRef?.hash ?? null;
+    const priorHash = await priorHeadHash(inputs.migrationsDir, space.spaceId);
 
     const artifacts = await emitContractSpaceArtifacts(inputs.migrationsDir, space.spaceId, {
       contract: descriptor.contractJson,
@@ -185,6 +185,21 @@ export async function runContractSpaceSeedPhase(
   }
 
   return { seeded };
+}
+
+/** The head the space's `refs/head.json` holds before the seed phase writes it; null when it is absent or its content cannot be read, since the seed phase writes it again from the installed extension. A format version this release does not read is still refused. */
+async function priorHeadHash(migrationsDir: string, spaceId: string): Promise<string | null> {
+  try {
+    return (await readContractSpaceHeadRef(migrationsDir, spaceId))?.hash ?? null;
+  } catch (error) {
+    if (
+      MigrationToolsError.is(error) &&
+      (error.code === 'MIGRATION.INVALID_JSON' || error.code === 'MIGRATION.INVALID_REF_FILE')
+    ) {
+      return null;
+    }
+    throw error;
+  }
 }
 
 /**

@@ -174,6 +174,7 @@ export class ArktypeJsonCodecClass<TInferred> extends CodecImpl<
 }
 
 const arktypeJsonParamsSchema = type({
+  '+': 'reject',
   expression: 'string',
   jsonIr: 'object',
 }) satisfies StandardSchemaV1<ArktypeJsonTypeParams>;

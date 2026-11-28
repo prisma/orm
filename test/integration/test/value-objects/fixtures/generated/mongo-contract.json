@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "1",
+  "formatVersion": 1,
   "targetFamily": "mongo",
   "target": "mongo",
   "profileHash": "vo-test-profile-hash",

@@ -78,7 +78,12 @@ function ormConfig(contractOutput = 'output/contract.json'): Record<string, unkn
 async function seedProject(dir: string): Promise<void> {
   await writeFile(
     join(dir, 'contract.json'),
-    JSON.stringify({ storage: { storageHash: HASH_A }, target: 'postgres', targetFamily: 'sql' }),
+    JSON.stringify({
+      formatVersion: 1,
+      storage: { storageHash: HASH_A },
+      target: 'postgres',
+      targetFamily: 'sql',
+    }),
     'utf-8',
   );
   const base = blindCast<
@@ -337,7 +342,12 @@ describe('migration show', () => {
     const dir = await projectDir();
     await writeFile(
       join(dir, 'contract.json'),
-      JSON.stringify({ storage: { storageHash: HASH_A }, target: 'postgres', targetFamily: 'sql' }),
+      JSON.stringify({
+        formatVersion: 1,
+        storage: { storageHash: HASH_A },
+        target: 'postgres',
+        targetFamily: 'sql',
+      }),
       'utf-8',
     );
 

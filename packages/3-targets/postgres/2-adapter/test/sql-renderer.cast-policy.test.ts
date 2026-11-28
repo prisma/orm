@@ -94,6 +94,7 @@ function descriptorFor(codecId: string, name: string): AnyPostgresCodecDescripto
 }
 
 const baseContract = new SqlContractSerializer().deserializeContract({
+  formatVersion: 1,
   target: 'postgres',
   targetFamily: 'sql',
   profileHash: 'sha256:cast-policy-test',

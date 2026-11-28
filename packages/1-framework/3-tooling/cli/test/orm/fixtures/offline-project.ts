@@ -86,7 +86,7 @@ export function contractJson(
       namespaces: storageNamespaces,
       ...(storageTypes === undefined ? {} : { types: storageTypes }),
     },
-    schemaVersion: '1.0.0',
+    formatVersion: 1,
     target: 'postgres',
     targetFamily: 'sql',
     models: {},

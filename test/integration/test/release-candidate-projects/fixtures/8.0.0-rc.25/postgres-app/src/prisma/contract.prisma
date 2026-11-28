@@ -1,0 +1,16 @@
+// use prisma-8
+
+model User {
+  id    Uuid   @id @onCreate(uuid())
+  email String @unique
+  name  String?
+  posts Post[]
+}
+
+model Post {
+  id       Uuid   @id @onCreate(uuid())
+  title    String
+  body     String?
+  authorId Uuid
+  author   User   @relation(fields: [authorId], references: [id])
+}

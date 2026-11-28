@@ -131,7 +131,7 @@ function buildExtensionWithPublicTable(
     targetId: 'postgres' as const,
     version: '0.0.1',
     contractSpace: {
-      contractJson: contract,
+      contractJson: Object.assign(contract, { formatVersion: 1 }),
       migrations: [],
       headRef: { hash, invariants: [] },
     } satisfies ContractSpace<Contract<SqlStorage>>,

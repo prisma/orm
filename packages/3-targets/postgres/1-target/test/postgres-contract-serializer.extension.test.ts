@@ -4,6 +4,11 @@ import { PostgresContractSerializer } from '../src/core/postgres-contract-serial
 import { PostgresExtension } from '../src/core/postgres-extension';
 import { PostgresSchema } from '../src/core/postgres-schema';
 
+/** A contract as a stored `contract.json` holds it: with its format version. */
+function storedContract(contract: unknown): unknown {
+  return { formatVersion: 1, ...(contract as Record<string, unknown>) };
+}
+
 function contractWithExtensions(extensions: Readonly<Record<string, unknown>>) {
   const base = createSqlContract({
     storage: { namespaces: { extensions: { id: 'extensions', entries: { table: {} } } } },
@@ -25,10 +30,12 @@ function contractWithExtensions(extensions: Readonly<Record<string, unknown>>) {
 describe('extension entries in the Postgres contract serializer', () => {
   it('hydrates each extension entry as a PostgresExtension on its namespace', () => {
     const contract = new PostgresContractSerializer().deserializeContract(
-      contractWithExtensions({
-        postgis: { kind: 'extension', name: 'postgis' },
-        vector: { kind: 'extension', name: 'vector', control: 'external' },
-      }),
+      storedContract(
+        contractWithExtensions({
+          postgis: { kind: 'extension', name: 'postgis' },
+          vector: { kind: 'extension', name: 'vector', control: 'external' },
+        }),
+      ),
     );
     const namespace = contract.storage.namespaces['extensions'];
     expect(namespace).toBeInstanceOf(PostgresSchema);
@@ -42,7 +49,7 @@ describe('extension entries in the Postgres contract serializer', () => {
     const serializer = new PostgresContractSerializer();
     const json = serializer.serializeContract(
       serializer.deserializeContract(
-        contractWithExtensions({ postgis: { kind: 'extension', name: 'postgis' } }),
+        storedContract(contractWithExtensions({ postgis: { kind: 'extension', name: 'postgis' } })),
       ),
     );
     expect(
@@ -65,7 +72,9 @@ describe('extension entries in the Postgres contract serializer', () => {
         },
       },
     });
-    expect(() => new PostgresContractSerializer().deserializeContract(contract)).toThrow(
+    expect(() =>
+      new PostgresContractSerializer().deserializeContract(storedContract(contract)),
+    ).toThrow(
       expect.objectContaining({
         code: 'CONTRACT.NAME_DUPLICATE',
         message:
@@ -77,7 +86,9 @@ describe('extension entries in the Postgres contract serializer', () => {
   it('refuses an extension entry carrying a version', () => {
     expect(() =>
       new PostgresContractSerializer().deserializeContract(
-        contractWithExtensions({ postgis: { kind: 'extension', name: 'postgis', version: '3' } }),
+        storedContract(
+          contractWithExtensions({ postgis: { kind: 'extension', name: 'postgis', version: '3' } }),
+        ),
       ),
     ).toThrow();
   });

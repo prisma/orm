@@ -19,6 +19,7 @@ import { dataLine } from '../data-lines';
 import { defineOrmCommand } from '../define-command';
 import { normalizeError } from '../normalize-error';
 import { displayPath, migrationsDirFor } from './paths';
+import { contractRefusalDiagnostics, unreadableFileDiagnostics } from './unreadable-files';
 
 function listPresentations(inputs: {
   readonly list: MigrationListResult;
@@ -87,7 +88,10 @@ export const migrationListCommand = defineOrmCommand({
   handler: async (args, ctx) => {
     const migrationsDir = migrationsDirFor(ctx.config);
 
-    const loaded = await buildReadAggregate(ctx.config, { migrationsDir });
+    const loaded = await buildReadAggregate(ctx.config, {
+      migrationsDir,
+      whenFileUnreadable: 'report',
+    });
     if (!loaded.ok) {
       return notOk(normalizeError(loaded.failure));
     }
@@ -120,7 +124,13 @@ export const migrationListCommand = defineOrmCommand({
 
     return ok(
       ctx.present(
-        { data: listed.value },
+        {
+          data: listed.value,
+          diagnostics: [
+            ...contractRefusalDiagnostics(loaded.value.contractRefusal),
+            ...unreadableFileDiagnostics(aggregate, migrationsDir, ctx.cwd),
+          ],
+        },
         listPresentations({
           list: listed.value,
           tree,

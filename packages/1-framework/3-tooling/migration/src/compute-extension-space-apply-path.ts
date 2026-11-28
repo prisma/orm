@@ -1,6 +1,7 @@
 import { InternalError } from '@internal/utils/internal-error';
+import { join } from 'pathe';
 import { EMPTY_CONTRACT_HASH } from './constants';
-import { readMigrationsDir } from './io';
+import { readMigrationPackage, readMigrationsDir } from './io';
 import { findPathWithDecision, reconstructGraph } from './migration-graph';
 import type { MigrationOps } from './package';
 import {
@@ -98,7 +99,15 @@ export async function computeExtensionSpaceApplyPath(
   }
 
   const spaceDir = spaceMigrationDirectory(projectMigrationsDir, spaceId);
-  const { packages } = await readMigrationsDir(spaceDir, { migrationsDir: projectMigrationsDir });
+  const { packages, problems } = await readMigrationsDir(spaceDir, {
+    migrationsDir: projectMigrationsDir,
+  });
+  const [problem] = problems;
+  if (problem !== undefined) {
+    await readMigrationPackage(join(spaceDir, problem.dirName), {
+      migrationsDir: projectMigrationsDir,
+    });
+  }
   const graph = reconstructGraph(packages);
 
   // Live-marker layer encodes "no prior state" as EMPTY_CONTRACT_HASH;

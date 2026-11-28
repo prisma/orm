@@ -117,7 +117,7 @@ async function addAuditSpace(migrationsDir: string): Promise<void> {
     invariants: [],
   });
   await writeContractSnapshot(migrationsDir, AUDIT_HEAD, {
-    contractJson: AUDIT_CONTRACT,
+    contractJson: { formatVersion: 1, ...AUDIT_CONTRACT },
     contractDts: 'export type Contract = never;\n',
   });
 }
@@ -136,7 +136,7 @@ const auditExtension: ControlExtensionDescriptor<'sql', 'postgres'> = {
   targetId: 'postgres',
   version: '1.0.0',
   contractSpace: {
-    contractJson: AUDIT_CONTRACT,
+    contractJson: { formatVersion: 1, ...AUDIT_CONTRACT } as Contract,
     headRef: { hash: AUDIT_HEAD, invariants: [] },
     migrations: [
       {

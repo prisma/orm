@@ -27,11 +27,45 @@ describe('contractFromJson', () => {
   });
 
   it('throws the structured validation error for invalid JSON', () => {
-    expect(() => contractFromJson({ target: 'postgres' })).toThrow(
+    expect(() => contractFromJson({ formatVersion: 1, target: 'postgres' })).toThrow(
       expect.objectContaining({
         name: 'ContractValidationError',
         code: 'CONTRACT.VALIDATION_FAILED',
       }),
+    );
+  });
+
+  it('refuses a contract written by a newer release, before reading anything else', () => {
+    expect(() => contractFromJson({ formatVersion: 2, target: 'postgres' })).toThrow(
+      expect.objectContaining({ code: 'CONTRACT.FORMAT_VERSION_NEWER' }),
+    );
+  });
+
+  it('reads a contract a release candidate wrote, passed to contractFromJson or a client', () => {
+    const { formatVersion: _, ...rest } = fixtureContractJson;
+    const releaseCandidate = { schemaVersion: '1', ...rest };
+    const expected = contractFromJson<Contract>(freshContractJson());
+    expect(contractFromJson<Contract>(releaseCandidate)).toEqual(expected);
+    expect(() =>
+      postgresStatic({ contract: releaseCandidate as unknown as Contract }),
+    ).not.toThrow();
+  });
+
+  it('refuses a newer contract passed straight to a client', () => {
+    expect(() =>
+      postgresStatic({
+        contract: { formatVersion: 2, target: 'postgres' } as unknown as Contract,
+      }),
+    ).toThrow(expect.objectContaining({ code: 'CONTRACT.FORMAT_VERSION_NEWER' }));
+  });
+
+  it('refuses a stored contract with no format version passed straight to a client', () => {
+    const { formatVersion: _, ...withoutVersion } = fixtureContractJson;
+    expect(() => postgresStatic({ contract: withoutVersion as unknown as Contract })).toThrow(
+      expect.objectContaining({ code: 'CONTRACT.FORMAT_VERSION_MISSING' }),
+    );
+    expect(() => postgres({ contract: withoutVersion as unknown as Contract })).toThrow(
+      expect.objectContaining({ code: 'CONTRACT.FORMAT_VERSION_MISSING' }),
     );
   });
 });

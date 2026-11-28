@@ -12,6 +12,11 @@ import { buildPostgresPslContract } from '../../src/core/psl-print/psl-contract'
 import { testBuildContext } from './build-context';
 import { type ColumnShape, domainFieldOf, INT_COLUMN, table } from './print-support';
 
+/** A contract as a stored `contract.json` holds it: with its format version. */
+function storedContract(contract: unknown): unknown {
+  return { formatVersion: 1, ...(contract as Record<string, unknown>) };
+}
+
 describe('domain enum blocks', () => {
   it('writes each member as the PSL literal its data type reads back, and retains the raw codec attribute', () => {
     const [block] = buildDomainEnumBlocks(
@@ -120,7 +125,7 @@ describe('native enum blocks', () => {
         },
       },
     });
-    const contract = new PostgresContractSerializer().deserializeContract(json);
+    const contract = new PostgresContractSerializer().deserializeContract(storedContract(json));
     const ast = buildPostgresPslContract(
       blindCast<Contract<SqlStorage>, 'the Postgres serializer yields a SQL contract'>(contract),
       testBuildContext(),

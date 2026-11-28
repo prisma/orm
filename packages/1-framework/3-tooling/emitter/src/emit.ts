@@ -8,8 +8,6 @@ import type { EmitOptions, EmitResult, EmitStackInput } from './emit-types';
 import { generateContractDts } from './generate-contract-dts';
 import { requireToOneRelationNullability } from './require-relation-nullability';
 
-const SCHEMA_VERSION = '1';
-
 export async function emit(
   contract: Contract,
   stack: EmitStackInput,
@@ -34,7 +32,6 @@ export async function emit(
   const { profileHash } = contract;
 
   const canonicalized = canonicalizeContractToObject(contract, {
-    schemaVersion: SCHEMA_VERSION,
     serializeContract: options.serializeContract,
     ...ifDefined('shouldPreserveEmpty', options.shouldPreserveEmpty),
     ...ifDefined('sortStorage', options.sortStorage),

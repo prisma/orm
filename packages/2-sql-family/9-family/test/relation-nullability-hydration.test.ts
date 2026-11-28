@@ -111,7 +111,7 @@ function contractJson(input: {
       },
     },
   });
-  return JSON.parse(JSON.stringify(contract));
+  return JSON.parse(JSON.stringify({ formatVersion: 1, ...contract }));
 }
 
 function hydratedAuthor(json: unknown) {

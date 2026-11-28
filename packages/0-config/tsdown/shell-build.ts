@@ -131,7 +131,8 @@ export async function defineShellConfig(shellName: ShellName): Promise<UserConfi
       const specifier = subpath === '.' ? pkg.name : `${pkg.name}/${subpath.slice(2)}`;
       const entryFile = addEntry(entryName, `${entryName}.ts`);
       writeFileSync(entryFile, entryModuleSource(specifier, join(pkg.absDir, distFile)));
-      if (subpath !== '.') aggregated.push({ specifier, distFile: join(pkg.absDir, distFile) });
+      if (subpath !== '.' && !isInternalSubpath(subpath))
+        aggregated.push({ specifier, distFile: join(pkg.absDir, distFile) });
     }
     // The ADR names each internal package as a whole (`@prisma/orm-framework/contract`,
     // `@prisma/orm-target-postgres/adapter`, ...). When the internal package
@@ -278,6 +279,11 @@ function publishedModuleBaseDefine(
 /** The name a package export subpath takes in a `subpaths` list: `'.'` for the root, `'x/y'` for `'./x/y'`. */
 function publishedSubpathName(subpath: string): string {
   return subpath === '.' ? '.' : subpath.slice(2);
+}
+
+/** An `internal/` subpath is published for sibling shells to import, but stays out of a synthesized aggregate. */
+function isInternalSubpath(subpath: string): boolean {
+  return subpath.split('/').includes('internal');
 }
 
 function shellEntryName(entry: string, subpath: string): string {

@@ -21,7 +21,8 @@ function isStorageDetails(details: unknown): details is StorageDetails {
   );
 }
 
-function storageDetailsOf(operation: MigrationPlanOperation): StorageDetails | undefined {
+/** An operation's target details, when they name a stored object. */
+export function storageDetailsOf(operation: object): StorageDetails | undefined {
   const target: unknown = Reflect.get(operation, 'target');
   if (typeof target !== 'object' || target === null) return undefined;
   const details: unknown = Reflect.get(target, 'details');

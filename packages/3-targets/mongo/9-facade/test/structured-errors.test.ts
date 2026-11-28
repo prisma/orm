@@ -36,6 +36,9 @@ vi.mock('@internal/family-mongo/ir', () => ({
     deserializeContract(json: unknown) {
       return mocks.deserializeContract(json);
     }
+    serializeContract(contract: unknown) {
+      return contract;
+    }
   },
 }));
 vi.mock('@internal/mongo-orm', () => ({

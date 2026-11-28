@@ -32,7 +32,7 @@ async function writeEndContractSnapshot(
   storageHash: string,
   extra: Record<string, unknown> = {},
 ): Promise<Record<string, unknown>> {
-  const contractJson = { ...extra, storage: { storageHash } };
+  const contractJson = { formatVersion: 1, ...extra, storage: { storageHash } };
   await writeContractSnapshot(migrationsDir, storageHash, {
     contractJson,
     contractDts: 'export type Contract = unknown;\n',
@@ -57,7 +57,7 @@ describe('writeMigrationPackage + readMigrationPackage', () => {
 
     const pkg = await readMigrationPackage(dir, { migrationsDir: tmpDir });
 
-    expect(JSON.stringify(pkg.metadata)).toBe(JSON.stringify(metadata));
+    expect(pkg.metadata).toEqual(metadata);
     expect(JSON.stringify(pkg.ops)).toBe(JSON.stringify(ops));
     expect(pkg.dirName).toBe('20260225T1430_add_users');
     expect(pkg.dirPath).toBe(dir);
@@ -164,7 +164,10 @@ describe('writeMigrationPackage + readMigrationPackage', () => {
   it('errors on missing ops.json with code MIGRATION.FILE_MISSING', async () => {
     const dir = join(tmpDir, '20260225T1430_no_ops');
     await mkdir(dir, { recursive: true });
-    await writeFile(join(dir, 'migration.json'), JSON.stringify(createTestMetadata()));
+    await writeFile(
+      join(dir, 'migration.json'),
+      JSON.stringify({ formatVersion: 1, ...createTestMetadata() }),
+    );
 
     await expect(readMigrationPackage(dir, { migrationsDir: tmpDir })).rejects.toSatisfy((e) => {
       expectMigrationError(e, 'MIGRATION.FILE_MISSING');
@@ -188,7 +191,10 @@ describe('writeMigrationPackage + readMigrationPackage', () => {
   it('errors when migration.json is missing required fields with code MIGRATION.INVALID_MANIFEST', async () => {
     const dir = join(tmpDir, '20260225T1430_bad_manifest');
     await mkdir(dir, { recursive: true });
-    await writeFile(join(dir, 'migration.json'), JSON.stringify({ from: 'x' }));
+    await writeFile(
+      join(dir, 'migration.json'),
+      JSON.stringify({ formatVersion: 1, ...{ from: 'x' } }),
+    );
     await writeFile(join(dir, 'ops.json'), '[]');
 
     await expect(readMigrationPackage(dir, { migrationsDir: tmpDir })).rejects.toSatisfy((e) => {
@@ -201,7 +207,10 @@ describe('writeMigrationPackage + readMigrationPackage', () => {
     const dir = join(tmpDir, '20260225T1430_no_edgeid');
     const { migrationHash: _, ...metadataWithoutHash } = createTestMetadata();
     await mkdir(dir, { recursive: true });
-    await writeFile(join(dir, 'migration.json'), JSON.stringify(metadataWithoutHash));
+    await writeFile(
+      join(dir, 'migration.json'),
+      JSON.stringify({ formatVersion: 1, ...metadataWithoutHash }),
+    );
     await writeFile(join(dir, 'ops.json'), JSON.stringify(createTestOps()));
 
     await expect(readMigrationPackage(dir, { migrationsDir: tmpDir })).rejects.toSatisfy((e) => {
@@ -214,7 +223,7 @@ describe('writeMigrationPackage + readMigrationPackage', () => {
     const dir = join(tmpDir, '20260225T1430_bad_edgeid');
     const metadata = { ...createTestMetadata(), migrationHash: 123 };
     await mkdir(dir, { recursive: true });
-    await writeFile(join(dir, 'migration.json'), JSON.stringify(metadata));
+    await writeFile(join(dir, 'migration.json'), JSON.stringify({ formatVersion: 1, ...metadata }));
     await writeFile(join(dir, 'ops.json'), JSON.stringify(createTestOps()));
 
     await expect(readMigrationPackage(dir, { migrationsDir: tmpDir })).rejects.toSatisfy((e) => {
@@ -227,7 +236,7 @@ describe('writeMigrationPackage + readMigrationPackage', () => {
     const dir = join(tmpDir, '20260225T1430_bad_from');
     const metadata = { ...createTestMetadata(), from: 42 };
     await mkdir(dir, { recursive: true });
-    await writeFile(join(dir, 'migration.json'), JSON.stringify(metadata));
+    await writeFile(join(dir, 'migration.json'), JSON.stringify({ formatVersion: 1, ...metadata }));
     await writeFile(join(dir, 'ops.json'), JSON.stringify(createTestOps()));
 
     await expect(readMigrationPackage(dir, { migrationsDir: tmpDir })).rejects.toSatisfy((e) => {
@@ -240,7 +249,7 @@ describe('writeMigrationPackage + readMigrationPackage', () => {
     const dir = join(tmpDir, '20260225T1430_carries_kind');
     const metadata = { ...createTestMetadata(), kind: 'regular' };
     await mkdir(dir, { recursive: true });
-    await writeFile(join(dir, 'migration.json'), JSON.stringify(metadata));
+    await writeFile(join(dir, 'migration.json'), JSON.stringify({ formatVersion: 1, ...metadata }));
     await writeFile(join(dir, 'ops.json'), JSON.stringify(createTestOps()));
 
     await expect(readMigrationPackage(dir, { migrationsDir: tmpDir })).rejects.toSatisfy((e) => {
@@ -256,7 +265,7 @@ describe('writeMigrationPackage + readMigrationPackage', () => {
       toContract: { storage: { storageHash: 'x' } },
     };
     await mkdir(dir, { recursive: true });
-    await writeFile(join(dir, 'migration.json'), JSON.stringify(metadata));
+    await writeFile(join(dir, 'migration.json'), JSON.stringify({ formatVersion: 1, ...metadata }));
     await writeFile(join(dir, 'ops.json'), JSON.stringify([]));
 
     await expect(readMigrationPackage(dir, { migrationsDir: tmpDir })).rejects.toSatisfy((e) => {
@@ -269,7 +278,7 @@ describe('writeMigrationPackage + readMigrationPackage', () => {
     const dir = join(tmpDir, '20260225T1430_carries_from_contract');
     const metadata = { ...createTestMetadata({}, []), fromContract: null };
     await mkdir(dir, { recursive: true });
-    await writeFile(join(dir, 'migration.json'), JSON.stringify(metadata));
+    await writeFile(join(dir, 'migration.json'), JSON.stringify({ formatVersion: 1, ...metadata }));
     await writeFile(join(dir, 'ops.json'), JSON.stringify([]));
 
     await expect(readMigrationPackage(dir, { migrationsDir: tmpDir })).rejects.toSatisfy((e) => {
@@ -308,7 +317,7 @@ describe('writeMigrationPackage + readMigrationPackage', () => {
     const dir = join(tmpDir, '20260225T1430_empty_from');
     const metadata = { ...createTestMetadata(), from: '' };
     await mkdir(dir, { recursive: true });
-    await writeFile(join(dir, 'migration.json'), JSON.stringify(metadata));
+    await writeFile(join(dir, 'migration.json'), JSON.stringify({ formatVersion: 1, ...metadata }));
     await writeFile(join(dir, 'ops.json'), JSON.stringify(createTestOps()));
 
     await expect(readMigrationPackage(dir, { migrationsDir: tmpDir })).rejects.toSatisfy((e) => {
@@ -321,7 +330,10 @@ describe('writeMigrationPackage + readMigrationPackage', () => {
     const dir = join(tmpDir, '20260225T1430_no_created');
     const { createdAt: _, ...metadataWithout } = createTestMetadata();
     await mkdir(dir, { recursive: true });
-    await writeFile(join(dir, 'migration.json'), JSON.stringify(metadataWithout));
+    await writeFile(
+      join(dir, 'migration.json'),
+      JSON.stringify({ formatVersion: 1, ...metadataWithout }),
+    );
     await writeFile(join(dir, 'ops.json'), JSON.stringify(createTestOps()));
 
     await expect(readMigrationPackage(dir, { migrationsDir: tmpDir })).rejects.toSatisfy((e) => {
@@ -333,7 +345,10 @@ describe('writeMigrationPackage + readMigrationPackage', () => {
   it('errors when ops is not an array', async () => {
     const dir = join(tmpDir, '20260225T1430_bad_ops');
     await mkdir(dir, { recursive: true });
-    await writeFile(join(dir, 'migration.json'), JSON.stringify(createTestMetadata()));
+    await writeFile(
+      join(dir, 'migration.json'),
+      JSON.stringify({ formatVersion: 1, ...createTestMetadata() }),
+    );
     await writeFile(join(dir, 'ops.json'), JSON.stringify({ not: 'an array' }));
 
     await expect(readMigrationPackage(dir, { migrationsDir: tmpDir })).rejects.toSatisfy((e) => {
@@ -345,7 +360,10 @@ describe('writeMigrationPackage + readMigrationPackage', () => {
   it('errors when ops entry is missing required fields', async () => {
     const dir = join(tmpDir, '20260225T1430_bad_op_entry');
     await mkdir(dir, { recursive: true });
-    await writeFile(join(dir, 'migration.json'), JSON.stringify(createTestMetadata()));
+    await writeFile(
+      join(dir, 'migration.json'),
+      JSON.stringify({ formatVersion: 1, ...createTestMetadata() }),
+    );
     await writeFile(join(dir, 'ops.json'), JSON.stringify([{ id: 'x' }]));
 
     await expect(readMigrationPackage(dir, { migrationsDir: tmpDir })).rejects.toSatisfy((e) => {
@@ -358,7 +376,7 @@ describe('writeMigrationPackage + readMigrationPackage', () => {
     const dir = join(tmpDir, '20260225T1430_null_hash');
     const metadata = { ...createTestMetadata(), migrationHash: null };
     await mkdir(dir, { recursive: true });
-    await writeFile(join(dir, 'migration.json'), JSON.stringify(metadata));
+    await writeFile(join(dir, 'migration.json'), JSON.stringify({ formatVersion: 1, ...metadata }));
     await writeFile(join(dir, 'ops.json'), JSON.stringify(createTestOps()));
 
     await expect(readMigrationPackage(dir, { migrationsDir: tmpDir })).rejects.toSatisfy((e) => {
@@ -566,7 +584,11 @@ describe('writeMigrationPackage + readMigrationPackage', () => {
     await mkdir(dir, { recursive: true });
     await writeFile(
       join(dir, 'migration.json'),
-      JSON.stringify({ ...metadata, providedInvariants: [badId], migrationHash }, null, 2),
+      JSON.stringify(
+        { formatVersion: 1, ...metadata, providedInvariants: [badId], migrationHash },
+        null,
+        2,
+      ),
     );
     await writeFile(join(dir, 'ops.json'), JSON.stringify(ops, null, 2));
 
@@ -611,7 +633,11 @@ describe('writeMigrationPackage + readMigrationPackage', () => {
     await mkdir(dir, { recursive: true });
     await writeFile(
       join(dir, 'migration.json'),
-      JSON.stringify({ ...metadata, providedInvariants: ['shared'], migrationHash }, null, 2),
+      JSON.stringify(
+        { formatVersion: 1, ...metadata, providedInvariants: ['shared'], migrationHash },
+        null,
+        2,
+      ),
     );
     await writeFile(join(dir, 'ops.json'), JSON.stringify(ops, null, 2));
 
@@ -788,7 +814,10 @@ describe('readMigrationsDir', () => {
   it('returns a packageUnloadable problem and omits the package when migration.json is schema-invalid', async () => {
     const dir = join(tmpDir, '20260225T1400_invalid_schema');
     await mkdir(dir, { recursive: true });
-    await writeFile(join(dir, 'migration.json'), JSON.stringify({ from: 'x' }));
+    await writeFile(
+      join(dir, 'migration.json'),
+      JSON.stringify({ formatVersion: 1, ...{ from: 'x' } }),
+    );
     await writeFile(join(dir, 'ops.json'), '[]');
 
     const { packages, problems } = await readMigrationsDir(tmpDir, { migrationsDir: tmpDir });

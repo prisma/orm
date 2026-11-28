@@ -325,7 +325,7 @@
 ./target/control: class MongoMigrationRunner, required method execute(options: MongoMigrationRunnerExecuteOptions): Promise<MongoMigrationRunnerResult>
 ./target/control: class MongoTargetContractSerializer extends MongoContractSerializerBase<MongoTargetContract>
 ./target/control: class MongoTargetContractSerializer, protected required method constructTargetContract(validated: MongoContract): MongoTargetContract
-./target/control: class MongoTargetContractSerializer, required method serializeContract(contract: MongoTargetContract): JsonObject
+./target/control: class MongoTargetContractSerializer, protected required method printContractV1(contract: MongoTargetContract): JsonObject
 ./target/control: class MongoTargetDatabase extends NamespaceBase
 ./target/control: class MongoTargetDatabase, constructor(input: MongoTargetDatabaseInput)
 ./target/control: class MongoTargetDatabase, readonly required property entries: MongoNamespaceEntries
@@ -379,7 +379,7 @@
 ./target/control: class UnsetFieldCall, required method toOp(): AnyMongoMigrationOperation
 ./target/control: const mongoTargetDescriptor: MongoControlTargetDescriptor<MongoTargetContract>
 ./target/control: function deserializeMongoOp(json: unknown): AnyMongoMigrationOperation
-./target/control: function deserializeMongoOps(json: readonly unknown[]): AnyMongoMigrationOperation[]
+./target/control: function deserializeMongoOps(json: readonly unknown[], location?: MongoOperationsLocation): AnyMongoMigrationOperation[]
 ./target/control: function renderCallsToTypeScript(calls: ReadonlyArray<OpFactoryCall>, meta: RenderMigrationMeta): string
 ./target/control: function renderOps(calls: ReadonlyArray<OpFactoryCall>): (AnyMongoMigrationOperation | Promise<AnyMongoMigrationOperation>)[]
 ./target/control: function schemaCollectionToCreateCollectionOptions(coll: MongoSchemaCollection): CreateCollectionOptions | undefined
@@ -405,6 +405,9 @@
 ./target/control: interface MongoMigrationRunnerExecuteOptions, readonly required property policy: MigrationOperationPolicy
 ./target/control: interface MongoMigrationRunnerFailure extends MigrationRunnerFailure
 ./target/control: interface MongoMigrationRunnerFailure, readonly required property code: MongoMigrationRunnerErrorCode
+./target/control: interface MongoOperationsLocation
+./target/control: interface MongoOperationsLocation, readonly optional property migrations?: readonly Pick<MigrationRunnerPerSpaceOptions['migrationEdges'][number], 'dirName' | 'operationCount'>[]
+./target/control: interface MongoOperationsLocation, readonly optional property space?: string
 ./target/control: interface RenderMigrationMeta
 ./target/control: interface RenderMigrationMeta, readonly required property from: null | string
 ./target/control: interface RenderMigrationMeta, readonly required property migrationModule: string
@@ -536,7 +539,7 @@
 ./target: class MongoMigrationRunner, required method execute(options: MongoMigrationRunnerExecuteOptions): Promise<MongoMigrationRunnerResult>
 ./target: class MongoTargetContractSerializer extends MongoContractSerializerBase<MongoTargetContract>
 ./target: class MongoTargetContractSerializer, protected required method constructTargetContract(validated: MongoContract): MongoTargetContract
-./target: class MongoTargetContractSerializer, required method serializeContract(contract: MongoTargetContract): JsonObject
+./target: class MongoTargetContractSerializer, protected required method printContractV1(contract: MongoTargetContract): JsonObject
 ./target: class MongoTargetDatabase extends NamespaceBase
 ./target: class MongoTargetDatabase, constructor(input: MongoTargetDatabaseInput)
 ./target: class MongoTargetDatabase, readonly required property entries: MongoNamespaceEntries
@@ -644,7 +647,7 @@
 ./target: function dataTransform(name: string, options: { invariantId?: string; check?: { source: () => Buildable | MongoQueryPlan; filter?: MongoFilterExpr; expect?: 'exists' | 'notExists'; description?: string; }; run: () => Buildable | MongoQueryPlan; }): MongoDmlOperation
 ./target: function deleteDocuments(options: DeleteDocumentsOptions): MongoDmlOperation
 ./target: function deserializeMongoOp(json: unknown): AnyMongoMigrationOperation
-./target: function deserializeMongoOps(json: readonly unknown[]): AnyMongoMigrationOperation[]
+./target: function deserializeMongoOps(json: readonly unknown[], location?: MongoOperationsLocation): AnyMongoMigrationOperation[]
 ./target: function dropCollection(collectionName: string): MongoMigrationPlanOperation
 ./target: function dropIndex(collectionName: string, keys: ReadonlyArray<MongoIndexKey>, options?: CreateIndexOptions): MongoMigrationPlanOperation
 ./target: function fillField(options: FillFieldOptions): MongoDmlOperation
@@ -690,6 +693,9 @@
 ./target: interface MongoMigrationRunnerExecuteOptions, readonly required property policy: MigrationOperationPolicy
 ./target: interface MongoMigrationRunnerFailure extends MigrationRunnerFailure
 ./target: interface MongoMigrationRunnerFailure, readonly required property code: MongoMigrationRunnerErrorCode
+./target: interface MongoOperationsLocation
+./target: interface MongoOperationsLocation, readonly optional property migrations?: readonly Pick<MigrationRunnerPerSpaceOptions['migrationEdges'][number], 'dirName' | 'operationCount'>[]
+./target: interface MongoOperationsLocation, readonly optional property space?: string
 ./target: interface MongoRuntimeTargetInstance extends RuntimeTargetInstance<'mongo', 'mongo'>
 ./target: interface ParameterizedOutputTypesForTypeParams extends ParameterizedOutputTypesFunction
 ./target: interface ParameterizedOutputTypesForTypeParams, readonly required property outputTypes: OutputTypeMap<this['typeParams']>

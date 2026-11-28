@@ -1,3 +1,4 @@
+import { isContractBuiltInMemory } from '@internal/contract/internal/format-version';
 import { validateContractOnce } from '@internal/contract/validate-once';
 import { MongoContractSerializer } from '@internal/family-mongo/ir';
 import type {
@@ -35,8 +36,13 @@ export function contractFromJson<
   );
 }
 
+/** Validates a contract value for a Mongo client, once per value. */
 export function validateMongoContract<
   TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>,
 >(contract: TContract): TContract {
-  return contractFromJson<TContract>(contract);
+  return validateContractOnce(contract, validator, () =>
+    serializer.deserializeContract<TContract>(
+      isContractBuiltInMemory(contract) ? serializer.serializeContract(contract) : contract,
+    ),
+  );
 }

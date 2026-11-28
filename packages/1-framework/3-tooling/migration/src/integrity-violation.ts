@@ -69,7 +69,13 @@ export type IntegrityViolation =
       readonly element: string;
       readonly claimedBy: readonly string[];
     }
-  | { readonly kind: 'contractUnreadable'; readonly spaceId: string; readonly detail: string }
+  | {
+      readonly kind: 'contractUnreadable';
+      readonly spaceId: string;
+      readonly detail: string;
+      /** The head the contract was read at, whose snapshot could not be read; undefined when the space has no head ref. */
+      readonly hash: string | undefined;
+    }
   // genuinely unloadable — package omitted from space.packages
   | {
       readonly kind: 'packageUnloadable';

@@ -156,6 +156,7 @@ export type TDecodeFixtureContract = MongoContractWithTypeMaps<
 >;
 
 export const decodeFixtureContractJson = {
+  formatVersion: 1,
   target: 'mongo' as const,
   targetFamily: 'mongo' as const,
   roots: { users: crossRef('User'), posts: crossRef('Post') },

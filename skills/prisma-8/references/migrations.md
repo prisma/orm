@@ -119,7 +119,7 @@ The on-disk layout is just the pointer:
 
 ```text
 migrations/app/refs/
-└── db.json                 # { "hash": "<hex>", "invariants": [] }
+└── db.json                 # { "formatVersion": 1, "hash": "<hex>", "invariants": [] }
 ```
 
 **First `migration plan` after dev iteration.** `migration plan` defaults `--from` to the `db` ref (and, when no `db` ref exists at all, falls back to planning from an empty database only while the migration graph is empty — the human output then adds a muted notice beneath the summary, `No db ref set — planning from an empty database. Run db init, db update, or db sign if a database already exists.`, and the JSON document carries `fromDefaulted: true`; over a non-empty graph there is no fallback: the command refuses with `MIGRATION.PLAN_ORIGIN_UNKNOWN`; see `references/migration-model.md` § *The trap*). When the on-disk migration graph is still **empty** and the `db` ref points at a non-null hash with a store entry (typical after one or more `db update` cycles), the planner emits **two** bundles instead of one:
@@ -530,6 +530,7 @@ A loss is an operation whose class is `destructive`. An access change is disabli
 ```json
 // migrations/app/refs/production.json
 {
+  "formatVersion": 1,
   "hash": "4b1c…e09a",
   "invariants": [],
   "policies": {
@@ -549,7 +550,7 @@ Write the field by hand, or with the `migration ref policy` commands, which chan
 
 `set` and `delete` print each changed setting before and after, labelled `tightens`, `loosens` or `unchanged`, and `--json` returns `{ ok, ref, policies, changes }`. A ref's policies record what the team decided about how that database may change, and a change to them is reviewed like code.
 
-No other command changes a ref's policies. Commands that rewrite a ref (`migration ref set`, `db update`, `db sign`, `db migrate`, and the `migration ref policy` commands) keep the fields the ref format defines (`hash`, `invariants`, `policies`) and drop any other top-level key.
+No other command changes a ref's policies. Commands that rewrite a ref (`migration ref set`, `db update`, `db sign`, `db migrate`, and the `migration ref policy` commands) keep the `hash`, `invariants` and `policies` they do not change, and write `formatVersion` themselves. A ref file with any other field is refused with `MIGRATION.INVALID_REF_FILE`, and the file is left as it was: remove the field by hand.
 
 **Applying a declared policy.** `db migrate --to <ref>` and `db update --to <ref>` compare the ref's declarations with the database before running anything. If they differ, the command fails with `MIGRATION.POLICY_MISMATCH` and nothing runs. The database's policy changes only when the deploy is told it may: `prisma db migrate --to production --permit-policy-change --db <url>`. The run is checked against the ref's policies, runs, and writes them into the marker when it succeeds, so a failed run leaves the old policy. With nothing pending, the run writes only the policies. A pipeline that should apply reviewed policy changes passes the flag on every deploy; a cautious team leaves it out and applies policy changes by hand. The flag needs `--to <ref>`: with a hash, `@db`, `@empty` or no `--to`, the command fails with `CLI.INVALID_ARGUMENTS` before it connects. A ref that declares no policies is accepted and changes nothing, so a pipeline can pass the flag on every deploy.
 

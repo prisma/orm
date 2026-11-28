@@ -1,17 +1,15 @@
 import type { IntegrityViolation } from '@internal/migration-tools/aggregate';
+import { contractSnapshotDir } from '@internal/migration-tools/contract-snapshot-store';
 import { join, relative } from 'pathe';
 import type { CheckFailure } from '../commands/json/schemas';
-import { chooseAction, runCommandAction } from './next-actions';
+import {
+  chooseAction,
+  migrationPackageRepairActions,
+  runCommandAction,
+  snapshotRepairActions,
+} from './next-actions';
 
 export type { CheckFailure } from '../commands/json/schemas';
-
-function migrationPathRelative(dirPath: string): string {
-  return relative(process.cwd(), dirPath);
-}
-
-function migrationFileRelative(dirPath: string, fileName: string): string {
-  return join(migrationPathRelative(dirPath), fileName);
-}
 
 /**
  * Map one {@link IntegrityViolation} onto a `migration check` failure row.
@@ -20,7 +18,17 @@ function migrationFileRelative(dirPath: string, fileName: string): string {
 export function integrityViolationToCheckFailure(
   violation: IntegrityViolation,
   migrationsDir: string,
+  cwd: string,
 ): CheckFailure {
+  const migrationPathRelative = (dirPath: string): string => relative(cwd, dirPath);
+  const migrationFileRelative = (dirPath: string, fileName: string): string =>
+    join(migrationPathRelative(dirPath), fileName);
+  const repairActions = (spaceId: string, dirName: string) =>
+    migrationPackageRepairActions({
+      spaceId,
+      packageDir: join(migrationsDir, spaceId, dirName),
+      cwd,
+    });
   const spaceRelative = (spaceId: string): string =>
     migrationPathRelative(join(migrationsDir, spaceId));
   const packageRelative = (spaceId: string, dirName: string): string =>
@@ -38,9 +46,7 @@ export function integrityViolationToCheckFailure(
           'migration.json',
         ),
         why: `Stored hash ${violation.stored} does not match recomputed hash ${violation.computed}`,
-        nextActions: [
-          chooseAction('Re-emit the migration package, or restore it from version control'),
-        ],
+        nextActions: repairActions(violation.spaceId, violation.dirName),
       };
     case 'providedInvariantsMismatch':
       return {
@@ -48,19 +54,15 @@ export function integrityViolationToCheckFailure(
         code: 'MIGRATION.CHECK_PROVIDED_INVARIANTS_MISMATCH',
         where: packageRelative(violation.spaceId, violation.dirName),
         why: `Migration "${violation.dirName}" providedInvariants in migration.json disagrees with ops.json.`,
-        nextActions: [
-          chooseAction('Re-emit the migration package so migration.json and ops.json agree'),
-        ],
+        nextActions: repairActions(violation.spaceId, violation.dirName),
       };
     case 'packageUnloadable':
       return {
         space: violation.spaceId,
         code: 'MIGRATION.CHECK_PACKAGE_UNLOADABLE',
         where: packageRelative(violation.spaceId, violation.dirName),
-        why: `Migration "${violation.dirName}" could not be loaded: ${violation.detail}`,
-        nextActions: [
-          chooseAction('Re-emit the migration package, or restore it from version control'),
-        ],
+        why: `Migration "${violation.dirName}" could not be loaded: ${violation.detail}. Until it is read, the checks that follow the migration graph of space "${violation.spaceId}" are not run.`,
+        nextActions: repairActions(violation.spaceId, violation.dirName),
       };
     case 'sameSourceAndTarget':
       return {
@@ -107,7 +109,10 @@ export function integrityViolationToCheckFailure(
         where: refRelative(violation.spaceId, 'head'),
         why: `Head ref \`refs/head.json\` is missing for contract space "${violation.spaceId}".`,
         nextActions: [
-          chooseAction('Re-emit the contract-space migrations and head ref artefacts'),
+          runCommandAction(
+            "Write the extension's head ref and migrations again from the installed extension",
+            '{bin} contract emit',
+          ),
           chooseAction('Or restore `refs/head.json` from version control'),
         ],
       };
@@ -118,8 +123,11 @@ export function integrityViolationToCheckFailure(
         where: refRelative(violation.spaceId, 'head'),
         why: `Head ref ${violation.hash} for contract space "${violation.spaceId}" is not present in its migration graph.`,
         nextActions: [
-          chooseAction('Re-emit the contract-space migrations'),
-          chooseAction('Or restore the missing migration package'),
+          runCommandAction(
+            "Write the extension's head ref and migrations again from the installed extension",
+            '{bin} contract emit',
+          ),
+          chooseAction('Or restore the missing migration package from version control'),
         ],
       };
     case 'refUnreadable':
@@ -157,12 +165,29 @@ export function integrityViolationToCheckFailure(
       return {
         space: violation.spaceId,
         code: 'MIGRATION.CHECK_CONTRACT_UNREADABLE',
-        where: migrationFileRelative(join(migrationsDir, violation.spaceId), 'contract.json'),
-        why: `Contract for space "${violation.spaceId}" is unreadable: ${violation.detail}`,
-        nextActions: [
-          runCommandAction('Re-emit the extension contract artefacts', '{bin} contract emit'),
-          chooseAction('Or fix the descriptor producing the invalid contract'),
-        ],
+        where:
+          violation.hash === undefined
+            ? refRelative(violation.spaceId, 'head')
+            : migrationPathRelative(
+                join(contractSnapshotDir(migrationsDir, violation.hash), 'contract.json'),
+              ),
+        why: `The head contract snapshot of space "${violation.spaceId}" is unreadable: ${violation.detail}`,
+        nextActions:
+          violation.hash === undefined
+            ? [
+                runCommandAction(
+                  "Write the extension's head ref and head snapshot again from the installed extension",
+                  '{bin} contract emit',
+                ),
+              ]
+            : snapshotRepairActions({
+                spaceId: violation.spaceId,
+                hash: violation.hash,
+                headHash: violation.hash,
+                headReachedByMigration: false,
+                migrationsDir,
+                cwd,
+              }),
       };
     case 'duplicateMigrationHash':
       return {

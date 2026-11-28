@@ -179,7 +179,7 @@ export class PostgresContractSerializer extends SqlContractSerializerBase<Contra
     return hydrated;
   }
 
-  override serializeContract(contract: Contract<SqlStorage>): JsonObject {
+  protected override printContractV1(contract: Contract<SqlStorage>): JsonObject {
     const { storage, ...rest } = contract;
     const namespacesJson: Record<string, JsonObject> = {};
     // Each namespace serializes to its id, its schema-kind tag, and the

@@ -75,7 +75,9 @@ describe('cross-reference shape round-trip', () => {
     });
 
     const serializer = new SqlContractSerializer();
-    const hydrated = serializer.deserializeContract(JSON.parse(JSON.stringify(envelope)));
+    const hydrated = serializer.deserializeContract(
+      JSON.parse(JSON.stringify({ formatVersion: 1, ...envelope })),
+    );
     const serialized = JSON.parse(JSON.stringify(serializer.serializeContract(hydrated)));
 
     expect(serialized.roots.users).toEqual(rootsCrossRef);

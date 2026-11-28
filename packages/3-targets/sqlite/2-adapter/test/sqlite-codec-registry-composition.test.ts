@@ -210,6 +210,7 @@ function createComposedControlAdapter(
 }
 
 const contract = new SqlContractSerializer().deserializeContract({
+  formatVersion: 1,
   target: 'sqlite',
   targetFamily: 'sql',
   profileHash: 'sha256:sqlite-codec-registry-composition',

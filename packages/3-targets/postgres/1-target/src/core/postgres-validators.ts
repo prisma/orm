@@ -1,6 +1,7 @@
 import { type } from 'arktype';
 
 export const PostgresRoleSchema = type({
+  '+': 'reject',
   kind: "'role'",
   name: 'string',
   namespaceId: 'string',
@@ -8,6 +9,7 @@ export const PostgresRoleSchema = type({
 });
 
 export const PostgresRlsPolicySchema = type({
+  '+': 'reject',
   kind: "'policy'",
   name: 'string',
   'prefix?': 'string',
@@ -21,12 +23,14 @@ export const PostgresRlsPolicySchema = type({
 });
 
 export const PostgresRlsEnablementSchema = type({
+  '+': 'reject',
   kind: "'rls'",
   tableName: 'string',
   namespaceId: 'string',
 });
 
 export const PostgresNativeEnumSchema = type({
+  '+': 'reject',
   kind: "'postgres-enum'",
   typeName: 'string',
   members: type.string.array().readonly(),

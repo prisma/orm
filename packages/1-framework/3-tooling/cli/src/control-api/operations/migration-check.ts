@@ -33,9 +33,10 @@ import {
   spaceRefsDirectory,
 } from '@internal/migration-tools/spaces';
 import { ifDefined } from '@internal/utils/defined';
+import { isInternalError } from '@internal/utils/internal-error';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { isStructuredError } from '@internal/utils/structured-error';
-import { join, relative } from 'pathe';
+import { basename, join, relative } from 'pathe';
 import type { CheckFailure, MigrationCheckResult } from '../../commands/json/schemas';
 import { INTEGRITY_FAILED, OK, PRECONDITION } from '../../commands/migration-check/exit-codes';
 import {
@@ -49,14 +50,24 @@ import {
 import { resolveContractPath } from '../../utils/command-helpers';
 import { contractValidationMeta } from '../../utils/contract-validation-meta';
 import { toDeclaredExtensionsFromRaw } from '../../utils/extension-pack-inputs';
+import { integrityViolationToCheckFailure } from '../../utils/integrity-violation-to-check-failure';
 import {
   findPackageByDirPath,
   looksLikePath,
   resolveAppTargetPath,
   resolveTargetPathAcrossSpaces,
 } from '../../utils/migration-path-target';
-import { chooseAction, runCommandAction } from '../../utils/next-actions';
+import {
+  chooseAction,
+  DATABASE_REF,
+  migrationPackageRepairActions,
+  REF_MOVE_EFFECT,
+  runCommandAction,
+  snapshotRepairActions,
+} from '../../utils/next-actions';
+import { readFailureReportedAsItself, reasonOf } from './caught-errors';
 import { mapContractAtError } from './contract-at-errors';
+import { unreadableFiles } from './contract-space-aggregate-loader';
 
 function migrationPathRelative(cwd: string, dirPath: string): string {
   return relative(cwd, dirPath);
@@ -78,9 +89,11 @@ function checkFileExists(
       code: 'MIGRATION.CHECK_FILE_MISSING',
       where: migrationFileRelative(space.cwd, dirPath, fileName),
       why: `${fileName} is missing from ${dirName}`,
-      nextActions: [
-        chooseAction('Re-emit the migration package, or restore it from version control'),
-      ],
+      nextActions: migrationPackageRepairActions({
+        spaceId: space.spaceId,
+        packageDir: dirPath,
+        cwd: space.cwd,
+      }),
     };
   }
   return null;
@@ -111,14 +124,36 @@ async function checkSnapshotConsistency(
       code: 'MIGRATION.CHECK_SNAPSHOT_UNPARSEABLE',
       where: migrationPathRelative(space.cwd, pkg.dirPath),
       why: `Migration "${pkg.dirName}" declares to="${pkg.metadata.to}", which is not a well-formed contract snapshot hash.`,
-      nextActions: [
-        chooseAction(
-          'Re-emit the migration package so migration.json declares a valid 64-hex to-hash',
-        ),
-      ],
+      nextActions: migrationPackageRepairActions({
+        spaceId: space.spaceId,
+        packageDir: pkg.dirPath,
+        cwd: space.cwd,
+      }),
     };
   }
 
+  const jsonPath = join(snapshotDir, 'contract.json');
+  const unreadable = (reason: string, nextActions: CheckFailure['nextActions']): CheckFailure => ({
+    space: spaceId,
+    code: 'MIGRATION.CHECK_SNAPSHOT_UNPARSEABLE',
+    where: migrationPathRelative(space.cwd, pkg.dirPath),
+    why: `Migration "${pkg.dirName}" ends at the contract snapshot ${jsonPath}, which this release of Prisma cannot read: ${reason}`,
+    nextActions,
+  });
+  const refNames = Object.entries(space.refs)
+    .filter(([, entry]) => entry.hash === pkg.metadata.to)
+    .map(([name]) => name);
+  const repairActions = snapshotRepairActions(
+    {
+      spaceId,
+      hash: pkg.metadata.to,
+      headHash: space.headHash,
+      headReachedByMigration: true,
+      migrationsDir,
+      cwd: space.cwd,
+    },
+    { refNames },
+  );
   let raw: unknown;
   try {
     raw = await readContractSnapshotJson(migrationsDir, pkg.metadata.to);
@@ -126,18 +161,10 @@ async function checkSnapshotConsistency(
     if (MigrationToolsError.is(error) && error.code === 'MIGRATION.CONTRACT_SNAPSHOT_MISSING') {
       return null;
     }
-    return {
-      space: spaceId,
-      code: 'MIGRATION.CHECK_SNAPSHOT_UNPARSEABLE',
-      where: migrationPathRelative(space.cwd, pkg.dirPath),
-      why: `Migration "${pkg.dirName}" has an unparseable contract snapshot at ${snapshotDir}/contract.json.`,
-      nextActions: [
-        chooseAction('Restore migrations/snapshots/ from version control'),
-        chooseAction(
-          'Or re-run the command that produced this migration to regenerate its snapshot',
-        ),
-      ],
-    };
+    return unreadable(
+      reasonOf(error),
+      repairActions.filter((action) => action.kind !== 'open-url'),
+    );
   }
   const record = raw !== null && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
   const storage = record['storage'] as Record<string, unknown> | undefined;
@@ -148,15 +175,10 @@ async function checkSnapshotConsistency(
       code: 'MIGRATION.CHECK_SNAPSHOT_HASH_MISMATCH',
       where: migrationPathRelative(space.cwd, pkg.dirPath),
       why: `Migration "${pkg.dirName}" declares to=${pkg.metadata.to} but its contract snapshot has storageHash=${snapshotHash}`,
-      nextActions: [
-        chooseAction(
-          'Re-emit the migration package so migration.json and its contract snapshot agree',
-        ),
-      ],
+      nextActions: repairActions.filter((action) => action.kind !== 'open-url'),
     };
   }
   if (space.verifySnapshotContent !== undefined) {
-    const jsonPath = join(snapshotDir, 'contract.json');
     try {
       space.verifySnapshotContent.assertSnapshotContentMatches(raw, pkg.metadata.to, jsonPath);
     } catch (error) {
@@ -171,14 +193,20 @@ async function checkSnapshotConsistency(
         code: 'MIGRATION.CHECK_SNAPSHOT_CONTENT_MISMATCH',
         where: migrationPathRelative(space.cwd, jsonPath),
         why: `Migration "${pkg.dirName}": ${error.why}`,
-        nextActions: [
-          chooseAction('Restore migrations/snapshots/ from version control'),
-          chooseAction(
-            'Or re-run the command that produced this migration to regenerate its snapshot',
-          ),
-        ],
+        nextActions: repairActions.filter((action) => action.kind !== 'open-url'),
       };
     }
+  }
+  const interpreted =
+    refNames.length > 0 ||
+    pkg.metadata.to === space.headHash ||
+    !space.packages.some((other) => other.metadata.from === pkg.metadata.to);
+  if (!interpreted) return null;
+  try {
+    space.deserializeContract(raw);
+  } catch (error) {
+    if (isInternalError(error)) throw error;
+    return unreadable(reasonOf(error), repairActions);
   }
   return null;
 }
@@ -207,6 +235,28 @@ export interface CheckSpace {
    * reports `MIGRATION.CHECK_SNAPSHOT_CONTENT_MISMATCH` on disagreement.
    */
   readonly verifySnapshotContent?: SnapshotContentVerifier;
+  /** The family's contract reader, through which every snapshot a later command interprets is read: each one a ref names, the space's head, and each one no migration of the space starts from. */
+  readonly deserializeContract: (contractJson: unknown) => unknown;
+  /** The space's head: the emitted contract's hash for the application, the head ref's for an extension. */
+  readonly headHash: string | undefined;
+  /** The migrations of this space whose `migration.json` could not be read, with why. */
+  readonly unreadableMigrations: readonly { readonly dirName: string; readonly detail: string }[];
+  /** The refs of this space whose file could not be read, with why. */
+  readonly unreadableRefs: readonly Extract<
+    IntegrityViolation,
+    { readonly kind: 'refUnreadable' }
+  >[];
+}
+
+/** The inputs of {@link enumerateCheckSpaces}. */
+export interface EnumerateCheckSpacesInputs {
+  readonly aggregate: ContractSpaceAggregate;
+  readonly projectMigrationsDir: string;
+  /** Directory the command was invoked from; every `where` path is relative to it. */
+  readonly cwd: string;
+  readonly verifySnapshotContent?: SnapshotContentVerifier;
+  /** The family's contract reader, for the snapshots the check reads strictly. */
+  readonly deserializeContract: (contractJson: unknown) => unknown;
 }
 
 /**
@@ -215,15 +265,21 @@ export interface CheckSpace {
  * contract-space directory, in the aggregate's `app`-first ordering. Mirrors
  * `migration list`'s `migrationSpaceListEntriesFromAggregate`: space
  * membership matches the on-disk directories, package / ref / graph data come
- * from `aggregate.space(id)`.
+ * from `aggregate.space(id)`. Load the aggregate with `whenFileUnreadable: 'report'`, so each migration it could not read is reported here.
  */
 export async function enumerateCheckSpaces(
-  aggregate: ContractSpaceAggregate,
-  projectMigrationsDir: string,
-  cwd: string,
-  verifySnapshotContent?: SnapshotContentVerifier,
+  inputs: EnumerateCheckSpacesInputs,
 ): Promise<readonly CheckSpace[]> {
+  const { aggregate, projectMigrationsDir, cwd, verifySnapshotContent, deserializeContract } =
+    inputs;
   const candidateDirs = await listContractSpaceDirectories(projectMigrationsDir);
+  const unreadable = unreadableFiles(aggregate);
+  const unloadable = unreadable.flatMap((file) =>
+    file.kind === 'packageUnloadable' ? [file] : [],
+  );
+  const unreadableRefs = unreadable.flatMap((file) =>
+    file.kind === 'refUnreadable' ? [file] : [],
+  );
   const onDiskSpaceIds = new Set(candidateDirs.filter(isValidSpaceId));
   const spaces: CheckSpace[] = [];
   for (const space of aggregate.spaces()) {
@@ -241,6 +297,12 @@ export async function enumerateCheckSpaces(
       projectMigrationsDir,
       cwd,
       ...ifDefined('verifySnapshotContent', verifySnapshotContent),
+      deserializeContract,
+      headHash: space.headRef?.hash,
+      unreadableMigrations: unloadable
+        .filter((violation) => violation.spaceId === spaceId)
+        .map(({ dirName, detail }) => ({ dirName, detail })),
+      unreadableRefs: unreadableRefs.filter((violation) => violation.spaceId === spaceId),
     });
   }
   return spaces;
@@ -289,7 +351,10 @@ function checkReachability(space: CheckSpace): readonly CheckFailure[] {
         where: migrationPathRelative(space.cwd, pkg.dirPath),
         why: `Migration "${pkg.dirName}" starts from ${pkg.metadata.from} which no other migration produces`,
         nextActions: [
-          chooseAction('Delete the unreachable migration'),
+          chooseAction(
+            `Restore from version control the migration that ends at ${pkg.metadata.from}, if one was deleted`,
+          ),
+          chooseAction('Or, if no database has applied it, delete the unreachable migration'),
           chooseAction('Or re-emit a migration that connects it to the graph'),
         ],
       });
@@ -308,10 +373,17 @@ function checkDanglingRefs(space: CheckSpace): readonly CheckFailure[] {
         where: relative(space.cwd, join(space.refsDir, `${name}.json`)),
         why: `Ref "${name}" points at ${entry.hash} which does not exist in the migration graph`,
         nextActions: [
-          runCommandAction(
-            'Point the ref at a graph node',
-            `{bin} migration ref set ${name} <valid-hash>`,
+          chooseAction(
+            `Restore from version control the migration that ends at ${entry.hash}, if one was deleted`,
           ),
+          ...(name === DATABASE_REF
+            ? []
+            : [
+                runCommandAction(
+                  `Or point the ref at a graph node. ${REF_MOVE_EFFECT}`,
+                  `{bin} migration ref set ${name} <valid-hash>`,
+                ),
+              ]),
           chooseAction('Or delete the ref'),
         ],
       });
@@ -324,11 +396,12 @@ async function checkSpace(space: CheckSpace): Promise<readonly CheckFailure[]> {
   const snapshotFailures = await Promise.all(
     space.packages.map((pkg) => checkSnapshotConsistency(space, pkg, space.projectMigrationsDir)),
   );
+  const missingFiles = checkManifestFilesPresent(space);
+  const graphReadInFull = space.unreadableMigrations.length === 0 && missingFiles.length === 0;
   return [
-    ...checkManifestFilesPresent(space),
+    ...missingFiles,
     ...snapshotFailures.filter((f): f is CheckFailure => f !== null),
-    ...checkReachability(space),
-    ...checkDanglingRefs(space),
+    ...(graphReadInFull ? [...checkReachability(space), ...checkDanglingRefs(space)] : []),
   ];
 }
 
@@ -400,11 +473,21 @@ export async function loadAggregateIntegrityViolations(
     });
     return ok(aggregate.checkIntegrity({ declaredExtensions, checkContracts: true }));
   } catch (error) {
+    const asItself = readFailureReportedAsItself(error, contractPath);
+    if (asItself !== undefined) return notOk(asItself);
     if (
       MigrationToolsError.is(error) &&
       error.code === 'MIGRATION.CONTRACT_DESERIALIZATION_FAILED'
     ) {
       return mapContractAtError(error);
+    }
+    if (error instanceof SyntaxError) {
+      return notOk(
+        errorContractValidationFailed(
+          `Contract at ${contractPath} is not valid JSON: ${error.message}`,
+          { where: { path: contractPath }, cause: error },
+        ),
+      );
     }
     if (isStructuredError(error) && error.code === 'CONTRACT.VALIDATION_FAILED') {
       return notOk(
@@ -420,6 +503,44 @@ export async function loadAggregateIntegrityViolations(
     }
     return ok([]);
   }
+}
+
+/** The unreadable-package finding for a migration whose directory `target` names, by its name or its path, when that migration's `migration.json` could not be read. */
+function unreadableMigrationNamed(
+  target: string,
+  spaces: readonly CheckSpace[],
+): CheckFailure | undefined {
+  const dirName = basename(target.replace(/[\\/]+$/, ''));
+  for (const space of spaces) {
+    const found = space.unreadableMigrations.find((migration) => migration.dirName === dirName);
+    if (found === undefined) continue;
+    const dirPath = join(space.migrationsDir, found.dirName);
+    return {
+      space: space.spaceId,
+      code: 'MIGRATION.CHECK_PACKAGE_UNLOADABLE',
+      where: migrationPathRelative(space.cwd, dirPath),
+      why: `Migration "${found.dirName}" could not be loaded: ${found.detail}`,
+      nextActions: migrationPackageRepairActions({
+        spaceId: space.spaceId,
+        packageDir: dirPath,
+        cwd: space.cwd,
+      }),
+    };
+  }
+  return undefined;
+}
+
+function unreadableRefNamedIn(
+  target: string,
+  spaces: readonly CheckSpace[],
+): CheckFailure | undefined {
+  for (const space of spaces) {
+    const found = space.unreadableRefs.find((violation) => violation.refName === target);
+    if (found !== undefined) {
+      return integrityViolationToCheckFailure(found, space.projectMigrationsDir, space.cwd);
+    }
+  }
+  return undefined;
 }
 
 export interface MigrationCheckOutcome {
@@ -491,6 +612,16 @@ export async function checkSingleTarget(
 
   const scopedSpaces =
     spaceFilter !== undefined ? spaces.filter((s) => s.spaceId === spaceFilter) : spaces;
+
+  const unreadable =
+    unreadableMigrationNamed(target, scopedSpaces) ?? unreadableRefNamedIn(target, scopedSpaces);
+  if (unreadable !== undefined) {
+    return {
+      result: { ok: false, failures: [unreadable], summary: '1 integrity failure(s)' },
+      exitCode: INTEGRITY_FAILED,
+      resolvedSpaceId: unreadable.space,
+    };
+  }
 
   let matchedSpace: CheckSpace | undefined;
   let matchedPkg: OnDiskMigrationPackage | undefined;
@@ -589,9 +720,11 @@ export async function checkSingleTarget(
       code: 'MIGRATION.CHECK_HASH_MISMATCH',
       where: migrationFileRelative(matchedSpace.cwd, matchedPkg.dirPath, 'migration.json'),
       why: `Stored hash ${verification.storedHash} does not match recomputed hash ${verification.computedHash}`,
-      nextActions: [
-        chooseAction('Re-emit the migration package, or restore it from version control'),
-      ],
+      nextActions: migrationPackageRepairActions({
+        spaceId: matchedSpace.spaceId,
+        packageDir: matchedPkg.dirPath,
+        cwd: matchedSpace.cwd,
+      }),
     });
   }
 

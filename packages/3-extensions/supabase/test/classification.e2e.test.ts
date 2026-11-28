@@ -211,8 +211,9 @@ describe('supabase external-schema classification (db init + db verify)', () => 
         // With the external shim in place, the verifier confirms all declared
         // `external` tables exist. The per-space result for `supabase` must
         // pass, and the per-space result for `app` must also pass.
-        const deserializedContract = new PostgresContractSerializer().deserializeContract(
-          appContract,
+        const serializer = new PostgresContractSerializer();
+        const deserializedContract = serializer.deserializeContract(
+          serializer.serializeContract(appContract),
         );
         const verifyResult = await client.dbVerify({
           contract: deserializedContract,

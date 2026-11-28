@@ -6,7 +6,6 @@ import { readFile } from 'node:fs/promises';
 import type { PrismaConfig } from '@internal/config/config-types';
 import type { Contract } from '@internal/contract/types';
 import { APP_SPACE_ID, createControlStack } from '@internal/framework-components/control';
-import { loadContractSpaceAggregate } from '@internal/migration-tools/aggregate';
 import {
   contractSnapshotDir,
   snapshotsImportPathFrom,
@@ -35,8 +34,11 @@ import { contractValidationMeta } from '../../utils/contract-validation-meta';
 import { assertFrameworkComponentsCompatible } from '../../utils/framework-components';
 import { snapshotVerifierFor } from '../../utils/snapshot-content-verification';
 import type { ControlClient } from '../types';
-import { errorFromCaught } from './caught-errors';
-import { refusePackageCorruptionOnAggregate } from './contract-space-aggregate-loader';
+import { errorFromCaught, readFailureReportedAsItself } from './caught-errors';
+import {
+  loadContractSpaceAggregateForCli,
+  refusePackageCorruptionOnAggregate,
+} from './contract-space-aggregate-loader';
 import { resolveDefaultOriginHash } from './plan-resolution';
 import { renderSnapshotDeclarations } from './snapshot-declarations';
 
@@ -108,6 +110,8 @@ export async function executeMigrationNewCommand(
     parsedContract = JSON.parse(contractJsonContent);
     toContract = familyInstance.deserializeContract(parsedContract);
   } catch (error) {
+    const asItself = readFailureReportedAsItself(error, contractPathAbsolute);
+    if (asItself !== undefined) return notOk(asItself);
     return notOk(
       errorRuntime('MIGRATION.CONTRACT_DESERIALIZATION_FAILED', 'Contract JSON is invalid', {
         why: `Failed to deserialize ${contractPathAbsolute}: ${error instanceof Error ? error.message : String(error)}`,
@@ -129,12 +133,18 @@ export async function executeMigrationNewCommand(
   }
 
   const verifySnapshotContent = snapshotVerifierFor(config);
-  const aggregate = await loadContractSpaceAggregate({
+  const loaded = await loadContractSpaceAggregateForCli({
+    targetId: config.target.targetId,
     migrationsDir,
-    deserializeContract: (json) => familyInstance.deserializeContract(json),
     appContract: toContract,
+    extensions: config.extensions ?? [],
+    deserializeContract: (json) => familyInstance.deserializeContract(json),
     ...ifDefined('verifySnapshotContent', verifySnapshotContent),
   });
+  if (!loaded.ok) {
+    return notOk(loaded.failure);
+  }
+  const aggregate = loaded.value;
   const packageCorruptionFailure = refusePackageCorruptionOnAggregate(aggregate, migrationsDir);
   if (packageCorruptionFailure) {
     return notOk(packageCorruptionFailure);

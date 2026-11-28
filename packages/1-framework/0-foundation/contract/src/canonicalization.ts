@@ -65,7 +65,7 @@ const STORAGE_NAMESPACE_ENTRIES_PATTERN = [
 ] as const satisfies PathPattern;
 
 const TOP_LEVEL_ORDER = [
-  'schemaVersion',
+  'formatVersion',
   'canonicalVersion',
   'targetFamily',
   'target',
@@ -232,7 +232,6 @@ export function orderTopLevel(obj: Record<string, unknown>): Record<string, unkn
 }
 
 export interface CanonicalizeContractOptions {
-  readonly schemaVersion?: string;
   /**
    * Per-target hook that converts the in-memory contract (which may
    * carry class-instance IR nodes) into a plain JsonObject before the
@@ -272,7 +271,7 @@ export function canonicalizeContractToObject(
 ): Record<string, unknown> {
   const serialized = options.serializeContract(contract);
   const normalized: Record<string, unknown> = {
-    ...ifDefined('schemaVersion', options.schemaVersion),
+    ...ifDefined('formatVersion', serialized['formatVersion']),
     targetFamily: serialized['targetFamily'],
     target: serialized['target'],
     profileHash: serialized['profileHash'],

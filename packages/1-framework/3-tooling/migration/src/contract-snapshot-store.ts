@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { convertContractDocument } from '@internal/contract/internal/format-version';
 import { CONTRACT_SNAPSHOTS_DIRNAME, storageHashHex } from '@internal/framework-components/control';
 import { canonicalizeJson } from '@internal/framework-components/utils';
 import { blindCast } from '@internal/utils/casts';
@@ -179,13 +180,14 @@ export async function writeContractSnapshot(
   input: ContractSnapshotInput,
 ): Promise<{ readonly written: boolean; readonly dir: string }> {
   const dir = contractSnapshotDir(migrationsDir, storageHash);
+  const contractJson = convertContractDocument(input.contractJson);
 
   // contractJson is unknown JSON; only storage.storageHash is read, to check
   // it against the hash the snapshot is being written under.
   const contractStorage = blindCast<
     { storage?: { storageHash?: unknown } },
     'contractJson is unknown JSON; only the storage.storageHash field is read here'
-  >(input.contractJson);
+  >(contractJson);
   const actualStorageHash = contractStorage.storage?.storageHash;
   if (actualStorageHash !== storageHash) {
     throw errorContractSnapshotHashMismatch(
@@ -206,7 +208,7 @@ export async function writeContractSnapshot(
   );
   await mkdir(tmpDir, { recursive: true });
 
-  const files = contractSnapshotFiles(input);
+  const files = contractSnapshotFiles({ ...input, contractJson });
 
   try {
     await writeFile(join(tmpDir, CONTRACT_JSON_FILE), files.contractJson);
@@ -224,6 +226,9 @@ export async function writeContractSnapshot(
 }
 
 /**
+ * The snapshot's format version is read first: a version this release cannot
+ * read throws a format version error naming the file.
+ *
  * When `verifyContent` is supplied, the parsed snapshot's content is checked
  * against the hash it was addressed by before being returned — the store is
  * content-addressed, and a snapshot edited in place under an unchanged hash
@@ -252,8 +257,9 @@ export async function readContractSnapshotJson(
   } catch (e) {
     throw errorInvalidJson(jsonPath, e instanceof Error ? e.message : String(e));
   }
-  verifyContent?.assertSnapshotContentMatches(parsed, storageHash, jsonPath);
-  return parsed;
+  const contractJson = convertContractDocument(parsed, { path: jsonPath, snapshot: true });
+  verifyContent?.assertSnapshotContentMatches(contractJson, storageHash, jsonPath);
+  return contractJson;
 }
 
 /**
@@ -267,7 +273,8 @@ export async function readContractSnapshotJson(
  * package. When `verifyContent` is supplied, an entry whose content does not
  * recompute to its address also resolves to `undefined` — tampered content
  * must not flow onward, and the strict store reads report the same file
- * loudly as `MIGRATION.CONTRACT_SNAPSHOT_CONTENT_MISMATCH`.
+ * loudly as `MIGRATION.CONTRACT_SNAPSHOT_CONTENT_MISMATCH`. A format version
+ * this release cannot read is never treated as absent: it throws.
  */
 export async function readContractSnapshotJsonTolerant(
   migrationsDir: string,
@@ -300,8 +307,9 @@ export async function readContractSnapshotJsonTolerant(
   if (parsed === null) {
     return undefined;
   }
+  const contractJson = convertContractDocument(parsed, { path: jsonPath, snapshot: true });
   try {
-    verifyContent?.assertSnapshotContentMatches(parsed, storageHash, jsonPath);
+    verifyContent?.assertSnapshotContentMatches(contractJson, storageHash, jsonPath);
   } catch (error) {
     if (
       MigrationToolsError.is(error) &&
@@ -311,7 +319,7 @@ export async function readContractSnapshotJsonTolerant(
     }
     throw error;
   }
-  return parsed;
+  return contractJson;
 }
 
 export function snapshotsImportPathFrom(packageDir: string, migrationsDir: string): string {
