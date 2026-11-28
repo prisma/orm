@@ -7,6 +7,7 @@ CI checks every pull request for changes that would break code written against t
 | What you see fail | Job | What it checks |
 | --- | --- | --- |
 | [`api.txt` is out of date](#apitxt-is-out-of-date) | `Lint` (`pnpm api:check`) | Each published package's committed `api.txt` matches the build |
+| [A set of values is neither open nor declared](#sets-of-values) | `Lint` (`pnpm api:sets`) | Every exported set of values is open, or declared in `packages/9-public/value-sets.json` |
 | [The description does not name a change](#the-description-does-not-name-a-change) | `API changes named` | A pull request that changes an `api.txt` names each changed export in its description, with a reason |
 | [A break against the last release](#a-break-against-the-last-release) | `API compatibility` (`pnpm api:compat`) | Code written against the last release still compiles against the build |
 | [The last release's example apps fail](#the-last-releases-example-apps-fail) | `API compatibility` (`pnpm api:compat:examples`) | The example apps, as they were at the last release, compile against the build |
@@ -160,6 +161,10 @@ export type Ea_Options<T> = Options<T>;                // an alias that passes i
 Keep the `typeof` annotation on a constant. Without it, TypeScript writes out the value's type for an object or a primitive, and the check can no longer see that the two names are one thing. An `interface Ea_Options extends Options {}` is not recognised either.
 
 A level on a member, such as a method named `preview_run` on a class, is not read: the member is checked like its class. Its break is permitted, so record it as `allowed`.
+
+## Sets of values
+
+An exported type that lists the values of something users may handle case by case, such as a union of error codes or of node kinds, is either open or closed. An open set may gain a value in any release, so its type carries a catch-all member that stops a `never` exhaustiveness check from compiling and makes users write a default branch from the start: `(string & {})` for strings, a template such as `` (`MIGRATION.${string}` & {}) `` for prefixed codes, `(number & {})` for numbers, and `{ readonly kind: '%future added value' }` for a union of objects told apart by `kind`, which keeps narrowing on `kind` working. A closed set changes only in a major version. Error codes are open, and so is any set an extension can add to. `pnpm api:sets` reads the `api.txt` lists and fails on a set that has no catch-all member and is not in `packages/9-public/value-sets.json`, where each entry names its package and type with one of three statuses and a reason: `closed`; `not-cases`, for a set users only pass in, such as an option, which may gain values without a break; or `undecided`, for a set still waiting for a decision, such as the ones in the framework domain. It also fails on an entry that names no exported set, or names a set that is open.
 
 ## Recording a break you mean
 
