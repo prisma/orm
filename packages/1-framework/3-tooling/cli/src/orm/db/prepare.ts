@@ -4,7 +4,10 @@ import { convertContractDocument } from '@internal/contract/internal/format-vers
 import { ifDefined } from '@internal/utils/defined';
 import type { CliStructuredError, Result } from '@prisma/cli-engine/protocol';
 import { notOk, ok } from '@prisma/cli-engine/protocol';
-import { errorFromCaught, formatVersionFailure } from '../../control-api/operations/caught-errors';
+import {
+  errorFromCaught,
+  readFailureReportedAsItself,
+} from '../../control-api/operations/caught-errors';
 import type { ControlClient, CreateControlClient } from '../../control-api/types';
 import {
   errorConfigValidation,
@@ -58,8 +61,8 @@ export async function readContractDocument(
     const document = convertContractDocument(JSON.parse(content), { path: contractPath });
     return ok({ ...document });
   } catch (error) {
-    const formatFailure = formatVersionFailure(error, contractPath);
-    if (formatFailure !== undefined) return notOk(normalizeError(formatFailure));
+    const asItself = readFailureReportedAsItself(error, contractPath);
+    if (asItself !== undefined) return notOk(normalizeError(asItself));
     return notOk(
       normalizeError(
         errorContractValidationFailed(

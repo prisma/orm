@@ -3,7 +3,10 @@ import { errorInvalidRefName } from '@internal/migration-tools/errors';
 import { InternalError } from '@internal/utils/internal-error';
 import { structuredError } from '@internal/utils/structured-error';
 import { describe, expect, it } from 'vitest';
-import { errorFromCaught } from '../../src/control-api/operations/caught-errors';
+import {
+  errorFromCaught,
+  readFailureReportedAsItself,
+} from '../../src/control-api/operations/caught-errors';
 import { errorRuntime } from '../../src/utils/cli-errors';
 
 const why = (message: string) => `Unexpected error during test: ${message}`;
@@ -115,5 +118,28 @@ describe('errorFromCaught', () => {
         { code: 'CLI.UNEXPECTED', summary: 'Unexpected error', why: why(`boom at ${masked}`) },
       ]);
     });
+  });
+});
+
+describe('readFailureReportedAsItself', () => {
+  it('reports a data type refusing the type parameters of the contract as itself', () => {
+    const error = structuredError(
+      'CONTRACT.TYPE_PARAMS_INVALID',
+      'pg/varchar: length must be at least 1 (was 0)',
+      { meta: { dataType: 'pg/varchar', parameters: ['length'] } },
+    );
+    expect(readFailureReportedAsItself(error, 'contract.json')?.toEnvelope()).toEqual({
+      ok: false,
+      code: 'CONTRACT.TYPE_PARAMS_INVALID',
+      severity: 'error',
+      summary: 'pg/varchar: length must be at least 1 (was 0)',
+      nextActions: [],
+      meta: { dataType: 'pg/varchar', parameters: ['length'] },
+    });
+  });
+
+  it('leaves any other refusal of the contract to the reader', () => {
+    const error = structuredError('CONTRACT.VALIDATION_FAILED', 'bad contract shape');
+    expect(readFailureReportedAsItself(error, 'contract.json')).toBeUndefined();
   });
 });

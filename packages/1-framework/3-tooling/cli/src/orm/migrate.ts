@@ -25,7 +25,10 @@ import type {
 } from '@prisma/cli-engine/protocol';
 import { notOk, ok } from '@prisma/cli-engine/protocol';
 import { join } from 'pathe';
-import { errorFromCaught, formatVersionFailure } from '../control-api/operations/caught-errors';
+import {
+  errorFromCaught,
+  readFailureReportedAsItself,
+} from '../control-api/operations/caught-errors';
 import { mapContractAtError } from '../control-api/operations/contract-at-errors';
 import {
   loadContractSpaceAggregateForCli,
@@ -531,8 +534,8 @@ export function createMigrateCommand(
       try {
         appContract = familyInstance.deserializeContract(contractJson);
       } catch (error) {
-        const formatFailure = formatVersionFailure(error, contractPath);
-        if (formatFailure !== undefined) return notOk(normalizeError(formatFailure));
+        const asItself = readFailureReportedAsItself(error, contractPath);
+        if (asItself !== undefined) return notOk(normalizeError(asItself));
         return notOk(
           normalizeError(
             errorContractValidationFailed(

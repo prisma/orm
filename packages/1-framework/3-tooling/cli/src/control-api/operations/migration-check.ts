@@ -65,7 +65,7 @@ import {
   runCommandAction,
   snapshotRepairActions,
 } from '../../utils/next-actions';
-import { formatVersionFailure, reasonOf } from './caught-errors';
+import { readFailureReportedAsItself, reasonOf } from './caught-errors';
 import { mapContractAtError } from './contract-at-errors';
 import { unreadableFiles } from './contract-space-aggregate-loader';
 
@@ -473,8 +473,8 @@ export async function loadAggregateIntegrityViolations(
     });
     return ok(aggregate.checkIntegrity({ declaredExtensions, checkContracts: true }));
   } catch (error) {
-    const formatFailure = formatVersionFailure(error, contractPath);
-    if (formatFailure !== undefined) return notOk(formatFailure);
+    const asItself = readFailureReportedAsItself(error, contractPath);
+    if (asItself !== undefined) return notOk(asItself);
     if (
       MigrationToolsError.is(error) &&
       error.code === 'MIGRATION.CONTRACT_DESERIALIZATION_FAILED'

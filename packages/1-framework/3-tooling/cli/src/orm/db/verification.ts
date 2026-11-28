@@ -14,7 +14,10 @@ import { isStructuredErrorCode } from '@internal/utils/structured-error';
 import type { Block, TreeNode } from '@prisma/cli-engine';
 import type { Diagnostic, NextAction, Result } from '@prisma/cli-engine/protocol';
 import { type CliStructuredError, notOk, ok } from '@prisma/cli-engine/protocol';
-import { errorFromCaught, formatVersionFailure } from '../../control-api/operations/caught-errors';
+import {
+  errorFromCaught,
+  readFailureReportedAsItself,
+} from '../../control-api/operations/caught-errors';
 import {
   errorConfigValidation,
   errorContractValidationFailed,
@@ -88,8 +91,8 @@ export async function readEmittedContract(inputs: {
       displayPath: relativePath,
     });
   } catch (error) {
-    const formatFailure = formatVersionFailure(error, path);
-    if (formatFailure !== undefined) return notOk(normalizeError(formatFailure));
+    const asItself = readFailureReportedAsItself(error, path);
+    if (asItself !== undefined) return notOk(normalizeError(asItself));
     return notOk(
       normalizeError(
         errorContractValidationFailed(

@@ -34,7 +34,7 @@ import { contractValidationMeta } from '../../utils/contract-validation-meta';
 import { assertFrameworkComponentsCompatible } from '../../utils/framework-components';
 import { snapshotVerifierFor } from '../../utils/snapshot-content-verification';
 import type { ControlClient } from '../types';
-import { errorFromCaught, formatVersionFailure } from './caught-errors';
+import { errorFromCaught, readFailureReportedAsItself } from './caught-errors';
 import {
   loadContractSpaceAggregateForCli,
   refusePackageCorruptionOnAggregate,
@@ -110,8 +110,8 @@ export async function executeMigrationNewCommand(
     parsedContract = JSON.parse(contractJsonContent);
     toContract = familyInstance.deserializeContract(parsedContract);
   } catch (error) {
-    const formatFailure = formatVersionFailure(error, contractPathAbsolute);
-    if (formatFailure !== undefined) return notOk(formatFailure);
+    const asItself = readFailureReportedAsItself(error, contractPathAbsolute);
+    if (asItself !== undefined) return notOk(asItself);
     return notOk(
       errorRuntime('MIGRATION.CONTRACT_DESERIALIZATION_FAILED', 'Contract JSON is invalid', {
         why: `Failed to deserialize ${contractPathAbsolute}: ${error instanceof Error ? error.message : String(error)}`,

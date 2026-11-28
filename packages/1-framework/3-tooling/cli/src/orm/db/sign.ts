@@ -18,7 +18,7 @@ import type { Diagnostic } from '@prisma/cli-engine/protocol';
 import { notOk, ok } from '@prisma/cli-engine/protocol';
 import { dirname, relative } from 'pathe';
 import { createControlClient } from '../../control-api/client';
-import { formatVersionFailure } from '../../control-api/operations/caught-errors';
+import { readFailureReportedAsItself } from '../../control-api/operations/caught-errors';
 import { resolveContractRefToSnapshot } from '../../control-api/operations/contract-snapshot-resolution';
 import type { DbSignSpaceOutcome } from '../../control-api/operations/db-sign';
 import {
@@ -413,8 +413,8 @@ function hydrateContract(
   try {
     return okResult(config.family.create(createControlStack(config)).deserializeContract(json));
   } catch (error) {
-    const formatFailure = formatVersionFailure(error, path);
-    if (formatFailure !== undefined) return notOkResult(formatFailure);
+    const asItself = readFailureReportedAsItself(error, path);
+    if (asItself !== undefined) return notOkResult(asItself);
     return notOkResult(
       errorContractValidationFailed(
         `Contract at ${path} failed to deserialize: ${error instanceof Error ? error.message : String(error)}`,

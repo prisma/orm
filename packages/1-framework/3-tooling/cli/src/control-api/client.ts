@@ -1,5 +1,4 @@
 import type { ContractSourceDiagnostic } from '@internal/config/config-types';
-import { isFormatVersionError } from '@internal/contract/format-version';
 import { isContractBuiltInMemory } from '@internal/contract/internal/format-version';
 import type { Contract, ContractMarkerRecord, LedgerEntryRecord } from '@internal/contract/types';
 import { emit as emitContractArtifacts } from '@internal/emitter';
@@ -38,6 +37,7 @@ import { contractValidationMeta } from '../utils/contract-validation-meta';
 import { assertFrameworkComponentsCompatible } from '../utils/framework-components';
 import { snapshotVerifierFor } from '../utils/snapshot-content-verification';
 import { enrichContract } from './contract-enrichment';
+import { isReportedAsItself } from './operations/caught-errors';
 import { executeDbInit } from './operations/db-init';
 import { type ExecuteDbSignResult, executeDbSign } from './operations/db-sign';
 import { executeDbUpdate } from './operations/db-update';
@@ -268,7 +268,7 @@ class ControlClientImpl implements ControlClient {
     try {
       contract = familyInstance.deserializeContract(this.contractDocument(options.contract));
     } catch (error) {
-      if (isFormatVersionError(error)) throw error;
+      if (isReportedAsItself(error)) throw error;
       const message = error instanceof Error ? error.message : String(error);
       throw structuredError('CONTRACT.VALIDATION_FAILED', message, {
         cause: error,
@@ -325,7 +325,7 @@ class ControlClientImpl implements ControlClient {
     try {
       contract = familyInstance.deserializeContract(this.contractDocument(options.contract));
     } catch (error) {
-      if (isFormatVersionError(error)) throw error;
+      if (isReportedAsItself(error)) throw error;
       const message = error instanceof Error ? error.message : String(error);
       throw structuredError('CONTRACT.VALIDATION_FAILED', message, {
         cause: error,
@@ -391,7 +391,7 @@ class ControlClientImpl implements ControlClient {
     try {
       contract = familyInstance.deserializeContract(this.contractDocument(options.contract));
     } catch (error) {
-      if (isFormatVersionError(error)) throw error;
+      if (isReportedAsItself(error)) throw error;
       const message = error instanceof Error ? error.message : String(error);
       throw structuredError('CONTRACT.VALIDATION_FAILED', message, {
         cause: error,
@@ -436,7 +436,7 @@ class ControlClientImpl implements ControlClient {
     try {
       contract = familyInstance.deserializeContract(this.contractDocument(options.contract));
     } catch (error) {
-      if (isFormatVersionError(error)) throw error;
+      if (isReportedAsItself(error)) throw error;
       const message = error instanceof Error ? error.message : String(error);
       throw structuredError('CONTRACT.VALIDATION_FAILED', message, {
         cause: error,
@@ -547,7 +547,7 @@ class ControlClientImpl implements ControlClient {
     try {
       contract = familyInstance.deserializeContract(this.contractDocument(options.contract));
     } catch (error) {
-      if (isFormatVersionError(error)) throw error;
+      if (isReportedAsItself(error)) throw error;
       const message = error instanceof Error ? error.message : String(error);
       throw structuredError('CONTRACT.VALIDATION_FAILED', message, {
         cause: error,
@@ -767,7 +767,7 @@ class ControlClientImpl implements ControlClient {
     try {
       contract = this.familyInstance.deserializeContract(this.contractDocument(options.contract));
     } catch (error) {
-      if (isFormatVersionError(error)) throw error;
+      if (isReportedAsItself(error)) throw error;
       return notOk({
         code: 'CONTRACT_VALIDATION_FAILED',
         summary: 'Contract validation failed',
