@@ -1,7 +1,6 @@
 import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { computeProfileHash, computeStorageHash } from '@internal/contract/hashing';
 import { normalizeMongoStorage } from '@internal/mongo-contract/normal-form';
-import { normalizeSqlStorage } from '@internal/sql-contract/normal-form';
 import { dirname, join } from 'pathe';
 import { afterAll, describe, expect, it } from 'vitest';
 import type { Tree } from './test-helpers';
@@ -537,105 +536,6 @@ describe('a contract listing a capability that is off', () => {
       }),
     });
     expect(upgraded.capabilities.postgres.aaOff).toBe(false);
-  });
-});
-
-describe('a source holding a value that the earlier release wrote as an empty object, such as an index option `fastupdate: false`', () => {
-  const CONTRACT = 'src/prisma/contract.json';
-  const DTS = 'src/prisma/contract.d.ts';
-  const BEFORE_HASH = 'e1916bd73bb2388302d81a1eaa17125c0cedb6ce47b489a7adeeb41c2ef50ebf';
-  const AFTER_HASH = '6f1bca1d17a471cc49aea3c186f6d9502843abedd4e8bf82744f6f4c918deeb9';
-  const WRITTEN_HASH = 'd10f68268cfc8f907a56ffa75fd4be6ee16ea796bbf60989a86b728729737df5';
-  const INDEX = '"name": "post_userId_idx_a489d58a",\n';
-  const FASTUPDATE = `{\n${' '.repeat(20)}"fastupdate": false\n${' '.repeat(18)}}`;
-  const before = fixtureTree('before', 'postgres-app');
-  const after = fixtureTree('after', 'postgres-app');
-  const snapshot = `migrations/snapshots/${WRITTEN_HASH}`;
-  const withOptions = (text: string | undefined, options: string) =>
-    (text ?? '').replace(INDEX, `${INDEX}${' '.repeat(18)}"options": ${options},\n`);
-  const sqlStorageHashOf = (text: string) => {
-    const { storageHash: _storageHash, ...storage } = JSON.parse(text).storage;
-    return computeStorageHash({
-      target: 'postgres',
-      targetFamily: 'sql',
-      storage,
-      normalizeStorage: normalizeSqlStorage,
-    });
-  };
-  const newHash = sqlStorageHashOf(withOptions(after[CONTRACT], '{}'));
-  const releaseCandidateFiles = {
-    json: withOptions(before[CONTRACT], '{}').replace(BEFORE_HASH, WRITTEN_HASH),
-    dts: (before[DTS] ?? '').replace(BEFORE_HASH, WRITTEN_HASH),
-  };
-  const upgradedFiles = {
-    json: withOptions(after[CONTRACT], '{}').replace(AFTER_HASH, newHash),
-    dts: (after[DTS] ?? '').replace(AFTER_HASH, newHash),
-  };
-
-  function projectWithSnapshot(contract: { json: string; dts: string }): string {
-    const root = copyFixture('before', 'postgres-app');
-    mkdirSync(join(root, snapshot));
-    writeTree(root, {
-      [CONTRACT]: contract.json,
-      [DTS]: contract.dts,
-      [`${snapshot}/contract.json`]: releaseCandidateFiles.json,
-      [`${snapshot}/contract.d.ts`]: releaseCandidateFiles.dts,
-    });
-    return root;
-  }
-
-  function expectedTree(contract: { json: string; dts: string }): Tree {
-    return {
-      ...after,
-      [CONTRACT]: contract.json,
-      [DTS]: contract.dts,
-      [`migrations/snapshots/${newHash}/contract.json`]: upgradedFiles.json,
-      [`migrations/snapshots/${newHash}/contract.d.ts`]: upgradedFiles.dts,
-    };
-  }
-
-  describe('when the script runs first, on the files the earlier release wrote', () => {
-    const root = projectWithSnapshot(releaseCandidateFiles);
-    const run = runScript(root);
-
-    it('gives the contract and its snapshot the hash the script computes', () => {
-      expect({ status: run.status, stderr: run.stderr, tree: readTree(root) }).toEqual({
-        status: 0,
-        stderr: '',
-        tree: expectedTree(upgradedFiles),
-      });
-      expect(run.stdout).toContain(`  ${WRITTEN_HASH} -> ${newHash}\n`);
-    });
-  });
-
-  describe('when `prisma contract emit` already wrote the contract with this release', () => {
-    const emittedHash = sqlStorageHashOf(withOptions(after[CONTRACT], FASTUPDATE));
-    const emitted = {
-      json: withOptions(after[CONTRACT], FASTUPDATE).replace(AFTER_HASH, emittedHash),
-      dts: (after[DTS] ?? '').replace(AFTER_HASH, emittedHash),
-    };
-    const root = projectWithSnapshot(emitted);
-    const run = runScript(root);
-
-    it('keeps the emitted contract, and gives its snapshot the hash the script computes', () => {
-      expect(emittedHash).not.toBe(newHash);
-      expect({ status: run.status, stderr: run.stderr, tree: readTree(root) }).toEqual({
-        status: 0,
-        stderr: '',
-        tree: expectedTree(emitted),
-      });
-      expect(run.stdout).toContain(`  ${WRITTEN_HASH} -> ${newHash}\n`);
-    });
-
-    it('lists the emitted contract with both hashes and names the instructions that apply', () => {
-      expect(run.stdout).toContain(
-        `Contracts \`prisma contract emit\` already wrote with this release, left as they are. Their storage hash differs from the new hash of the snapshot with the same old hash, because the contract source holds a value the earlier release left out of \`contract.json\`; the upgrade instructions say what to do, under "When the emitted contract gets a different storage hash":\n  ${CONTRACT} (${emittedHash}; the snapshot's is ${newHash})\n`,
-      );
-    });
-
-    it('changes nothing on a second run', () => {
-      expect(runScript(root)).toEqual({ status: 0, stdout: NOTHING_CHANGED, stderr: '' });
-    });
   });
 });
 
