@@ -11,7 +11,7 @@ Seven slices, one pull request each, in this order. PostgreSQL comes first becau
 | Slice | State |
 | --- | --- |
 | 1. PostgreSQL: the `_prisma` contract space, applied first, and the schema rename | Merged in [prisma/orm#31234](https://github.com/prisma/orm/pull/31234), together with slice 2, after prisma/orm#31203 |
-| 2. PostgreSQL: split the marker into signatures and configuration | Merged into slice 1's branch by a stacked pull request, and into `main` with it |
+| 2. PostgreSQL: split the marker into signatures and configuration | Merged into slice 1's branch by [prisma/orm#31242](https://github.com/prisma/orm/pull/31242), and into `main` with it |
 | 3. Commands read the policies from the database's configuration | Not started. Design with the operator first |
 | 4. Rename the concept from "marker" to "signature" | Not started |
 | 5. SQLite, MySQL, MariaDB and MongoDB | Not started |
