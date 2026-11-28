@@ -145,3 +145,36 @@ describe('a runtime given a silent log', () => {
     expect(consoleCalls()).toEqual({ debug: [], info: [], warn: [], error: [] });
   });
 });
+
+class RecordingLog {
+  readonly warnings: unknown[] = [];
+  info(): void {}
+  warn(event: unknown): void {
+    this.warnings.push(event);
+  }
+  error(): void {}
+}
+
+describe('a runtime given a log', () => {
+  it('calls its methods with the log as this', async () => {
+    const log = new RecordingLog();
+    const runtime = buildRuntime({ markerResult: { kind: 'absent' }, log });
+
+    await runtime.query(createPlan()).toArray();
+
+    expect(log.warnings).toEqual([expect.objectContaining({ code: 'CONTRACT.MARKER_MISSING' })]);
+  });
+
+  it('looks each method up when it logs', async () => {
+    const log: RuntimeLog = { info() {}, warn() {}, error() {} };
+    const runtime = buildRuntime({ markerResult: { kind: 'absent' }, log });
+    const replacement = vi.fn();
+    log.warn = replacement;
+
+    await runtime.query(createPlan()).toArray();
+
+    expect(replacement.mock.calls).toEqual([
+      [expect.objectContaining({ code: 'CONTRACT.MARKER_MISSING' })],
+    ]);
+  });
+});

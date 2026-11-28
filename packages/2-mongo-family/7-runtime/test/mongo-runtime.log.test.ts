@@ -97,3 +97,40 @@ describe('the Mongo runtime log', () => {
     expect(consoleCalls()).toEqual({ debug: [], info: [], warn: [], error: [] });
   });
 });
+
+class RecordingLog {
+  readonly errors: unknown[] = [];
+  info(): void {}
+  warn(): void {}
+  error(event: unknown): void {
+    this.errors.push(event);
+  }
+}
+
+describe('a Mongo runtime given a log', () => {
+  it('calls its methods with the log as this', async () => {
+    const log = new RecordingLog();
+
+    await queryWith(log);
+
+    expect(log.errors).toEqual([hookError]);
+  });
+
+  it('looks each method up when it logs', async () => {
+    const replacement = vi.fn();
+    const log: RuntimeLog = { info() {}, warn() {}, error() {} };
+    const runtime = createMongoRuntime({
+      ...makeExecution(createMockAdapter()),
+      driver: createMockDriver([{ _id: '1' }]),
+      middleware: [failingFinalizer],
+      log,
+    });
+    log.error = replacement;
+
+    for await (const _row of runtime.query(createPlan())) {
+      void _row;
+    }
+
+    expect(replacement.mock.calls).toEqual([[hookError]]);
+  });
+});

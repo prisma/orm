@@ -50,13 +50,23 @@ afterEach(() => {
 });
 
 describe.each(warningMiddleware)('the warning of %s', (_name, middleware, plan, code) => {
-  it('reaches console.warn when the runtime is given no log', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  it('reaches console.warn, and no other console method, when the runtime is given no log', async () => {
+    const spies = {
+      debug: vi.spyOn(console, 'debug').mockImplementation(() => {}),
+      info: vi.spyOn(console, 'info').mockImplementation(() => {}),
+      warn: vi.spyOn(console, 'warn').mockImplementation(() => {}),
+      error: vi.spyOn(console, 'error').mockImplementation(() => {}),
+    };
     const { runtime } = createSetup({ mode: 'permissive', middleware: [middleware] });
 
     await runtime.query(plan()).toArray();
 
-    expect(warn.mock.calls).toEqual(expect.arrayContaining([[expect.objectContaining({ code })]]));
+    expect({
+      debug: spies.debug.mock.calls,
+      info: spies.info.mock.calls,
+      warn: spies.warn.mock.calls,
+      error: spies.error.mock.calls,
+    }).toEqual({ debug: [], info: [], warn: [[expect.objectContaining({ code })]], error: [] });
   });
 
   it('does not fail the query when the log throws', async () => {
