@@ -2,7 +2,7 @@
 changes:
   - id: prisma-tables-move-to-prisma-schema
     summary: |
-      On PostgreSQL, Prisma's own tables move from the schema `prisma_contract` to the schema `_prisma`, and the `marker` table is replaced by two tables: `_prisma.signatures`, which records which contract each contract space was signed with, and `_prisma.config`, which holds the database's change policy and data protection policy. The first command that changes the database (`prisma db init`, `db update`, `db migrate` or `db sign`) renames the schema, moves the rows of `marker` into the two new tables, drops `marker`, and keeps every record. Run one of them against each database once, with the new release, before the application on the new release reads it. After that, only the new release may change the database: a release candidate's command applies every migration again. The command stops without changing anything when the role that runs it does not own the schema and its tables or may not create in the database, when `_prisma` already exists beside `prisma_contract` and is not empty or is owned by another role, or when one of Prisma's tables is in a form this release does not bring up to date.
+      On PostgreSQL, Prisma's own tables move from the schema `prisma_contract` to the schema `_prisma`, and the `marker` table is replaced by two tables: `_prisma.signatures`, which records which contract each contract space was signed with, and `_prisma.config`, which holds the database's change policy and data protection policy. The first command that changes the database (`prisma db init`, `db update`, `db migrate` or `db sign`) renames the schema, moves the rows of `marker` into the two new tables, drops `marker`, and keeps everything Prisma recorded. Run one of them against each database once, with the new release, before the application on the new release reads it. After that, only the new release may change the database: a release candidate's command applies every migration again. The command stops without changing anything when the role that runs it does not own the schema and its tables or may not create in the database, when `_prisma` already exists beside `prisma_contract` and is not empty or is owned by another role, or when one of Prisma's tables is in a form this release does not bring up to date.
     detection:
       glob: "**/package.json"
       matches:
@@ -20,14 +20,14 @@ changes:
 
 Prisma 8 keeps a few tables of its own in your PostgreSQL database. The release candidates kept three, in a schema named `prisma_contract`:
 
-- `marker` recorded which contract (the description of your data model that Prisma emits as `contract.json`) the database was last brought to, once for each contract space. A contract space is a set of tables with its own contract and migrations: the application's own, and one for each extension that brings tables, such as pgvector. The application's row also held the database's policies, under its `meta` column.
+- `marker` recorded which contract (the description of your data model that Prisma emits as `contract.json`) the database was last brought to, once for each contract space. A contract space is a set of tables with its own contract and migrations: the application's own, and one for each extension that brings tables, such as pgvector. From `8.0.0-rc.25` on, the application's row also could hold the database's policies, under its `meta` column.
 - `ledger` records each migration applied.
 - `contract` holds the contract of each migration.
 
 They are now in a schema named `_prisma`, and `marker` is replaced by two tables:
 
 - `_prisma.signatures` has one row for each contract space, with the columns `space`, `core_hash`, `profile_hash`, `invariants` and `signed_at`. `signed_at` is the release candidates' `updated_at`. The columns `contract_json`, `canonical_version`, `app_tag` and `meta` are gone.
-- `_prisma.config` has at most one row, for the whole database. Its `policies` column holds the change policy and the data protection policy, in the same form a ref's `policies` declares them. No row means the default policies.
+- `_prisma.config` has at most one row, for the whole database. Its `policies` column holds the change policy and the data protection policy, in the form a ref's `policies` declares them, with every setting filled in. No row means the default policies.
 
 `_prisma.ledger` and `_prisma.contract` are unchanged.
 
@@ -37,7 +37,7 @@ Prisma now creates and updates these tables with migrations of its own, which it
 
 ### What the database needs
 
-The first command that changes the database, `prisma db init`, `prisma db update`, `prisma db migrate` or `prisma db sign`, run with the new release, brings Prisma's tables up to date before it reads anything else. On a database a release candidate set up, it renames the schema `prisma_contract` to `_prisma`. Then it copies each row of `marker` into `signatures`, copies the policies on the application's row, when it has them, into `config`, and drops `marker`. Every record is kept. Renaming a schema changes only PostgreSQL's catalogue, so it is instant however large the tables are, and `marker` has only one row for each contract space.
+The first command that changes the database, `prisma db init`, `prisma db update`, `prisma db migrate` or `prisma db sign`, run with the new release, brings Prisma's tables up to date before it reads anything else. On a database a release candidate set up, it renames the schema `prisma_contract` to `_prisma`. Then it copies each row of `marker` into `signatures`, copies the policies on the application's row, when it has them, into `config`, and drops `marker`. Everything Prisma recorded is kept; any other key a project wrote into `meta` is not. Renaming a schema changes only PostgreSQL's catalogue, so it is instant however large the tables are, and `marker` has only one row for each contract space.
 
 For each database the project deploys to (development, staging, production), run the command the project already uses to change it, `prisma db migrate`, `prisma db update` or `prisma db sign`, once with the new release. Do this before the application on the new release is deployed against that database.
 
@@ -57,7 +57,7 @@ The application's check when the client is first used does not stop queries. On 
 
 The command checks the following before it renames, and stops without changing anything if one of them fails.
 
-**The role that runs it does not own the schema and its tables.** PostgreSQL lets a role rename a schema only if it has the privileges of the schema's owner and the CREATE privilege on the database. Later releases of Prisma change these tables with migrations of their own, such as one that adds a column, and PostgreSQL lets a role alter a table only if it has the privileges of the table's owner. So the command checks both before it renames, though creating tables never needed either. If an administrator role created `prisma_contract` or its tables and the role that runs migrations only has grants on them, the command stops with `MIGRATION.PRECHECK_FAILED` and says that the role that runs it must have the privileges of the role that owns `prisma_contract`, or of the role that owns one of its tables. These queries name the owners:
+**The role that runs it does not own the schema and its tables.** PostgreSQL lets a role rename a schema only if it has the privileges of the schema's owner and the CREATE privilege on the database. Later releases of Prisma change these tables with migrations of their own, such as one that adds a column, and this release drops `marker` after moving its rows; PostgreSQL lets a role alter or drop a table only if it has the privileges of the table's owner. So the command checks both before it renames, though creating tables never needed either. If an administrator role created `prisma_contract` or its tables and the role that runs migrations only has grants on them, the command stops with `MIGRATION.PRECHECK_FAILED` and says that the role that runs it must have the privileges of the role that owns `prisma_contract`, or of the role that owns one of its tables. These queries name the owners:
 
 ```sql
 SELECT nspowner::regrole FROM pg_namespace WHERE nspname = 'prisma_contract';
@@ -126,7 +126,7 @@ DROP TABLE IF EXISTS "prisma_contract"."marker", "prisma_contract"."ledger", "pr
 DROP SCHEMA "prisma_contract";
 ```
 
-Without `CASCADE`, PostgreSQL refuses and names the object when something outside the schema, such as a view, a foreign key or a function, depends on one of these tables, or when the schema still holds something else. Show that error to the user and ask what to do; do not add `CASCADE`, which drops those objects too. Then run `prisma db sign`, which checks that the database matches the contract and records it in a new `_prisma.signatures`. The history of applied migrations in the old `ledger` is lost, and so are any policies the old `marker` recorded: tell the user that the database now has the default policies.
+Without `CASCADE`, PostgreSQL refuses and names the object when something outside the schema, such as a view, a foreign key or a function, depends on one of these tables, or when the schema still holds something else. Show that error to the user and ask what to do; do not add `CASCADE`, which drops those objects too. Then run `prisma db sign`, which checks that the database matches the contract and records it in a new `_prisma.signatures`. The history of applied migrations in the old `ledger` is lost. No release before the release candidates recorded policies, so the database keeps the default policies it had.
 
 **A table in `_prisma` is not in the form this release creates.** After the rename, Prisma checks the columns of each of its tables in `_prisma` too, because it reads and writes them only in the form it creates. The command stops with `MIGRATION.PRECHECK_FAILED`, names the table and the column it expected, and changes nothing. This happens when a table of that name in `_prisma` was not created by Prisma: for example, the project keeps a table of its own named `signatures`, `config`, `marker`, `ledger` or `contract` in a schema it created as `_prisma`. Stop and tell the user. Do not drop or change the table without asking. If it is the project's own table, it can be moved to another schema with `ALTER TABLE "_prisma"."<table>" SET SCHEMA <other schema>`, after which the command can run again; the project's code that names it must then name the other schema.
 
@@ -157,7 +157,7 @@ Stop and tell the user what you found before dropping anything.
 
 ## `name-the-prisma-schema`
 
-PostgreSQL keeps grants when a schema is renamed, so roles that were granted privileges on the schema `prisma_contract` or on its `ledger` and `contract` tables keep them. Grants on `prisma_contract.marker` do not carry over: the table is dropped once its rows are moved, and `_prisma.signatures` and `_prisma.config` are new tables, which only their owner may read unless the schema's default privileges grant more. Anything that names the schema or the `marker` table in its own text still names the old one.
+PostgreSQL keeps grants when a schema is renamed, so roles that were granted privileges on the schema `prisma_contract` or on its `ledger` and `contract` tables keep them. Grants on `prisma_contract.marker` do not carry over: the table is dropped once its rows are moved, and `_prisma.signatures` and `_prisma.config` are new tables, which only their owner and superusers may read, unless default privileges for the role that runs the command (`ALTER DEFAULT PRIVILEGES`) grant more. Anything that names the schema or the `marker` table in its own text still names the old one.
 
 Search the project for `prisma_contract`, outside `node_modules` and build output. Look in particular at:
 
@@ -173,7 +173,7 @@ Replace `prisma_contract` with `_prisma` in each of these, except planned migrat
 - The contract a space was signed with, its hashes and its invariants: `_prisma.signatures`, which has the columns `space`, `core_hash`, `profile_hash`, `invariants` and `signed_at`. Use `signed_at` where it used `updated_at`. The columns `contract_json`, `canonical_version`, `app_tag` and `meta` are gone, and nothing replaces the first three.
 - The change policy and the data protection policy, which it read from `meta` on the application's row (`meta -> 'policies'`): the `policies` column of `_prisma.config`, which has at most one row. No row means the default policies.
 
-The application's role reads both tables when the client is first used, to check which contract the database was signed with. Without `SELECT` on them that check cannot read the database; when the application gives its client a `log`, it logs a warning, and queries still run. For example:
+The application's role reads both tables when the client is first used, to check which contract the database was signed with. Without `SELECT` on them, that check cannot read which contract the database was signed with, and queries still run. When the application gives its client a `log`, it logs a warning: `CONTRACT.MARKER_MISSING` ("Contract marker not found in database") when the role has no privilege on `_prisma.signatures`, because PostgreSQL then hides the table from it, or `CONTRACT.MARKER_READ_FAILED` when it may read `signatures` but not `config`. A client created with `verifyMarker: false` makes no such check. For example:
 
 ```sql
 -- Before
