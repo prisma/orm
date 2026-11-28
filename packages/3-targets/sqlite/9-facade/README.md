@@ -113,7 +113,18 @@ Reads stream row by row: the driver steps through each result with `StatementSyn
 
 Pass `collections` to give models custom collection classes: `sqlite({ contract, path, collections: { Post: PostCollection } })`, where `PostCollection` extends `Collection<Contract, 'Post'>` from `@prisma/orm-sqlite/orm-client`. `db.orm.Post`, and the ORM inside `db.transaction(...)`, then return a `PostCollection`. The client's type carries the classes as its second type parameter, which defaults to no classes.
 
-Pass `log` (an object with `info`, `warn`, `error` and an optional `debug` method, each taking one event object; `console` works, and the type is `Log` from `@prisma/orm-sqlite/family-runtime`) to receive what the runtime logs: the marker-verification warnings `CONTRACT.MARKER_MISSING`, `CONTRACT.MARKER_MISMATCH`, `CONTRACT.MARKER_READ_FAILED` and `CONTRACT.MARKER_ROW_CORRUPT` from the client's first use of the database (its first query, connection or transaction), the warnings `lints()` emits for rules whose severity is `warn`, and the errors a middleware hook throws that the runtime logs and swallows instead of failing the call: an `activityEnded` error after the activity has already failed, and any `activityFinalized` error (an `activityEnded` error on an activity that succeeded fails the call instead). It also receives the warning `runtime.close.waiting-for-activities` when `close()` is waiting only for activities whose handles were never ended or for transactions still open, with the counts `openActivities` and `openTransactions`; `close()` waits for each such transaction until it commits or rolls back. If `log` has a `debug` method, it also receives debug events, for example when a middleware intercepts a statement. `budgets()` violations reach `log` only in `mode: 'permissive'` (see *Running plans and rendering SQL*). Without `log`, the runtime logs to the console: errors to `console.error` and warnings to `console.warn`, which in Node write to standard error, info events to `console.info`, and debug events nowhere. To silence it, pass a logger that does nothing: `log: { info() {}, warn() {}, error() {} }`.
+Pass `log` to receive what the runtime logs. It is an object with `info`, `warn`, `error` and an optional `debug` method, each taking one event object; `console` works, and the type is `Log` from `@prisma/orm-sqlite/family-runtime`. It receives:
+
+- the marker warnings `CONTRACT.MARKER_MISSING`, `CONTRACT.MARKER_MISMATCH`, `CONTRACT.MARKER_READ_FAILED` and `CONTRACT.MARKER_ROW_CORRUPT`, from the client's first use of the database (its first query, connection or transaction);
+- the warnings `lints()` emits for rules whose severity is `warn`;
+- `budgets()` violations, only in `mode: 'permissive'` (see *Running plans and rendering SQL*);
+- the errors a middleware hook throws that the runtime logs and swallows instead of failing the call: an `activityEnded` error after the activity has already failed, and any `activityFinalized` error (an `activityEnded` error on an activity that succeeded fails the call instead);
+- the warning `runtime.close.waiting-for-activities` when `close()` is waiting only for activities whose handles were never ended or for transactions still open, with the counts `openActivities` and `openTransactions`; `close()` waits for each such transaction until it commits or rolls back;
+- debug events, such as a middleware intercepting a statement, if `log` has a `debug` method.
+
+Without `log`, the runtime logs to the console: errors to `console.error` and warnings to `console.warn`, which in Node write to standard error, info events to `console.info`, and debug events nowhere. To silence it, pass a logger that does nothing: `log: { info() {}, warn() {}, error() {} }`.
+
+`verifyMarker: false` turns off the marker check and its warnings.
 
 `db.orm` offers `fragment` beside the models, unless a model is named `fragment`. A fragment is a reusable query step:
 
