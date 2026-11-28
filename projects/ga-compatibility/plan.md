@@ -41,7 +41,7 @@ As of 2026-11-27. The GA plan (`planning/plan.md` on branch `planning/prisma-8-g
 
 | Project | State | Pull requests | Waits on |
 | --- | --- | --- | --- |
-| 2. Stored files and records | Built; in review | prisma/orm#31198 and #31200 ready; #31203 a draft with review fixes in progress; reading release-candidate files is on a local branch | Review. Which other hash-changing work lands with #31203 |
+| 2. Stored files and records | Half merged | prisma/orm#31198 merged 2026-11-27 and #31200 merged 2026-11-28; #31203 (the one-time hash change) a draft, being brought up to date with `main` | #31203, then the capabilities rename, in one release candidate; then the saved samples |
 | 3. Reduce exports | Design settled; session paused | None. Audit, spec and plan on a local branch | prisma/orm#31218 merging, since both change the PostgreSQL facade |
 | 4. API check in CI | Done | prisma/orm#31201 and #31217 merged | Nothing for GA. TML-3977 (compare each package with its own last release) can follow GA |
 | 5. Additions that break | Not started | | A free session |
