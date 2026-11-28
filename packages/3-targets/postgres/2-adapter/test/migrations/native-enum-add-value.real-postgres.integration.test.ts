@@ -41,6 +41,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   controlAdapter,
   createDriver,
+  createPrismaTables,
   emptySchema,
   familyInstance,
   formatRunnerFailure,
@@ -171,6 +172,7 @@ async function applyPlan(
   contract: Contract<SqlStorage>,
   policy: MigrationOperationPolicy,
 ): Promise<void> {
+  await createPrismaTables(driver);
   const runner = postgresTargetDescriptor.createRunner(familyInstance);
   const executeResult = await runner.execute({
     driver,

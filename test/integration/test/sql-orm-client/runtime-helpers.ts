@@ -406,8 +406,8 @@ function preparedExecution(
 }
 
 export async function setupTestSchema(runtime: PgIntegrationRuntime): Promise<void> {
-  await runtime.query('create schema if not exists prisma_contract');
-  await runtime.query(`create table if not exists prisma_contract.marker (
+  await runtime.query('create schema if not exists _prisma');
+  await runtime.query(`create table if not exists _prisma.marker (
     space text not null primary key default 'app',
     core_hash text not null,
     profile_hash text not null,

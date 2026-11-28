@@ -32,6 +32,7 @@ import {
 import postgres from '@internal/target-postgres/control';
 import { createDevDatabase, timeouts } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
+import { createPrismaTables } from '../postgres-bootstrap';
 import {
   authorSqlContractFromPsl,
   findStorageColumn,
@@ -66,6 +67,7 @@ async function applyContract(
   if (planResult.kind !== 'success') {
     throw new Error(`planner failed: ${JSON.stringify(planResult)}`);
   }
+  await createPrismaTables(driver);
   return postgres.createRunner(familyInstance).execute({
     driver,
     perSpaceOptions: [

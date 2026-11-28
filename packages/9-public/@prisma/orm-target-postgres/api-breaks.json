@@ -5,8 +5,8 @@
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "4bd1ba09fce7f6d2",
-    "reason": "The PostgreSQL schema tree holds the server's version as the number `serverVersionNumber`, read from `server_version_num`, in place of the text `pgVersion` (prisma/orm#31218)."
+    "fingerprint": "065e5a42fe659d93",
+    "reason": "The PostgreSQL schema tree holds the server's version as the number `serverVersionNumber`, read from `server_version_num`, in place of the text `pgVersion` (prisma/orm#31218). It names `_prisma.marker`, so its type is no longer the old literal (prisma/orm#31234)."
   },
   {
     "path": "./adapter",
@@ -14,44 +14,35 @@
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "4bd1ba09fce7f6d2",
-    "reason": "The PostgreSQL schema tree holds the server's version as the number `serverVersionNumber`, read from `server_version_num`, in place of the text `pgVersion` (prisma/orm#31218)."
+    "fingerprint": "065e5a42fe659d93",
+    "reason": "The PostgreSQL schema tree holds the server's version as the number `serverVersionNumber`, read from `server_version_num`, in place of the text `pgVersion` (prisma/orm#31218). It names `_prisma.marker`, so its type is no longer the old literal (prisma/orm#31234)."
   },
   {
     "path": "./adapter",
-    "export": "postgresAdapterCapabilities",
-    "test": "value",
+    "export": "SqlRuntimeAdapter",
+    "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "42dd06282121175a",
-    "reason": "The PostgreSQL adapter declares no capabilities, because a contract lists the capabilities it requires (prisma/orm#31218)."
+    "fingerprint": "b5a9852fd03d998f",
+    "reason": "A marker read can now report that Prisma's own tables are in a release candidate's schema (prisma/orm#31234)."
   },
   {
     "path": "./adapter",
-    "export": "postgresAdapterContractContributions",
+    "export": "createPostgresAdapter",
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "d81980751fc53674",
-    "reason": "The PostgreSQL adapter declares no capabilities, because a contract lists the capabilities it requires (prisma/orm#31218)."
+    "fingerprint": "3c939c108eb548af",
+    "reason": "A marker read can now report that Prisma's own tables are in a release candidate's schema (prisma/orm#31234)."
   },
   {
     "path": "./adapter/adapter",
-    "export": "postgresAdapterCapabilities",
+    "export": "createPostgresAdapter",
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "42dd06282121175a",
-    "reason": "The PostgreSQL adapter declares no capabilities, because a contract lists the capabilities it requires (prisma/orm#31218)."
-  },
-  {
-    "path": "./adapter/adapter",
-    "export": "postgresAdapterContractContributions",
-    "test": "value",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "d81980751fc53674",
-    "reason": "The PostgreSQL adapter declares no capabilities, because a contract lists the capabilities it requires (prisma/orm#31218)."
+    "fingerprint": "3c939c108eb548af",
+    "reason": "A marker read can now report that Prisma's own tables are in a release candidate's schema (prisma/orm#31234)."
   },
   {
     "path": "./adapter/control",
@@ -59,8 +50,8 @@
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "4bd1ba09fce7f6d2",
-    "reason": "The PostgreSQL schema tree holds the server's version as the number `serverVersionNumber`, read from `server_version_num`, in place of the text `pgVersion` (prisma/orm#31218)."
+    "fingerprint": "065e5a42fe659d93",
+    "reason": "The PostgreSQL schema tree holds the server's version as the number `serverVersionNumber`, read from `server_version_num`, in place of the text `pgVersion` (prisma/orm#31218). It names `_prisma.marker`, so its type is no longer the old literal (prisma/orm#31234)."
   },
   {
     "path": "./adapter/control",
@@ -68,8 +59,107 @@
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "4bd1ba09fce7f6d2",
-    "reason": "The PostgreSQL schema tree holds the server's version as the number `serverVersionNumber`, read from `server_version_num`, in place of the text `pgVersion` (prisma/orm#31218)."
+    "fingerprint": "065e5a42fe659d93",
+    "reason": "The PostgreSQL schema tree holds the server's version as the number `serverVersionNumber`, read from `server_version_num`, in place of the text `pgVersion` (prisma/orm#31218). It names `_prisma.marker`, so its type is no longer the old literal (prisma/orm#31234)."
+  },
+  {
+    "path": "./adapter/runtime",
+    "export": "SqlRuntimeAdapter",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "b5a9852fd03d998f",
+    "reason": "A marker read can now report that Prisma's own tables are in a release candidate's schema (prisma/orm#31234)."
+  },
+  {
+    "path": "./adapter/runtime",
+    "export": "default",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "18a471cef8f92dcb",
+    "reason": "A marker read can now report that Prisma's own tables are in a release candidate's schema (prisma/orm#31234)."
+  },
+  {
+    "path": "./target",
+    "export": "buildControlTableBootstrapQueries",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "e3b0c44298fc1c14",
+    "reason": "Prisma's own tables are created by the Prisma space's migration, not by these statements (prisma/orm#31234)."
+  },
+  {
+    "path": "./target",
+    "export": "buildSignMarkerBootstrapQueries",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "e3b0c44298fc1c14",
+    "reason": "Prisma's own tables are created by the Prisma space's migration, not by these statements (prisma/orm#31234)."
+  },
+  {
+    "path": "./target/contract-free",
+    "export": "buildControlTableBootstrapQueries",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "e3b0c44298fc1c14",
+    "reason": "Prisma's own tables are created by the Prisma space's migration, not by these statements (prisma/orm#31234)."
+  },
+  {
+    "path": "./target/contract-free",
+    "export": "buildSignMarkerBootstrapQueries",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "e3b0c44298fc1c14",
+    "reason": "Prisma's own tables are created by the Prisma space's migration, not by these statements (prisma/orm#31234)."
+  },
+  {
+    "path": "./target/control",
+    "export": "default",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "de7236849976d2a0",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). The runner can now refuse because Prisma's own tables do not exist yet (prisma/orm#31234)."
+  },
+  {
+    "path": "./adapter",
+    "export": "postgresAdapterCapabilities",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "42dd06282121175a",
+    "reason": "The PostgreSQL adapter declares no capabilities, because a contract lists the capabilities it requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./adapter",
+    "export": "postgresAdapterContractContributions",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "d81980751fc53674",
+    "reason": "The PostgreSQL adapter declares no capabilities, because a contract lists the capabilities it requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./adapter/adapter",
+    "export": "postgresAdapterCapabilities",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "42dd06282121175a",
+    "reason": "The PostgreSQL adapter declares no capabilities, because a contract lists the capabilities it requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./adapter/adapter",
+    "export": "postgresAdapterContractContributions",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "d81980751fc53674",
+    "reason": "The PostgreSQL adapter declares no capabilities, because a contract lists the capabilities it requires (prisma/orm#31218)."
   },
   {
     "path": "./adapter/control",
@@ -205,15 +295,6 @@
     "lastRelease": "8.0.0-rc.25",
     "fingerprint": "253b218ba133cbfb",
     "reason": "The PostgreSQL schema tree holds the server's version as the number `serverVersionNumber`, read from `server_version_num`, in place of the text `pgVersion` (prisma/orm#31218)."
-  },
-  {
-    "path": "./target/control",
-    "export": "default",
-    "test": "value",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "de7236849976d2a0",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
   },
   {
     "path": "./target/diff-database-schema",

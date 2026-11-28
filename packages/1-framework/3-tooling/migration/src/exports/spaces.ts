@@ -1,7 +1,18 @@
 export {
+  type ApplyInstalledContractSpaceInputs,
+  applyInstalledContractSpace,
+  type InstalledContractSpaceApplied,
+} from '../apply-installed-contract-space';
+export {
   assertDescriptorSelfConsistency,
   type DescriptorSelfConsistencyInputs,
 } from '../assert-descriptor-self-consistency';
+export {
+  type ClassifyInstalledSpaceRowInputs,
+  classificationNeedsLedger,
+  classifyInstalledSpaceRow,
+  type InstalledSpacePosition,
+} from '../classify-installed-space-row';
 export {
   type ComputeExtensionSpaceApplyPathInputs,
   computeExtensionSpaceApplyPath,

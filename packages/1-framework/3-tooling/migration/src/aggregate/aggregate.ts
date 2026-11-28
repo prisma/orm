@@ -173,7 +173,9 @@ async function resolveGraphNodeContractAt(args: {
  * state. The app space's head ref is always synthesised, so this only
  * ever guards an ungated extension space.
  */
-export function requireHeadRef(space: AggregateContractSpace): ContractSpaceHeadRecord {
+export function requireHeadRef(
+  space: Pick<AggregateContractSpace, 'spaceId' | 'headRef'>,
+): ContractSpaceHeadRecord {
   if (space.headRef === null) {
     throw new InternalError(
       `Contract space "${space.spaceId}" has no head ref; the integrity gate must refuse a missing head ref before planning or verifying.`,

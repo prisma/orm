@@ -915,6 +915,7 @@
 ./components/control: const DATA_LOSS_LEVELS: readonly ["data-loss-forbidden", "data-loss-with-consent", "data-loss-permitted"]
 ./components/control: const DATA_PROTECTION_KEYS: readonly ["dataLoss", "accessWidening"]
 ./components/control: const DEFAULT_DATABASE_POLICIES: DatabasePolicies
+./components/control: const PRISMA_SPACE_ID: "_prisma"
 ./components/control: const TAGGED_LITERAL_MAX_BYTES = 65536
 ./components/control: const VERIFY_CODE_HASH_MISMATCH = "CONTRACT.MARKER_MISMATCH"
 ./components/control: const VERIFY_CODE_MARKER_MISSING = "CONTRACT.MARKER_MISSING"
@@ -958,6 +959,7 @@
 ./components/control: function hasPslContractInfer<TFamilyId extends string, TSchemaIR>(instance: ControlFamilyInstance<TFamilyId, TSchemaIR>): instance is ControlFamilyInstance<TFamilyId, TSchemaIR> & PslContractInferCapable<TSchemaIR>
 ./components/control: function hasSchemaSubjectClassifier<TFamilyId extends string, TSchemaIR>(instance: ControlFamilyInstance<TFamilyId, TSchemaIR>): instance is ControlFamilyInstance<TFamilyId, TSchemaIR> & SchemaSubjectClassifierCapable
 ./components/control: function hasSchemaView<TFamilyId extends string, TSchemaIR>(instance: ControlFamilyInstance<TFamilyId, TSchemaIR>): instance is ControlFamilyInstance<TFamilyId, TSchemaIR> & SchemaViewCapable<TSchemaIR>
+./components/control: function isPrismaSpace(spaceId: string): spaceId is typeof PRISMA_SPACE_ID
 ./components/control: function isRenameStatement(statement: ResolvedMigrationStatement): statement is ResolvedRenameStatement
 ./components/control: function isStorageHashHex(storageHash: string): boolean
 ./components/control: function issueLabel(issue: SchemaDiffIssue): string
@@ -1080,6 +1082,7 @@
 ./components/control: interface ControlStack, readonly required property scalarTypes: ReadonlyArray<string>
 ./components/control: interface ControlStack, readonly required property target: ControlTargetDescriptor<TFamilyId, TTargetId>
 ./components/control: interface ControlStack<TFamilyId extends string = string, TTargetId extends string = string>
+./components/control: interface ControlTargetDescriptor, readonly optional property contractSpace?: ContractSpace
 ./components/control: interface ControlTargetDescriptor, readonly required property contractSerializer: ContractSerializer<TContract>
 ./components/control: interface ControlTargetDescriptor, readonly required property defaultNamespaceId: string
 ./components/control: interface ControlTargetDescriptor, required method create(): TTargetInstance
@@ -2058,6 +2061,7 @@
 ./components: const EMPTY_GENERATOR_FUNCTIONS: GeneratorFunctionRegistry
 ./components: const INT32_RANGE: IntegerRange
 ./components: const INT64_RANGE: BigIntRange
+./components: const PRISMA_SPACE_ID: "_prisma"
 ./components: const RUNTIME_ABORTED: "RUNTIME.ABORTED"
 ./components: const RelationKeys: unique symbol
 ./components: const SAFE_INTEGER_BIGINT_RANGE: BigIntRange
@@ -2214,6 +2218,7 @@
 ./components: function isNonFiniteText(text: string): boolean
 ./components: function isNumeralText(text: string): boolean
 ./components: function isPlainRecord(value: unknown): value is Readonly<Record<string, unknown>>
+./components: function isPrismaSpace(spaceId: string): spaceId is typeof PRISMA_SPACE_ID
 ./components: function isRenameStatement(statement: ResolvedMigrationStatement): statement is ResolvedRenameStatement
 ./components: function isRuntimeError(error: unknown): error is RuntimeErrorEnvelope
 ./components: function isStorageHashHex(storageHash: string): boolean
@@ -2684,6 +2689,7 @@
 ./components: interface ControlStack, readonly required property scalarTypes: ReadonlyArray<string>
 ./components: interface ControlStack, readonly required property target: ControlTargetDescriptor<TFamilyId, TTargetId>
 ./components: interface ControlStack<TFamilyId extends string = string, TTargetId extends string = string>
+./components: interface ControlTargetDescriptor, readonly optional property contractSpace?: ContractSpace
 ./components: interface ControlTargetDescriptor, readonly required property contractSerializer: ContractSerializer<TContract>
 ./components: interface ControlTargetDescriptor, readonly required property defaultNamespaceId: string
 ./components: interface ControlTargetDescriptor, required method create(): TTargetInstance
@@ -4449,6 +4455,7 @@
 ./errors/control: function errorMigrationCliUnknownFlag(options: { readonly flag: string; readonly knownFlags: readonly string[]; }): CliStructuredError
 ./errors/control: function errorMigrationPlanningFailed(options: { readonly conflicts: readonly CliErrorConflict[]; readonly why?: string; }): CliStructuredError & { readonly why: string; }
 ./errors/control: function errorOutputFormatMutex(): CliStructuredError
+./errors/control: function errorPrismaSpaceBehind(options: { readonly why: string; readonly meta: { readonly spaceId: string; readonly situation: 'missingRow' | 'olderContract' | 'releaseCandidateSchema'; }; }): CliStructuredError
 ./errors/control: function errorQueryRunnerFactoryRequired(options?: { readonly why?: string; }): CliStructuredError
 ./errors/control: function errorTargetMigrationNotSupported(options?: { readonly why?: string; }): CliStructuredError
 ./errors/control: function errorUnexpected(message: string, options?: { readonly why?: string; readonly fix?: string; readonly meta?: Record<string, unknown>; readonly cause?: unknown; }): CliStructuredError
@@ -4539,6 +4546,7 @@
 ./errors: function errorMigrationPlanningFailed(options: { readonly conflicts: readonly CliErrorConflict[]; readonly why?: string; }): CliStructuredError & { readonly why: string; }
 ./errors: function errorMigrationTargetMismatch(options: { readonly migrationTargetId: string; readonly configTargetId: string; }): CliStructuredError
 ./errors: function errorOutputFormatMutex(): CliStructuredError
+./errors: function errorPrismaSpaceBehind(options: { readonly why: string; readonly meta: { readonly spaceId: string; readonly situation: 'missingRow' | 'olderContract' | 'releaseCandidateSchema'; }; }): CliStructuredError
 ./errors: function errorQueryRunnerFactoryRequired(options?: { readonly why?: string; }): CliStructuredError
 ./errors: function errorRuntime(code: `${string}.${string}`, summary: string, options?: { readonly why?: string; readonly fix?: string; readonly diagnostics?: readonly Diagnostic[]; readonly meta?: Record<string, unknown>; readonly cause?: unknown; }): CliStructuredError
 ./errors: function errorTargetMigrationNotSupported(options?: { readonly why?: string; }): CliStructuredError

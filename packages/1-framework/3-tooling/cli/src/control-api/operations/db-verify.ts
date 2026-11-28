@@ -1,13 +1,18 @@
-import type { Contract } from '@internal/contract/types';
+import type { Contract, ContractMarkerRecord } from '@internal/contract/types';
+import { errorPrismaSpaceBehind } from '@internal/errors/control';
 import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
 import type {
+  ContractSpace,
   ControlDriverInstance,
   ControlExtensionDescriptor,
   ControlFamilyInstance,
   SchemaDiffIssue,
   VerifyDatabaseSchemaResult,
 } from '@internal/framework-components/control';
-import { hasSchemaSubjectClassifier } from '@internal/framework-components/control';
+import {
+  hasSchemaSubjectClassifier,
+  PRISMA_SPACE_ID,
+} from '@internal/framework-components/control';
 import {
   type AggregateContractSpace,
   collectAggregateNamespaces,
@@ -16,6 +21,11 @@ import {
   verifyMigration,
 } from '@internal/migration-tools/aggregate';
 import type { SnapshotContentVerifier } from '@internal/migration-tools/contract-snapshot-store';
+import { errorInstalledSpaceUnreachable } from '@internal/migration-tools/errors';
+import {
+  classificationNeedsLedger,
+  classifyInstalledSpaceRow,
+} from '@internal/migration-tools/spaces';
 import { castAs } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
@@ -58,6 +68,8 @@ export interface ExecuteDbVerifyOptions<TFamilyId extends string, TTargetId exte
   readonly skipMarker: boolean;
   /** Content check for contract snapshots the aggregate loader resolves. */
   readonly verifySnapshotContent?: SnapshotContentVerifier;
+  /** The Prisma space the target's control descriptor carries, whose row is checked against it. */
+  readonly prismaSpace?: ContractSpace;
   readonly onProgress?: OnControlProgress;
 }
 
@@ -157,7 +169,54 @@ export async function executeDbVerify<TFamilyId extends string, TTargetId extend
     skipMarker,
     onProgress,
     migrationsDir: options.migrationsDir,
+    prismaSpaceFinding:
+      skipMarker || options.prismaSpace === undefined
+        ? null
+        : await prismaSpaceFinding(
+            options,
+            options.prismaSpace,
+            markersBySpaceId.get(PRISMA_SPACE_ID),
+          ),
   });
+}
+
+/**
+ * What the commands that change the database would do with the Prisma space's row, as a finding: nothing at or ahead of the head, `CONTRACT.PRISMA_SPACE_BEHIND` when there is no row or it is behind the head, and `MIGRATION.INSTALLED_SPACE_UNREACHABLE` when this release cannot use it. The application's own marker finding, such as a database with no marker at all, is reported in its place.
+ */
+async function prismaSpaceFinding<TFamilyId extends string, TTargetId extends string>(
+  options: ExecuteDbVerifyOptions<TFamilyId, TTargetId>,
+  contractSpace: ContractSpace,
+  row: ContractMarkerRecord | undefined,
+): Promise<CliStructuredError | null> {
+  const { driver, familyInstance } = options;
+  const ledger = classificationNeedsLedger(contractSpace, row ?? null)
+    ? await familyInstance.readLedger({ driver, space: PRISMA_SPACE_ID })
+    : [];
+  const position = classifyInstalledSpaceRow({ contractSpace, row: row ?? null, ledger });
+  const headRefHash = contractSpace.headRef.hash;
+  switch (position.kind) {
+    case 'atHead':
+    case 'ahead':
+      return null;
+    case 'behind':
+      return errorPrismaSpaceBehind({
+        why:
+          row === undefined
+            ? `The database has no row of the \`${PRISMA_SPACE_ID}\` space, and the newest contract of that space the installed release knows is ${headRefHash}.`
+            : `The row of the \`${PRISMA_SPACE_ID}\` space records contract ${row.storageHash}, and the newest the installed release knows is ${headRefHash}.`,
+        meta: {
+          spaceId: PRISMA_SPACE_ID,
+          situation: row === undefined ? 'missingRow' : 'olderContract',
+        },
+      });
+    case 'unreachable':
+      return errorInstalledSpaceUnreachable({
+        spaceId: PRISMA_SPACE_ID,
+        markerHash: position.markerHash,
+        headRefHash,
+        reason: position.reason,
+      });
+  }
 }
 
 function buildLoadInputs<TFamilyId extends string, TTargetId extends string>(
@@ -270,6 +329,7 @@ function finaliseVerifyResult(args: {
   skipMarker: boolean;
   onProgress: OnControlProgress | undefined;
   migrationsDir: string;
+  prismaSpaceFinding: CliStructuredError | null;
 }): ExecuteDbVerifyResult {
   const { verifyResult, aggregate, skipMarker, onProgress, migrationsDir } = args;
   if (!verifyResult.ok) {
@@ -288,7 +348,11 @@ function finaliseVerifyResult(args: {
   }
   const markerDrift = skipMarker
     ? null
-    : mapMarkerCheckFailures(aggregate.app.spaceId, verifyResult.value.markerCheck, migrationsDir);
+    : (mapMarkerCheckFailures(
+        aggregate.app.spaceId,
+        verifyResult.value.markerCheck,
+        migrationsDir,
+      ) ?? args.prismaSpaceFinding);
   emitVerifySpan(onProgress, markerDrift === null ? 'spanEndOk' : 'spanEndError');
   return ok({
     schemaResults: verifyResult.value.schemaCheck.perSpace,

@@ -61,9 +61,13 @@ const EXCLUDED_DIRECTORIES = new Set([
   'fixtures',
   'recordings',
   'templates',
+  // A migration's source is a frozen record of the SQL it ran, which names the space as text.
+  'migrations',
 ]);
 
 const DECLARATION_RE = /export\s+const\s+APP_SPACE_ID\b/;
+/** `prisma contract emit` writes a contract's default values into its `contract.d.ts`, where no constant can stand in for them. */
+const EMITTED_CONTRACT_HEADER = '// ⚠️  GENERATED FILE - DO NOT EDIT';
 const LITERAL_RE = /(['"])app\1/g;
 
 function* walk(dir) {
@@ -107,6 +111,7 @@ const literalViolations = [];
 for (const root of SCAN_ROOTS_FOR_LITERALS) {
   for (const file of walk(root)) {
     const contents = readFileSync(file, 'utf8');
+    if (contents.startsWith(EMITTED_CONTRACT_HEADER)) continue;
     if (!LITERAL_RE.test(contents)) continue;
     const lines = contents.split('\n');
     LITERAL_RE.lastIndex = 0;

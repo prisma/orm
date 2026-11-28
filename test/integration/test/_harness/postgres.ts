@@ -10,6 +10,7 @@ import postgresTargetControl from '@internal/target-postgres/control';
 import { PostgresContractSerializer } from '@internal/target-postgres/runtime';
 import { createDevDatabase, type DevDatabase, timeouts, withClient } from '@repo/test-utils';
 import { afterAll } from 'vitest';
+import { createPrismaTables } from '../postgres-bootstrap';
 
 /**
  * Generic Postgres harness for ported tests.
@@ -94,7 +95,7 @@ async function clearRows(connectionString: string): Promise<void> {
       from pg_tables
       where schemaname not like 'pg_%'
         and schemaname !~ '^_prisma_dev_'
-        and schemaname not in ('information_schema', 'prisma_contract')
+        and schemaname not in ('information_schema', '_prisma')
     `);
     if (tables.rows.length === 0) {
       return;
@@ -131,6 +132,7 @@ async function pushContract(connectionString: string, contractJson: unknown): Pr
       throw new Error(`Contract push planning failed: ${JSON.stringify(planResult)}`);
     }
     const plan = planResult.plan;
+    await createPrismaTables(driver);
     const runner = postgresTargetControl.createRunner(controlFamily);
     const executeResult = await runner.execute({
       driver,

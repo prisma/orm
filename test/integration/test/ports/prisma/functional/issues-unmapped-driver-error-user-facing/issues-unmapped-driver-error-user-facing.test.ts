@@ -11,6 +11,7 @@ import postgresTargetControl from '@internal/target-postgres/control';
 import { PostgresContractSerializer } from '@internal/target-postgres/runtime';
 import { timeouts, withClient, withDevDatabase } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
+import { createPrismaTables } from '../../../../postgres-bootstrap';
 import type { Contract as PortContract } from './_fixture/generated/contract';
 import contractJson from './_fixture/generated/contract.json' with { type: 'json' };
 
@@ -71,6 +72,7 @@ async function pushContract(connectionString: string): Promise<void> {
       throw new Error(`Contract push planning failed: ${JSON.stringify(planResult)}`);
     }
     const plan = planResult.plan;
+    await createPrismaTables(driver);
     const runner = postgresTargetControl.createRunner(controlFamily);
     const executeResult = await runner.execute({
       driver,

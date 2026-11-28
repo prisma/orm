@@ -24,6 +24,7 @@ import { postgresDataTypeSupport } from '../helpers/postgres-data-type-support';
 import {
   controlAdapter,
   createDriver,
+  createPrismaTables,
   createTestDatabase,
   emptySchema,
   familyInstance,
@@ -198,6 +199,7 @@ async function applyContract(
   policy: MigrationOperationPolicy = INIT_ADDITIVE_POLICY,
 ): Promise<void> {
   const planner = postgresTargetDescriptor.createPlanner(controlAdapter);
+  await createPrismaTables(driver);
   const runner = postgresTargetDescriptor.createRunner(familyInstance);
   const planResult = planner.plan({
     contract,

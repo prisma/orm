@@ -103,18 +103,9 @@ export async function expectProjectWorksAgainstDatabase(project: Project): Promi
 export async function postgresMarkers(connectionString: string): Promise<Markers> {
   return withClient(connectionString, async (client) => {
     const result = await client.query(
-      'SELECT space, core_hash FROM prisma_contract.marker ORDER BY space',
+      "SELECT space, core_hash FROM _prisma.marker WHERE space <> '_prisma' ORDER BY space",
     );
     return Object.fromEntries(result.rows.map((row) => [row.space, row.core_hash]));
-  });
-}
-
-export async function postgresMarkerTableExists(connectionString: string): Promise<boolean> {
-  return withClient(connectionString, async (client) => {
-    const result = await client.query(
-      `SELECT to_regclass('prisma_contract.marker') IS NOT NULL AS exists`,
-    );
-    return result.rows[0]?.exists === true;
   });
 }
 
@@ -173,18 +164,17 @@ export async function ageMarkersOnPostgres(
   },
 ): Promise<void> {
   await withClient(connectionString, async (client) => {
-    const app = await client.query(
-      `UPDATE prisma_contract.marker SET core_hash = $1 WHERE space = 'app'`,
-      [OLD_APP_HASH],
-    );
+    const app = await client.query(`UPDATE _prisma.marker SET core_hash = $1 WHERE space = 'app'`, [
+      OLD_APP_HASH,
+    ]);
     const extension =
       extensionSpace.extensionMarker === 'exists'
         ? await client.query(
-            'UPDATE prisma_contract.marker SET core_hash = $1, invariants = $2::text[] WHERE space = $3',
+            'UPDATE _prisma.marker SET core_hash = $1, invariants = $2::text[] WHERE space = $3',
             [OLD_EXT_HASH, [extensionSpace.invariant], extensionSpace.id],
           )
         : await client.query(
-            `INSERT INTO prisma_contract.marker (space, core_hash, profile_hash, invariants)
+            `INSERT INTO _prisma.marker (space, core_hash, profile_hash, invariants)
              VALUES ($3, $1, $1, $2::text[])`,
             [OLD_EXT_HASH, [extensionSpace.invariant], extensionSpace.id],
           );

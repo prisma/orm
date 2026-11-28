@@ -63,7 +63,7 @@ describe('PostgresControlAdapter', () => {
       createPostgresBuiltinCodecLookup(),
       createPostgresBuiltinDataTypeLookup(),
     );
-    expect(adapter.markerLocation).toBe('prisma_contract.marker');
+    expect(adapter.markerLocation).toBe('_prisma.marker');
   });
 
   describe('introspect', () => {
@@ -2011,9 +2011,9 @@ describe('PostgresControlAdapter', () => {
       const driver = createMockDriver([
         {
           match: includes('"information_schema"."tables"'),
-          rows: [{ table_schema: 'prisma_contract' }],
+          rows: [{ table_schema: '_prisma' }],
         },
-        { match: includes('"prisma_contract"."marker"'), rows: [] },
+        { match: includes('"_prisma"."marker"'), rows: [] },
       ]);
       await expect(adapter.readMarker(driver, 'app')).resolves.toBeNull();
     });
@@ -2026,10 +2026,10 @@ describe('PostgresControlAdapter', () => {
       const driver = createMockDriver([
         {
           match: includes('"information_schema"."tables"'),
-          rows: [{ table_schema: 'prisma_contract' }],
+          rows: [{ table_schema: '_prisma' }],
         },
         {
-          match: includes('"prisma_contract"."marker"'),
+          match: includes('"_prisma"."marker"'),
           rows: [{ ...validMarkerRow, invariants: ['inv-1', 'inv-2'] }],
         },
       ]);
@@ -2057,10 +2057,10 @@ describe('PostgresControlAdapter', () => {
       const driver = createMockDriver([
         {
           match: includes('"information_schema"."tables"'),
-          rows: [{ table_schema: 'prisma_contract' }],
+          rows: [{ table_schema: '_prisma' }],
         },
         {
-          match: includes('"prisma_contract"."marker"'),
+          match: includes('"_prisma"."marker"'),
           rows: [{ ...validMarkerRow, canonical_version: '7', invariants: '{}' }],
         },
       ]);
@@ -2078,10 +2078,10 @@ describe('PostgresControlAdapter', () => {
       const driver = createMockDriver([
         {
           match: includes('"information_schema"."tables"'),
-          rows: [{ table_schema: 'prisma_contract' }],
+          rows: [{ table_schema: '_prisma' }],
         },
         {
-          match: includes('"prisma_contract"."marker"'),
+          match: includes('"_prisma"."marker"'),
           rows: [{ ...validMarkerRow, canonical_version: '1.5', invariants: '{}' }],
         },
       ]);
@@ -2104,10 +2104,10 @@ describe('PostgresControlAdapter', () => {
       const driver = createMockDriver([
         {
           match: includes('"information_schema"."tables"'),
-          rows: [{ table_schema: 'prisma_contract' }],
+          rows: [{ table_schema: '_prisma' }],
         },
         {
-          match: includes('"prisma_contract"."marker"'),
+          match: includes('"_prisma"."marker"'),
           rows: [{ ...validMarkerRow, invariants: null }],
         },
       ]);
@@ -2122,7 +2122,7 @@ describe('PostgresControlAdapter', () => {
           meta: { space: 'app' },
         });
         expect(envelope.why).toContain('expected raw text for a Postgres array, got object');
-        expect(JSON.stringify(envelope)).toContain('prisma_contract.marker');
+        expect(JSON.stringify(envelope)).toContain('_prisma.marker');
         expect(structured.cause).toBeInstanceOf(TypeError);
         expect((structured.cause as Error).message).toContain(
           'expected raw text for a Postgres array, got object',
@@ -2141,7 +2141,7 @@ describe('PostgresControlAdapter', () => {
         targetId: 'postgres',
         query: async <Row = Record<string, unknown>>(sql: string) => {
           if (sql.includes('"information_schema"."tables"')) {
-            return { rows: [{ table_schema: 'prisma_contract' }] as unknown as Row[] };
+            return { rows: [{ table_schema: '_prisma' }] as unknown as Row[] };
           }
           throw new Error('permission denied for table marker');
         },
@@ -2166,7 +2166,7 @@ describe('PostgresControlAdapter', () => {
       const driver = createMockDriver([
         { match: includes('"information_schema"."tables"'), rows: [{ '?column?': 1 }] },
         {
-          match: includes('"prisma_contract"."marker"'),
+          match: includes('"_prisma"."marker"'),
           rows: [
             {
               space: 'app',
@@ -2195,7 +2195,7 @@ describe('PostgresControlAdapter', () => {
       const driver = createMockDriver([
         { match: includes('"information_schema"."tables"'), rows: [{ '?column?': 1 }] },
         {
-          match: includes('"prisma_contract"."marker"'),
+          match: includes('"_prisma"."marker"'),
           rows: [
             {
               space: 'app',

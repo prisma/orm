@@ -1,5 +1,23 @@
 [
   {
+    "path": "./adapter/runtime",
+    "export": "default",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "a7e2459d336c529b",
+    "reason": "The shared SQL-family type for a marker read gained the kind `earlier-release`, which only PostgreSQL returns today (prisma/orm#31234)."
+  },
+  {
+    "path": "./target/control",
+    "export": "default",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "48e253ed249d248f",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). The shared SQL-family type for a runner's error codes gained `MIGRATION.PRISMA_TABLES_MISSING`, which only PostgreSQL returns today (prisma/orm#31234)."
+  },
+  {
     "path": "./adapter/control",
     "export": "default",
     "test": "value",
@@ -33,15 +51,6 @@
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
     "fingerprint": "934d84e729169486",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
-  },
-  {
-    "path": "./target/control",
-    "export": "default",
-    "test": "value",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "48e253ed249d248f",
     "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
   },
   {

@@ -17,8 +17,8 @@ const contractJsonPath = join(exampleDir, 'src', 'prisma', 'contract.json');
 // this test readable top-to-bottom without a fixture file or a control-client
 // setup that would expand the scope and the flake surface.
 const TEST_SCHEMA_SQL = `
-create schema if not exists prisma_contract;
-create table if not exists prisma_contract.marker (
+create schema if not exists _prisma;
+create table if not exists _prisma.marker (
   space text not null primary key default 'app',
   core_hash text not null default '',
   profile_hash text not null default '',

@@ -32,7 +32,7 @@ withTempDir(({ createTempDir }) => {
             // Verify marker was created in database
             await withClient(connectionString, async (client) => {
               const result = await client.query(
-                'select core_hash, profile_hash from prisma_contract.marker where space = $1',
+                'select core_hash, profile_hash from _prisma.marker where space = $1',
                 ['app'],
               );
               expect(result.rows.length).toBe(1);
@@ -137,7 +137,7 @@ withTempDir(({ createTempDir }) => {
               // Marker should NOT exist
               const schemaResult = await client.query(`
                 SELECT schema_name FROM information_schema.schemata
-                WHERE schema_name = 'prisma_contract'
+                WHERE schema_name = '_prisma'
               `);
               expect(schemaResult.rows.length).toBe(0);
             });

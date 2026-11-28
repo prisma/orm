@@ -103,6 +103,7 @@ export async function resetTestDatabase(contract: unknown): Promise<void> {
     await client.query('DROP SCHEMA IF EXISTS public CASCADE');
     await client.query('CREATE SCHEMA public');
     await client.query('DROP SCHEMA IF EXISTS prisma_contract CASCADE');
+    await client.query('DROP SCHEMA IF EXISTS _prisma CASCADE');
   } finally {
     await client.end();
   }

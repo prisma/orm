@@ -81,7 +81,7 @@ function output(run: { readonly stdout: string; readonly stderr: string }): stri
 function markerHash(connectionString: string): Promise<unknown> {
   return withClient(connectionString, async (client) => {
     const result = await client.query(
-      `SELECT core_hash FROM "prisma_contract"."marker" WHERE space = 'app'`,
+      `SELECT core_hash FROM "_prisma"."marker" WHERE space = 'app'`,
     );
     return result.rows[0]?.['core_hash'];
   });
@@ -117,7 +117,7 @@ withTempDir(({ createTempDir }) => {
             .replaceAll('readonly elementNullable: true', 'readonly elementNullable: false'),
         );
         await withClient(db.connectionString, (client) =>
-          client.query(`UPDATE "prisma_contract"."marker" SET core_hash = $1 WHERE space = 'app'`, [
+          client.query(`UPDATE "_prisma"."marker" SET core_hash = $1 WHERE space = 'app'`, [
             previous.hash,
           ]),
         );

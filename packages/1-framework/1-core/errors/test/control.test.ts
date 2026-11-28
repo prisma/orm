@@ -24,6 +24,7 @@ import {
   errorMigrationCliUnknownFlag,
   errorMigrationPlanningFailed,
   errorOutputFormatMutex,
+  errorPrismaSpaceBehind,
   errorQueryRunnerFactoryRequired,
   errorTargetMigrationNotSupported,
   errorUnexpected,
@@ -640,5 +641,48 @@ describe('Generic Error', () => {
   it('errorUnexpected without cause leaves no own cause property', () => {
     const error = errorUnexpected('Unexpected error occurred');
     expect(Object.hasOwn(error, 'cause')).toBe(false);
+  });
+});
+
+describe('errorPrismaSpaceBehind', () => {
+  it('says the records are not up to date, keeps the explanation and situation it is given, and names the command for each way a project changes its database', () => {
+    const error = errorPrismaSpaceBehind({
+      why: 'The row records an earlier contract.',
+      meta: { spaceId: '_prisma', situation: 'olderContract' },
+    });
+
+    expect({
+      code: error.code,
+      message: error.message,
+      why: error.why,
+      fix: error.fix,
+      nextActions: error.nextActions,
+      meta: error.meta,
+    }).toEqual({
+      code: 'CONTRACT.PRISMA_SPACE_BEHIND',
+      message:
+        'The records Prisma keeps for itself in this database are not up to date with the installed release of Prisma',
+      why: 'The row records an earlier contract.',
+      fix: 'Run the command the project already uses to change its database: `{bin} db migrate` in a project that applies migrations, `{bin} db update` in one that changes its database with `db update`, or `{bin} db sign` in one that only signs it. Each brings the records Prisma keeps for itself up to date before it does its usual work.',
+      nextActions: [
+        {
+          kind: 'run-command',
+          label: 'Bring the records up to date, in a project that applies migrations',
+          command: '{bin} db migrate',
+        },
+        {
+          kind: 'run-command',
+          label:
+            'Bring the records up to date, in a project that changes its database with db update',
+          command: '{bin} db update',
+        },
+        {
+          kind: 'run-command',
+          label: 'Bring the records up to date, in a project that only signs its database',
+          command: '{bin} db sign',
+        },
+      ],
+      meta: { spaceId: '_prisma', situation: 'olderContract' },
+    });
   });
 });

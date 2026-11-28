@@ -10,6 +10,7 @@ import { printPsl } from '@internal/psl-printer';
 import postgres from '@internal/target-postgres/control';
 import { createDevDatabase, type DevDatabase, timeouts, withClient } from '@repo/test-utils';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { createPrismaTables } from '../postgres-bootstrap';
 import {
   authorSqlContractFromPsl,
   postgresFrameworkComponents,
@@ -120,7 +121,7 @@ describe('contract infer over date and time columns', { concurrent: false }, () 
       await withClient(database.connectionString, async (client) => {
         await client.query('DROP SCHEMA IF EXISTS public CASCADE');
         await client.query('CREATE SCHEMA public');
-        await client.query('DROP SCHEMA IF EXISTS prisma_contract CASCADE');
+        await client.query('DROP SCHEMA IF EXISTS _prisma CASCADE');
       });
       const authored = await authorSqlContractFromPsl(`model Stamp {
   id    Int                    @id
@@ -144,6 +145,7 @@ describe('contract infer over date and time columns', { concurrent: false }, () 
           snapshotsImportPath: '../../snapshots',
         });
         if (planned.kind !== 'success') throw new Error(JSON.stringify(planned));
+        await createPrismaTables(driver);
         const run = await postgres.createRunner(familyInstance).execute({
           driver,
           perSpaceOptions: [

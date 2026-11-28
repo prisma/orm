@@ -17,9 +17,11 @@ import {
   APP_SPACE_ID,
   createControlStack,
   type MigrationOperationPolicy,
+  PRISMA_SPACE_ID,
 } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { buildFabricatedMigrationEdge } from '@internal/migration-tools/aggregate';
+import { applyInstalledContractSpace } from '@internal/migration-tools/spaces';
 import { SqlStorage, type StorageColumnInput } from '@internal/sql-contract/types';
 import type { SqlSchemaIRNode } from '@internal/sql-schema-ir/types';
 import postgresTargetDescriptor from '@internal/target-postgres/control';
@@ -126,8 +128,20 @@ describe('a vector(3)[] literal default', { concurrent: false }, () => {
     driver = await postgresDriverDescriptor.create(database.connectionString);
     await driver.query('drop schema if exists public cascade');
     await driver.query('drop schema if exists prisma_contract cascade');
+    await driver.query('drop schema if exists _prisma cascade');
     await driver.query('create schema public');
     await driver.query('CREATE EXTENSION IF NOT EXISTS vector');
+    const prismaTables = await applyInstalledContractSpace({
+      spaceId: PRISMA_SPACE_ID,
+      contractSpace: postgresTargetDescriptor.contractSpace!,
+      driver,
+      familyInstance,
+      migrations: postgresTargetDescriptor.migrations,
+      frameworkComponents,
+    });
+    if (!prismaTables.ok) {
+      throw new Error(`Prisma's own tables: ${JSON.stringify(prismaTables.failure, null, 2)}`);
+    }
   }, timeouts.spinUpPpgDev);
 
   afterEach(async () => {

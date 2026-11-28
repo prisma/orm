@@ -53,7 +53,7 @@
 (not exported) interface LoadedContractSource
 (not exported) interface LoadedContractSource, readonly required property contract: Contract
 (not exported) interface LoadedContractSource, readonly required property warnings: readonly ContractSourceDiagnostic[]
-(not exported) interface MigrateOptions extends UnrecordedSnapshotListener
+(not exported) interface MigrateOptions extends PrismaSpaceListener, UnrecordedSnapshotListener
 (not exported) interface MigrateOptions, readonly optional property connection?: unknown
 (not exported) interface MigrateOptions, readonly optional property onProgress?: OnControlProgress
 (not exported) interface MigrateOptions, readonly optional property permitPolicyChange?: boolean
@@ -122,6 +122,8 @@
 (not exported) interface PerSpaceExecutionEntry, readonly required property spaceId: string
 (not exported) interface PlannerWarningsListener
 (not exported) interface PlannerWarningsListener, readonly optional property onPlannerWarnings?: (warnings: readonly MigrationPlannerConflict[]) => void
+(not exported) interface PrismaSpaceListener
+(not exported) interface PrismaSpaceListener, readonly optional property onPrismaSpaceApplied?: (applied: InstalledContractSpaceApplied) => void
 (not exported) interface ReadMigrationPackageOptions
 (not exported) interface ReadMigrationPackageOptions, readonly optional property verifySnapshotContent?: SnapshotContentVerifier
 (not exported) interface ReadMigrationPackageOptions, readonly required property migrationsDir: string
@@ -293,6 +295,7 @@
 ./cli/control-api/testing: function createFixtureControlClient(overrides?: Partial<ControlClientFixtures>): FixtureControlClient
 ./cli/control-api/testing: function defaultControlClientFixtures(): ControlClientFixtures
 ./cli/control-api/testing: interface ControlClientFixtures
+./cli/control-api/testing: interface ControlClientFixtures, readonly required property bringPrismaSpaceUpToDate: InstalledContractSpaceApplied | undefined
 ./cli/control-api/testing: interface ControlClientFixtures, readonly required property dbInit: DbInitResult
 ./cli/control-api/testing: interface ControlClientFixtures, readonly required property dbSign: ExecuteDbSignResult
 ./cli/control-api/testing: interface ControlClientFixtures, readonly required property dbUpdate: DbUpdateResult
@@ -447,6 +450,7 @@
 ./cli/control-api: interface ContractSpaceSeedPhaseResult
 ./cli/control-api: interface ContractSpaceSeedPhaseResult, readonly required property seeded: readonly ContractSpaceSeedPhaseRecord[]
 ./cli/control-api: interface ControlClient
+./cli/control-api: interface ControlClient, required method bringPrismaSpaceUpToDate(): Promise<InstalledContractSpaceApplied | undefined>
 ./cli/control-api: interface ControlClient, required method close(): Promise<void>
 ./cli/control-api: interface ControlClient, required method connect(connection?: unknown, options?: ControlDriverConnectOptions): Promise<void>
 ./cli/control-api: interface ControlClient, required method dbInit(options: DbInitOptions): Promise<DbInitResult>
@@ -474,7 +478,7 @@
 ./cli/control-api: interface ControlClientOptions, readonly required property adapter: ControlAdapterDescriptor<any, any, any>
 ./cli/control-api: interface ControlClientOptions, readonly required property family: ControlFamilyDescriptor<any, any>
 ./cli/control-api: interface ControlClientOptions, readonly required property target: ControlTargetDescriptor<any, any, any>
-./cli/control-api: interface DbInitOptions extends PlannerWarningsListener, UnrecordedSnapshotListener
+./cli/control-api: interface DbInitOptions extends PlannerWarningsListener, PrismaSpaceListener, UnrecordedSnapshotListener
 ./cli/control-api: interface DbInitOptions, readonly optional property connection?: unknown
 ./cli/control-api: interface DbInitOptions, readonly optional property onProgress?: OnControlProgress
 ./cli/control-api: interface DbInitOptions, readonly required property contract: unknown
@@ -489,7 +493,7 @@
 ./cli/control-api: interface DbInitSuccess, readonly required property mode: 'apply' | 'plan'
 ./cli/control-api: interface DbInitSuccess, readonly required property plan: { readonly operations: ReadonlyArray<{ readonly id: string; readonly label: string; readonly operationClass: string; }>; readonly preview?: OperationPreview; }
 ./cli/control-api: interface DbInitSuccess, readonly required property summary: string
-./cli/control-api: interface DbSignOptions
+./cli/control-api: interface DbSignOptions extends PrismaSpaceListener
 ./cli/control-api: interface DbSignOptions, readonly optional property connection?: unknown
 ./cli/control-api: interface DbSignOptions, readonly optional property onProgress?: OnControlProgress
 ./cli/control-api: interface DbSignOptions, readonly required property contract: Contract
@@ -500,7 +504,7 @@
 ./cli/control-api: interface DbSignSpaceFailure, readonly required property schema: VerifyDatabaseSchemaResult
 ./cli/control-api: interface DbSignSpaceFailure, readonly required property space: string
 ./cli/control-api: interface DbSignSpaceFailure, readonly required property status: 'failed'
-./cli/control-api: interface DbUpdateOptions extends PlannerWarningsListener, UnrecordedSnapshotListener
+./cli/control-api: interface DbUpdateOptions extends PlannerWarningsListener, PrismaSpaceListener, UnrecordedSnapshotListener
 ./cli/control-api: interface DbUpdateOptions, readonly optional property acceptAccessChanges?: boolean
 ./cli/control-api: interface DbUpdateOptions, readonly optional property acceptDataLoss?: boolean
 ./cli/control-api: interface DbUpdateOptions, readonly optional property connection?: unknown
@@ -605,6 +609,7 @@
 ./cli/control-api: interface ExecuteDbUpdateOptions, readonly required property targetId: TTargetId
 ./cli/control-api: interface ExecuteDbUpdateOptions<TFamilyId extends string, TTargetId extends string> extends PlannerWarningsListener, UnrecordedSnapshotListener
 ./cli/control-api: interface ExecuteDbVerifyOptions, readonly optional property onProgress?: OnControlProgress
+./cli/control-api: interface ExecuteDbVerifyOptions, readonly optional property prismaSpace?: ContractSpace
 ./cli/control-api: interface ExecuteDbVerifyOptions, readonly optional property verifySnapshotContent?: SnapshotContentVerifier
 ./cli/control-api: interface ExecuteDbVerifyOptions, readonly required property contract: Contract
 ./cli/control-api: interface ExecuteDbVerifyOptions, readonly required property driver: ControlDriverInstance<TFamilyId, TTargetId>
@@ -912,7 +917,7 @@
 ./migration-tools/aggregate: function loadContractSpaceAggregate(input: LoadAggregateInput): Promise<ContractSpaceAggregate>
 ./migration-tools/aggregate: function loadProblemToViolation(spaceId: string, problem: PackageLoadProblem): IntegrityViolation
 ./migration-tools/aggregate: function planMigration<TFamilyId extends string, TTargetId extends string>(input: PlannerInput<TFamilyId, TTargetId>): Promise<PlannerOutput>
-./migration-tools/aggregate: function requireHeadRef(space: AggregateContractSpace): ContractSpaceHeadRecord
+./migration-tools/aggregate: function requireHeadRef(space: Pick<AggregateContractSpace, 'headRef' | 'spaceId'>): ContractSpaceHeadRecord
 ./migration-tools/aggregate: function resolveRecordedPath(input: ResolveRecordedPathInputs): ResolveRecordedPathOutcome
 ./migration-tools/aggregate: function spacesInApplyOrder(aggregate: ContractSpaceAggregate): readonly AggregateContractSpace[]
 ./migration-tools/aggregate: function verifyMigration(input: VerifierInput): VerifierOutput
@@ -956,6 +961,8 @@
 ./migration-tools/aggregate: interface ContractSpaceAggregate, required method listSpaces(): readonly string[]
 ./migration-tools/aggregate: interface ContractSpaceAggregate, required method space(id: string): AggregateContractSpace | undefined
 ./migration-tools/aggregate: interface ContractSpaceAggregate, required method spaces(): readonly AggregateContractSpace[]
+./migration-tools/aggregate: interface ContractSpaceWithGraph extends Pick<AggregateContractSpace, 'contract' | 'graph' | 'headRef' | 'spaceId'>
+./migration-tools/aggregate: interface ContractSpaceWithGraph, readonly required property packages: readonly MigrationPackage[]
 ./migration-tools/aggregate: interface DeclaredExtensionEntry
 ./migration-tools/aggregate: interface DeclaredExtensionEntry, readonly required property id: string
 ./migration-tools/aggregate: interface DeclaredExtensionEntry, readonly required property targetId: string
@@ -1008,7 +1015,7 @@
 ./migration-tools/aggregate: interface ResolveRecordedPathInputs, readonly required property accessChangesOf: (operations: readonly MigrationPlanOperation[]) => readonly MigrationAccessChange[]
 ./migration-tools/aggregate: interface ResolveRecordedPathInputs, readonly required property aggregateTargetId: string
 ./migration-tools/aggregate: interface ResolveRecordedPathInputs, readonly required property currentMarker: ContractMarkerRecordLike | null
-./migration-tools/aggregate: interface ResolveRecordedPathInputs, readonly required property space: AggregateContractSpace
+./migration-tools/aggregate: interface ResolveRecordedPathInputs, readonly required property space: ContractSpaceWithGraph
 ./migration-tools/aggregate: interface ResolveRecordedPathInputs, readonly required property storageNameOf: (operation: MigrationPlanOperation) => string
 ./migration-tools/aggregate: interface SchemaCheckSection
 ./migration-tools/aggregate: interface SchemaCheckSection, readonly required property perSpace: ReadonlyMap<string, VerifyDatabaseSchemaResult>
@@ -1061,6 +1068,7 @@
 ./migration-tools/errors: function errorContractSnapshotHashMismatch(storageHash: string, actualHash: string, dir: string): MigrationToolsError
 ./migration-tools/errors: function errorContractSnapshotMissing(storageHash: string, expectedPath: string): MigrationToolsError
 ./migration-tools/errors: function errorDescriptorHeadHashMismatch(args: { readonly extensionId: string; readonly recomputedHash: string; readonly headRefHash: string; }): MigrationToolsError
+./migration-tools/errors: function errorInstalledSpaceUnreachable(args: { readonly spaceId: string; readonly markerHash: string; readonly headRefHash: string; readonly reason: 'laterMajor' | 'unknownContract'; }): MigrationToolsError
 ./migration-tools/errors: function errorInvalidJson(filePath: string, parseError: string): MigrationToolsError
 ./migration-tools/errors: function errorInvalidRefFile(filePath: string, reason: string, policyIssues?: readonly DeclaredDatabasePoliciesIssue[]): MigrationToolsError
 ./migration-tools/errors: function errorInvalidRefName(refName: string): MigrationToolsError
@@ -1090,7 +1098,7 @@
 ./migration-tools/graph: interface MigrationGraph, readonly required property nodes: ReadonlySet<string>
 ./migration-tools/graph: interface MigrationGraph, readonly required property reverseChain: ReadonlyMap<string, readonly MigrationEdge[]>
 ./migration-tools/hash: function computeMigrationHash(metadata: Omit<MigrationMetadata, 'migrationHash'> & { readonly migrationHash?: string; readonly formatVersion?: number; }, ops: MigrationOps): string
-./migration-tools/hash: function verifyMigrationHash(pkg: OnDiskMigrationPackage): VerifyResult
+./migration-tools/hash: function verifyMigrationHash(pkg: MigrationPackage): VerifyResult
 ./migration-tools/hash: interface VerifyResult
 ./migration-tools/hash: interface VerifyResult, readonly optional property reason?: 'mismatch'
 ./migration-tools/hash: interface VerifyResult, readonly required property computedHash: string
@@ -1125,7 +1133,7 @@
 ./migration-tools/migration-graph: function historyEndsFrom(graph: MigrationGraph, hash: string): readonly string[]
 ./migration-tools/migration-graph: function isGraphNode(hash: string, graph: MigrationGraph): boolean
 ./migration-tools/migration-graph: function isInSpaceHistory(hash: string, space: { readonly graph: MigrationGraph; readonly headHash: string | undefined; }): boolean
-./migration-tools/migration-graph: function reconstructGraph(packages: readonly OnDiskMigrationPackage[]): MigrationGraph
+./migration-tools/migration-graph: function reconstructGraph(packages: readonly MigrationPackage[]): MigrationGraph
 ./migration-tools/migration-graph: interface PathDecision
 ./migration-tools/migration-graph: interface PathDecision, readonly optional property refName?: string
 ./migration-tools/migration-graph: interface PathDecision, readonly required property alternativeCount: number
@@ -1242,8 +1250,11 @@
 ./migration-tools/spaces: const SPACE_REFS_DIRNAME = "refs"
 ./migration-tools/spaces: export APP_SPACE_ID from @prisma/orm-framework/components/control
 ./migration-tools/spaces: export type ContractSpaceHeadRef from @prisma/orm-framework/components/control
+./migration-tools/spaces: function applyInstalledContractSpace<TFamilyId extends string, TTargetId extends string>(inputs: ApplyInstalledContractSpaceInputs<TFamilyId, TTargetId>): Promise<Result<InstalledContractSpaceApplied, MigrationRunnerFailure>>
 ./migration-tools/spaces: function assertDescriptorSelfConsistency(inputs: DescriptorSelfConsistencyInputs): void
 ./migration-tools/spaces: function assertValidSpaceId(spaceId: string): asserts spaceId is ValidSpaceId
+./migration-tools/spaces: function classificationNeedsLedger(contractSpace: ContractSpace, row: ContractMarkerRecordLike | null): boolean
+./migration-tools/spaces: function classifyInstalledSpaceRow(inputs: ClassifyInstalledSpaceRowInputs): InstalledSpacePosition
 ./migration-tools/spaces: function computeExtensionSpaceApplyPath(inputs: ComputeExtensionSpaceApplyPathInputs): Promise<ExtensionSpaceApplyPathOutcome>
 ./migration-tools/spaces: function contractSpaceFromJson<TContract extends Contract = Contract>(inputs: { readonly spaceId: string; readonly contractJson: unknown; readonly migrations: ReadonlyArray<{ readonly dirName: string; readonly metadata: unknown; readonly ops: unknown; }>; readonly headRef: unknown; }): ContractSpace<TContract>
 ./migration-tools/spaces: function emitContractSpaceArtifacts(projectMigrationsDir: string, spaceId: string, inputs: ContractSpaceArtifactInputs): Promise<{ readonly writtenPaths: readonly string[]; }>
@@ -1255,6 +1266,17 @@
 ./migration-tools/spaces: function spaceMigrationDirectory(projectMigrationsDir: string, spaceId: string): string
 ./migration-tools/spaces: function spaceRefsDirectory(spaceMigrationsDir: string): string
 ./migration-tools/spaces: function verifyContractSpaces(inputs: VerifyContractSpacesInputs): VerifyContractSpacesResult
+./migration-tools/spaces: interface ApplyInstalledContractSpaceInputs, readonly required property contractSpace: ContractSpace
+./migration-tools/spaces: interface ApplyInstalledContractSpaceInputs, readonly required property driver: ControlDriverInstance<TFamilyId, TTargetId>
+./migration-tools/spaces: interface ApplyInstalledContractSpaceInputs, readonly required property familyInstance: ControlFamilyInstance<TFamilyId, unknown>
+./migration-tools/spaces: interface ApplyInstalledContractSpaceInputs, readonly required property frameworkComponents: ReadonlyArray<TargetBoundComponentDescriptor<TFamilyId, TTargetId>>
+./migration-tools/spaces: interface ApplyInstalledContractSpaceInputs, readonly required property migrations: TargetMigrationsCapability<TFamilyId, TTargetId, ControlFamilyInstance<TFamilyId, unknown>>
+./migration-tools/spaces: interface ApplyInstalledContractSpaceInputs, readonly required property spaceId: string
+./migration-tools/spaces: interface ApplyInstalledContractSpaceInputs<TFamilyId extends string, TTargetId extends string>
+./migration-tools/spaces: interface ClassifyInstalledSpaceRowInputs
+./migration-tools/spaces: interface ClassifyInstalledSpaceRowInputs, readonly required property contractSpace: ContractSpace
+./migration-tools/spaces: interface ClassifyInstalledSpaceRowInputs, readonly required property ledger: readonly { readonly to: string; }[]
+./migration-tools/spaces: interface ClassifyInstalledSpaceRowInputs, readonly required property row: ContractMarkerRecordLike | null
 ./migration-tools/spaces: interface ComputeExtensionSpaceApplyPathInputs
 ./migration-tools/spaces: interface ComputeExtensionSpaceApplyPathInputs, readonly required property currentMarkerHash: null | string
 ./migration-tools/spaces: interface ComputeExtensionSpaceApplyPathInputs, readonly required property currentMarkerInvariants: readonly string[]
@@ -1276,6 +1298,9 @@
 ./migration-tools/spaces: interface DiskContractSpaceState
 ./migration-tools/spaces: interface DiskContractSpaceState, readonly required property headRefsBySpace: ReadonlyMap<string, ContractSpaceHeadRecord>
 ./migration-tools/spaces: interface DiskContractSpaceState, readonly required property spaceDirsOnDisk: readonly string[]
+./migration-tools/spaces: interface InstalledContractSpaceApplied
+./migration-tools/spaces: interface InstalledContractSpaceApplied, readonly required property operationsExecuted: number
+./migration-tools/spaces: interface InstalledContractSpaceApplied, readonly required property outcome: 'ahead' | 'applied' | 'atHead'
 ./migration-tools/spaces: interface SpaceApplyInput, readonly required property currentMarkerHash: null | string
 ./migration-tools/spaces: interface SpaceApplyInput, readonly required property currentMarkerInvariants: readonly string[]
 ./migration-tools/spaces: interface SpaceApplyInput, readonly required property migrationDirectory: string
@@ -1299,6 +1324,7 @@
 ./migration-tools/spaces: interface VerifyContractSpacesInputs, readonly required property markerRowsBySpace: ReadonlyMap<string, SpaceMarkerRecord>
 ./migration-tools/spaces: interface VerifyContractSpacesInputs, readonly required property spaceDirsOnDisk: readonly string[]
 ./migration-tools/spaces: type ExtensionSpaceApplyPathOutcome = { readonly kind: 'contractSpaceHeadRefMissing'; } | { readonly kind: 'ok'; readonly contractSpaceHeadRef: ContractSpaceHeadRef; readonly providedInvariants: readonly string[]; readonly pathOps: MigrationOps; readonly walkedMigrationDirs: readonly string[]; } | { readonly kind: 'unreachable'; readonly contractSpaceHeadRef: ContractSpaceHeadRef; } | { readonly kind: 'unsatisfiable'; readonly contractSpaceHeadRef: ContractSpaceHeadRef; readonly missing: readonly string[]; readonly structuralPath: readonly { readonly dirName: string; readonly to: string; }[]; }
+./migration-tools/spaces: type InstalledSpacePosition = { readonly kind: 'ahead'; } | { readonly kind: 'atHead'; } | { readonly kind: 'behind'; } | { readonly kind: 'unreachable'; readonly reason: 'laterMajor' | 'unknownContract'; readonly markerHash: string; }
 ./migration-tools/spaces: type SpaceVerifierViolation = { readonly kind: 'declaredButUnmigrated'; readonly spaceId: string; readonly remediation: string; } | { readonly kind: 'hashMismatch'; readonly spaceId: string; readonly priorHeadHash: string; readonly markerHash: string; readonly remediation: string; } | { readonly kind: 'invariantsMismatch'; readonly spaceId: string; readonly onDiskInvariants: readonly string[]; readonly markerInvariants: readonly string[]; readonly remediation: string; } | { readonly kind: 'orphanMarker'; readonly spaceId: string; readonly remediation: string; } | { readonly kind: 'orphanSpaceDir'; readonly spaceId: string; readonly remediation: string; }
 ./migration-tools/spaces: type ValidSpaceId = string & { readonly __brand: 'ValidSpaceId'; }
 ./migration-tools/spaces: type VerifyContractSpacesResult = { readonly ok: false; readonly violations: readonly SpaceVerifierViolation[]; } | { readonly ok: true; }
@@ -1339,11 +1365,14 @@
 ./migration-tools: export type MigrationPackage from @prisma/orm-framework/components/control
 ./migration-tools: function advanceRef(refsDir: string, name: string, hash: string): Promise<RefEntry>
 ./migration-tools: function allStorageElementsExternal(contract: Contract): boolean
+./migration-tools: function applyInstalledContractSpace<TFamilyId extends string, TTargetId extends string>(inputs: ApplyInstalledContractSpaceInputs<TFamilyId, TTargetId>): Promise<Result<InstalledContractSpaceApplied, MigrationRunnerFailure>>
 ./migration-tools: function assertDescriptorSelfConsistency(inputs: DescriptorSelfConsistencyInputs): void
 ./migration-tools: function assertHashIsGraphNode(hash: string, graph: MigrationGraph): asserts hash is string
 ./migration-tools: function assertValidSpaceId(spaceId: string): asserts spaceId is ValidSpaceId
 ./migration-tools: function buildFabricatedMigrationEdge(args: { readonly currentMarkerStorageHash: null | string | undefined; readonly destinationStorageHash: string; readonly operationCount: number; readonly destinationContractJson?: unknown; }): AggregateMigrationEdgeRef
 ./migration-tools: function buildMigrationArtifacts(instance: Migration, existing: Partial<MigrationMetadata> | null): Promise<MigrationArtifacts>
+./migration-tools: function classificationNeedsLedger(contractSpace: ContractSpace, row: ContractMarkerRecordLike | null): boolean
+./migration-tools: function classifyInstalledSpaceRow(inputs: ClassifyInstalledSpaceRowInputs): InstalledSpacePosition
 ./migration-tools: function collectAggregateNamespaces(aggregate: ContractSpaceAggregate, originContract?: Contract | null): { readonly storage: { readonly namespaces: Readonly<Record<string, StorageNamespace>>; }; readonly contracts: readonly Contract[]; }
 ./migration-tools: function computeExtensionSpaceApplyPath(inputs: ComputeExtensionSpaceApplyPathInputs): Promise<ExtensionSpaceApplyPathOutcome>
 ./migration-tools: function computeIntegrityViolations(input: IntegrityComputationInput, opts?: IntegrityQueryOptions): readonly IntegrityViolation[]
@@ -1366,6 +1395,7 @@
 ./migration-tools: function errorContractSnapshotHashMismatch(storageHash: string, actualHash: string, dir: string): MigrationToolsError
 ./migration-tools: function errorContractSnapshotMissing(storageHash: string, expectedPath: string): MigrationToolsError
 ./migration-tools: function errorDescriptorHeadHashMismatch(args: { readonly extensionId: string; readonly recomputedHash: string; readonly headRefHash: string; }): MigrationToolsError
+./migration-tools: function errorInstalledSpaceUnreachable(args: { readonly spaceId: string; readonly markerHash: string; readonly headRefHash: string; readonly reason: 'laterMajor' | 'unknownContract'; }): MigrationToolsError
 ./migration-tools: function errorInvalidJson(filePath: string, parseError: string): MigrationToolsError
 ./migration-tools: function errorInvalidRefFile(filePath: string, reason: string, policyIssues?: readonly DeclaredDatabasePoliciesIssue[]): MigrationToolsError
 ./migration-tools: function errorInvalidRefName(refName: string): MigrationToolsError
@@ -1408,9 +1438,9 @@
 ./migration-tools: function readMigrationsDir(migrationsRoot: string, options: ReadMigrationPackageOptions): Promise<ReadMigrationsDirResult>
 ./migration-tools: function readRef(refsDir: string, name: string): Promise<RefEntry>
 ./migration-tools: function readRefs(refsDir: string): Promise<Refs>
-./migration-tools: function reconstructGraph(packages: readonly OnDiskMigrationPackage[]): MigrationGraph
+./migration-tools: function reconstructGraph(packages: readonly MigrationPackage[]): MigrationGraph
 ./migration-tools: function refsByContractHash(refs: Refs): ReadonlyMap<string, readonly string[]>
-./migration-tools: function requireHeadRef(space: AggregateContractSpace): ContractSpaceHeadRecord
+./migration-tools: function requireHeadRef(space: Pick<AggregateContractSpace, 'headRef' | 'spaceId'>): ContractSpaceHeadRecord
 ./migration-tools: function resolveRecordedPath(input: ResolveRecordedPathInputs): ResolveRecordedPathOutcome
 ./migration-tools: function resolveRef(refs: Refs, name: string): RefEntry
 ./migration-tools: function resolveRefsByContractHash(refsDir: string): Promise<ReadonlyMap<string, readonly string[]>>
@@ -1425,7 +1455,7 @@
 ./migration-tools: function validateRefValue(value: string): boolean
 ./migration-tools: function verifyContractSpaces(inputs: VerifyContractSpacesInputs): VerifyContractSpacesResult
 ./migration-tools: function verifyMigration(input: VerifierInput): VerifierOutput
-./migration-tools: function verifyMigrationHash(pkg: OnDiskMigrationPackage): VerifyResult
+./migration-tools: function verifyMigrationHash(pkg: MigrationPackage): VerifyResult
 ./migration-tools: function writeContractSnapshot(migrationsDir: string, storageHash: string, input: ContractSnapshotInput): Promise<{ readonly written: boolean; readonly dir: string; }>
 ./migration-tools: function writeMigrationMetadata(dir: string, metadata: MigrationMetadata): Promise<void>
 ./migration-tools: function writeMigrationOps(dir: string, ops: MigrationOps): Promise<void>
@@ -1453,8 +1483,19 @@
 ./migration-tools: interface AppSpacePlanningInputs
 ./migration-tools: interface AppSpacePlanningInputs, readonly required property fromContract: Contract | null
 ./migration-tools: interface AppSpacePlanningInputs, readonly required property statements: readonly ResolvedMigrationStatement[]
+./migration-tools: interface ApplyInstalledContractSpaceInputs, readonly required property contractSpace: ContractSpace
+./migration-tools: interface ApplyInstalledContractSpaceInputs, readonly required property driver: ControlDriverInstance<TFamilyId, TTargetId>
+./migration-tools: interface ApplyInstalledContractSpaceInputs, readonly required property familyInstance: ControlFamilyInstance<TFamilyId, unknown>
+./migration-tools: interface ApplyInstalledContractSpaceInputs, readonly required property frameworkComponents: ReadonlyArray<TargetBoundComponentDescriptor<TFamilyId, TTargetId>>
+./migration-tools: interface ApplyInstalledContractSpaceInputs, readonly required property migrations: TargetMigrationsCapability<TFamilyId, TTargetId, ControlFamilyInstance<TFamilyId, unknown>>
+./migration-tools: interface ApplyInstalledContractSpaceInputs, readonly required property spaceId: string
+./migration-tools: interface ApplyInstalledContractSpaceInputs<TFamilyId extends string, TTargetId extends string>
 ./migration-tools: interface CallerPolicy
 ./migration-tools: interface CallerPolicy, readonly required property ignoreGraphFor: ReadonlySet<string>
+./migration-tools: interface ClassifyInstalledSpaceRowInputs
+./migration-tools: interface ClassifyInstalledSpaceRowInputs, readonly required property contractSpace: ContractSpace
+./migration-tools: interface ClassifyInstalledSpaceRowInputs, readonly required property ledger: readonly { readonly to: string; }[]
+./migration-tools: interface ClassifyInstalledSpaceRowInputs, readonly required property row: ContractMarkerRecordLike | null
 ./migration-tools: interface ComputeExtensionSpaceApplyPathInputs
 ./migration-tools: interface ComputeExtensionSpaceApplyPathInputs, readonly required property currentMarkerHash: null | string
 ./migration-tools: interface ComputeExtensionSpaceApplyPathInputs, readonly required property currentMarkerInvariants: readonly string[]
@@ -1490,6 +1531,8 @@
 ./migration-tools: interface ContractSpaceHeadRecord
 ./migration-tools: interface ContractSpaceHeadRecord, readonly required property hash: string
 ./migration-tools: interface ContractSpaceHeadRecord, readonly required property invariants: readonly string[]
+./migration-tools: interface ContractSpaceWithGraph extends Pick<AggregateContractSpace, 'contract' | 'graph' | 'headRef' | 'spaceId'>
+./migration-tools: interface ContractSpaceWithGraph, readonly required property packages: readonly MigrationPackage[]
 ./migration-tools: interface DeclaredExtensionEntry
 ./migration-tools: interface DeclaredExtensionEntry, readonly required property id: string
 ./migration-tools: interface DeclaredExtensionEntry, readonly required property targetId: string
@@ -1502,6 +1545,9 @@
 ./migration-tools: interface DiskContractSpaceState
 ./migration-tools: interface DiskContractSpaceState, readonly required property headRefsBySpace: ReadonlyMap<string, ContractSpaceHeadRecord>
 ./migration-tools: interface DiskContractSpaceState, readonly required property spaceDirsOnDisk: readonly string[]
+./migration-tools: interface InstalledContractSpaceApplied
+./migration-tools: interface InstalledContractSpaceApplied, readonly required property operationsExecuted: number
+./migration-tools: interface InstalledContractSpaceApplied, readonly required property outcome: 'ahead' | 'applied' | 'atHead'
 ./migration-tools: interface IntegrityComputationInput
 ./migration-tools: interface IntegrityComputationInput, readonly required property spaces: readonly IntegritySpaceState[]
 ./migration-tools: interface IntegrityComputationInput, readonly required property targetId: string
@@ -1632,7 +1678,7 @@
 ./migration-tools: interface ResolveRecordedPathInputs, readonly required property accessChangesOf: (operations: readonly MigrationPlanOperation[]) => readonly MigrationAccessChange[]
 ./migration-tools: interface ResolveRecordedPathInputs, readonly required property aggregateTargetId: string
 ./migration-tools: interface ResolveRecordedPathInputs, readonly required property currentMarker: ContractMarkerRecordLike | null
-./migration-tools: interface ResolveRecordedPathInputs, readonly required property space: AggregateContractSpace
+./migration-tools: interface ResolveRecordedPathInputs, readonly required property space: ContractSpaceWithGraph
 ./migration-tools: interface ResolveRecordedPathInputs, readonly required property storageNameOf: (operation: MigrationPlanOperation) => string
 ./migration-tools: interface SchemaCheckSection
 ./migration-tools: interface SchemaCheckSection, readonly required property perSpace: ReadonlyMap<string, VerifyDatabaseSchemaResult>
@@ -1683,6 +1729,7 @@
 ./migration-tools: type ContractAtResult = { readonly provenance: 'graph-node'; readonly hash: string; readonly contractJson: unknown; readonly contract: Contract; } | { readonly provenance: 'ref'; readonly hash: string; readonly contractJson: unknown; readonly contract: Contract; }
 ./migration-tools: type ContractRefProvenance = { readonly kind: 'hash'; readonly input: string; } | { readonly kind: 'migration-from'; readonly dirName: string; } | { readonly kind: 'migration-to'; readonly dirName: string; } | { readonly kind: 'ref'; readonly refName: string; } | { readonly kind: 'reserved-contract'; } | { readonly kind: 'reserved-db'; } | { readonly kind: 'reserved-empty'; }
 ./migration-tools: type ExtensionSpaceApplyPathOutcome = { readonly kind: 'contractSpaceHeadRefMissing'; } | { readonly kind: 'ok'; readonly contractSpaceHeadRef: ContractSpaceHeadRef; readonly providedInvariants: readonly string[]; readonly pathOps: MigrationOps; readonly walkedMigrationDirs: readonly string[]; } | { readonly kind: 'unreachable'; readonly contractSpaceHeadRef: ContractSpaceHeadRef; } | { readonly kind: 'unsatisfiable'; readonly contractSpaceHeadRef: ContractSpaceHeadRef; readonly missing: readonly string[]; readonly structuralPath: readonly { readonly dirName: string; readonly to: string; }[]; }
+./migration-tools: type InstalledSpacePosition = { readonly kind: 'ahead'; } | { readonly kind: 'atHead'; } | { readonly kind: 'behind'; } | { readonly kind: 'unreachable'; readonly reason: 'laterMajor' | 'unknownContract'; readonly markerHash: string; }
 ./migration-tools: type IntegrityViolation = { readonly kind: 'contractUnreadable'; readonly spaceId: string; readonly detail: string; readonly hash: string | undefined; } | { readonly kind: 'declaredButUnmigrated'; readonly spaceId: string; } | { readonly kind: 'disjointness'; readonly element: string; readonly claimedBy: readonly string[]; } | { readonly kind: 'duplicateMigrationHash'; readonly spaceId: string; readonly migrationHash: string; readonly dirNames: readonly string[]; } | { readonly kind: 'hashMismatch'; readonly spaceId: string; readonly dirName: string; readonly stored: string; readonly computed: string; } | { readonly kind: 'headRefMissing'; readonly spaceId: string; } | { readonly kind: 'headRefNotInGraph'; readonly spaceId: string; readonly hash: string; } | { readonly kind: 'orphanSpaceDir'; readonly spaceId: string; } | { readonly kind: 'packageUnloadable'; readonly spaceId: string; readonly dirName: string; readonly detail: string; } | { readonly kind: 'providedInvariantsMismatch'; readonly spaceId: string; readonly dirName: string; } | { readonly kind: 'refUnreadable'; readonly spaceId: string; readonly refName: string; readonly path: string; readonly detail: string; readonly policyIssues?: readonly DeclaredDatabasePoliciesIssue[]; } | { readonly kind: 'sameSourceAndTarget'; readonly spaceId: string; readonly dirName: string; readonly hash: string; } | { readonly kind: 'targetMismatch'; readonly spaceId: string; readonly expected: string; readonly actual: string; }
 ./migration-tools: type MarkerCheckResult = { readonly kind: 'absent'; } | { readonly kind: 'hashMismatch'; readonly markerHash: string; readonly expected: string; } | { readonly kind: 'missingInvariants'; readonly missing: readonly string[]; } | { readonly kind: 'ok'; }
 ./migration-tools: type MigrationMetadataDocument = MigrationMetadataDocumentV1

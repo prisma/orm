@@ -18,6 +18,7 @@ import { timeouts, withDevDatabase } from '@repo/test-utils';
 import { join } from 'pathe';
 import { describe, expect, it } from 'vitest';
 import { runSchemaVerify } from '../family.schema-verify.helpers';
+import { createPrismaTables } from '../postgres-bootstrap';
 import {
   authorSqlContractFromPsl,
   findStorageColumn,
@@ -100,6 +101,7 @@ async function applyContract(connectionString: string, contract: Contract<SqlSto
       throw new Error(`planner failed: ${JSON.stringify(planResult)}`);
     }
     const { plan } = planResult;
+    await createPrismaTables(driver);
     const runResult = await postgres.createRunner(familyInstance).execute({
       driver,
       perSpaceOptions: [

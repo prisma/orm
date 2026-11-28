@@ -37,13 +37,13 @@ import {
   databaseCapabilitiesNotProvidedText,
   failedPostcheckWhy,
   failedPrecheckWhy,
+  isPrismaSpace,
   schemaCheckWhy,
   withDatabaseUnchanged,
   withFailingSpace,
 } from '@internal/framework-components/control';
 import type { SqlControlDriverInstance, SqlStorage } from '@internal/sql-contract/types';
 import { SqlConnectionError, SqlQueryError } from '@internal/sql-errors';
-import type { SqlExecuteRequest } from '@internal/sql-relational-core/ast';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
@@ -51,6 +51,12 @@ import type { Result } from '@internal/utils/result';
 import { notOk, ok, okVoid } from '@internal/utils/result';
 import { postgresDatabaseCapabilitiesNotProvided } from '../database-capabilities-not-provided';
 import { postgresError } from '../errors';
+import {
+  PRISMA_TABLE_NAMES,
+  PRISMA_TABLES_MISSING_WHY,
+  prismaTablesMissingSummary,
+  qualifiedPrismaTable,
+} from '../prisma-tables';
 import { type CapabilitiesByVersion, postgresCapabilitiesByVersion } from '../server-version';
 import { readPostgresServerVersionNumber } from '../server-version-number';
 import { CONTROL_PLANE_LC_MONETARY, quoteIdentifier } from '../sql-utils';
@@ -205,8 +211,10 @@ class PostgresMigrationRunner implements SqlMigrationRunner<PostgresPlanTargetDe
 
     await this.readMoneyLiteralsInCents(driver);
     await this.acquireLock(driver);
-    const ensureResult = await this.ensureControlTables(driver, options.destinationContract);
-    if (!ensureResult.ok) return ensureResult;
+    if (!isPrismaSpace(space)) {
+      const tablesCheck = await this.ensurePrismaTablesExist(driver);
+      if (!tablesCheck.ok) return tablesCheck;
+    }
     const existingMarker = await this.family.readMarker({ driver, space });
 
     const markerCheck = this.ensureMarkerCompatibility(existingMarker, options.plan);
@@ -431,21 +439,21 @@ class PostgresMigrationRunner implements SqlMigrationRunner<PostgresPlanTargetDe
     return ok({ operationsExecuted, executedOperations });
   }
 
-  private async ensureControlTables(
+  /**
+   * The target's `_prisma` contract space creates the marker and ledger tables. Without them a space's operations would run and its marker write would then fail, and on a database a release candidate set up, whose tables are in the schema `prisma_contract`, the runner would read no row and plan from an empty database.
+   */
+  private async ensurePrismaTablesExist(
     driver: SqlMigrationRunnerExecuteOptions<PostgresPlanTargetDetails>['driver'],
-    contract: Contract<SqlStorage>,
   ): Promise<Result<void, SqlMigrationRunnerFailure>> {
-    const lowererContext = { contract };
-    const bootstrapQueries = this.family.bootstrapControlTableQueries();
-    const [schemaQuery, ...tableQueries] = bootstrapQueries;
-    if (schemaQuery === undefined) {
-      throw new InternalError('Postgres control-table bootstrap must include CREATE SCHEMA');
-    }
-    await this.executeStatement(driver, await this.family.lowerAst(schemaQuery, lowererContext));
-    for (const query of tableQueries) {
-      await this.executeStatement(driver, await this.family.lowerAst(query, lowererContext));
-    }
-    return okVoid();
+    const found = await driver.query<{ readonly exists: boolean }>(
+      'SELECT to_regclass($1) IS NOT NULL AS "exists"',
+      [qualifiedPrismaTable(PRISMA_TABLE_NAMES.marker)],
+    );
+    if (found.rows[0]?.exists === true) return okVoid();
+    return runnerFailure('MIGRATION.PRISMA_TABLES_MISSING', prismaTablesMissingSummary(), {
+      why: PRISMA_TABLES_MISSING_WHY,
+      meta: { markerLocation: this.family.markerLocation },
+    });
   }
 
   private async runExpectationSteps(
@@ -1006,12 +1014,5 @@ class PostgresMigrationRunner implements SqlMigrationRunner<PostgresPlanTargetDe
     driver: SqlMigrationRunnerExecuteOptions<PostgresPlanTargetDetails>['driver'],
   ): Promise<void> {
     await driver.query('ROLLBACK');
-  }
-
-  private async executeStatement(
-    driver: SqlMigrationRunnerExecuteOptions<PostgresPlanTargetDetails>['driver'],
-    statement: SqlExecuteRequest,
-  ): Promise<void> {
-    await driver.query(statement.sql, statement.params);
   }
 }

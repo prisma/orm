@@ -178,11 +178,11 @@ describe('PostgresMigrationRunner.execute', { concurrent: false }, () => {
     // table itself may not have been created since the whole
     // transaction rolled back).
     const markerSchemaExists = await driver!.query<{ exists: boolean }>(
-      `select exists(select 1 from information_schema.schemata where schema_name = 'prisma_contract') as exists`,
+      `select exists(select 1 from information_schema.schemata where schema_name = '_prisma') as exists`,
     );
     if (markerSchemaExists.rows[0]?.exists) {
       const markers = await driver!.query<{ space: string }>(
-        'select space from prisma_contract.marker',
+        "select space from _prisma.marker where space <> '_prisma'",
       );
       expect(markers.rows).toEqual([]);
     }
@@ -212,7 +212,7 @@ describe('PostgresMigrationRunner.execute', { concurrent: false }, () => {
     expect(result.ok).toBe(true);
 
     const markerRow = await driver!.query<{ space: string; core_hash: string }>(
-      'select space, core_hash from prisma_contract.marker order by space',
+      "select space, core_hash from _prisma.marker where space <> '_prisma' order by space",
     );
     expect(markerRow.rows).toEqual([
       {

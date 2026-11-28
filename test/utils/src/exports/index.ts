@@ -130,5 +130,6 @@ export async function teardownTestDatabase(client: Client, tables?: string[]): P
       await client.query(`drop table if exists "${table}"`);
     }
   }
+  await client.query('drop schema if exists _prisma cascade');
   await client.query('drop schema if exists prisma_contract cascade');
 }

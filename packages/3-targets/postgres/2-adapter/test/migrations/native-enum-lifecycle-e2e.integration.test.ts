@@ -29,6 +29,7 @@ import {
 } from './fixtures/native-enum-lifecycle';
 import {
   createDriver,
+  createPrismaTables,
   createTestDatabase,
   emptySchema,
   familyInstance,
@@ -58,6 +59,7 @@ function lifecycleSuite(cfg: LifecycleConfig): void {
     beforeAll(async () => {
       database = await createTestDatabase();
       driver = await createDriver(database.connectionString);
+      await createPrismaTables(driver);
     }, testTimeout);
 
     afterAll(async () => {

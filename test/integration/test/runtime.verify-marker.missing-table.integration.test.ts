@@ -29,7 +29,7 @@ describe('runtime verify-marker: missing marker table', {
     connectionString = database.connectionString;
     closeFns.push(() => database.close());
 
-    // Deliberately skip `prisma_contract.marker` — the scenario under test
+    // Deliberately skip `_prisma.marker` — the scenario under test
     // is PN attaching to a database that has never had `db init` run.
     await withClient(connectionString, async (client) => {
       await client.query(`

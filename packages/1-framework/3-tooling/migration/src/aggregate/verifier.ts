@@ -1,6 +1,7 @@
-import type {
-  SchemaEntityCoordinate,
-  VerifyDatabaseSchemaResult,
+import {
+  isPrismaSpace,
+  type SchemaEntityCoordinate,
+  type VerifyDatabaseSchemaResult,
 } from '@internal/framework-components/control';
 import { coordinateKey } from '@internal/framework-components/ir';
 import type { Result } from '@internal/utils/result';
@@ -188,10 +189,10 @@ function runVerifyMigration(input: VerifierInput): VerifierOutput {
   }
 
   // Orphan markers: entries in markersBySpaceId whose spaceId is not a
-  // contract space of the aggregate.
+  // contract space of the aggregate, nor the Prisma space.
   const orphanMarkers: { spaceId: string; row: ContractMarkerRecordLike }[] = [];
   for (const [spaceId, row] of markersBySpaceId) {
-    if (row !== null && !aggregateSpaceIds.has(spaceId)) {
+    if (row !== null && !aggregateSpaceIds.has(spaceId) && !isPrismaSpace(spaceId)) {
       orphanMarkers.push({ spaceId, row });
     }
   }

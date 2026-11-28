@@ -51,6 +51,23 @@ describe('verifyMarker', () => {
     );
   });
 
+  it('warns that an earlier release wrote the tables when the adapter finds them in that form', async () => {
+    const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    const runtime = buildRuntime({ markerResult: { kind: 'earlier-release' }, log });
+
+    await runtime.query(createPlan()).toArray();
+
+    expect(log.warn).toHaveBeenCalledOnce();
+    expect(log.warn).toHaveBeenCalledWith({
+      code: 'CONTRACT.PRISMA_SPACE_BEHIND',
+      scope: 'marker-verification',
+      expected: { storageHash: 'test', profileHash: 'test-profile' },
+      actual: null,
+      message:
+        'The records Prisma keeps for itself in this database are not up to date with the installed release of Prisma, so the contract the database matches cannot be read. Run the command the project already uses to change its database: `prisma db migrate` in a project that applies migrations, `prisma db update` in one that changes its database with `db update`, or `prisma db sign` in one that only signs it. Each brings the records Prisma keeps for itself up to date before it does its usual work.',
+    });
+  });
+
   it('emits no log when the marker record matches the contract', async () => {
     const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
     const runtime = buildRuntime({

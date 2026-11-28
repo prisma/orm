@@ -252,7 +252,7 @@ withTempDir(({ createTempDir }) => {
           expect(snapshotExists(ctx, signedHash)).toBe(false);
           await withClient(connectionString, async (client) => {
             const result = await client.query(
-              'select core_hash from prisma_contract.marker where space = $1',
+              'select core_hash from _prisma.marker where space = $1',
               ['app'],
             );
             expect(result.rows).toHaveLength(1);

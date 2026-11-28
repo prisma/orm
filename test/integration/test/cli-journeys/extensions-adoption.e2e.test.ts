@@ -69,7 +69,7 @@ async function markers(
 ): Promise<Record<string, { readonly hash: string; readonly invariants: readonly string[] }>> {
   return withClient(connectionString, async (client) => {
     const result = await client.query(
-      'SELECT space, core_hash, invariants FROM prisma_contract.marker ORDER BY space',
+      "SELECT space, core_hash, invariants FROM _prisma.marker WHERE space <> '_prisma' ORDER BY space",
     );
     return Object.fromEntries(
       result.rows.map((row) => [row.space, { hash: row.core_hash, invariants: row.invariants }]),
@@ -80,7 +80,7 @@ async function markers(
 async function appliedMigrations(connectionString: string, spaceId: string): Promise<string[]> {
   return withClient(connectionString, async (client) => {
     const result = await client.query(
-      'SELECT migration_name FROM prisma_contract.ledger WHERE space = $1 ORDER BY id',
+      'SELECT migration_name FROM _prisma.ledger WHERE space = $1 ORDER BY id',
       [spaceId],
     );
     return result.rows.map((row) => row.migration_name);

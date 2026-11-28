@@ -52,5 +52,14 @@
     "lastRelease": "8.0.0-rc.25",
     "fingerprint": "192a7de67f01c3fd",
     "reason": "A column name that several joined tables share must now name its table (prisma/orm#31150)."
+  },
+  {
+    "path": "./runtime",
+    "export": "SupabaseDb",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "2480ffa3c26a7fbf",
+    "reason": "A marker read can now report that Prisma's own tables are in a release candidate's schema (prisma/orm#31234)."
   }
 ]

@@ -22,6 +22,7 @@ import postgresRuntimeTarget, {
 } from '@internal/target-postgres/runtime';
 import { createDevDatabase, type DevDatabase, timeouts, withClient } from '@repo/test-utils';
 import { afterAll, beforeAll, describe, expect, expectTypeOf, it } from 'vitest';
+import { createPrismaTables } from '../postgres-bootstrap';
 import type { Contract } from '../sql-orm-client/fixtures/scalar-lists/generated/contract';
 import contractJson from '../sql-orm-client/fixtures/scalar-lists/generated/contract.json' with {
   type: 'json',
@@ -60,6 +61,7 @@ async function migrateContract(connectionString: string): Promise<void> {
       throw new Error(`planner failed: ${JSON.stringify(planResult)}`);
     }
 
+    await createPrismaTables(driver);
     const runner = postgres.createRunner(familyInstance);
     const runResult = await runner.execute({
       driver,
@@ -108,7 +110,7 @@ describe('ORM scalar-list round-trip', { concurrent: false }, () => {
       await withClient(database.connectionString, async (client) => {
         await client.query('DROP SCHEMA IF EXISTS public CASCADE');
         await client.query('CREATE SCHEMA public');
-        await client.query('DROP SCHEMA IF EXISTS prisma_contract CASCADE');
+        await client.query('DROP SCHEMA IF EXISTS _prisma CASCADE');
       });
       await migrateContract(database.connectionString);
 

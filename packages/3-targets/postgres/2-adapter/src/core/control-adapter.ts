@@ -30,6 +30,7 @@ import {
 import {
   APP_SPACE_ID,
   DATABASE_POLICIES_META_KEY,
+  isPrismaSpace,
   type MarkerDestination,
   type MarkerInsert,
   type SchemaNodeRef,
@@ -77,10 +78,7 @@ import {
   type PostgresCodecRegistry,
   parsePostgresListText,
 } from '@internal/target-postgres/codecs';
-import {
-  buildControlTableBootstrapQueries,
-  buildSignMarkerBootstrapQueries,
-} from '@internal/target-postgres/contract-free';
+import { PRISMA_TABLE_NAMES, PRISMA_TABLES_SCHEMA } from '@internal/target-postgres/contract-free';
 import type {
   AddColumnAction,
   AddConstraintAction,
@@ -134,7 +132,6 @@ import { adapterError } from './adapter-errors';
 import { encodeControlQueryParams } from './control-codecs';
 import {
   execute,
-  infoSchemaTables,
   ledger,
   ledgerContract,
   ledgerReadShape,
@@ -142,13 +139,20 @@ import {
   mergeInvariants,
   metaRecordingPolicies,
   NOW,
+  prismaTableExists,
+  prismaTableHasColumns,
 } from './marker-ledger';
+import {
+  errorPrismaTablesFromEarlierRelease,
+  errorPrismaTablesMissing,
+  prismaTablesFromEarlierRelease,
+} from './prisma-tables-state';
 import { reportedSqlType } from './reported-sql-type';
 import { renderLoweredSql } from './sql-renderer';
 import type { PostgresContract } from './types';
 
-const POSTGRES_MARKER_TABLE = 'prisma_contract.marker';
-const POSTGRES_LEDGER_TABLE = 'prisma_contract.ledger';
+const POSTGRES_MARKER_TABLE = `${PRISMA_TABLES_SCHEMA}.${PRISMA_TABLE_NAMES.marker}`;
+const POSTGRES_LEDGER_TABLE = `${PRISMA_TABLES_SCHEMA}.${PRISMA_TABLE_NAMES.ledger}`;
 
 /**
  * Tables another migration tool, not Prisma 8, keeps in an application schema: Prisma 7's ledger. `introspect` leaves them out unless the contract declares a table of that name in the same namespace.
@@ -225,12 +229,14 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
     private readonly declaredDataTypes: readonly DataType[],
   ) {}
 
+  /** None: the first migration of the target's `_prisma` contract space creates the tables. */
   bootstrapControlTableQueries(): readonly DdlNode[] {
-    return buildControlTableBootstrapQueries();
+    return [];
   }
 
+  /** None: the first migration of the target's `_prisma` contract space creates the tables. */
   bootstrapSignMarkerQueries(): readonly DdlNode[] {
-    return buildSignMarkerBootstrapQueries();
+    return [];
   }
 
   /**
@@ -299,9 +305,9 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
   }
 
   /**
-   * Reads the contract marker from `prisma_contract.marker`. Probes
+   * Reads the contract marker from `_prisma.marker`. Probes
    * `information_schema.tables` first so a fresh database (where the
-   * `prisma_contract` schema doesn't yet exist) returns `null` instead of a
+   * `_prisma` schema doesn't yet exist) returns `null` instead of a
    * "relation does not exist" error — some Postgres wire-protocol clients
    * (e.g. PGlite's TCP proxy) don't fully recover from extended-protocol
    * parse errors, so we probe before reading.
@@ -311,6 +317,7 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
     space: string,
   ): Promise<ContractMarkerRecord | null> {
     const result = await this.readMarkerDiscriminated(driver, space);
+    if (result.kind === 'earlier-release') throw errorPrismaTablesFromEarlierRelease();
     return result.kind === 'present' ? result.record : null;
   }
 
@@ -323,9 +330,9 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
   }
 
   /**
-   * Reads every row from `prisma_contract.marker` and returns them keyed
+   * Reads every row from `_prisma.marker` and returns them keyed
    * by `space`. Mirrors the existence probe in {@link readMarker}: a
-   * fresh database without the `prisma_contract` schema returns an empty
+   * fresh database without the `_prisma` schema returns an empty
    * map rather than raising "relation does not exist".
    */
   async readAllMarkers(
@@ -339,16 +346,10 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
     driver: SqlControlDriverInstance<'postgres'>,
   ): Promise<ReadonlyMap<string, ContractMarkerRecord>> {
     const lower = (query: AnyQueryAst) => this.lower(query, { contract: undefined });
-    const probe = infoSchemaTables
-      .select(infoSchemaTables.table_schema)
-      .where(
-        infoSchemaTables.table_schema
-          .eq('prisma_contract')
-          .and(infoSchemaTables.table_name.eq('marker')),
-      )
-      .build();
-    const exists = await execute(lower, driver, probe);
-    if (exists.length === 0) {
+    if (!(await prismaTableExists(lower, driver, PRISMA_TABLE_NAMES.marker))) {
+      if (await prismaTablesFromEarlierRelease(lower, driver, undefined)) {
+        throw errorPrismaTablesFromEarlierRelease();
+      }
       return new Map();
     }
 
@@ -387,7 +388,7 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
   }
 
   /**
-   * Reads per-migration ledger rows from `prisma_contract.ledger` in apply
+   * Reads per-migration ledger rows from `_prisma.ledger` in apply
    * order. Probes `information_schema.tables` first so a fresh database
    * without the ledger table returns `[]` instead of raising "relation does
    * not exist".
@@ -405,16 +406,10 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
     space: string | undefined,
   ): Promise<readonly LedgerEntryRecord[]> {
     const lower = (query: AnyQueryAst) => this.lower(query, { contract: undefined });
-    const probe = infoSchemaTables
-      .select(infoSchemaTables.table_schema)
-      .where(
-        infoSchemaTables.table_schema
-          .eq('prisma_contract')
-          .and(infoSchemaTables.table_name.eq('ledger')),
-      )
-      .build();
-    const exists = await execute(lower, driver, probe);
-    if (exists.length === 0) {
+    if (!(await prismaTableExists(lower, driver, PRISMA_TABLE_NAMES.ledger))) {
+      if (await prismaTablesFromEarlierRelease(lower, driver, space)) {
+        throw errorPrismaTablesFromEarlierRelease();
+      }
       return [];
     }
 
@@ -457,8 +452,12 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
     space: string,
     destination: MarkerInsert,
   ): Promise<void> {
+    const lower = (query: AnyQueryAst) => this.lower(query, { contract: undefined });
+    if (!(await prismaTableExists(lower, driver, PRISMA_TABLE_NAMES.marker))) {
+      throw errorPrismaTablesMissing(this.markerLocation);
+    }
     await execute(
-      (query) => this.lower(query, { contract: undefined }),
+      lower,
       driver,
       marker
         .insert({
@@ -582,7 +581,7 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
   }
 
   /**
-   * Appends a ledger entry for `space`. When the edge carries a destination contract snapshot, the content-addressed `prisma_contract.contract` store is populated first (keyed by the destination hash, DO NOTHING on revisit) so a reader never sees a ledger row whose stored destination contract is missing. See the `SqlControlAdapter.writeLedgerEntry` contract.
+   * Appends a ledger entry for `space`. When the edge carries a destination contract snapshot, the content-addressed `_prisma.contract` store is populated first (keyed by the destination hash, DO NOTHING on revisit) so a reader never sees a ledger row whose stored destination contract is missing. See the `SqlControlAdapter.writeLedgerEntry` contract.
    */
   async writeLedgerEntry(
     driver: SqlControlDriverInstance<'postgres'>,
@@ -625,30 +624,41 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
     );
   }
 
+  /**
+   * A marker table in `_prisma` that lacks a column this select names was not created by Prisma's first migration. For the Prisma space's own row that reads as no row, so the phase runs the first migration, whose check of the marker table's columns stops it and names the table.
+   */
   private async readMarkerResult(driver: SqlControlDriverInstance<'postgres'>, space: string) {
     const lower = (query: AnyQueryAst) => this.lower(query, { contract: undefined });
-    const probe = infoSchemaTables
-      .select(infoSchemaTables.table_schema)
-      .where(
-        infoSchemaTables.table_schema
-          .eq('prisma_contract')
-          .and(infoSchemaTables.table_name.eq('marker')),
-      )
-      .build();
-    const exists = await execute(lower, driver, probe);
-    if (exists.length === 0) return { kind: 'no-table' as const };
+    if (!(await prismaTableExists(lower, driver, PRISMA_TABLE_NAMES.marker))) {
+      return (await prismaTablesFromEarlierRelease(lower, driver, space))
+        ? { kind: 'earlier-release' as const }
+        : { kind: 'no-table' as const };
+    }
+
+    const selected = [
+      marker.core_hash,
+      marker.profile_hash,
+      marker.contract_json,
+      marker.canonical_version,
+      marker.updated_at,
+      marker.app_tag,
+      marker.meta,
+      marker.invariants,
+    ];
+    if (
+      isPrismaSpace(space) &&
+      !(await prismaTableHasColumns(
+        lower,
+        driver,
+        PRISMA_TABLE_NAMES.marker,
+        [marker.space, ...selected].map((column) => column.columnName),
+      ))
+    ) {
+      return { kind: 'absent' as const };
+    }
 
     const fetch = marker
-      .select(
-        marker.core_hash,
-        marker.profile_hash,
-        marker.contract_json,
-        marker.canonical_version,
-        marker.updated_at,
-        marker.app_tag,
-        marker.meta,
-        marker.invariants,
-      )
+      .select(...selected)
       .where(marker.space.eq(space))
       .build();
     const result = await execute(lower, driver, fetch);

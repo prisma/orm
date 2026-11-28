@@ -78,6 +78,7 @@ import { dbFlag, permitPolicyChangeFlag } from '../flags';
 import { displayPath, migrationsDirFor } from '../migration/paths';
 import { normalizeError } from '../normalize-error';
 import { promptPlanQuestions } from '../plan-question-prompt';
+import { reportPrismaSpaceApplied } from '../prisma-space-report';
 import { controlProgressReporter } from '../progress';
 import { dbUpdateStatementVerbs } from '../statement-verbs';
 import { migrationResultBlocks, migrationResultNextActions } from './migration-blocks';
@@ -485,6 +486,7 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
           },
           ...ifDefined('emittedContractHash', storageHashOf(prepared.value.contractJson)),
           onPlannerWarnings: plannerWarnings.onPlannerWarnings,
+          onPrismaSpaceApplied: () => reportPrismaSpaceApplied(ctx.report),
           onUnreadableOrigin: ({ path, reason }) =>
             ctx.report({
               kind: 'message',

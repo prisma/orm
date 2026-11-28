@@ -5197,6 +5197,9 @@ importers:
       '@internal/sql-errors':
         specifier: workspace:8.0.0-rc.25
         version: link:../../../2-sql-family/1-core/errors
+      '@prisma/cli-engine':
+        specifier: 0.10.4
+        version: 0.10.4(@prisma/management-api-sdk@1.76.0)(magicast@0.5.4)
       '@repo/test-utils':
         specifier: workspace:8.0.0-rc.25
         version: link:../../../../test/utils

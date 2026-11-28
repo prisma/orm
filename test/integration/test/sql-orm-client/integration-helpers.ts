@@ -10,6 +10,7 @@ import type { SqlMiddleware, SqlRuntimeExtensionDescriptor } from '@internal/sql
 import postgresTargetControl from '@internal/target-postgres/control';
 import { createDevDatabase, type DevDatabase, timeouts, withDevDatabase } from '@repo/test-utils';
 import { afterAll, expect } from 'vitest';
+import { createPrismaTables } from '../postgres-bootstrap';
 import { withReturningCapability } from './collection-fixtures';
 import {
   contextFor,
@@ -152,6 +153,7 @@ export async function withPushedContractRuntime(
       }
 
       const plan = planResult.plan;
+      await createPrismaTables(driver);
       const runner = postgresTargetControl.createRunner(controlFamily);
       const executeResult = await runner.execute({
         driver,

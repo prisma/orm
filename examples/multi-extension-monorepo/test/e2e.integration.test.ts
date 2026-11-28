@@ -173,7 +173,7 @@ describe('multi-extension-monorepo end-to-end (PGlite)', {
   beforeEach(async () => {
     await withClient(database.connectionString, async (pg) => {
       await pg.query('drop schema if exists public cascade');
-      await pg.query('drop schema if exists prisma_contract cascade');
+      await pg.query('drop schema if exists _prisma cascade');
       await pg.query('create schema public');
     });
   }, timeouts.spinUpPpgDev);
@@ -284,7 +284,9 @@ describe('multi-extension-monorepo end-to-end (PGlite)', {
         space: string;
         core_hash: string;
         invariants: readonly string[];
-      }>('select space, core_hash, invariants from prisma_contract.marker order by space');
+      }>(
+        "select space, core_hash, invariants from _prisma.marker where space <> '_prisma' order by space",
+      );
       const markerBySpace = new Map(markers.rows.map((row) => [row.space, row]));
 
       expect([...markerBySpace.keys()].sort()).toEqual(
@@ -370,7 +372,7 @@ describe('multi-extension-monorepo end-to-end (PGlite)', {
       const markers = await pg.query<{
         space: string;
         core_hash: string;
-      }>('select space, core_hash from prisma_contract.marker order by space');
+      }>("select space, core_hash from _prisma.marker where space <> '_prisma' order by space");
       const markerBySpace = new Map(markers.rows.map((row) => [row.space, row]));
 
       expect(markerBySpace.get(AUDIT_SPACE_ID)?.core_hash).toBe(AUDIT_STORAGE_HASH);

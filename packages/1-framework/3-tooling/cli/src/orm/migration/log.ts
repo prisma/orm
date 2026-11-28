@@ -1,5 +1,6 @@
 import { ormConfigSection } from '@internal/config-loader';
 import type { LedgerEntryRecord } from '@internal/contract/types';
+import { isPrismaSpace } from '@internal/framework-components/control';
 import { ifDefined } from '@internal/utils/defined';
 import type { Block, Presentations, Text } from '@prisma/cli-engine';
 import { flag } from '@prisma/cli-engine';
@@ -164,7 +165,7 @@ export const migrationLogCommand = defineOrmCommand({
     let entries: readonly LedgerEntryRecord[];
     try {
       await client.connect(dbConnection);
-      entries = await client.readLedger();
+      entries = (await client.readLedger()).filter((entry) => !isPrismaSpace(entry.space));
     } catch (error) {
       return notOk(
         normalizeError(

@@ -37,7 +37,7 @@ This skill does **not** cover migrating from another ORM (Drizzle, Prisma 6/7, S
   - **Why the application lists them.** The application must have exactly one copy of each. Prisma does not accept a value that another copy of its own code created, and a package manager takes a peer dependency only from the application's own list. A monorepo whose applications are on different Prisma releases can still get two copies under npm workspaces and under Bun's hoisted linker; keep such applications on one release, or use pnpm, Yarn or Bun's isolated linker.
   - **Yarn Plug'n'Play.** `prisma orm init` does not support it. With Yarn, set `nodeLinker: node-modules` in `.yarnrc.yml` first.
 - **`db.ts`**: the runtime entry point. Lives next to the contract source at `src/prisma/db.ts`. Imports the contract artefacts and exports a `db` value the rest of the app uses.
-- **Marker**: a row in the `prisma_contract.marker` table (Postgres) or a document in the `_prisma_migrations` collection (Mongo) that records the contract hash per contract space. Lets Prisma 8 detect drift between contract and live DB. Created by `db init` (greenfield / first-touch orientation) or `db sign` (brownfield).
+- **Marker**: a row in the `_prisma.marker` table (Postgres) or a document in the `_prisma_migrations` collection (Mongo) that records the contract hash per contract space. Lets Prisma 8 detect drift between contract and live DB. Created by `db init` (greenfield / first-touch orientation) or `db sign` (brownfield).
 
 ### Canonical on-disk layout
 

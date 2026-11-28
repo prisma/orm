@@ -15,6 +15,7 @@ import postgres from '@internal/target-postgres/control';
 import postgresRuntimeTarget from '@internal/target-postgres/runtime';
 import { createDevDatabase, type DevDatabase, timeouts, withClient } from '@repo/test-utils';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { createPrismaTables } from '../postgres-bootstrap';
 import { includeStrategies, withIncludeStrategy } from '../sql-orm-client/helpers';
 import { createTestRuntimeFromClient } from '../utils';
 import { authorSqlContractFromPsl, postgresFrameworkComponents } from './psl-list-authoring';
@@ -76,6 +77,7 @@ async function migrateContract(connectionString: string, contract: Contract<SqlS
     if (planResult.kind !== 'success') {
       throw new Error(`planner failed: ${JSON.stringify(planResult)}`);
     }
+    await createPrismaTables(driver);
     const runResult = await postgres.createRunner(familyInstance).execute({
       driver,
       perSpaceOptions: [

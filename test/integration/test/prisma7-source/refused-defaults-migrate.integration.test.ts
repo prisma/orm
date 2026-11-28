@@ -13,6 +13,7 @@ import { prisma7PostgresBinding } from '@internal/target-postgres/prisma7-bindin
 import { createDevDatabase, type DevDatabase, timeouts, withClient } from '@repo/test-utils';
 import { join } from 'pathe';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { createPrismaTables } from '../postgres-bootstrap';
 import { postgresFrameworkComponents } from '../scalar-lists/psl-list-authoring';
 import { loadPrisma7Schema } from './load-prisma7-schema';
 
@@ -72,6 +73,7 @@ describe('a Prisma 7 default a Date cannot hold, migrated by Prisma 8', {
           snapshotsImportPath: '../../snapshots',
         });
         if (planned.kind !== 'success') throw new Error(JSON.stringify(planned));
+        await createPrismaTables(driver);
         const run = await postgres.createRunner(familyInstance).execute({
           driver,
           perSpaceOptions: [

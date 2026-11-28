@@ -3282,7 +3282,7 @@
 ./family/control: type SameName = (left: string, right: string) => boolean
 ./family/control: type SqlDatabaseCapabilitiesNotProvidedFn = (input: { readonly contract: Contract<SqlStorage>; readonly schema: SqlSchemaIRNode; }) => DatabaseCapabilitiesNotProvided | undefined
 ./family/control: type SqlDefaultFunctionName = 'autoincrement' | 'now'
-./family/control: type SqlMigrationRunnerErrorCode = 'MIGRATION.DATABASE_CAPABILITIES_NOT_PROVIDED' | 'MIGRATION.DESTINATION_CONTRACT_MISMATCH' | 'MIGRATION.EXECUTION_FAILED' | 'MIGRATION.FOREIGN_KEY_VIOLATION' | 'MIGRATION.MARKER_CAS_FAILURE' | 'MIGRATION.MARKER_ORIGIN_MISMATCH' | 'MIGRATION.POLICY_VIOLATION' | 'MIGRATION.POSTCHECK_FAILED' | 'MIGRATION.PRECHECK_FAILED' | 'MIGRATION.SCHEMA_VERIFY_FAILED'
+./family/control: type SqlMigrationRunnerErrorCode = 'MIGRATION.DATABASE_CAPABILITIES_NOT_PROVIDED' | 'MIGRATION.DESTINATION_CONTRACT_MISMATCH' | 'MIGRATION.EXECUTION_FAILED' | 'MIGRATION.FOREIGN_KEY_VIOLATION' | 'MIGRATION.MARKER_CAS_FAILURE' | 'MIGRATION.MARKER_ORIGIN_MISMATCH' | 'MIGRATION.POLICY_VIOLATION' | 'MIGRATION.POSTCHECK_FAILED' | 'MIGRATION.PRECHECK_FAILED' | 'MIGRATION.PRISMA_TABLES_MISSING' | 'MIGRATION.SCHEMA_VERIFY_FAILED'
 ./family/control: type SqlMigrationRunnerResult = Result<SqlMigrationRunnerSuccessValue, SqlMigrationRunnerFailure>
 ./family/control: type SqlOperationsReader<TTargetDetails> = (operations: readonly unknown[], location?: SqlOperationsLocation) => readonly SqlMigrationPlanOperation<TTargetDetails>[]
 ./family/control: type SqlPlannerConflictKind = 'controlPolicySuppressedCall' | 'foreignKeyConflict' | 'indexIncompatible' | 'missingButNonAdditive' | 'nullabilityConflict' | 'rlsPolicyIncompatible' | 'statementRefused' | 'tableNameCaseChanged' | 'typeMismatch' | 'unsupportedOperation'
@@ -4124,7 +4124,7 @@
 ./family: type SqlDatabaseCapabilitiesNotProvidedFn = (input: { readonly contract: Contract<SqlStorage>; readonly schema: SqlSchemaIRNode; }) => DatabaseCapabilitiesNotProvided | undefined
 ./family: type SqlDefaultFunctionName = 'autoincrement' | 'now'
 ./family: type SqlEntityHydrationFactory = (entry: unknown) => unknown
-./family: type SqlMigrationRunnerErrorCode = 'MIGRATION.DATABASE_CAPABILITIES_NOT_PROVIDED' | 'MIGRATION.DESTINATION_CONTRACT_MISMATCH' | 'MIGRATION.EXECUTION_FAILED' | 'MIGRATION.FOREIGN_KEY_VIOLATION' | 'MIGRATION.MARKER_CAS_FAILURE' | 'MIGRATION.MARKER_ORIGIN_MISMATCH' | 'MIGRATION.POLICY_VIOLATION' | 'MIGRATION.POSTCHECK_FAILED' | 'MIGRATION.PRECHECK_FAILED' | 'MIGRATION.SCHEMA_VERIFY_FAILED'
+./family: type SqlMigrationRunnerErrorCode = 'MIGRATION.DATABASE_CAPABILITIES_NOT_PROVIDED' | 'MIGRATION.DESTINATION_CONTRACT_MISMATCH' | 'MIGRATION.EXECUTION_FAILED' | 'MIGRATION.FOREIGN_KEY_VIOLATION' | 'MIGRATION.MARKER_CAS_FAILURE' | 'MIGRATION.MARKER_ORIGIN_MISMATCH' | 'MIGRATION.POLICY_VIOLATION' | 'MIGRATION.POSTCHECK_FAILED' | 'MIGRATION.PRECHECK_FAILED' | 'MIGRATION.PRISMA_TABLES_MISSING' | 'MIGRATION.SCHEMA_VERIFY_FAILED'
 ./family: type SqlMigrationRunnerResult = Result<SqlMigrationRunnerSuccessValue, SqlMigrationRunnerFailure>
 ./family: type SqlOperationsReader<TTargetDetails> = (operations: readonly unknown[], location?: SqlOperationsLocation) => readonly SqlMigrationPlanOperation<TTargetDetails>[]
 ./family: type SqlPlannerConflictKind = 'controlPolicySuppressedCall' | 'foreignKeyConflict' | 'indexIncompatible' | 'missingButNonAdditive' | 'nullabilityConflict' | 'rlsPolicyIncompatible' | 'statementRefused' | 'tableNameCaseChanged' | 'typeMismatch' | 'unsupportedOperation'
@@ -5148,7 +5148,7 @@
 ./relational-core/ast: type LockWaitPolicy = 'nowait' | 'skipLocked'
 ./relational-core/ast: type LoweredParam = { readonly kind: 'bind'; readonly name: string; } | { readonly kind: 'literal'; readonly value: unknown; }
 ./relational-core/ast: type Lowerer<Ast = unknown, TContract = unknown, TBody = LoweredStatement> = (ast: Ast, context: LowererContext<TContract>) => TBody
-./relational-core/ast: type MarkerReadResult = { readonly kind: 'absent'; } | { readonly kind: 'no-table'; } | { readonly kind: 'present'; readonly record: ContractMarkerRecord; }
+./relational-core/ast: type MarkerReadResult = { readonly kind: 'absent'; } | { readonly kind: 'earlier-release'; } | { readonly kind: 'no-table'; } | { readonly kind: 'present'; readonly record: ContractMarkerRecord; }
 ./relational-core/ast: type OrderByNulls = 'first' | 'last'
 ./relational-core/ast: type ProjectionExpr = AnyExpression
 ./relational-core/ast: type RawPart = AnyExpression | DeleteAst | InsertAst | SelectAst | UpdateAst | string
@@ -6314,7 +6314,7 @@
 ./relational-core: type LockWaitPolicy = 'nowait' | 'skipLocked'
 ./relational-core: type LoweredParam = { readonly kind: 'bind'; readonly name: string; } | { readonly kind: 'literal'; readonly value: unknown; }
 ./relational-core: type Lowerer<Ast = unknown, TContract = unknown, TBody = LoweredStatement> = (ast: Ast, context: LowererContext<TContract>) => TBody
-./relational-core: type MarkerReadResult = { readonly kind: 'absent'; } | { readonly kind: 'no-table'; } | { readonly kind: 'present'; readonly record: ContractMarkerRecord; }
+./relational-core: type MarkerReadResult = { readonly kind: 'absent'; } | { readonly kind: 'earlier-release'; } | { readonly kind: 'no-table'; } | { readonly kind: 'present'; readonly record: ContractMarkerRecord; }
 ./relational-core: type Meta<T extends { [META]: unknown; }> = T[typeof META]
 ./relational-core: type NoReservedRowColumn = { readonly __proto__?: 'A raw row spec cannot declare a __proto__ column: alias the column in SQL and declare the alias instead'; }
 ./relational-core: type OperationTypeSignature = { readonly args: ReadonlyArray<@prisma/orm-framework.ParamSpec>; readonly returns: @prisma/orm-framework.ParamSpec; readonly lowering: SqlLoweringSpec; readonly capabilities?: ReadonlyArray<string>; }
@@ -6610,7 +6610,7 @@
 ./runtime: type DelegatingRuntime = Pick<Runtime, 'connection' | 'execute' | 'prepare' | 'query'> & ActivitySourceTarget
 ./runtime: type HashablePlan = BoundPreparedStatement | SqlExecutionPlan | SqlQueryPlan
 ./runtime: type InteractiveTransactionsListed<TContract extends Contract<SqlStorage>, RetiredCapabilities = undefined> = NoneMissing<InteractiveTransactionsNotListed<TContract['capabilities'], RetiredCapabilities>, '`transaction()` is unavailable: your contract declares no dependency on `', '`'>
-./runtime: type MarkerReadResult = { readonly kind: 'absent'; } | { readonly kind: 'no-table'; } | { readonly kind: 'present'; readonly record: ContractMarkerRecord; }
+./runtime: type MarkerReadResult = { readonly kind: 'absent'; } | { readonly kind: 'earlier-release'; } | { readonly kind: 'no-table'; } | { readonly kind: 'present'; readonly record: ContractMarkerRecord; }
 ./runtime: type ParamSpec<CT extends CodecTypesBase = CodecTypesBase> = (keyof CT & string) | { readonly codecId: keyof CT & string; readonly typeParams?: JsonValue; readonly nullable?: boolean; }
 ./runtime: type ParamsFromDeclaration<D, CT extends CodecTypesBase> = { readonly [K in keyof D]: CodecValue<DeclaredCodecId<D[K]>, DeclaredNullable<D[K]>, CT>; }
 ./runtime: type PrepareCallback<D, Row> = (params: BindSiteParams<D>) => SqlQueryPlan<Row>

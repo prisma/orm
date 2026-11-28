@@ -19,6 +19,9 @@ import {
   int4,
   int8,
   jsonb,
+  PRISMA_TABLE_NAMES,
+  PRISMA_TABLES_SCHEMA,
+  type PrismaTableName,
   pgTable,
   text,
   textArray,
@@ -27,7 +30,7 @@ import {
 import { encodeControlQueryParams } from './control-codecs';
 
 export const marker = pgTable(
-  { name: 'marker', schema: 'prisma_contract' },
+  { name: PRISMA_TABLE_NAMES.marker, schema: PRISMA_TABLES_SCHEMA },
   {
     space: text(),
     core_hash: text(),
@@ -36,18 +39,18 @@ export const marker = pgTable(
     canonical_version: int4({ nullable: true }),
     updated_at: timestamptz(),
     app_tag: text({ nullable: true }),
-    meta: jsonb({ nullable: true }),
+    meta: jsonb(),
     invariants: textArray(),
   },
 );
 
 /**
- * Writeable subset of the `prisma_contract.ledger` table. Omits the
+ * Writeable subset of the `_prisma.ledger` table. Omits the
  * DB-generated `id` (bigserial) and `created_at` (default `now()`) so the
  * insert path doesn't have to pass them.
  */
 export const ledger = pgTable(
-  { name: 'ledger', schema: 'prisma_contract' },
+  { name: PRISMA_TABLE_NAMES.ledger, schema: PRISMA_TABLES_SCHEMA },
   {
     space: text(),
     migration_name: text(),
@@ -66,7 +69,7 @@ export const ledger = pgTable(
  * a rollback cycle is stored exactly once (upsert DO NOTHING).
  */
 export const ledgerContract = pgTable(
-  { name: 'contract', schema: 'prisma_contract' },
+  { name: PRISMA_TABLE_NAMES.contract, schema: PRISMA_TABLES_SCHEMA },
   {
     core_hash: text(),
     contract_json: jsonb(),
@@ -74,18 +77,20 @@ export const ledgerContract = pgTable(
 );
 
 /**
- * Read-side handle covering every column of `prisma_contract.ledger`,
+ * Read-side handle covering every column of `_prisma.ledger`,
  * including the DB-generated `id` (for ORDER BY) and `created_at`.
  */
 export const ledgerReadShape = pgTable(
-  { name: 'ledger', schema: 'prisma_contract' },
+  { name: PRISMA_TABLE_NAMES.ledger, schema: PRISMA_TABLES_SCHEMA },
   {
     id: int8(),
     space: text(),
     migration_name: text(),
     migration_hash: text(),
     origin_core_hash: text({ nullable: true }),
+    origin_profile_hash: text({ nullable: true }),
     destination_core_hash: text(),
+    destination_profile_hash: text({ nullable: true }),
     operations: jsonb(),
     created_at: timestamptz(),
   },
@@ -94,6 +99,11 @@ export const ledgerReadShape = pgTable(
 export const infoSchemaTables = pgTable(
   { name: 'tables', schema: 'information_schema' },
   { table_schema: text(), table_name: text() },
+);
+
+export const infoSchemaColumns = pgTable(
+  { name: 'columns', schema: 'information_schema' },
+  { table_schema: text(), table_name: text(), column_name: text() },
 );
 
 export const NOW = new RawExpr({
@@ -148,3 +158,33 @@ export async function execute(
 export type PostgresMarkerDriver = MarkerDriver;
 export type PostgresMarkerLower = Lower;
 export type PostgresMarkerWriteDriver = SqlControlDriverInstance<'postgres'>;
+
+/** Whether one of Prisma's own tables exists in `schema`. Reads `information_schema.tables`, so a database without the schema answers no instead of raising "relation does not exist". */
+export async function prismaTableExists(
+  lower: Lower,
+  driver: MarkerDriver,
+  table: PrismaTableName,
+  schema: string = PRISMA_TABLES_SCHEMA,
+): Promise<boolean> {
+  const probe = infoSchemaTables
+    .select(infoSchemaTables.table_schema)
+    .where(infoSchemaTables.table_schema.eq(schema).and(infoSchemaTables.table_name.eq(table)))
+    .build();
+  return (await execute(lower, driver, probe)).length > 0;
+}
+
+/** Whether one of Prisma's own tables in `schema` has every column in `columns`, by name. */
+export async function prismaTableHasColumns(
+  lower: Lower,
+  driver: MarkerDriver,
+  table: PrismaTableName,
+  columns: readonly string[],
+  schema: string = PRISMA_TABLES_SCHEMA,
+): Promise<boolean> {
+  const probe = infoSchemaColumns
+    .select(infoSchemaColumns.column_name)
+    .where(infoSchemaColumns.table_schema.eq(schema).and(infoSchemaColumns.table_name.eq(table)))
+    .build();
+  const present = new Set((await execute(lower, driver, probe)).map((row) => row['column_name']));
+  return columns.every((column) => present.has(column));
+}

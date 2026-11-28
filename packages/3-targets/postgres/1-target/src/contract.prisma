@@ -1,0 +1,40 @@
+// use prisma-8
+
+namespace _prisma {
+  model Marker {
+    space            String             @id @default("app")
+    coreHash         String             @map("core_hash")
+    profileHash      String             @map("profile_hash")
+    contractJson     Jsonb?             @map("contract_json")
+    canonicalVersion Int4?              @map("canonical_version")
+    updatedAt        TimestamptzString  @default(now()) @map("updated_at")
+    appTag           String?            @map("app_tag")
+    meta             Jsonb              @default(json`{}`)
+    invariants       String?[]          @default([])
+
+    @@map("marker")
+  }
+
+  model Ledger {
+    id                     Int8BigInt         @id @default(autoincrement())
+    createdAt              TimestamptzString  @default(now()) @map("created_at")
+    space                  String
+    migrationName          String             @map("migration_name")
+    migrationHash          String             @map("migration_hash")
+    originCoreHash         String?            @map("origin_core_hash")
+    originProfileHash      String?            @map("origin_profile_hash")
+    destinationCoreHash    String             @map("destination_core_hash")
+    destinationProfileHash String?            @map("destination_profile_hash")
+    operations             Jsonb
+
+    @@map("ledger")
+  }
+
+  model Contract {
+    coreHash     String             @id @map("core_hash")
+    createdAt    TimestamptzString  @default(now()) @map("created_at")
+    contractJson Jsonb              @map("contract_json")
+
+    @@map("contract")
+  }
+}

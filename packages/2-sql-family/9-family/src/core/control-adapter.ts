@@ -53,7 +53,7 @@ export interface ExecuteRequestLowerer extends Lowerer {
 export interface SqlControlAdapter<TTarget extends string = string>
   extends ControlAdapterInstance<'sql', TTarget>,
     ExecuteRequestLowerer {
-  /** Where the database keeps the contract markers, as messages name it to the user, such as `prisma_contract.marker`. */
+  /** Where the database keeps the contract markers, as messages name it to the user, such as `_prisma.marker` on PostgreSQL. */
   readonly markerLocation: string;
 
   /**
@@ -67,6 +67,8 @@ export interface SqlControlAdapter<TTarget extends string = string>
    * `space` is required so callers cannot accidentally fall through to
    * the app's marker row when reading per-extension markers.
    *
+   * A target whose tables an earlier release left in another form, which a command that changes the database brings up to date, throws `CONTRACT.PRISMA_SPACE_BEHIND` here and in {@link readAllMarkers} and {@link readLedger}, except for the `_prisma` space, whose row no earlier release wrote.
+   *
    * @param driver - ControlDriverInstance for executing queries (target-specific)
    * @param space - Contract space id whose marker row to read (e.g. `'app'`)
    * @returns Resolved marker record, or `null` if not yet stamped.
@@ -77,7 +79,7 @@ export interface SqlControlAdapter<TTarget extends string = string>
   ): Promise<ContractMarkerRecord | null>;
 
   /**
-   * Reads every marker row from `prisma_contract.marker` (one per
+   * Reads every marker row from `_prisma.marker` on PostgreSQL (one per
    * contract space) and returns them keyed by `space`. Used by the
    * per-space verifier to detect marker-vs-on-disk drift and orphan
    * marker rows. Returns an empty map when the marker table does not

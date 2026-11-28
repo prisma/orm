@@ -97,5 +97,23 @@
     "lastRelease": "8.0.0-rc.25",
     "fingerprint": "23ad978bb2ee1eba",
     "reason": "A column name that several joined tables share must now name its table (prisma/orm#31150)."
+  },
+  {
+    "path": "./target/contract-free",
+    "export": "buildControlTableBootstrapQueries",
+    "test": "exists",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "e3b0c44298fc1c14",
+    "reason": "Prisma's own tables are created by the Prisma space's migration, not by these statements (prisma/orm#31234)."
+  },
+  {
+    "path": "./target/contract-free",
+    "export": "buildSignMarkerBootstrapQueries",
+    "test": "exists",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "e3b0c44298fc1c14",
+    "reason": "Prisma's own tables are created by the Prisma space's migration, not by these statements (prisma/orm#31234)."
   }
 ]

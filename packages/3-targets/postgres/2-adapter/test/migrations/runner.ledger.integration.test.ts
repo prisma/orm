@@ -62,19 +62,30 @@ async function readLedgerRows(driver: PostgresControlDriver): Promise<LedgerRow[
     `select l.space, l.migration_name, l.migration_hash, l.origin_core_hash,
       l.destination_core_hash, l.operations,
       ca.contract_json, cb.contract_json as origin_contract_json
-     from prisma_contract.ledger l
-     left join prisma_contract.contract ca on ca.core_hash = l.destination_core_hash
-     left join prisma_contract.contract cb on cb.core_hash = l.origin_core_hash
+     from _prisma.ledger l
+     left join _prisma.contract ca on ca.core_hash = l.destination_core_hash
+     left join _prisma.contract cb on cb.core_hash = l.origin_core_hash
+     where l.space <> '_prisma'
      order by l.id`,
   );
   return result.rows;
 }
 
-async function countContractRows(driver: PostgresControlDriver): Promise<number> {
-  const result = await driver.query<{ n: string | number }>(
-    'select count(*)::int as n from prisma_contract.contract',
+async function readContractRowHashes(driver: PostgresControlDriver): Promise<string[]> {
+  const result = await driver.query<{ core_hash: string }>(
+    `select core_hash from _prisma.contract
+     where core_hash not in (
+       select destination_core_hash from _prisma.ledger where space = '_prisma'
+       union
+       select origin_core_hash from _prisma.ledger
+       where space = '_prisma' and origin_core_hash is not null
+     )`,
   );
-  return Number(result.rows[0]?.n ?? 0);
+  return result.rows.map((row) => row.core_hash).sort();
+}
+
+async function countContractRows(driver: PostgresControlDriver): Promise<number> {
+  return (await readContractRowHashes(driver)).length;
 }
 
 describe('PostgresMigrationRunner - per-edge ledger', { concurrent: false }, () => {
@@ -274,10 +285,7 @@ describe('PostgresMigrationRunner - per-edge ledger', { concurrent: false }, () 
     expect(rows[1]!.origin_contract_json).toEqual(midContract);
     // Content-addressed store: one row per distinct contract, keyed by hash.
     expect(await countContractRows(driver!)).toBe(2);
-    const stored = await driver!.query<{ core_hash: string }>(
-      'select core_hash from prisma_contract.contract order by core_hash',
-    );
-    expect(stored.rows.map((row) => row.core_hash).sort()).toEqual([midHash, destHash].sort());
+    expect(await readContractRowHashes(driver!)).toEqual([midHash, destHash].sort());
   });
 
   it('throws when migrationEdges operationCount sum does not match plan.operations length', {

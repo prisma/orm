@@ -41,6 +41,7 @@ function driverConfig(project: OfflineProject, marker: MarkerScript = {}): Recor
       ...(base['family'] as Record<string, unknown>),
       create: () => ({
         deserializeContract: (json: unknown) => json,
+        bringPrismaSpaceUpToDate: async () => undefined,
         readAllMarkers: async () => markers,
         readLedger: async () => [],
       }),

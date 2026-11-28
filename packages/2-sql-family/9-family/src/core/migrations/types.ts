@@ -222,7 +222,7 @@ export interface SqlMigrationPlanContractInfo {
 export interface SqlMigrationPlan<TTargetDetails> extends MigrationPlan {
   /**
    * Contract space this plan applies to. The runner uses this to key the
-   * `prisma_contract.marker` row it writes/reads (`space = <spaceId>`),
+   * marker row (in `_prisma.marker` on PostgreSQL) it writes/reads (`space = <spaceId>`),
    * so per-extension plans hit per-extension marker rows instead of all
    * collapsing onto the app's row.
    *
@@ -429,6 +429,7 @@ export type SqlMigrationRunnerErrorCode =
   | 'MIGRATION.POLICY_VIOLATION'
   | 'MIGRATION.PRECHECK_FAILED'
   | 'MIGRATION.POSTCHECK_FAILED'
+  | 'MIGRATION.PRISMA_TABLES_MISSING'
   | 'MIGRATION.SCHEMA_VERIFY_FAILED'
   | 'MIGRATION.FOREIGN_KEY_VIOLATION'
   | 'MIGRATION.EXECUTION_FAILED';

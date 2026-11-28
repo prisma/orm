@@ -10,7 +10,7 @@
  *     config targets postgres. db verify reports the mismatch.
  *
  * V — Unmanaged database init: db init on a database with pre-existing tables
- *     that match the contract (created via raw SQL, no prisma_contract schema).
+ *     that match the contract (created via raw SQL, no _prisma schema).
  */
 
 import { readFileSync, writeFileSync } from 'node:fs';

@@ -267,6 +267,10 @@ A type, in PSL or the TypeScript builder (`type.DateTime(...)`), named for what 
 
 A type, in PSL or the TypeScript builder, that fixes one codec, so it fixes both the column type and the value the application reads. It is named after the database (ADR 257). An explicit type that a convenience type chooses is named after what stores it, with a suffix for the kind of value: the database's column type where the database has one (`TimestamptzTemporal`, `TimestamptzJsDate`), else the target's data type (SQLite's `DateString`, stored as text). It leaves the suffix off only when its column type has one codec and its bare name is not a convenience name, as PostgreSQL's `Timetz`. See ADR 279 and ADR 315.
 
+### Prisma space
+
+The [contract space](architecture%20docs/adrs/ADR%20212%20-%20Contract%20spaces.md), named `_prisma`, for the tables Prisma keeps for itself in a database: the [marker](#marker), the [ledger](#ledger) and, on PostgreSQL, a store of contracts by hash. The target package carries its contract and migrations. A command that changes a database (`db init`, `db update`, `db migrate`, `db sign`) brings it up to date from the installed package before it reads anything, so these tables are always in a form the installed release can use, and the user runs no extra command. PostgreSQL does this today; the other targets still create these tables on first use. It is never copied into the user's repository and is not listed among their spaces. On PostgreSQL the tables are in the schema `_prisma`. See [ADR 339](architecture%20docs/adrs/ADR%20339%20-%20Each%20target%20has%20a%20contract%20space%20for%20Prisma%27s%20own%20tables.md).
+
 ### Marker
 
 A small record stored in the database that tracks which contract the database is currently migrated to. Before running queries or migrations, Prisma 8 checks that the marker matches the contract the application is carrying. This catches situations where the database and application have drifted out of sync — for example, if a migration was run but the application wasn't redeployed. The marker also records the database's [change policy](#change-policy) and [data protection policy](#data-protection-policy) under `meta.policies`.
@@ -329,7 +333,7 @@ A ref is a specific kind of [contract reference](#contract-reference) — the na
 
 ### Ledger
 
-An append-only audit log of executed migrations, per database. The ledger records what migration ran when. The framework reads the [marker](#marker) (not the ledger) for routing decisions; the ledger is for visualization and auditing.
+An append-only audit log of executed migrations, per database. The ledger records what migration ran when. The framework reads the [marker](#marker) (not the ledger) for routing decisions; the ledger is for visualization and auditing. One exception: for the [Prisma space](#prisma-space), a release that finds the database at a contract it does not know reads that space's ledger rows to learn whether the database has already passed through the release's own form.
 
 ### Drift
 

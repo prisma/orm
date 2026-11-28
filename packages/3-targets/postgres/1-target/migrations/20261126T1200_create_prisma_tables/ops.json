@@ -1,0 +1,489 @@
+[
+  {
+    "id": "_prisma.check-release-candidate-columns.marker",
+    "label": "Check the columns of table \"prisma_contract\".\"marker\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "prisma_contract",
+        "objectType": "table",
+        "name": "marker"
+      }
+    },
+    "precheck": [
+      {
+        "description": "Table \"prisma_contract\".\"marker\", which the release candidates of Prisma 8 created, must have column \"space\" of type text, NOT NULL. Prisma brings up to date only the tables the release candidates of Prisma 8 created, and leaves a table in another form, such as one from before the release candidates, as it is.",
+        "sql": "WITH \"table\" AS (\n  SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2\n)\nSELECT NOT EXISTS (SELECT 1 FROM \"table\") OR EXISTS (\n  SELECT 1 FROM pg_attribute a JOIN \"table\" t ON a.attrelid = t.oid\n  WHERE a.attname = $3 AND NOT a.attisdropped\n    AND format_type(a.atttypid, a.atttypmod) = $4 AND a.attnotnull = $5\n) AS \"result\"",
+        "params": ["prisma_contract", "marker", "space", "text", true]
+      },
+      {
+        "description": "Table \"prisma_contract\".\"marker\", which the release candidates of Prisma 8 created, must have column \"core_hash\" of type text, NOT NULL. Prisma brings up to date only the tables the release candidates of Prisma 8 created, and leaves a table in another form, such as one from before the release candidates, as it is.",
+        "sql": "WITH \"table\" AS (\n  SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2\n)\nSELECT NOT EXISTS (SELECT 1 FROM \"table\") OR EXISTS (\n  SELECT 1 FROM pg_attribute a JOIN \"table\" t ON a.attrelid = t.oid\n  WHERE a.attname = $3 AND NOT a.attisdropped\n    AND format_type(a.atttypid, a.atttypmod) = $4 AND a.attnotnull = $5\n) AS \"result\"",
+        "params": ["prisma_contract", "marker", "core_hash", "text", true]
+      },
+      {
+        "description": "Table \"prisma_contract\".\"marker\", which the release candidates of Prisma 8 created, must have column \"profile_hash\" of type text, NOT NULL. Prisma brings up to date only the tables the release candidates of Prisma 8 created, and leaves a table in another form, such as one from before the release candidates, as it is.",
+        "sql": "WITH \"table\" AS (\n  SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2\n)\nSELECT NOT EXISTS (SELECT 1 FROM \"table\") OR EXISTS (\n  SELECT 1 FROM pg_attribute a JOIN \"table\" t ON a.attrelid = t.oid\n  WHERE a.attname = $3 AND NOT a.attisdropped\n    AND format_type(a.atttypid, a.atttypmod) = $4 AND a.attnotnull = $5\n) AS \"result\"",
+        "params": ["prisma_contract", "marker", "profile_hash", "text", true]
+      },
+      {
+        "description": "Table \"prisma_contract\".\"marker\", which the release candidates of Prisma 8 created, must have column \"contract_json\" of type jsonb, nullable. Prisma brings up to date only the tables the release candidates of Prisma 8 created, and leaves a table in another form, such as one from before the release candidates, as it is.",
+        "sql": "WITH \"table\" AS (\n  SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2\n)\nSELECT NOT EXISTS (SELECT 1 FROM \"table\") OR EXISTS (\n  SELECT 1 FROM pg_attribute a JOIN \"table\" t ON a.attrelid = t.oid\n  WHERE a.attname = $3 AND NOT a.attisdropped\n    AND format_type(a.atttypid, a.atttypmod) = $4 AND a.attnotnull = $5\n) AS \"result\"",
+        "params": ["prisma_contract", "marker", "contract_json", "jsonb", false]
+      },
+      {
+        "description": "Table \"prisma_contract\".\"marker\", which the release candidates of Prisma 8 created, must have column \"canonical_version\" of type integer, nullable. Prisma brings up to date only the tables the release candidates of Prisma 8 created, and leaves a table in another form, such as one from before the release candidates, as it is.",
+        "sql": "WITH \"table\" AS (\n  SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2\n)\nSELECT NOT EXISTS (SELECT 1 FROM \"table\") OR EXISTS (\n  SELECT 1 FROM pg_attribute a JOIN \"table\" t ON a.attrelid = t.oid\n  WHERE a.attname = $3 AND NOT a.attisdropped\n    AND format_type(a.atttypid, a.atttypmod) = $4 AND a.attnotnull = $5\n) AS \"result\"",
+        "params": ["prisma_contract", "marker", "canonical_version", "integer", false]
+      },
+      {
+        "description": "Table \"prisma_contract\".\"marker\", which the release candidates of Prisma 8 created, must have column \"updated_at\" of type timestamp with time zone, NOT NULL. Prisma brings up to date only the tables the release candidates of Prisma 8 created, and leaves a table in another form, such as one from before the release candidates, as it is.",
+        "sql": "WITH \"table\" AS (\n  SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2\n)\nSELECT NOT EXISTS (SELECT 1 FROM \"table\") OR EXISTS (\n  SELECT 1 FROM pg_attribute a JOIN \"table\" t ON a.attrelid = t.oid\n  WHERE a.attname = $3 AND NOT a.attisdropped\n    AND format_type(a.atttypid, a.atttypmod) = $4 AND a.attnotnull = $5\n) AS \"result\"",
+        "params": ["prisma_contract", "marker", "updated_at", "timestamp with time zone", true]
+      },
+      {
+        "description": "Table \"prisma_contract\".\"marker\", which the release candidates of Prisma 8 created, must have column \"app_tag\" of type text, nullable. Prisma brings up to date only the tables the release candidates of Prisma 8 created, and leaves a table in another form, such as one from before the release candidates, as it is.",
+        "sql": "WITH \"table\" AS (\n  SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2\n)\nSELECT NOT EXISTS (SELECT 1 FROM \"table\") OR EXISTS (\n  SELECT 1 FROM pg_attribute a JOIN \"table\" t ON a.attrelid = t.oid\n  WHERE a.attname = $3 AND NOT a.attisdropped\n    AND format_type(a.atttypid, a.atttypmod) = $4 AND a.attnotnull = $5\n) AS \"result\"",
+        "params": ["prisma_contract", "marker", "app_tag", "text", false]
+      },
+      {
+        "description": "Table \"prisma_contract\".\"marker\", which the release candidates of Prisma 8 created, must have column \"meta\" of type jsonb, NOT NULL. Prisma brings up to date only the tables the release candidates of Prisma 8 created, and leaves a table in another form, such as one from before the release candidates, as it is.",
+        "sql": "WITH \"table\" AS (\n  SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2\n)\nSELECT NOT EXISTS (SELECT 1 FROM \"table\") OR EXISTS (\n  SELECT 1 FROM pg_attribute a JOIN \"table\" t ON a.attrelid = t.oid\n  WHERE a.attname = $3 AND NOT a.attisdropped\n    AND format_type(a.atttypid, a.atttypmod) = $4 AND a.attnotnull = $5\n) AS \"result\"",
+        "params": ["prisma_contract", "marker", "meta", "jsonb", true]
+      },
+      {
+        "description": "Table \"prisma_contract\".\"marker\", which the release candidates of Prisma 8 created, must have column \"invariants\" of type text[], NOT NULL. Prisma brings up to date only the tables the release candidates of Prisma 8 created, and leaves a table in another form, such as one from before the release candidates, as it is.",
+        "sql": "WITH \"table\" AS (\n  SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2\n)\nSELECT NOT EXISTS (SELECT 1 FROM \"table\") OR EXISTS (\n  SELECT 1 FROM pg_attribute a JOIN \"table\" t ON a.attrelid = t.oid\n  WHERE a.attname = $3 AND NOT a.attisdropped\n    AND format_type(a.atttypid, a.atttypmod) = $4 AND a.attnotnull = $5\n) AS \"result\"",
+        "params": ["prisma_contract", "marker", "invariants", "text[]", true]
+      }
+    ],
+    "execute": [],
+    "postcheck": []
+  },
+  {
+    "id": "_prisma.check-release-candidate-columns.ledger",
+    "label": "Check the columns of table \"prisma_contract\".\"ledger\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "prisma_contract",
+        "objectType": "table",
+        "name": "ledger"
+      }
+    },
+    "precheck": [
+      {
+        "description": "Table \"prisma_contract\".\"ledger\", which the release candidates of Prisma 8 created, must have column \"id\" of type bigint, NOT NULL. Prisma brings up to date only the tables the release candidates of Prisma 8 created, and leaves a table in another form, such as one from before the release candidates, as it is.",
+        "sql": "WITH \"table\" AS (\n  SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2\n)\nSELECT NOT EXISTS (SELECT 1 FROM \"table\") OR EXISTS (\n  SELECT 1 FROM pg_attribute a JOIN \"table\" t ON a.attrelid = t.oid\n  WHERE a.attname = $3 AND NOT a.attisdropped\n    AND format_type(a.atttypid, a.atttypmod) = $4 AND a.attnotnull = $5\n) AS \"result\"",
+        "params": ["prisma_contract", "ledger", "id", "bigint", true]
+      },
+      {
+        "description": "Table \"prisma_contract\".\"ledger\", which the release candidates of Prisma 8 created, must have column \"created_at\" of type timestamp with time zone, NOT NULL. Prisma brings up to date only the tables the release candidates of Prisma 8 created, and leaves a table in another form, such as one from before the release candidates, as it is.",
+        "sql": "WITH \"table\" AS (\n  SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2\n)\nSELECT NOT EXISTS (SELECT 1 FROM \"table\") OR EXISTS (\n  SELECT 1 FROM pg_attribute a JOIN \"table\" t ON a.attrelid = t.oid\n  WHERE a.attname = $3 AND NOT a.attisdropped\n    AND format_type(a.atttypid, a.atttypmod) = $4 AND a.attnotnull = $5\n) AS \"result\"",
+        "params": ["prisma_contract", "ledger", "created_at", "timestamp with time zone", true]
+      },
+      {
+        "description": "Table \"prisma_contract\".\"ledger\", which the release candidates of Prisma 8 created, must have column \"space\" of type text, NOT NULL. Prisma brings up to date only the tables the release candidates of Prisma 8 created, and leaves a table in another form, such as one from before the release candidates, as it is.",
+        "sql": "WITH \"table\" AS (\n  SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2\n)\nSELECT NOT EXISTS (SELECT 1 FROM \"table\") OR EXISTS (\n  SELECT 1 FROM pg_attribute a JOIN \"table\" t ON a.attrelid = t.oid\n  WHERE a.attname = $3 AND NOT a.attisdropped\n    AND format_type(a.atttypid, a.atttypmod) = $4 AND a.attnotnull = $5\n) AS \"result\"",
+        "params": ["prisma_contract", "ledger", "space", "text", true]
+      },
+      {
+        "description": "Table \"prisma_contract\".\"ledger\", which the release candidates of Prisma 8 created, must have column \"migration_name\" of type text, NOT NULL. Prisma brings up to date only the tables the release candidates of Prisma 8 created, and leaves a table in another form, such as one from before the release candidates, as it is.",
+        "sql": "WITH \"table\" AS (\n  SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2\n)\nSELECT NOT EXISTS (SELECT 1 FROM \"table\") OR EXISTS (\n  SELECT 1 FROM pg_attribute a JOIN \"table\" t ON a.attrelid = t.oid\n  WHERE a.attname = $3 AND NOT a.attisdropped\n    AND format_type(a.atttypid, a.atttypmod) = $4 AND a.attnotnull = $5\n) AS \"result\"",
+        "params": ["prisma_contract", "ledger", "migration_name", "text", true]
+      },
+      {
+        "description": "Table \"prisma_contract\".\"ledger\", which the release candidates of Prisma 8 created, must have column \"migration_hash\" of type text, NOT NULL. Prisma brings up to date only the tables the release candidates of Prisma 8 created, and leaves a table in another form, such as one from before the release candidates, as it is.",
+        "sql": "WITH \"table\" AS (\n  SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2\n)\nSELECT NOT EXISTS (SELECT 1 FROM \"table\") OR EXISTS (\n  SELECT 1 FROM pg_attribute a JOIN \"table\" t ON a.attrelid = t.oid\n  WHERE a.attname = $3 AND NOT a.attisdropped\n    AND format_type(a.atttypid, a.atttypmod) = $4 AND a.attnotnull = $5\n) AS \"result\"",
+        "params": ["prisma_contract", "ledger", "migration_hash", "text", true]
+      },
+      {
+        "description": "Table \"prisma_contract\".\"ledger\", which the release candidates of Prisma 8 created, must have column \"origin_core_hash\" of type text, nullable. Prisma brings up to date only the tables the release candidates of Prisma 8 created, and leaves a table in another form, such as one from before the release candidates, as it is.",
+        "sql": "WITH \"table\" AS (\n  SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2\n)\nSELECT NOT EXISTS (SELECT 1 FROM \"table\") OR EXISTS (\n  SELECT 1 FROM pg_attribute a JOIN \"table\" t ON a.attrelid = t.oid\n  WHERE a.attname = $3 AND NOT a.attisdropped\n    AND format_type(a.atttypid, a.atttypmod) = $4 AND a.attnotnull = $5\n) AS \"result\"",
+        "params": ["prisma_contract", "ledger", "origin_core_hash", "text", false]
+      },
+      {
+        "description": "Table \"prisma_contract\".\"ledger\", which the release candidates of Prisma 8 created, must have column \"origin_profile_hash\" of type text, nullable. Prisma brings up to date only the tables the release candidates of Prisma 8 created, and leaves a table in another form, such as one from before the release candidates, as it is.",
+        "sql": "WITH \"table\" AS (\n  SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2\n)\nSELECT NOT EXISTS (SELECT 1 FROM \"table\") OR EXISTS (\n  SELECT 1 FROM pg_attribute a JOIN \"table\" t ON a.attrelid = t.oid\n  WHERE a.attname = $3 AND NOT a.attisdropped\n    AND format_type(a.atttypid, a.atttypmod) = $4 AND a.attnotnull = $5\n) AS \"result\"",
+        "params": ["prisma_contract", "ledger", "origin_profile_hash", "text", false]
+      },
+      {
+        "description": "Table \"prisma_contract\".\"ledger\", which the release candidates of Prisma 8 created, must have column \"destination_core_hash\" of type text, NOT NULL. Prisma brings up to date only the tables the release candidates of Prisma 8 created, and leaves a table in another form, such as one from before the release candidates, as it is.",
+        "sql": "WITH \"table\" AS (\n  SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2\n)\nSELECT NOT EXISTS (SELECT 1 FROM \"table\") OR EXISTS (\n  SELECT 1 FROM pg_attribute a JOIN \"table\" t ON a.attrelid = t.oid\n  WHERE a.attname = $3 AND NOT a.attisdropped\n    AND format_type(a.atttypid, a.atttypmod) = $4 AND a.attnotnull = $5\n) AS \"result\"",
+        "params": ["prisma_contract", "ledger", "destination_core_hash", "text", true]
+      },
+      {
+        "description": "Table \"prisma_contract\".\"ledger\", which the release candidates of Prisma 8 created, must have column \"destination_profile_hash\" of type text, nullable. Prisma brings up to date only the tables the release candidates of Prisma 8 created, and leaves a table in another form, such as one from before the release candidates, as it is.",
+        "sql": "WITH \"table\" AS (\n  SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2\n)\nSELECT NOT EXISTS (SELECT 1 FROM \"table\") OR EXISTS (\n  SELECT 1 FROM pg_attribute a JOIN \"table\" t ON a.attrelid = t.oid\n  WHERE a.attname = $3 AND NOT a.attisdropped\n    AND format_type(a.atttypid, a.atttypmod) = $4 AND a.attnotnull = $5\n) AS \"result\"",
+        "params": ["prisma_contract", "ledger", "destination_profile_hash", "text", false]
+      },
+      {
+        "description": "Table \"prisma_contract\".\"ledger\", which the release candidates of Prisma 8 created, must have column \"operations\" of type jsonb, NOT NULL. Prisma brings up to date only the tables the release candidates of Prisma 8 created, and leaves a table in another form, such as one from before the release candidates, as it is.",
+        "sql": "WITH \"table\" AS (\n  SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2\n)\nSELECT NOT EXISTS (SELECT 1 FROM \"table\") OR EXISTS (\n  SELECT 1 FROM pg_attribute a JOIN \"table\" t ON a.attrelid = t.oid\n  WHERE a.attname = $3 AND NOT a.attisdropped\n    AND format_type(a.atttypid, a.atttypmod) = $4 AND a.attnotnull = $5\n) AS \"result\"",
+        "params": ["prisma_contract", "ledger", "operations", "jsonb", true]
+      }
+    ],
+    "execute": [],
+    "postcheck": []
+  },
+  {
+    "id": "_prisma.check-release-candidate-columns.contract",
+    "label": "Check the columns of table \"prisma_contract\".\"contract\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "prisma_contract",
+        "objectType": "table",
+        "name": "contract"
+      }
+    },
+    "precheck": [
+      {
+        "description": "Table \"prisma_contract\".\"contract\", which the release candidates of Prisma 8 created, must have column \"core_hash\" of type text, NOT NULL. Prisma brings up to date only the tables the release candidates of Prisma 8 created, and leaves a table in another form, such as one from before the release candidates, as it is.",
+        "sql": "WITH \"table\" AS (\n  SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2\n)\nSELECT NOT EXISTS (SELECT 1 FROM \"table\") OR EXISTS (\n  SELECT 1 FROM pg_attribute a JOIN \"table\" t ON a.attrelid = t.oid\n  WHERE a.attname = $3 AND NOT a.attisdropped\n    AND format_type(a.atttypid, a.atttypmod) = $4 AND a.attnotnull = $5\n) AS \"result\"",
+        "params": ["prisma_contract", "contract", "core_hash", "text", true]
+      },
+      {
+        "description": "Table \"prisma_contract\".\"contract\", which the release candidates of Prisma 8 created, must have column \"created_at\" of type timestamp with time zone, NOT NULL. Prisma brings up to date only the tables the release candidates of Prisma 8 created, and leaves a table in another form, such as one from before the release candidates, as it is.",
+        "sql": "WITH \"table\" AS (\n  SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2\n)\nSELECT NOT EXISTS (SELECT 1 FROM \"table\") OR EXISTS (\n  SELECT 1 FROM pg_attribute a JOIN \"table\" t ON a.attrelid = t.oid\n  WHERE a.attname = $3 AND NOT a.attisdropped\n    AND format_type(a.atttypid, a.atttypmod) = $4 AND a.attnotnull = $5\n) AS \"result\"",
+        "params": ["prisma_contract", "contract", "created_at", "timestamp with time zone", true]
+      },
+      {
+        "description": "Table \"prisma_contract\".\"contract\", which the release candidates of Prisma 8 created, must have column \"contract_json\" of type jsonb, NOT NULL. Prisma brings up to date only the tables the release candidates of Prisma 8 created, and leaves a table in another form, such as one from before the release candidates, as it is.",
+        "sql": "WITH \"table\" AS (\n  SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2\n)\nSELECT NOT EXISTS (SELECT 1 FROM \"table\") OR EXISTS (\n  SELECT 1 FROM pg_attribute a JOIN \"table\" t ON a.attrelid = t.oid\n  WHERE a.attname = $3 AND NOT a.attisdropped\n    AND format_type(a.atttypid, a.atttypmod) = $4 AND a.attnotnull = $5\n) AS \"result\"",
+        "params": ["prisma_contract", "contract", "contract_json", "jsonb", true]
+      }
+    ],
+    "execute": [],
+    "postcheck": []
+  },
+  {
+    "id": "_prisma.rename-release-candidate-schema",
+    "label": "Rename schema \"prisma_contract\" to \"_prisma\"",
+    "operationClass": "widening",
+    "target": {
+      "id": "postgres"
+    },
+    "precheck": [
+      {
+        "description": "Schema \"_prisma\" must be empty while schema \"prisma_contract\" exists. This release keeps Prisma's own tables in \"_prisma\", and \"prisma_contract\" holds the tables a release candidate of Prisma 8 created, so Prisma drops an empty \"_prisma\" and renames \"prisma_contract\" to it, and does not choose between them when \"_prisma\" holds anything. Follow the upgrade instructions before dropping either schema.",
+        "sql": "SELECT to_regnamespace($1) IS NULL OR NOT EXISTS (\n  SELECT 1 FROM pg_depend\n  WHERE refclassid = 'pg_namespace'::regclass AND refobjid = to_regnamespace($1) AND deptype = 'n'\n) AS \"result\"",
+        "params": ["_prisma"]
+      },
+      {
+        "description": "The role that runs this command must have the privileges of the role that owns schema \"_prisma\", because Prisma drops the empty \"_prisma\" before it renames schema \"prisma_contract\" to \"_prisma\", and dropping a schema needs them. Give the empty schema to the migrating role with ALTER SCHEMA \"_prisma\" OWNER TO <migrating role>, or drop it with DROP SCHEMA \"_prisma\".",
+        "sql": "SELECT (SELECT rolsuper FROM pg_roles WHERE rolname = current_user) OR NOT EXISTS (\n  SELECT 1 FROM pg_namespace\n  WHERE nspname = $1 AND NOT pg_has_role(current_user, nspowner, 'USAGE')\n) AS \"result\"",
+        "params": ["_prisma"]
+      },
+      {
+        "description": "The role that runs this command must have the privileges of the role that owns schema \"prisma_contract\", because renaming a schema needs them. Find the owners of the schema and its tables with SELECT nspowner::regrole FROM pg_namespace WHERE nspname = 'prisma_contract' and SELECT relname, relowner::regrole FROM pg_class WHERE relnamespace = to_regnamespace('prisma_contract') AND relkind = 'r'. Give the schema and its tables to the migrating role with ALTER SCHEMA \"prisma_contract\" OWNER TO <migrating role>, then ALTER TABLE \"prisma_contract\".\"marker\" OWNER TO <migrating role>, ALTER TABLE \"prisma_contract\".\"ledger\" OWNER TO <migrating role>, ALTER TABLE \"prisma_contract\".\"contract\" OWNER TO <migrating role>.",
+        "sql": "SELECT (SELECT rolsuper FROM pg_roles WHERE rolname = current_user) OR NOT EXISTS (\n  SELECT 1 FROM pg_namespace\n  WHERE nspname = $1 AND NOT pg_has_role(current_user, nspowner, 'USAGE')\n) AS \"result\"",
+        "params": ["prisma_contract"]
+      },
+      {
+        "description": "The role that runs this command must have the privileges of the role that owns table \"prisma_contract\".\"marker\", because a later migration of Prisma's own tables may add a column to it, and that needs those privileges. Give the schema and its tables to the migrating role with ALTER SCHEMA \"prisma_contract\" OWNER TO <migrating role>, then ALTER TABLE \"prisma_contract\".\"marker\" OWNER TO <migrating role>, ALTER TABLE \"prisma_contract\".\"ledger\" OWNER TO <migrating role>, ALTER TABLE \"prisma_contract\".\"contract\" OWNER TO <migrating role>.",
+        "sql": "SELECT (SELECT rolsuper FROM pg_roles WHERE rolname = current_user) OR NOT EXISTS (\n  SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2 AND NOT pg_has_role(current_user, c.relowner, 'USAGE')\n) AS \"result\"",
+        "params": ["prisma_contract", "marker"]
+      },
+      {
+        "description": "The role that runs this command must have the privileges of the role that owns table \"prisma_contract\".\"ledger\", because a later migration of Prisma's own tables may add a column to it, and that needs those privileges. Give the schema and its tables to the migrating role with ALTER SCHEMA \"prisma_contract\" OWNER TO <migrating role>, then ALTER TABLE \"prisma_contract\".\"marker\" OWNER TO <migrating role>, ALTER TABLE \"prisma_contract\".\"ledger\" OWNER TO <migrating role>, ALTER TABLE \"prisma_contract\".\"contract\" OWNER TO <migrating role>.",
+        "sql": "SELECT (SELECT rolsuper FROM pg_roles WHERE rolname = current_user) OR NOT EXISTS (\n  SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2 AND NOT pg_has_role(current_user, c.relowner, 'USAGE')\n) AS \"result\"",
+        "params": ["prisma_contract", "ledger"]
+      },
+      {
+        "description": "The role that runs this command must have the privileges of the role that owns table \"prisma_contract\".\"contract\", because a later migration of Prisma's own tables may add a column to it, and that needs those privileges. Give the schema and its tables to the migrating role with ALTER SCHEMA \"prisma_contract\" OWNER TO <migrating role>, then ALTER TABLE \"prisma_contract\".\"marker\" OWNER TO <migrating role>, ALTER TABLE \"prisma_contract\".\"ledger\" OWNER TO <migrating role>, ALTER TABLE \"prisma_contract\".\"contract\" OWNER TO <migrating role>.",
+        "sql": "SELECT (SELECT rolsuper FROM pg_roles WHERE rolname = current_user) OR NOT EXISTS (\n  SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2 AND NOT pg_has_role(current_user, c.relowner, 'USAGE')\n) AS \"result\"",
+        "params": ["prisma_contract", "contract"]
+      },
+      {
+        "description": "The role that runs this command must have the CREATE privilege on the database, because renaming schema \"prisma_contract\" needs it. Grant it with GRANT CREATE ON DATABASE <database> TO <migrating role>, or run the command once as a role that has it.",
+        "sql": "SELECT (SELECT rolsuper FROM pg_roles WHERE rolname = current_user)\n  OR has_database_privilege(current_database(), 'CREATE') AS \"result\"",
+        "params": []
+      }
+    ],
+    "execute": [
+      {
+        "description": "drop schema \"_prisma\" if it exists, which the database refuses when anything is in it",
+        "sql": "DROP SCHEMA IF EXISTS \"_prisma\""
+      },
+      {
+        "description": "rename schema \"prisma_contract\" to \"_prisma\"",
+        "sql": "ALTER SCHEMA \"prisma_contract\" RENAME TO \"_prisma\""
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "Schema \"prisma_contract\" must no longer exist once it is renamed to \"_prisma\".",
+        "sql": "SELECT to_regnamespace($1) IS NULL AS \"result\"",
+        "params": ["prisma_contract"]
+      }
+    ]
+  },
+  {
+    "id": "_prisma.create-schema",
+    "label": "Create schema \"_prisma\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres"
+    },
+    "precheck": [],
+    "execute": [
+      {
+        "description": "create schema \"_prisma\"",
+        "sql": "CREATE SCHEMA IF NOT EXISTS \"_prisma\""
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "Schema \"_prisma\" must exist.",
+        "sql": "SELECT to_regnamespace($1) IS NOT NULL AS \"result\"",
+        "params": ["_prisma"]
+      }
+    ]
+  },
+  {
+    "id": "_prisma.create-table.marker",
+    "label": "Create table \"_prisma\".\"marker\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "_prisma",
+        "objectType": "table",
+        "name": "marker"
+      }
+    },
+    "precheck": [],
+    "execute": [
+      {
+        "description": "create table \"_prisma\".\"marker\"",
+        "sql": "CREATE TABLE IF NOT EXISTS \"_prisma\".\"marker\" (\n  \"space\" text DEFAULT 'app' NOT NULL PRIMARY KEY,\n  \"core_hash\" text NOT NULL,\n  \"profile_hash\" text NOT NULL,\n  \"contract_json\" jsonb,\n  \"canonical_version\" int,\n  \"updated_at\" timestamptz DEFAULT (now()) NOT NULL,\n  \"app_tag\" text,\n  \"meta\" jsonb DEFAULT '{}'::jsonb NOT NULL,\n  \"invariants\" text[] DEFAULT '{}'::text[] NOT NULL\n)"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "Table \"_prisma\".\"marker\" must exist.",
+        "sql": "SELECT to_regclass($1) IS NOT NULL AS \"result\"",
+        "params": ["\"_prisma\".\"marker\""]
+      }
+    ]
+  },
+  {
+    "id": "_prisma.create-table.ledger",
+    "label": "Create table \"_prisma\".\"ledger\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "_prisma",
+        "objectType": "table",
+        "name": "ledger"
+      }
+    },
+    "precheck": [],
+    "execute": [
+      {
+        "description": "create table \"_prisma\".\"ledger\"",
+        "sql": "CREATE TABLE IF NOT EXISTS \"_prisma\".\"ledger\" (\n  \"id\" bigserial PRIMARY KEY,\n  \"created_at\" timestamptz DEFAULT (now()) NOT NULL,\n  \"space\" text NOT NULL,\n  \"migration_name\" text NOT NULL,\n  \"migration_hash\" text NOT NULL,\n  \"origin_core_hash\" text,\n  \"origin_profile_hash\" text,\n  \"destination_core_hash\" text NOT NULL,\n  \"destination_profile_hash\" text,\n  \"operations\" jsonb NOT NULL\n)"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "Table \"_prisma\".\"ledger\" must exist.",
+        "sql": "SELECT to_regclass($1) IS NOT NULL AS \"result\"",
+        "params": ["\"_prisma\".\"ledger\""]
+      }
+    ]
+  },
+  {
+    "id": "_prisma.create-table.contract",
+    "label": "Create table \"_prisma\".\"contract\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "_prisma",
+        "objectType": "table",
+        "name": "contract"
+      }
+    },
+    "precheck": [],
+    "execute": [
+      {
+        "description": "create table \"_prisma\".\"contract\"",
+        "sql": "CREATE TABLE IF NOT EXISTS \"_prisma\".\"contract\" (\n  \"core_hash\" text NOT NULL PRIMARY KEY,\n  \"created_at\" timestamptz DEFAULT (now()) NOT NULL,\n  \"contract_json\" jsonb NOT NULL\n)"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "Table \"_prisma\".\"contract\" must exist.",
+        "sql": "SELECT to_regclass($1) IS NOT NULL AS \"result\"",
+        "params": ["\"_prisma\".\"contract\""]
+      }
+    ]
+  },
+  {
+    "id": "_prisma.check-columns.marker",
+    "label": "Check the columns of table \"_prisma\".\"marker\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "_prisma",
+        "objectType": "table",
+        "name": "marker"
+      }
+    },
+    "precheck": [
+      {
+        "description": "Table \"_prisma\".\"marker\" must have column \"space\" of type text, NOT NULL. This release of Prisma reads and writes this table only in the form it creates.",
+        "sql": "WITH \"table\" AS (\n  SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2\n)\nSELECT NOT EXISTS (SELECT 1 FROM \"table\") OR EXISTS (\n  SELECT 1 FROM pg_attribute a JOIN \"table\" t ON a.attrelid = t.oid\n  WHERE a.attname = $3 AND NOT a.attisdropped\n    AND format_type(a.atttypid, a.atttypmod) = $4 AND a.attnotnull = $5\n) AS \"result\"",
+        "params": ["_prisma", "marker", "space", "text", true]
+      },
+      {
+        "description": "Table \"_prisma\".\"marker\" must have column \"core_hash\" of type text, NOT NULL. This release of Prisma reads and writes this table only in the form it creates.",
+        "sql": "WITH \"table\" AS (\n  SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2\n)\nSELECT NOT EXISTS (SELECT 1 FROM \"table\") OR EXISTS (\n  SELECT 1 FROM pg_attribute a JOIN \"table\" t ON a.attrelid = t.oid\n  WHERE a.attname = $3 AND NOT a.attisdropped\n    AND format_type(a.atttypid, a.atttypmod) = $4 AND a.attnotnull = $5\n) AS \"result\"",
+        "params": ["_prisma", "marker", "core_hash", "text", true]
+      },
+      {
+        "description": "Table \"_prisma\".\"marker\" must have column \"profile_hash\" of type text, NOT NULL. This release of Prisma reads and writes this table only in the form it creates.",
+        "sql": "WITH \"table\" AS (\n  SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2\n)\nSELECT NOT EXISTS (SELECT 1 FROM \"table\") OR EXISTS (\n  SELECT 1 FROM pg_attribute a JOIN \"table\" t ON a.attrelid = t.oid\n  WHERE a.attname = $3 AND NOT a.attisdropped\n    AND format_type(a.atttypid, a.atttypmod) = $4 AND a.attnotnull = $5\n) AS \"result\"",
+        "params": ["_prisma", "marker", "profile_hash", "text", true]
+      },
+      {
+        "description": "Table \"_prisma\".\"marker\" must have column \"contract_json\" of type jsonb, nullable. This release of Prisma reads and writes this table only in the form it creates.",
+        "sql": "WITH \"table\" AS (\n  SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2\n)\nSELECT NOT EXISTS (SELECT 1 FROM \"table\") OR EXISTS (\n  SELECT 1 FROM pg_attribute a JOIN \"table\" t ON a.attrelid = t.oid\n  WHERE a.attname = $3 AND NOT a.attisdropped\n    AND format_type(a.atttypid, a.atttypmod) = $4 AND a.attnotnull = $5\n) AS \"result\"",
+        "params": ["_prisma", "marker", "contract_json", "jsonb", false]
+      },
+      {
+        "description": "Table \"_prisma\".\"marker\" must have column \"canonical_version\" of type integer, nullable. This release of Prisma reads and writes this table only in the form it creates.",
+        "sql": "WITH \"table\" AS (\n  SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2\n)\nSELECT NOT EXISTS (SELECT 1 FROM \"table\") OR EXISTS (\n  SELECT 1 FROM pg_attribute a JOIN \"table\" t ON a.attrelid = t.oid\n  WHERE a.attname = $3 AND NOT a.attisdropped\n    AND format_type(a.atttypid, a.atttypmod) = $4 AND a.attnotnull = $5\n) AS \"result\"",
+        "params": ["_prisma", "marker", "canonical_version", "integer", false]
+      },
+      {
+        "description": "Table \"_prisma\".\"marker\" must have column \"updated_at\" of type timestamp with time zone, NOT NULL. This release of Prisma reads and writes this table only in the form it creates.",
+        "sql": "WITH \"table\" AS (\n  SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2\n)\nSELECT NOT EXISTS (SELECT 1 FROM \"table\") OR EXISTS (\n  SELECT 1 FROM pg_attribute a JOIN \"table\" t ON a.attrelid = t.oid\n  WHERE a.attname = $3 AND NOT a.attisdropped\n    AND format_type(a.atttypid, a.atttypmod) = $4 AND a.attnotnull = $5\n) AS \"result\"",
+        "params": ["_prisma", "marker", "updated_at", "timestamp with time zone", true]
+      },
+      {
+        "description": "Table \"_prisma\".\"marker\" must have column \"app_tag\" of type text, nullable. This release of Prisma reads and writes this table only in the form it creates.",
+        "sql": "WITH \"table\" AS (\n  SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2\n)\nSELECT NOT EXISTS (SELECT 1 FROM \"table\") OR EXISTS (\n  SELECT 1 FROM pg_attribute a JOIN \"table\" t ON a.attrelid = t.oid\n  WHERE a.attname = $3 AND NOT a.attisdropped\n    AND format_type(a.atttypid, a.atttypmod) = $4 AND a.attnotnull = $5\n) AS \"result\"",
+        "params": ["_prisma", "marker", "app_tag", "text", false]
+      },
+      {
+        "description": "Table \"_prisma\".\"marker\" must have column \"meta\" of type jsonb, NOT NULL. This release of Prisma reads and writes this table only in the form it creates.",
+        "sql": "WITH \"table\" AS (\n  SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2\n)\nSELECT NOT EXISTS (SELECT 1 FROM \"table\") OR EXISTS (\n  SELECT 1 FROM pg_attribute a JOIN \"table\" t ON a.attrelid = t.oid\n  WHERE a.attname = $3 AND NOT a.attisdropped\n    AND format_type(a.atttypid, a.atttypmod) = $4 AND a.attnotnull = $5\n) AS \"result\"",
+        "params": ["_prisma", "marker", "meta", "jsonb", true]
+      },
+      {
+        "description": "Table \"_prisma\".\"marker\" must have column \"invariants\" of type text[], NOT NULL. This release of Prisma reads and writes this table only in the form it creates.",
+        "sql": "WITH \"table\" AS (\n  SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2\n)\nSELECT NOT EXISTS (SELECT 1 FROM \"table\") OR EXISTS (\n  SELECT 1 FROM pg_attribute a JOIN \"table\" t ON a.attrelid = t.oid\n  WHERE a.attname = $3 AND NOT a.attisdropped\n    AND format_type(a.atttypid, a.atttypmod) = $4 AND a.attnotnull = $5\n) AS \"result\"",
+        "params": ["_prisma", "marker", "invariants", "text[]", true]
+      }
+    ],
+    "execute": [],
+    "postcheck": []
+  },
+  {
+    "id": "_prisma.check-columns.ledger",
+    "label": "Check the columns of table \"_prisma\".\"ledger\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "_prisma",
+        "objectType": "table",
+        "name": "ledger"
+      }
+    },
+    "precheck": [
+      {
+        "description": "Table \"_prisma\".\"ledger\" must have column \"id\" of type bigint, NOT NULL. This release of Prisma reads and writes this table only in the form it creates.",
+        "sql": "WITH \"table\" AS (\n  SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2\n)\nSELECT NOT EXISTS (SELECT 1 FROM \"table\") OR EXISTS (\n  SELECT 1 FROM pg_attribute a JOIN \"table\" t ON a.attrelid = t.oid\n  WHERE a.attname = $3 AND NOT a.attisdropped\n    AND format_type(a.atttypid, a.atttypmod) = $4 AND a.attnotnull = $5\n) AS \"result\"",
+        "params": ["_prisma", "ledger", "id", "bigint", true]
+      },
+      {
+        "description": "Table \"_prisma\".\"ledger\" must have column \"created_at\" of type timestamp with time zone, NOT NULL. This release of Prisma reads and writes this table only in the form it creates.",
+        "sql": "WITH \"table\" AS (\n  SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2\n)\nSELECT NOT EXISTS (SELECT 1 FROM \"table\") OR EXISTS (\n  SELECT 1 FROM pg_attribute a JOIN \"table\" t ON a.attrelid = t.oid\n  WHERE a.attname = $3 AND NOT a.attisdropped\n    AND format_type(a.atttypid, a.atttypmod) = $4 AND a.attnotnull = $5\n) AS \"result\"",
+        "params": ["_prisma", "ledger", "created_at", "timestamp with time zone", true]
+      },
+      {
+        "description": "Table \"_prisma\".\"ledger\" must have column \"space\" of type text, NOT NULL. This release of Prisma reads and writes this table only in the form it creates.",
+        "sql": "WITH \"table\" AS (\n  SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2\n)\nSELECT NOT EXISTS (SELECT 1 FROM \"table\") OR EXISTS (\n  SELECT 1 FROM pg_attribute a JOIN \"table\" t ON a.attrelid = t.oid\n  WHERE a.attname = $3 AND NOT a.attisdropped\n    AND format_type(a.atttypid, a.atttypmod) = $4 AND a.attnotnull = $5\n) AS \"result\"",
+        "params": ["_prisma", "ledger", "space", "text", true]
+      },
+      {
+        "description": "Table \"_prisma\".\"ledger\" must have column \"migration_name\" of type text, NOT NULL. This release of Prisma reads and writes this table only in the form it creates.",
+        "sql": "WITH \"table\" AS (\n  SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2\n)\nSELECT NOT EXISTS (SELECT 1 FROM \"table\") OR EXISTS (\n  SELECT 1 FROM pg_attribute a JOIN \"table\" t ON a.attrelid = t.oid\n  WHERE a.attname = $3 AND NOT a.attisdropped\n    AND format_type(a.atttypid, a.atttypmod) = $4 AND a.attnotnull = $5\n) AS \"result\"",
+        "params": ["_prisma", "ledger", "migration_name", "text", true]
+      },
+      {
+        "description": "Table \"_prisma\".\"ledger\" must have column \"migration_hash\" of type text, NOT NULL. This release of Prisma reads and writes this table only in the form it creates.",
+        "sql": "WITH \"table\" AS (\n  SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2\n)\nSELECT NOT EXISTS (SELECT 1 FROM \"table\") OR EXISTS (\n  SELECT 1 FROM pg_attribute a JOIN \"table\" t ON a.attrelid = t.oid\n  WHERE a.attname = $3 AND NOT a.attisdropped\n    AND format_type(a.atttypid, a.atttypmod) = $4 AND a.attnotnull = $5\n) AS \"result\"",
+        "params": ["_prisma", "ledger", "migration_hash", "text", true]
+      },
+      {
+        "description": "Table \"_prisma\".\"ledger\" must have column \"origin_core_hash\" of type text, nullable. This release of Prisma reads and writes this table only in the form it creates.",
+        "sql": "WITH \"table\" AS (\n  SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2\n)\nSELECT NOT EXISTS (SELECT 1 FROM \"table\") OR EXISTS (\n  SELECT 1 FROM pg_attribute a JOIN \"table\" t ON a.attrelid = t.oid\n  WHERE a.attname = $3 AND NOT a.attisdropped\n    AND format_type(a.atttypid, a.atttypmod) = $4 AND a.attnotnull = $5\n) AS \"result\"",
+        "params": ["_prisma", "ledger", "origin_core_hash", "text", false]
+      },
+      {
+        "description": "Table \"_prisma\".\"ledger\" must have column \"origin_profile_hash\" of type text, nullable. This release of Prisma reads and writes this table only in the form it creates.",
+        "sql": "WITH \"table\" AS (\n  SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2\n)\nSELECT NOT EXISTS (SELECT 1 FROM \"table\") OR EXISTS (\n  SELECT 1 FROM pg_attribute a JOIN \"table\" t ON a.attrelid = t.oid\n  WHERE a.attname = $3 AND NOT a.attisdropped\n    AND format_type(a.atttypid, a.atttypmod) = $4 AND a.attnotnull = $5\n) AS \"result\"",
+        "params": ["_prisma", "ledger", "origin_profile_hash", "text", false]
+      },
+      {
+        "description": "Table \"_prisma\".\"ledger\" must have column \"destination_core_hash\" of type text, NOT NULL. This release of Prisma reads and writes this table only in the form it creates.",
+        "sql": "WITH \"table\" AS (\n  SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2\n)\nSELECT NOT EXISTS (SELECT 1 FROM \"table\") OR EXISTS (\n  SELECT 1 FROM pg_attribute a JOIN \"table\" t ON a.attrelid = t.oid\n  WHERE a.attname = $3 AND NOT a.attisdropped\n    AND format_type(a.atttypid, a.atttypmod) = $4 AND a.attnotnull = $5\n) AS \"result\"",
+        "params": ["_prisma", "ledger", "destination_core_hash", "text", true]
+      },
+      {
+        "description": "Table \"_prisma\".\"ledger\" must have column \"destination_profile_hash\" of type text, nullable. This release of Prisma reads and writes this table only in the form it creates.",
+        "sql": "WITH \"table\" AS (\n  SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2\n)\nSELECT NOT EXISTS (SELECT 1 FROM \"table\") OR EXISTS (\n  SELECT 1 FROM pg_attribute a JOIN \"table\" t ON a.attrelid = t.oid\n  WHERE a.attname = $3 AND NOT a.attisdropped\n    AND format_type(a.atttypid, a.atttypmod) = $4 AND a.attnotnull = $5\n) AS \"result\"",
+        "params": ["_prisma", "ledger", "destination_profile_hash", "text", false]
+      },
+      {
+        "description": "Table \"_prisma\".\"ledger\" must have column \"operations\" of type jsonb, NOT NULL. This release of Prisma reads and writes this table only in the form it creates.",
+        "sql": "WITH \"table\" AS (\n  SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2\n)\nSELECT NOT EXISTS (SELECT 1 FROM \"table\") OR EXISTS (\n  SELECT 1 FROM pg_attribute a JOIN \"table\" t ON a.attrelid = t.oid\n  WHERE a.attname = $3 AND NOT a.attisdropped\n    AND format_type(a.atttypid, a.atttypmod) = $4 AND a.attnotnull = $5\n) AS \"result\"",
+        "params": ["_prisma", "ledger", "operations", "jsonb", true]
+      }
+    ],
+    "execute": [],
+    "postcheck": []
+  },
+  {
+    "id": "_prisma.check-columns.contract",
+    "label": "Check the columns of table \"_prisma\".\"contract\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "_prisma",
+        "objectType": "table",
+        "name": "contract"
+      }
+    },
+    "precheck": [
+      {
+        "description": "Table \"_prisma\".\"contract\" must have column \"core_hash\" of type text, NOT NULL. This release of Prisma reads and writes this table only in the form it creates.",
+        "sql": "WITH \"table\" AS (\n  SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2\n)\nSELECT NOT EXISTS (SELECT 1 FROM \"table\") OR EXISTS (\n  SELECT 1 FROM pg_attribute a JOIN \"table\" t ON a.attrelid = t.oid\n  WHERE a.attname = $3 AND NOT a.attisdropped\n    AND format_type(a.atttypid, a.atttypmod) = $4 AND a.attnotnull = $5\n) AS \"result\"",
+        "params": ["_prisma", "contract", "core_hash", "text", true]
+      },
+      {
+        "description": "Table \"_prisma\".\"contract\" must have column \"created_at\" of type timestamp with time zone, NOT NULL. This release of Prisma reads and writes this table only in the form it creates.",
+        "sql": "WITH \"table\" AS (\n  SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2\n)\nSELECT NOT EXISTS (SELECT 1 FROM \"table\") OR EXISTS (\n  SELECT 1 FROM pg_attribute a JOIN \"table\" t ON a.attrelid = t.oid\n  WHERE a.attname = $3 AND NOT a.attisdropped\n    AND format_type(a.atttypid, a.atttypmod) = $4 AND a.attnotnull = $5\n) AS \"result\"",
+        "params": ["_prisma", "contract", "created_at", "timestamp with time zone", true]
+      },
+      {
+        "description": "Table \"_prisma\".\"contract\" must have column \"contract_json\" of type jsonb, NOT NULL. This release of Prisma reads and writes this table only in the form it creates.",
+        "sql": "WITH \"table\" AS (\n  SELECT c.oid FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2\n)\nSELECT NOT EXISTS (SELECT 1 FROM \"table\") OR EXISTS (\n  SELECT 1 FROM pg_attribute a JOIN \"table\" t ON a.attrelid = t.oid\n  WHERE a.attname = $3 AND NOT a.attisdropped\n    AND format_type(a.atttypid, a.atttypmod) = $4 AND a.attnotnull = $5\n) AS \"result\"",
+        "params": ["_prisma", "contract", "contract_json", "jsonb", true]
+      }
+    ],
+    "execute": [],
+    "postcheck": []
+  }
+]

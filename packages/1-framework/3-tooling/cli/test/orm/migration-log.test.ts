@@ -92,6 +92,22 @@ function harness(config: Record<string, unknown>) {
 }
 
 describe('migration log', () => {
+  it("leaves out the migrations of the space for Prisma's own tables", async () => {
+    mocks.readLedger.mockResolvedValue([
+      ledgerEntry({ space: '_prisma', migrationName: '20261126T1200_create_prisma_tables' }),
+      ledgerEntry(),
+    ]);
+
+    const run = await harness(ormConfig()).run(['migration', 'log', '--json'], {
+      cwd: '/tmp',
+    });
+
+    expect(run.presented?.data).toMatchObject({
+      summary: '1 migration(s) applied',
+      records: [{ space: 'app', name: '20260601T0800_initial' }],
+    });
+  });
+
   it('settles as a completed envelope carrying the ledger document', async () => {
     mocks.readLedger.mockResolvedValue([ledgerEntry()]);
 

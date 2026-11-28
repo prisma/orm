@@ -3,7 +3,11 @@ import postgresAdapter from '@internal/adapter-postgres/control';
 import type { Contract } from '@internal/contract/types';
 import postgresDriverDescriptor from '@internal/driver-postgres/control';
 import sql from '@internal/family-sql/control';
-import { APP_SPACE_ID, createControlStack } from '@internal/framework-components/control';
+import {
+  APP_SPACE_ID,
+  createControlStack,
+  PRISMA_SPACE_ID,
+} from '@internal/framework-components/control';
 import {
   defineContract,
   field,
@@ -70,8 +74,7 @@ describe('family instance signSpaces', () => {
 
       await withClient(connectionString, async (client) => {
         // Clean up any existing marker
-        await client.query('drop table if exists prisma_contract.marker');
-        await client.query('drop schema if exists prisma_contract');
+        await client.query('drop schema if exists _prisma cascade');
         // Create schema and table
         await bootstrapPostgresSignMarkerTables(client);
         // Create table matching contract
@@ -138,6 +141,55 @@ describe('family instance signSpaces', () => {
     );
   });
 
+  describe("without Prisma's own tables", () => {
+    beforeEach(async () => {
+      if (!connectionString) {
+        throw new Error('Connection string not set');
+      }
+      await withClient(connectionString, async (client) => {
+        await client.query('drop schema if exists _prisma cascade');
+      });
+    }, timeouts.spinUpPpgDev);
+
+    it(
+      'refuses to sign, saying the tables are missing, as the migration runner does',
+      async () => {
+        if (!connectionString) {
+          throw new Error('Connection string not set');
+        }
+        const validatedContract = new PostgresContractSerializer().deserializeContract(
+          createTestContract(),
+        ) as Contract<SqlStorage>;
+        const driver = await postgresDriverDescriptor.create(connectionString);
+        try {
+          const familyInstance = sql.create(
+            createControlStack({
+              family: sql,
+              target: postgres,
+              adapter: postgresAdapter,
+              driver: postgresDriverDescriptor,
+              extensions: [],
+            }),
+          );
+
+          await expect(
+            familyInstance.signSpaces({
+              driver,
+              spaces: [{ space: APP_SPACE_ID, contract: validatedContract, expected: null }],
+            }),
+          ).rejects.toMatchObject({
+            code: 'MIGRATION.PRISMA_TABLES_MISSING',
+            message:
+              "Prisma's own tables are missing from this database: _prisma.marker does not exist.",
+          });
+        } finally {
+          await driver.close();
+        }
+      },
+      timeouts.spinUpPpgDev,
+    );
+  });
+
   describe('marker update', () => {
     beforeEach(async () => {
       if (!connectionString) {
@@ -146,8 +198,7 @@ describe('family instance signSpaces', () => {
 
       await withClient(connectionString, async (client) => {
         // Clean up any existing marker
-        await client.query('drop table if exists prisma_contract.marker');
-        await client.query('drop schema if exists prisma_contract');
+        await client.query('drop schema if exists _prisma cascade');
         // Create schema and table
         await bootstrapPostgresSignMarkerTables(client);
         // Create table matching contract
@@ -237,7 +288,7 @@ describe('family instance signSpaces', () => {
 
         await withClient(connectionString, async (client) => {
           await client.query(
-            `update prisma_contract.marker set invariants = $1::text[] where space = 'app'`,
+            `update _prisma.marker set invariants = $1::text[] where space = 'app'`,
             [['email-verified', 'phone-backfill']],
           );
         });
@@ -301,7 +352,7 @@ describe('family instance signSpaces', () => {
           `);
           await client.query(`
             create trigger refuse_extension_marker
-            before insert or update on prisma_contract.marker
+            before insert or update on _prisma.marker
             for each row execute function refuse_extension_marker()
           `);
         });
@@ -338,9 +389,11 @@ describe('family instance signSpaces', () => {
           ).rejects.toThrow(/marker write refused/);
 
           const markers = await familyInstance.readAllMarkers({ driver });
-          expect([...markers].map(([space, marker]) => [space, marker.storageHash])).toEqual([
-            [APP_SPACE_ID, 'old-hash'],
-          ]);
+          expect(
+            [...markers]
+              .filter(([space]) => space !== PRISMA_SPACE_ID)
+              .map(([space, marker]) => [space, marker.storageHash]),
+          ).toEqual([[APP_SPACE_ID, 'old-hash']]);
         } finally {
           await driver.close();
         }
@@ -357,8 +410,7 @@ describe('family instance signSpaces', () => {
 
       await withClient(connectionString, async (client) => {
         // Clean up any existing marker
-        await client.query('drop table if exists prisma_contract.marker');
-        await client.query('drop schema if exists prisma_contract');
+        await client.query('drop schema if exists _prisma cascade');
         // Create schema and table
         await bootstrapPostgresSignMarkerTables(client);
         // Create table matching contract

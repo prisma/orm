@@ -23,6 +23,7 @@ import type {
 import {
   CONTRACT_SNAPSHOTS_DIRNAME,
   hasOperationPreview,
+  isPrismaSpace,
   isStorageHashHex,
   migrationSubjectKey,
 } from '@internal/framework-components/control';
@@ -873,7 +874,12 @@ function detectOrphanMarkers(
   ]);
   const orphans: string[] = [];
   for (const [spaceId, row] of markerRows) {
-    if (row !== null && row !== undefined && !aggregateSpaceIds.has(spaceId)) {
+    if (
+      row !== null &&
+      row !== undefined &&
+      !aggregateSpaceIds.has(spaceId) &&
+      !isPrismaSpace(spaceId)
+    ) {
       orphans.push(spaceId);
     }
   }

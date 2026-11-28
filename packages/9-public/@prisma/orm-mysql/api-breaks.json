@@ -1,50 +1,5 @@
 [
   {
-    "path": "./config",
-    "export": "MysqlConfigComponents",
-    "test": "type",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "7f76022b8c05a2ea",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
-  },
-  {
-    "path": "./config",
-    "export": "createMysqlDefineConfig",
-    "test": "value",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "bf15f1ca6dde8bf1",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
-  },
-  {
-    "path": "./config",
-    "export": "defineConfig",
-    "test": "value",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "255024c6cf68f20a",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
-  },
-  {
-    "path": "./control",
-    "export": "createMysqlControlClient",
-    "test": "value",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "53948b4b5df4622a",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
-  },
-  {
-    "path": "./runtime",
-    "export": "MysqlClient",
-    "test": "type",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "37e722cfd658fd56",
-    "reason": "A column name that several joined tables share must now name its table (prisma/orm#31150)."
-  },
-  {
     "path": "./runtime",
     "export": "MysqlQueryMembers",
     "test": "type",
@@ -79,5 +34,68 @@
     "lastRelease": "8.0.0-rc.25",
     "fingerprint": "75b140f086ece7dc",
     "reason": "A column name that several joined tables share must now name its table (prisma/orm#31150)."
+  },
+  {
+    "path": "./runtime",
+    "export": "MysqlClient",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "37e722cfd658fd56",
+    "reason": "A column name that several joined tables share must now name its table (prisma/orm#31150)."
+  },
+  {
+    "path": "./runtime",
+    "export": "MysqlClientComponents",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "7721ba3b4134db5d",
+    "reason": "The shared SQL-family type for a marker read gained the kind `earlier-release`, which only PostgreSQL returns today (prisma/orm#31234)."
+  },
+  {
+    "path": "./static",
+    "export": "MysqlStaticComponents",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "385480085008de21",
+    "reason": "The shared SQL-family type for a marker read gained the kind `earlier-release`, which only PostgreSQL returns today (prisma/orm#31234)."
+  },
+  {
+    "path": "./config",
+    "export": "MysqlConfigComponents",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "7f76022b8c05a2ea",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./config",
+    "export": "createMysqlDefineConfig",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "bf15f1ca6dde8bf1",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./config",
+    "export": "defineConfig",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "255024c6cf68f20a",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./control",
+    "export": "createMysqlControlClient",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "53948b4b5df4622a",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
   }
 ]

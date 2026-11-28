@@ -1,11 +1,12 @@
 import { createHash } from 'node:crypto';
 import type { PreserveEmptyPredicate, StorageSort } from '@internal/contract/hashing';
 import { computeStorageHash } from '@internal/contract/hashing';
+import type { MigrationPackage } from '@internal/framework-components/control';
 import { canonicalizeJson } from '@internal/framework-components/utils';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import type { MigrationMetadata } from './metadata';
-import type { MigrationOps, OnDiskMigrationPackage } from './package';
+import type { MigrationOps } from './package';
 
 /**
  * The canonicalization hooks a family's emit pipeline computes storage
@@ -117,7 +118,7 @@ export function computeMigrationHash(
  * not — typically a sign of FS corruption, partial writes, or a post-emit
  * hand edit.
  */
-export function verifyMigrationHash(pkg: OnDiskMigrationPackage): VerifyResult {
+export function verifyMigrationHash(pkg: MigrationPackage): VerifyResult {
   const computed = computeMigrationHash(pkg.metadata, pkg.ops);
 
   if (pkg.metadata.migrationHash === computed) {

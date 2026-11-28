@@ -471,7 +471,6 @@ describe('executeMigrate with no path to the target', () => {
     const graph = reconstructGraph([
       {
         dirName: '20260101T0000_initial',
-        dirPath: '/project/migrations/app/20260101T0000_initial',
         metadata: {
           migrationHash: 'sha256:initial',
           from: EMPTY_CONTRACT_HASH,

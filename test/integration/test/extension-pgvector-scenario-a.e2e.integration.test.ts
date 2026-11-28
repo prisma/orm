@@ -21,6 +21,7 @@ import type { SqlStorage } from '@internal/sql-contract/types';
 import postgresTargetDescriptor, { parsePostgresListText } from '@internal/target-postgres/control';
 import { applicationDomainOf, createDevDatabase, timeouts } from '@repo/test-utils';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { createPrismaTables } from './postgres-bootstrap';
 
 const TEST_INVOCATION = { cwd: process.cwd(), configPath: undefined, dbGiven: false };
 
@@ -154,8 +155,9 @@ describe('pgvector contract space through db init (PGlite)', {
   beforeEach(async () => {
     driver = await postgresDriverDescriptor.create(database.connectionString);
     await driver.query('drop schema if exists public cascade');
-    await driver.query('drop schema if exists prisma_contract cascade');
+    await driver.query('drop schema if exists _prisma cascade');
     await driver.query('create schema public');
+    await createPrismaTables(driver);
   }, timeouts.spinUpPpgDev);
 
   afterEach(async () => {
@@ -226,7 +228,7 @@ describe('pgvector contract space through db init (PGlite)', {
       space: string;
       core_hash: string;
       invariants: string;
-    }>('select space, core_hash, invariants from prisma_contract.marker order by space');
+    }>('select space, core_hash, invariants from _prisma.marker order by space');
     const markerBySpace = new Map(markers.rows.map((row) => [row.space, row]));
 
     expect(markerBySpace.has('app')).toBe(true);

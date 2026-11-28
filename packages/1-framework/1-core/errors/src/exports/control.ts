@@ -20,6 +20,7 @@ export {
   errorMigrationCliUnknownFlag,
   errorMigrationPlanningFailed,
   errorOutputFormatMutex,
+  errorPrismaSpaceBehind,
   errorQueryRunnerFactoryRequired,
   errorTargetMigrationNotSupported,
   errorUnexpected,

@@ -57,7 +57,7 @@ withTempDir(({ createTempDir }) => {
           // Verify marker was created in database
           await withClient(connectionString, async (client) => {
             const result = await client.query(
-              'select core_hash, profile_hash from prisma_contract.marker where space = $1',
+              'select core_hash, profile_hash from _prisma.marker where space = $1',
               ['app'],
             );
             expect(result.rows.length).toBe(1);
@@ -96,10 +96,10 @@ withTempDir(({ createTempDir }) => {
           await withClient(connectionString, async (client) => {
             // Ensure marker table exists (might have been created by sign attempt)
             await client.query(`
-                CREATE SCHEMA IF NOT EXISTS prisma_contract
+                CREATE SCHEMA IF NOT EXISTS _prisma
               `);
             await client.query(`
-                CREATE TABLE IF NOT EXISTS prisma_contract.marker (
+                CREATE TABLE IF NOT EXISTS _prisma.marker (
                   space text not null primary key default 'app',
                   core_hash text not null,
                   profile_hash text not null,
@@ -112,7 +112,7 @@ withTempDir(({ createTempDir }) => {
                 )
               `);
             const result = await client.query(
-              'select count(*) as count from prisma_contract.marker where space = $1',
+              'select count(*) as count from _prisma.marker where space = $1',
               ['app'],
             );
             // Marker should not exist (sign should have failed before writing)

@@ -22,6 +22,7 @@ import { type CliInvocation, cliCommand, cliInvocation } from '../../utils/print
 import { defineOrmCommand } from '../define-command';
 import { dbFlag } from '../flags';
 import { normalizeError } from '../normalize-error';
+import { reportPrismaSpaceApplied } from '../prisma-space-report';
 import { controlProgressReporter } from '../progress';
 import { migrationResultBlocks, migrationResultNextActions } from './migration-blocks';
 import { plannerWarningsCollector } from './planner-warnings';
@@ -187,6 +188,7 @@ export function createDbInitCommand(createClient: CreateControlClient) {
           migrationsDir,
           invocation: cliInvocation(ctx, args.flags.db),
           onPlannerWarnings: plannerWarnings.onPlannerWarnings,
+          onPrismaSpaceApplied: () => reportPrismaSpaceApplied(ctx.report),
           onProgress: controlProgressReporter(ctx.report),
         });
         if (!result.ok) {
