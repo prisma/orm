@@ -17,6 +17,7 @@ import type { Executed, OutputsOf, Run } from './node';
 import { type Requires, requirementUnmet } from './requires';
 import { executeStatement, rowsResult } from './run-statement';
 import type { StateEdge } from './state';
+import { stitchKey } from './stitch-key';
 
 export type Filtered = { filter: FilterData[]; state: StateEdge[]; requires: Requires[] };
 
@@ -77,9 +78,32 @@ export function anyOf(conditions: readonly AnyExpression[]): AnyExpression {
     : BinaryExpr.in(
         column,
         ListExpression.of(
-          conditions.flatMap((condition) => (isParamEq(condition) ? [condition.right] : [])),
+          deduplicateParams(
+            conditions.flatMap((condition) => (isParamEq(condition) ? [condition.right] : [])),
+          ),
         ),
       );
+}
+
+function deduplicateParams(params: readonly ParamRef[]): readonly ParamRef[] {
+  const seen = new Set<string>();
+  const unique: ParamRef[] = [];
+  for (const param of params) {
+    const key = paramKey(param.value);
+    if (!seen.has(key)) {
+      seen.add(key);
+      unique.push(param);
+    }
+  }
+  return unique;
+}
+
+function paramKey(value: unknown): string {
+  try {
+    return `${typeof value}:${stitchKey([value])}`;
+  } catch {
+    return `${typeof value}:${String(value)}`;
+  }
 }
 
 function isParamEq(
