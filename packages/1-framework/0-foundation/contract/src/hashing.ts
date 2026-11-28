@@ -123,7 +123,8 @@ export interface HashedContractSections {
   readonly execution?: Record<string, unknown>;
 }
 
-export interface ExpectedContractHashes {
+/** One saved contract and the hashes the hash rules must give it. */
+export interface SavedContractHashes {
   readonly name: string;
   readonly contract: HashedContractSections;
   readonly storageHash: string;
@@ -132,7 +133,7 @@ export interface ExpectedContractHashes {
 }
 
 export interface AssertContractHashesOptions {
-  readonly contracts: readonly ExpectedContractHashes[];
+  readonly contracts: readonly SavedContractHashes[];
   /** The family's normal form of `storage`. */
   readonly normalizeStorage: NormalizeStorage;
 }
@@ -161,7 +162,7 @@ export function assertContractHashes(options: AssertContractHashesOptions): void
 }
 
 function contractHashDifferences(
-  expected: ExpectedContractHashes,
+  expected: SavedContractHashes,
   options: AssertContractHashesOptions,
 ): string[] {
   const { contract } = expected;

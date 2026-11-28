@@ -2,8 +2,8 @@ import { cpSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os';
 import {
   assertContractHashes,
-  type ExpectedContractHashes,
   type NormalizeStorage,
+  type SavedContractHashes,
 } from '@internal/contract/hashing';
 import type { Contract } from '@internal/contract/types';
 import { MongoContractSerializer } from '@internal/family-mongo/ir';
@@ -291,13 +291,13 @@ describe.each(projects)(
     const { migrationsDir, readJson, snapshots, migrationDirs } = projectFiles(root);
     const verifier = createSnapshotContentVerifier(project.normalizeStorage);
 
-    function expectedHashes(file: string): ExpectedContractHashes {
+    function expectedHashes(file: string): SavedContractHashes {
       const contract = readJson(file);
       const storage = contract['storage'] as { storageHash: string };
       const execution = contract['execution'] as { executionHash: string } | undefined;
       return {
         name: file,
-        contract: contract as unknown as ExpectedContractHashes['contract'],
+        contract: contract as unknown as SavedContractHashes['contract'],
         storageHash: storage.storageHash,
         profileHash: contract['profileHash'] as string,
         ...(execution === undefined ? {} : { executionHash: execution.executionHash }),

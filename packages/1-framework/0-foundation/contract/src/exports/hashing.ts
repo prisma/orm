@@ -12,6 +12,6 @@ export {
   computeExecutionHash,
   computeProfileHash,
   computeStorageHash,
-  type ExpectedContractHashes,
   type HashedContractSections,
+  type SavedContractHashes,
 } from '../hashing';

@@ -1,5 +1,5 @@
 import { readdirSync, readFileSync } from 'node:fs';
-import { assertContractHashes, type ExpectedContractHashes } from '@internal/contract/hashing';
+import { assertContractHashes, type SavedContractHashes } from '@internal/contract/hashing';
 import { MongoContractSerializer } from '@internal/family-mongo/ir';
 import {
   createSnapshotContentVerifier,
@@ -79,13 +79,13 @@ function snapshotHashes(project: Project): string[] {
 }
 
 /** The hashes a saved contract stores, as the expectations `assertContractHashes` checks. */
-function storedHashes(name: string, relative: string): ExpectedContractHashes {
+function storedHashes(name: string, relative: string): SavedContractHashes {
   const contract = readJson(relative);
   const storage = contract['storage'] as { storageHash: string };
   const execution = contract['execution'] as { executionHash: string } | undefined;
   return {
     name,
-    contract: contract as unknown as ExpectedContractHashes['contract'],
+    contract: contract as unknown as SavedContractHashes['contract'],
     storageHash: storage.storageHash,
     profileHash: contract['profileHash'] as string,
     ...(execution === undefined ? {} : { executionHash: execution.executionHash }),
