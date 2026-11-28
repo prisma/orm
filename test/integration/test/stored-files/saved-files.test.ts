@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { canonicalizeContractToObject } from '@internal/contract/hashing';
 import type { Contract } from '@internal/contract/types';
 import { MongoContractSerializer } from '@internal/family-mongo/ir';
+import type { ContractSerializer } from '@internal/framework-components/control';
 import { deserializeMongoOps } from '@internal/target-mongo/control';
 import { MysqlContractSerializer } from '@internal/target-mysql/runtime';
 import { PostgresContractSerializer } from '@internal/target-postgres/runtime';
@@ -12,41 +13,43 @@ import { describe, expect, it } from 'vitest';
 
 const repoRoot = join(import.meta.dirname, '../../../..');
 
-interface TargetSerializer {
-  deserializeContract(json: unknown): Contract;
-  serializeContract(contract: Contract): Record<string, unknown>;
-  readonly normalizeStorage: (storage: Record<string, unknown>) => Record<string, unknown>;
+interface ContractReader {
+  read(json: unknown): unknown;
+  /** The `contract.json` content `prisma contract emit` writes for the contract read from `json`, without `_generated`. */
+  writeAgain(json: unknown): Record<string, unknown>;
 }
 
-const serializers: Readonly<Record<string, TargetSerializer>> = {
-  postgres: new PostgresContractSerializer(),
-  sqlite: new SqliteContractSerializer(),
-  mysql: new MysqlContractSerializer(),
-  mariadb: new MysqlContractSerializer(),
-  mongo: new MongoContractSerializer(),
-};
+function readerOf<TContract extends Contract>(
+  serializer: ContractSerializer<TContract>,
+): ContractReader {
+  return {
+    read: (json) => serializer.deserializeContract(json),
+    writeAgain: (json) => {
+      const contract = serializer.deserializeContract(json);
+      return canonicalizeContractToObject(contract, {
+        serializeContract: () => serializer.serializeContract(contract),
+        normalizeStorage: serializer.normalizeStorage,
+      });
+    },
+  };
+}
 
-const contractReaders: Readonly<Record<string, (json: unknown) => unknown>> = Object.fromEntries(
-  Object.entries(serializers).map(([target, serializer]) => [
-    target,
-    (json: unknown) => serializer.deserializeContract(json),
-  ]),
-);
+const contractReaders: Readonly<Record<string, ContractReader>> = {
+  postgres: readerOf(new PostgresContractSerializer()),
+  sqlite: readerOf(new SqliteContractSerializer()),
+  mysql: readerOf(new MysqlContractSerializer()),
+  mariadb: readerOf(new MysqlContractSerializer()),
+  mongo: readerOf(new MongoContractSerializer()),
+};
 
 /** The text `prisma contract emit` writes for the contract read from `text`. */
 function writtenAgain(text: string): string | undefined {
   const json = JSON.parse(text);
-  const serializer = serializers[String(Reflect.get(Object(json), 'target'))];
-  if (serializer === undefined) return undefined;
+  const reader = contractReaders[String(Reflect.get(Object(json), 'target'))];
+  if (reader === undefined) return undefined;
   const generated = Reflect.get(Object(json), '_generated');
   return JSON.stringify(
-    {
-      ...canonicalizeContractToObject(serializer.deserializeContract(json), {
-        serializeContract: (contract) => serializer.serializeContract(contract),
-        normalizeStorage: serializer.normalizeStorage,
-      }),
-      ...(generated === undefined ? {} : { _generated: generated }),
-    },
+    { ...reader.writeAgain(json), ...(generated === undefined ? {} : { _generated: generated }) },
     null,
     2,
   );
@@ -206,9 +209,11 @@ describe('the stored files saved in the repository', () => {
     const refused = contractFiles.flatMap((file) => {
       const json = readJson(file);
       const target = String(Reflect.get(Object(json), 'target'));
-      const read = contractReaders[target];
+      const reader = contractReaders[target];
       const reason =
-        read === undefined ? `no reader for target "${target}"` : refusalOf(() => read(json));
+        reader === undefined
+          ? `no reader for target "${target}"`
+          : refusalOf(() => reader.read(json));
       return reason === undefined ? [] : [`${file}: ${reason}`];
     });
     expect(refused).toEqual([]);
