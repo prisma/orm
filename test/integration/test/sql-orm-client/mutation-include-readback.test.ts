@@ -568,7 +568,7 @@ describe.each(includeStrategies)('integration/mutation-include-readback (%s)', (
                   },
                 ]),
             });
-          expectPerRelationStatements(runtime, strategy, 6);
+          expectPerRelationStatements(runtime, strategy, 5);
 
           expect(updated).toEqual({
             name: 'Alice',

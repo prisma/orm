@@ -7,6 +7,7 @@ import { foldRule } from './fold-rule';
 import type { Graph } from './graph';
 import type { InputEdges, Node, Slots } from './node';
 import { readBackRule } from './read-back-rule';
+import { reuseRule } from './reuse-rule';
 
 export interface Replacement {
   readonly node: Node;
@@ -21,7 +22,8 @@ export type Rule = (
 ) => NodeId | Replacement | undefined;
 
 export function rulesFor(contract: Contract<SqlStorage>): readonly Rule[] {
-  return hasContractCapability(contract, 'returning')
+  const returning = hasContractCapability(contract, 'returning')
     ? [foldRule(contract), deleteRule, readBackRule(contract)]
     : [];
+  return [...returning, reuseRule(contract)];
 }

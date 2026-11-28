@@ -85,17 +85,13 @@ export function conditionOnlyReadOf(ast: SelectAst): TableSource | undefined {
 }
 
 function rowsOfConditionReadOf(ast: SelectAst): TableSource | undefined {
-  const from = oneTableReadOf(ast);
-  const clauses = [
-    ast.distinct,
-    ast.distinctOn,
-    ast.groupBy,
-    ast.having,
-    ast.limit,
-    ast.offset,
-    ast.locking,
-  ];
-  return clauses.every((clause) => clause === undefined) ? from : undefined;
+  const clauses = [ast.limit, ast.offset, ast.locking];
+  return clauses.every((clause) => clause === undefined) ? rowsOfTableReadOf(ast) : undefined;
+}
+
+export function rowsOfTableReadOf(ast: SelectAst): TableSource | undefined {
+  const clauses = [ast.distinct, ast.distinctOn, ast.groupBy, ast.having];
+  return clauses.every((clause) => clause === undefined) ? oneTableReadOf(ast) : undefined;
 }
 
 export function sameTable(a: TableSource, b: TableSource): boolean {
