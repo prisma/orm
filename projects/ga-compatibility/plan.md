@@ -1,0 +1,286 @@
+# GA compatibility: plan
+
+The plan for stream 7 of the Prisma 8 GA plan (`planning/plan.md` on the branch `planning/prisma-8-ga`), which lists the same projects. The policy is in [spec.md](spec.md) and [maturity-levels.md](maturity-levels.md).
+
+## Goal
+
+From `8.0.0`, an application built on Prisma 8 upgrades to any later `8.x` release with no changes to its code, its generated files or its database.
+
+Upgrading becomes routine, so users stay on the latest release and we maintain one release line for each major. It is always clear to a user what they can rely on. A project belongs in this stream when it removes a reason for a user to hesitate before upgrading.
+
+## How the policy comes into force
+
+Each project brings three things together, in the same pull requests: the code changed to conform to its part of the policy, the checks that enforce it, and the documentation of it, including any decision record. Nothing that describes a part of the policy is merged to `main` before the code conforms. What is on `main` is therefore what is in force.
+
+A part is in force from the first release after its project merges. Until `8.0.0` that means we follow it by default and the checks enforce it, and we can still break it by a deliberate decision, with upgrade instructions. At `8.0.0` it becomes the promise to users.
+
+Some parts can only start at `8.0.0`. Nothing can be promised about exports until they are reduced, which project 3 does, and no package is GA before then.
+
+### Drafts to start the documentation from
+
+Drafts exist for most of the documentation: decision records for the policy and for the maturity levels, and corrections to the docs, rules and skills that contradict them. They come from the pull request prisma/orm#31194, which was closed without merging because it documented the whole policy ahead of the code. A project starts its documentation from these drafts and takes only its own part.
+
+- **Where they are:** the branch `docs/compatibility-policy-records`, at commit `126f6d2d40`.
+- **If the branch is ever deleted:** the drafts stay on GitHub as `refs/pull/31194/head`, at commit `6b840b95f6`. Fetch them with `git fetch bot refs/pull/31194/head`.
+- **Which project takes what:** [documentation-drafts.md](documentation-drafts.md) in this folder. It is a copy of the list the drafts' author wrote, kept here so that it does not depend on that branch.
+- **To read a draft:** `git fetch bot docs/compatibility-policy-records`, then `git show FETCH_HEAD:<path>`.
+
+## How to read this plan
+
+Each project is sized for one to four pull requests. Its design is written when it starts.
+
+New work joins a project only when it serves that project's purpose. Work that serves the goal and fits no project becomes a new project.
+
+Projects 2 to 7, 12 and 13 are Must for GA, 9 is Aim, and 8, 10 and 11 are Later. Project 12 became Must on 2026-11-27: release 8.0 is where the promise and the maturity levels take effect, so what they mean has to be published when it ships. Will confirmed this on 2026-11-24; it is updated as we go. Project 4 comes before project 3. There is no project 1: it was to document the whole policy on `main` ahead of the code, and each project now documents its own part.
+
+"Task N" is the number a piece of work had before 2026-11-24. The reports under [research/](research/) use those numbers. The facts about the code were read on 2026-11-23 and are rechecked when a project starts.
+
+## Status
+
+As of 2026-11-27. The GA plan (`planning/plan.md` on branch `planning/prisma-8-ga`, stream 7) carries the same status and is updated more often.
+
+| Project | State | Pull requests | Waits on |
+| --- | --- | --- | --- |
+| 2. Stored files and records | Half merged | prisma/orm#31198 merged 2026-11-27 and #31200 merged 2026-11-28; #31203 (the one-time hash change) a draft, being brought up to date with `main` | #31203, then the capabilities rename, in one release candidate; then the saved samples |
+| 3. Reduce exports | Design settled; session paused | None. Audit, spec and plan on a local branch | prisma/orm#31218 merging, since both change the PostgreSQL facade |
+| 4. API check in CI | Done | prisma/orm#31201 and #31217 merged | Nothing for GA. TML-3977 (compare each package with its own last release) can follow GA |
+| 5. Additions that break | Building (niamh-86) | prisma/orm#31245 (the API check catches a planted required member) and #31246 (every set of values outside the framework domain declared open or closed, 21 given a catch-all member; check `pnpm api:sets`), open for review, #31246 stacked on #31245 | Review of both. The 145 sets in the framework domain stay `pending` until the framework change is agreed (rollout item 22). The design for names that clash with built-in names is under discussion |
+| 6. Versions, levels, dependencies | Mostly merged | prisma/prisma-cli#405, prisma/orm#31204, #31212, #31222 and #31236 merged | prisma/orm#31236 (the procedure for cutting release 8.0 as `8.0.1`) merged 2026-11-28. Next TML-3987, which GA waits for: the API compatibility job finds each package's last release at that package's own version, such as `8.0.1-ea.0`. Then create-prisma listing the platform packages (TML-3956) |
+| 7. Prisma's own tables | Building | prisma/studio#1606 merged; nothing pushed in prisma/orm | A decision on applying Prisma's own tables in a first phase; merges after #31203 |
+| 12. Published policy | Not started; required for GA | | A session |
+| 13. The `prisma` tool's interface | Not started; survey done | | Design discussion |
+
+Outside this stream, and blocking projects 2 and 3: capabilities by database version (GA plan, stream 6, row 10), prisma/orm#31218, a draft close to ready.
+
+## Projects that GA requires
+
+### 2. Make later releases read the files and database records of earlier releases
+
+**Purpose.** After an upgrade, what Prisma wrote into a user's repository and database works as it is. The user regenerates nothing and runs no repair command. An application never stops serving queries because of those records.
+
+**What it achieves.**
+
+- Every stored file records the version of its format, and every reader checks it before interpreting the file. A reader that meets a version it does not know says so, and a command that would change the database or the user's files from such a record stops and changes nothing.
+- The same stored content produces the same hash in every release of the major.
+- The check that compares a running application's contract with the database's marker only warns.
+- Samples of everything `8.0.0` writes are saved, and every later release is tested against them.
+
+**How, where we know.**
+
+- Add a format version to `migration.json` and to ref files, and decide how `ops.json` is covered. A reader reports an unknown version as such, before it validates the shape. Rename the contract's `schemaVersion` field to a name without "schema", and give existing files a path to the new name. Decide which unknown fields an earlier release may ignore: today a contract reader and the `migration.json` reader reject any unknown field (task 10).
+- Remove the contract's format version from the inputs of the storage hash, and provide the move for existing projects and databases, since every storage hash changes. Save a fixed set of contracts with their hashes and test that the current code reproduces them (task 11).
+- Turn each failure to read or decode the marker into a warning. Today such a failure fails the query (task 13). prisma/orm#30537, open since October, changes the same code.
+- When the formats are fixed at `8.0.0`, save one sample of each stored file and each database record, and a set of migrations with their snapshots. Test on every release that the current code reads the samples and applies the migrations, for PostgreSQL and MongoDB (task 12).
+
+**Decided when it started.** The design is in [designs/2-stored-files-and-records.md](designs/2-stored-files-and-records.md). Since then: the SQL profile hash covers the contract's capability list, because signing is the one check that a database provides them.
+
+### 3. Minimize the exported TS APIs of GA packages and guarantee them until the next major version
+
+**Purpose.** Everything a user can import from a GA package keeps working until Prisma 9. So before `8.0.0` we export only what we mean to keep.
+
+**What it achieves.**
+
+- Each published package exports only what we intend to support for the whole major. This holds for the facades and for the platform packages.
+- No published import path and no exported name contains "internal".
+- An application depends on its facade, its extension packages and the `prisma` tool, and on nothing else from us.
+- Our own products use only what any user can: the Supabase extension, Composer, the `prisma` tool and the control plane.
+
+**How, where we know.**
+
+- Remove every export we do not intend to cover. The 21 published packages have 1,036 export paths; `@prisma/orm-postgres` has 164, including general helpers such as `./utils/array-equal` (task 3).
+- Rename every published import path that contains `internal`: 15 paths in 7 packages, such as the facade's `./internal/options`. Each export in them gets a proper entrypoint, a name that carries its level, or is removed. Exported names such as `InternalError` are renamed too (task 8).
+- Give the Supabase extension supported names for what it builds on, and delete the facade's four `internal` paths (task 7). Supabase's client is a variant of the facade's client: it assembles the same parts with a role bound first, and its application already installs `@prisma/orm-postgres`. Every part it takes is code `postgres()` itself runs, so nothing new is added to any bundle.
+  - **Stays in the facade, exported from `@prisma/orm-postgres/runtime` with the Early Access prefix:** the connection handling (`ea_resolveOptionalPostgresBinding`, `ea_connectWithBinding`, the type `ea_PostgresBindingRules`), `ea_buildPostgresQueryMembers` and its options type, and the option checks (`ea_validateTransactionOptions`, `ea_validateCursorOptions`, `ea_toDriverCursorOptions`). `ea_buildPostgresStaticContext` and its return type are exported from `@prisma/orm-postgres/static`, where the code lives, so they stay usable without `pg`. No new import path: a separate one would keep no code out of a bundle, and a level is never written in a path.
+  - **Stays in the facade too, found while building (2026-11-28):** the runtime class Supabase subclasses, as `Ea_PostgresRuntimeImpl` from `runtime`, and the contract check, as `ea_validatePostgresContract` from `static`. Moving them to `@prisma/orm-target-postgres`, as first planned, would break that package's rule of not importing the SQL runtime, which keeps the control plane from loading execution code: the class extends `SqlRuntimeBase` from it. The contract check shares its validation cache with `contractFromJson`, so it stays beside it. Supabase imports `IsolationLevel` and `role` from the target directly, where they are already defined.
+  - **Why the prefix:** these functions are the seams inside `postgres()`, cut out so Supabase could reuse them. Exporting them at GA would freeze the client's internal structure until Prisma 9. They are promoted when a second caller shows which hold up.
+  - **The types that describe the client** (`PostgresQueryMembers`, `PostgresTransactionContext`, `PostgresTransactionOptions`, `PostgresBinding`, `PostgresOptionsBase`, `isPgClient`) stay exported from `runtime` at GA.
+  - **Supabase names `@prisma/orm-postgres` as a peer.** This is the one stated exception to two recorded positions: that extension authors build only against platform packages, and that an extension does not name a facade as its peer. Supabase is tied to this facade by its purpose. The decision record on the published packages and the design for project 6 each gain a sentence saying so.
+  - **Supabase also imports the SQL family's `internal/prepared-query` path.** The family package gives that a proper name, at Early Access as well.
+- Applications keep importing `definePrismaConfig` from `@prisma/cli-engine`, and the policy's list names that package. It gets a GA release with the same compatibility promise as our GA packages, at least for `definePrismaConfig` and the config types, and keeps its own version number, since Composer and the `prisma` tool use it too. Importing from `prisma/config` was rejected: `prisma` is built from the ORM's toolchain, so every example, test and `orm init` template in this repository would depend on a package built from this repository. Having each facade export it again was rejected: the config file also holds Composer's settings, so a project without the ORM would need another source. This may be improved later (task 18).
+- Remove the package `@internal/extension-author-tools`. Its one tool, `prisma-8-check-pins`, was written for extension authors but is never published, nothing runs it, it checks `@internal/*` names no extension lists any more, and it checks exact versions, which ranges replace from release 8.0 (project 6). With ranges, the package manager reports a mismatch at install, so no replacement is needed now; if a check for extension authors is wanted later, it belongs in the `prisma` tool, which they already have. This follows from the purpose above: everything an extension author is told to use is published and covered, or it does not exist.
+- Keep or replace each entrypoint that Composer, the `prisma` tool and the control plane import, and change their imports. What each imports is in [analysis.md](analysis.md) (task 22).
+
+**To decide when it starts.** Nothing. The names that depend on the capabilities project (whether the facade's exports carry a database version) are settled there: they do not. This project may prove to be two once its pull requests are counted.
+
+### 4. Catch breaking changes and accidental new exports in CI, by comparing each package's API with the last release
+
+**Purpose.** We find out before a release, not from a user, that a change breaks code written against an earlier release. We also find out when something became importable that we did not mean to support, because an API we expose by accident is one we are then bound to keep.
+
+**What it achieves.**
+
+- A check in CI compares each package's exported API with the last release. It fails on a removal or an incompatible change to anything GA.
+- It reports every added API, and an addition is merged only when the reviewer approves it as intended.
+
+**How, where we know.**
+
+- The approaches other projects use are in [research/public-api-compatibility.md](research/public-api-compatibility.md). The check needs its own design document (task 5).
+- A comparison of exported declarations does not see a change to a query's result type, which is computed from the user's input. Type tests written against the published packages cover that.
+- The check treats a new required member on an interface that users implement as a break, through the test of each exported function that accepts the interface. No list of which interfaces users implement is kept: the decision record on the API checks rejected one, because it goes out of date without anyone noticing.
+
+**Decided when it started.** The checks compare each package's types and the example apps with the last published release, and fail on any break not recorded in the package's `api-breaks.json`. They fail now, during the release candidates. A name starting `ea_`, `preview_` or `rc_` may break, unless a promotion left it as another name for a GA API.
+
+**Decided on 2026-11-28.** TML-3977, which makes the check compare each package with its own last release, is not needed for GA. We release all packages in sync today. If that policy changes, it changes after GA, and the check changes with it.
+
+### 5. Prevent new error codes, built-in names and builder methods from breaking user code
+
+**Purpose.** A release may add features at any time, and an addition must not affect an application that does not use it. In three places today an addition would break existing code. Two of the fixes change published types, so they cannot wait until after `8.0.0`.
+
+**What it achieves.**
+
+- Every exported set that a user's code may handle case by case is declared open or closed. An open set's type has a catch-all member, so the compiler makes the user write a default branch from the start.
+- A user's name never puts a built-in name on the ORM client out of reach.
+- An extension's name is never taken away by a method we add later.
+
+**How, where we know (all task 19).**
+
+- List the exported sets, such as `SqlMigrationRunnerErrorCode`, `EmitFailureCode` and the `kind` values of query-tree nodes. Declare each open or closed and add the catch-all member to the open ones.
+- Give each built-in name on the ORM client a way to be reached when a user's name hides it. Today a user namespace named `fragment` hides `db.orm.fragment`.
+- Stop refusing an extension's aggregate operation whose name matches a collection builder method (`ORM.AGGREGATE_OPERATION_RESERVED`). Today, adding a builder method would make a working extension throw.
+- Add a check that fails when an error code disappears.
+- Show that the API check catches a new required member on an interface users implement, by planting one on a real interface. (Changed on 2026-11-28 from recording a list of those interfaces, which the decision record on the API checks rejected.)
+
+**Agreed so far.** A set that may grow gets a catch-all member such as `(string & {})`, so a user's exhaustiveness check cannot compile and a new case falls to their default branch. A set marked closed changes only in a major version.
+
+**For the project to settle, from the existing guidance.** The hidden built-in on `db.orm` and the clash between our methods and an extension's are one problem: a name we add shares a space with a name a user or an extension chose. The operator recalls that the decision records and design docs already settle it: there is always a way to write the user's name fully qualified, the system's name takes precedence, and there is guidance on whether something specific to the ORM may be promoted onto `db`. A quick search did not find those passages, so the project starts by finding them. Section 5.1 of the [spec](spec.md) says the opposite for PSL (the user's name takes precedence over a built-in); reconcile the two and correct whichever is wrong.
+
+### 6. Show whether something is GA in a package's version and an API's name, and release each package at its own level
+
+**Purpose.** A user can tell from their own `package.json` and code which parts of Prisma 8 the promise covers. Each database reaches GA on its own date: PostgreSQL can be GA while MySQL is a preview.
+
+**What it achieves.**
+
+- The three levels, Early Access, Preview and GA, are defined in full and published in the Prisma 8 docs, in place of the five undefined labels used there today.
+- Each of the 21 packages has a level, written in its version. An API below GA inside a GA package has its level at the start of its name.
+- The release process publishes each package at its own version and tag, and can cut `8.0.0` and a later major.
+- Inside a project, the command-line tool runs the project's own copy of the toolchain, so the commands and the library always come from one release (decided 2026-11-28, built in project 13).
+
+**How, where we know.**
+
+- Turn the working definitions in [maturity-levels.md](maturity-levels.md) into exact requirements for a package to enter each level, and settle every point in its section 6: version numbers while packages are at different levels, what happens to the name `preview_foo` when the API reaches GA, and how a level is written where the name is not a TypeScript identifier. State how the levels relate to the support categories in prisma/orm#25843 (task 1).
+- Change the release scripts and workflow. Today they give every package one version, publish everything under `latest`, and cannot produce `8.0.0` without a hand edit. Decide the version ranges between our own packages from `8.0.0`, which are exact pins today, and change the publish step to write them. State the 12 months of fixes for the previous major in `SECURITY.md`, `docs/oss/versioning.md` and the docs (task 16).
+- Take along five small corrections that are true of the code today and listed in that handover file: remove a stability scheme for capabilities that was never built from the Ecosystem subsystem doc and `docs/reference/capabilities.md`, note that the per-component version matrix in the decision record on versioning was never built, and three wording fixes in `docs/oss/versioning.md`, the decision record index and `AGENTS.md`.
+- Dropped on 2026-11-27: a "How to upgrade" section in each release's notes, with steps a person can follow. After GA an upgrade within Prisma 8 needs no changes for anything that is GA, so per-release upgrade instructions matter only during the release candidates, and no more work goes into them.
+- Update the upgrade skills before GA. Today they describe moving from one release candidate to the next. From `8.0.0` an upgrade within the major needs no change, so skills that still describe release-candidate upgrades would tell users the opposite of the promise.
+- Dropped on 2026-11-27: delivering a corrected upgrade guide to users another way (TML-3942). `prisma skills sync` is the only thing that moves skill files into a project, and nothing else fetches or copies them. What remains of that work is a docs change: the upgrade instructions write a caret only at the newest release, because a caret at an earlier step lets the install jump past it.
+- Decided on 2026-11-27: anything on `main` can be released at any time, so a fix ships in the next release. There is no fix release of one package alone and there are no release branches.
+- Its public docs on prisma.io are not this project's work. What they must say, with the merged source for each statement, is in [handovers/public-docs-from-project-6.md](handovers/public-docs-from-project-6.md): the maturity levels go to project 12, and what an application installs goes to stream 5 of the GA plan.
+- Write the procedure for releasing `8.0.0`, with the list of docs to rewrite on that day. A draft is in prisma/orm#31194, which was not merged.
+- Dropped on 2026-11-28: a check in the `prisma` tool that compares the toolchain it carries with the project's ORM packages (task 17). Once project 13 has made the tool run the project's own copy of the toolchain inside a project, which the peer ranges of prisma/orm#31204 hold to the library's release, there is nothing to compare; outside a project there is nothing to compare with. Today the tool does not do this: `prisma` depends on `@prisma/orm-toolchain` and `@prisma/orm-framework` at one exact release and imports the toolchain directly, so a project on another release gets a second copy, and a mismatch fails with an error that names no versions. Project 13 must build the change before 8.0, or the mismatch ships at GA. Its open questions: how `prisma` decides it is inside a project, and what it does when the project's toolchain is missing or too old for it to load.
+- The API compatibility job must find each package's last release at that package's own version: from release 8.0 the GA packages are `8.0.1` and the Early Access ones `8.0.1-ea.0`, and the job today looks for every package at the root version, so it would fail on every pull request (TML-3987, which GA waits for). Comparing each package with its own last release, and letting a package below GA break, is TML-3977 and can follow GA.
+- Make create-prisma list the platform packages in the apps it generates, in its first release on an ORM version that contains prisma/orm#31204. That pull request makes the database packages name the platform packages (framework, family, target, toolchain) as peers, and `prisma orm init` writes them and every required peer they declare, such as `@prisma/cli-engine` and `temporal-polyfill`, into the app's `package.json`. create-prisma writes that file itself and does not run `init`, so its Yarn apps would get none of them, and npm, pnpm and Bun apps would fail the same way where installing peers is turned off. Generated apps list the same packages at the database package's version, for every package manager, for example by copying the database package's `peerDependencies` and adding the toolchain's required peers. The code is `writePrismaDependenciesEffect` in create-prisma's `src/tasks/install.ts`, and `src/constants/dependencies.ts`. create-prisma 0.14.10 lists only `@prisma/cli-engine`, for Yarn apps. Its CI builds one Yarn MongoDB app and no Yarn PostgreSQL app; add one.
+
+**Decided when it started.** The design is in [designs/6-maturity-versions-and-dependencies.md](designs/6-maturity-versions-and-dependencies.md), and the versioning page the project ships, `docs/oss/versioning.md`, is the authority for the points [maturity-levels.md](maturity-levels.md) listed as open.
+
+### 7. Bring Prisma's own database tables up to date in each release, so no upgrade fails on them
+
+**Purpose.** An upgrade never fails because the tables Prisma keeps for itself in a user's database were created by an earlier release.
+
+**What it achieves.** The requirement in section 6.4 of the spec: the ordinary migration system brings Prisma's own tables up to date, through the commands the user already runs. The user never edits or drops them by hand.
+
+**How.** The agreed design is in [designs/7-prismas-own-tables.md](designs/7-prismas-own-tables.md): each target has a contract space for its own tables, which the framework adds, reads from the installed package and applies before every other space. The marker splits into contract signatures (`_prisma.signatures`, per space) and configuration (`_prisma.config`, per database), beside `_prisma.ledger`. `8.0.0` writes the marker row for that space, which is why this project is needed for GA. On PostgreSQL today the tables are created only if absent and never changed afterwards, and a real database has already failed this way; see [analysis.md](analysis.md) (task 4).
+
+- **A last slice:** decide whether PostgreSQL's contract table, which keeps one copy of each contract for Prisma Studio's Migrations view, becomes a first-class feature: a framework interface every target provides, and a setting that controls whether contracts are stored. Until then it stays an undocumented PostgreSQL feature (section 10 of the design).
+
+**To decide when it starts.** Nothing. The design is settled.
+
+### 12. Publish one versioning and compatibility policy for Prisma's open-source products, and a page for each product that applies it
+
+**Purpose.** A user can read the promise itself, and the ORM, the `prisma` command-line tool and Composer make the same promise in the same words.
+
+**Why a general policy.** Project 13 brings every command of the `prisma` tool under the policy, Composer's included, and its work runs in the prisma-cli repository and in Composer's command-line package as well as here. Those repositories need a policy written for any product, not one written for the ORM. Other Prisma products can adopt it later without changing it.
+
+**What it achieves.**
+
+- One general policy, published on prisma.io from prisma/web. It names no product. It says what each part of a version number means; defines the four maturity levels (Early Access, Preview, Release Candidate, Generally Available) and how a user sees each one (a version suffix on a package, the level in an API's name, the level in a command's help text); says what is promised for each kind of thing a product exposes (code APIs, data it stores, commands and their machine-readable output, configuration); how a change is classified and announced; and how long the previous major receives fixes.
+- A short page for each product: the ORM, the `prisma` tool and Composer. It lists what the product exposes (its packages, its commands, what it stores) and any exception to the general policy.
+- Each repository's own versioning document links to the general policy, and its checks and release scripts apply it.
+
+**How, where we know.**
+
+- Split [spec.md](spec.md) into the general policy and the ORM's page. Section 13 of the spec says which part goes where.
+- Publish it as soon as it is written, not after the other projects. It sets the requirements for each maturity level, and project 6 is setting every ORM package to its real level now, so what we publish matches what we ship. Where something does not yet match, we say so and say that it is being worked on.
+- Start from [handovers/public-docs-from-project-6.md](handovers/public-docs-from-project-6.md), part B. It lists what the page must cover and the section of `docs/oss/versioning.md` on `main` that is the source for each point.
+- Prior art to verify before citing: Google Cloud's single page of launch stages, which every product refers to, and the Kubernetes deprecation policy, which covers its API, its command-line flags and its feature flags with rules for each maturity level.
+
+### 13. Keep scripts and agents that drive the `prisma` command-line tool working, by designing every command's flags, exit codes and machine-readable output before `8.0.0` and checking them in CI
+
+**Purpose.** A script or an agent that calls a command and reads its result keeps working across every `8.x` release, and can tell what each field of the output means.
+
+**Why it is a project of its own.** The policy promises three surfaces: the TypeScript API, what Prisma stores, and the command-line tool. Projects 3 and 4 decide and check the first, and project 2 the second. No project did either for the third. Its intent is different from theirs, it needs its own design, and its work is spread over every command. It covers the whole `prisma` tool, the commands of every product in it, Composer's included. `prisma` takes the ORM's major and minor version (project 6), and a user who sees `prisma` 8.4 reads that number as one promise for every command in it. The config file is not here: its options are TypeScript types, which projects 3 and 4 cover.
+
+**What it achieves.**
+
+- What a script may depend on is written down: each command's name, flags, exit codes and every output a program reads. That is all output not written for a person: the `--json` documents, the data lines a command prints to stdout, the Markdown output, which agents read, and any file a command writes for a program to read, such as a report.
+- Each of those outputs follows one set of principles, and the ones that do not are corrected before `8.0.0`, because a format cannot change after it.
+- A check in CI fails when any of these changes incompatibly, as project 4's does for exports.
+
+**How, where we know.**
+
+- Survey every command: its flags, its exit codes and each machine-readable output it has. The `--json` output is the largest part. Today nobody has designed it: each command's document is whatever was chosen when the command was written. The data lines already have a rule in the CLI Style Guide (tab-separated fields, new fields only appended). The Markdown output is produced by `@prisma/cli-engine`, which renders every command, and has no written rule yet. So part of this project's work is in the engine, and the survey decides what in that output a reader can depend on.
+- Settle the principles in a decision record, for every machine-readable format: what a document reports (the result, or the input given back), stable names, one meaning for each field, how an error is shaped, what a reader must ignore so that an added field does not break it, how a format is versioned, and which maturity level it has. The "JSON semantics" section of the CLI Style Guide is the starting point.
+- Each command's help and usage text states its maturity level when it is below GA. A command that is GA carries the full promise, including any file it writes. No other form is added to mark a level: no `alpha` or `beta` command groups, no change to the command's name.
+- Bring each command into line, and add the check.
+- Publish a schema for every machine-readable format, as `prisma orm init` already does with `@prisma/orm-toolchain/cli/init-output`, so that a program reading it can test against the real format. This includes `@prisma/composer-cli`'s `deploy --report` file. Whether it ships a schema or a sample report today is not checked.
+- In create-prisma, test the deploy report parser (`src/tasks/composer/deploy-report.ts`) against the report the pinned `@prisma/composer-cli` writes, using that schema or by running the pinned version. Today its tests in `tests/telemetry.test.ts` use hand-written reports, so they pass whatever the pinned tool writes. That is how the move from format `1` to `2` went unnoticed. This is the consumer's own check and stays even after the tool's own check exists.
+- The work and the checks run in three repositories: this one (the ORM's commands), prisma-cli (the `prisma` tool and `@prisma/cli-engine`), and Composer's command-line package (`@prisma/composer-cli`). The design is done in this stream. `@prisma/composer-cli`'s own version number becomes internal: users rely on the version of `prisma`.
+
+**The example that raised it.** `prisma orm init --json`, whose schema is in `packages/1-framework/3-tooling/cli/src/commands/init/output.ts` and is published as `@prisma/orm-toolchain/cli/init-output`. Its `package` field is one string, the database package, although `init` installs many packages, which it reports separately under `packagesInstalled`. Its `target` field held `'postgres'` or `'mongodb'` until prisma/orm#31093; since then it holds a short name for a database in Prisma's list and a package name for any other, so a reader cannot tell which kind of value it has. Nothing documented reads either field.
+
+**A second example.** create-prisma runs `prisma deploy --report <file>` and, on a failed deploy, reads `failure.code` from the file for telemetry. The file carries a format version, now `2`. create-prisma's parser accepted only `1`, so when the format moved to `2` the code was dropped with no error and no failing test. It was found by reading the code and fixed in create-prisma 0.14.10. Nothing yet would catch the next change.
+
+**Already decided.** The input flag `--target` keeps its name. Project 6 changes no JSON format.
+
+**GA waits for it.** `8.0.0` is not released until this work is complete. No output ships uncorrected under a lower maturity level.
+
+**Survey.** Every command of the three repositories is surveyed in [research/2026-11-25-prisma-cli-surface-survey.md](research/2026-11-25-prisma-cli-surface-survey.md): 91 commands, their outputs, and 21 issues for the design to settle.
+
+**A problem it must answer: updating `prisma` can lock a user out of their own project.** `prisma` keeps its own version numbers and carries a copy of `@prisma/orm-toolchain`. When it runs an ORM command it stops if that copy and the project's ORM packages are on different minors (project 6). So a user who updates `prisma` gets a toolchain newer than their application's packages and a tool that refuses to run, and they may not be able to move the ORM packages at once: an application on a database below GA stays on its release until its dependency lines are edited by hand. Manual QA in project 6 hit this with a SQLite application. Decided on 2026-11-28: inside a project the tool runs the project's own copy of the toolchain, which the application already lists, and uses its own copy only outside a project, for example for `orm init`. The commands that read and write a project's files then come from the same release as its library, so there is nothing to compare and no lock-out. Rejected: a stated way to install the `prisma` version that carries a given ORM release, because it leaves the user to fix by hand a mismatch the tool created, and ties every update of `prisma` to a move of the ORM. To check first: how `prisma` loads the `orm` command family today, in prisma/prisma-cli. To design: how `prisma` decides it is inside a project, and what it does when the project's toolchain is missing or too old for this `prisma` to load. This replaces project 6's planned check of the toolchain the tool carries. GA waits for this.
+
+**To decide when it starts.** Its design discussion has not been held. One question for it: project 6 puts a level in a flag's name (`--preview-foo`), while a command states its level only in its help text. Whether flags should follow commands, for one form across the tool.
+
+## Projects that can follow GA
+
+### 8. Define promised behaviour in reference documentation shipped inside each package
+
+**Purpose.** A user can look up exactly which behaviour we promise not to change. The reference documentation is the specification: where it is silent, behaviour is unspecified.
+
+**What it achieves.** A reference exists for every export of a GA or Preview package and for every CLI command, config option, error code and file format. It is generated from the code or stored beside it, and ships inside each package as Markdown, so it matches the installed version.
+
+**How, where we know.** Name the reference for each kind of thing, write what is missing, generated where possible, and add a check for each kind that fails when something has no entry, as exists today for error codes. Rewrite the agent skill to refer to the reference where it restates behaviour today (task 14).
+
+### 9. Classify every change to behaviour in its pull request, and list it by class in the release notes
+
+**Purpose.** A user reads, in the release notes, every change in behaviour and why it was allowed. A change made for a package below GA never affects an application that does not use that package.
+
+**What it achieves.** The author of a change states its class and the reviewer checks it. The four classes are in section 5.2 of the spec: a fix to wrong behaviour, a change to specified behaviour, a change to unspecified detail, and a security fix. Every release lists each change to behaviour with its class.
+
+**How, where we know.**
+
+- The pull request template and the review skills ask for the class, and a check rejects a pull request without one. The release notes group changes by class, always list a new rejection of input, and mark security fixes. `SECURITY.md` states that every security fix gets a published notice. Config, CLI and builder input gain a way to warn before a later release rejects, as schema files have today (task 15).
+- Release notes carry no "How to upgrade" section: project 6 dropped it on 2026-11-27. Where one of the policy's exceptions requires a user to act, the release notes say what to do in the entry for that change.
+- MySQL, MariaDB and SQLite share the SQL family package and the framework with PostgreSQL. Either changes for a package below GA stay out of shared packages, or tests show they do not affect a GA target (task 21).
+
+### 10. Make the changes an upgrade needs with a deterministic tool, not a guide
+
+**Purpose.** When an upgrade needs a change to a user's project, a tool makes it, with the same result on every run. A guide applied by an agent does not count.
+
+**What it achieves.** The requirement in section 10 of the spec, within a major and for the move to a new major, including carrying migrations forward. Where the correct edit depends on what the user meant, the tool finds every affected place, changes none, and reports what must be decided.
+
+**How, where we know.** The project defines what the tool is, how a change that needs one gets its part of the tool, and how the tool replaces today's per-release upgrade guides (task 9).
+
+**Also in this project.** Probably retire the system of upgrade scripts under `upgrade-instructions/` with its coverage check. It exists for releases that may break, and from `8.0.0` a release within the major may not. Updating the upgrade skills is not here: it must happen before GA, and is in project 6.
+
+### 11. Follow each maker's lifetime for supported versions of Node.js, TypeScript and databases, and test them in CI
+
+**Purpose.** A user knows which versions of Node.js, TypeScript, each database and each driver we support, and until when. We do not drop a version by our own choice within a major.
+
+**What it achieves.** For each thing Prisma runs on, the docs state which event ends our support for a version. CI tests every supported version. A declared minimum cannot rise within the major unnoticed.
+
+**How, where we know.**
+
+- State the event for Node.js, Bun, Deno, TypeScript, PostgreSQL, MongoDB, the other databases and each driver, and publish it on the supported-versions page (task 6), and revise the decision record on version support, which says "We raise floors freely".
+- CI runs against each supported version of Node.js, each database and each driver, and against the newest and the next TypeScript release. Each package declares its Node.js minimum, and a check fails when a declared minimum rises (task 20). prisma/orm#30669, open since October, declares one Node.js range on every package.
+
+## Moved out of this stream
+
+Finishing the rename of "extension pack" to "extension" (task 2) is terminology clean-up and not part of the compatibility promise. It is row 15 of stream 6 in the GA plan. On 2026-11-23 the old term appeared in 74 files under `docs/`, 136 under `packages/`, 9 under `examples/`, 5 rules, 2 skills, and 29 Prisma 8 pages in prisma/web. It is done when a search for "extension pack" finds nothing outside release notes and other historical records.
