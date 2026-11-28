@@ -7,7 +7,7 @@ Spec: [spec.md](spec.md). Stream plan: `projects/ga-compatibility/plan.md` on br
 | Slice | State | Pull request |
 | --- | --- | --- |
 | 1. Open and closed sets | Not started | |
-| 2. Error codes do not disappear | Not started | |
+| 2. Error codes do not disappear | Built; review findings being fixed | |
 | 3. The name rule | Proposal with Will | |
 | 4. Interfaces users implement | Not started | |
 
@@ -24,9 +24,10 @@ Spec: [spec.md](spec.md). Stream plan: `projects/ga-compatibility/plan.md` on br
 
 ### 2. Error codes do not disappear
 
-- Today `pnpm check:error-reference` fails when a code raised in source is missing from `docs/reference/error-reference.md`. Nothing fails when a code stops being raised.
-- Compare with the last release, as the API check does: the codes the last release's published packages can raise are the baseline. A code in the baseline that is no longer raised fails the check, unless a repository-level record names it, with its reason and its replacement.
-- Coordinate with the session building Prisma's own tables (prisma/orm#31234), which renames the marker's error codes: its renames are the first records.
+- Before this slice, `pnpm check:error-reference` failed when a code in source was missing from `docs/reference/error-reference.md`, and nothing failed when a code stopped being raised.
+- `pnpm api:compat:error-codes`, a step of the API compatibility job, compares the codes in the `dist` of the last release's published packages with the codes in the build. A missing code fails unless `packages/9-public/removed-error-codes.json` records it, or `removed-packages.json` records its package. A stale record fails. A change to the records must be named in the pull request description.
+- The build side is the built JavaScript, not the source: three codes are defined in source but in no published bundle.
+- The session building Prisma's own tables removes no code in prisma/orm#31234 or #31242. It will record its later rename of the marker's codes itself.
 
 ### 3. The name rule
 

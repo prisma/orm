@@ -38,7 +38,7 @@ A release may add features at any time, and an addition must not affect an appli
    - A closed set changes only in a major version. Each closed set is listed with its reason, in a file the check reads.
    - A check in CI fails when an exported set is neither.
    - Error codes are an open set. So is every set of `kind` values that an extension can add to.
-2. **Error codes do not disappear.** A check in CI fails when a code that the last release could raise is no longer raised, unless the removal is recorded with its reason and the code that replaces it. Before `8.0.0` a recorded removal is allowed; from `8.0.0` the policy forbids it within the major.
+2. **Error codes do not disappear.** A check in CI fails when a code that appears in the last release's published code no longer appears in the build, unless the removal is recorded with its reason and the code that replaces it, if one does. A package recorded as removed covers its codes. Within a major, removing a code is a break the policy does not allow; a record is for a deliberate break, such as before `8.0.0`, as `api-breaks.json` is for an API. The check reads text, so a code that is no longer raised but is still compared somewhere passes; the docs say so.
 3. **Our names and names chosen by users or extensions do not share a space.** The rule is in "The name rule" below. It removes the two cases the stream plan names: `fragment` on `db.orm`, and `ORM.AGGREGATE_OPERATION_RESERVED`.
 4. **Interfaces users implement.** A new required member on an exported interface that users implement is reported as a break by the API check. See "Interfaces users implement" below: the check already does this, and the list the stream plan asked for is not built.
 
