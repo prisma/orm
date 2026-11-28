@@ -7,7 +7,7 @@ Spec: [spec.md](spec.md). Stream plan: `projects/ga-compatibility/plan.md` on br
 | Slice | State | Pull request |
 | --- | --- | --- |
 | 1. Open and closed sets | Not started | |
-| 2. Error codes do not disappear | Built; review findings being fixed | |
+| 2. Error codes do not disappear | Merged | prisma/orm#31245 |
 | 3. The name rule | Proposal with Will | |
 | 4. Interfaces users implement | Not started | |
 
