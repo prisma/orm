@@ -190,7 +190,7 @@ Limits of the object sentinel:
 `pnpm api:sets` reads the `api.txt` lists and fails on a set that has no catch-all member and is not in `packages/9-public/value-sets.json`. Each entry names its package and its type, or `Type.property` for a property, with a reason and one of four statuses: `closed`, `input`, `type-parameter` or `pending`.
 
 - `pending` is allowed only for a set in the framework domain (`packages/1-framework`) while we agree whether this work may change it. It carries the status we recommend in `recommended`.
-- `pending` fails once the root `package.json` version is not a prerelease, so 8.0.0 cannot be cut with one.
+- `pending` fails once the root `package.json` version is not a prerelease, so release 8.0, which is published as `8.0.1`, cannot be cut with one.
 - The check also fails on an entry that names no exported set or names an open one, and on two entries for one set.
 
 ## Recording a break you mean
