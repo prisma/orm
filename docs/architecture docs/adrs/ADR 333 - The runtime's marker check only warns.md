@@ -48,7 +48,7 @@ The drivers decide what is a connection error. A server that does not answer, a 
 
 `verifyMarker: false` still skips the check.
 
-An application that passes no `log` sees these warnings on the console: the runtime's default logger passes each one to `console.warn`, which in Node writes to standard error. An application that wants them elsewhere passes `log`, and one that wants none passes a logger whose methods do nothing.
+An application that passes no `log` sees these warnings on the console: the runtime's default logger passes each one to `console.warn`, which in Node writes to standard error ([ADR 340](ADR%20340%20-%20The%20client%20logs%20to%20the%20console%20when%20given%20no%20log.md)). An application that wants them elsewhere passes `log`, and one that wants none passes a logger whose methods do nothing.
 
 ## Why
 

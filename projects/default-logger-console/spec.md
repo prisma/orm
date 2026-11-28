@@ -80,7 +80,7 @@ The warnings our runtime logs are of the second kind: a database signed for anot
 
 ## Alternatives considered
 
-- **Format each event as one line, such as `prisma:warn <message>`.** Prisma 7 does this. It loses the structured fields (the hashes, the missing capabilities), and it makes the text a second format to keep stable through 8.x. The event already starts with its `code`, which names the source.
+- **Format each event as one line, such as `prisma:warn <message>`.** Prisma 6 does this. It loses the structured fields (the hashes, the missing capabilities), and it makes the text a second format to keep stable through 8.x. The event already starts with its `code`, which names the source.
 - **Print debug events too.** They come once per statement or more, so the console would fill with them.
 - **Put the default in the framework's runtime core, shared by both families.** The framework domain is not changed for this; the default is three lines, kept once in each family's runtime.
 - **Export a ready-made silent logger.** It adds a public name for a one-line object; the docs show the object instead.
