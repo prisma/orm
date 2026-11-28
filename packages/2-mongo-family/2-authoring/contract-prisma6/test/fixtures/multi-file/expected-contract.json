@@ -23,16 +23,14 @@
                   "kind": "scalar",
                   "codecId": "mongo/objectId@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "authorId": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "mongo/objectId@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               }
             },
             "relations": {
@@ -68,8 +66,7 @@
                   "kind": "scalar",
                   "codecId": "mongo/objectId@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               }
             },
             "relations": {
@@ -100,10 +97,10 @@
   },
   "capabilities": {},
   "extensions": {},
-  "profileHash": "251b3ce23f6c9f561892e7c1af9d2cc941a13d64ba1aa7226b90036b09568cc3",
+  "profileHash": "8fe2b3350db5a83e2473520e59e52262982215115e17bb22a76239170eee6e69",
   "meta": {},
   "storage": {
-    "storageHash": "7076eab78d157f3b2b12c2ec268903b3dbc5126580f5d83726da8bb42bfcc50d",
+    "storageHash": "ef57b282607f6e24bc02a8451daa7e0df2ae4ccbcb9ec665f44aaebcd713504a",
     "namespaces": {
       "__unbound__": {
         "id": "__unbound__",

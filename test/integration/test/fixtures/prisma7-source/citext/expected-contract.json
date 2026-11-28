@@ -34,32 +34,28 @@
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "email": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/citext@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "nickname": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/citext@1"
                 },
-                "nullable": true,
-                "many": false
+                "nullable": true
               },
               "region": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/citext@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "aliases": {
                 "type": {
@@ -105,16 +101,14 @@
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "authorEmail": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/citext@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               }
             },
             "relations": {
@@ -151,16 +145,14 @@
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "authorEmail": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/citext@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               }
             },
             "relations": {}
@@ -193,32 +185,28 @@
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "literal": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/citext@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "expr": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/citext@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "none": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/citext@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "list": {
                 "type": {
@@ -265,10 +253,10 @@
     }
   },
   "capabilities": {},
-  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "profileHash": "ae77f23935a24b8a63c81ef26bb0f186581670a56e603cef8314a629414e2632",
   "meta": {},
   "storage": {
-    "storageHash": "f36abd00211bcf348d542e77a491165ae38ae5f87419dabd2c066146a2d7485c",
+    "storageHash": "29ae96a1e05ac7e0c184df89ee0e52fdcebbedb1e66fdf13df0ae2aeca0a51a2",
     "namespaces": {
       "public": {
         "id": "public",

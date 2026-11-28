@@ -1,7 +1,7 @@
 import { computeStorageHash } from '@internal/contract/hashing';
 import { type Contract, coreHash, profileHash } from '@internal/contract/types';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
-import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonicalization-hooks';
+import { normalizeSqlStorage } from '@internal/sql-contract/normal-form';
 import { SqlStorage } from '@internal/sql-contract/types';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
 import { TEST_BOX_TABLE } from './constants';
@@ -41,7 +41,7 @@ export const TEST_HEAD_HASH = computeStorageHash({
   target: TARGET,
   targetFamily: TARGET_FAMILY,
   storage: storageBody,
-  ...sqlContractCanonicalizationHooks,
+  normalizeStorage: normalizeSqlStorage,
 });
 
 /**

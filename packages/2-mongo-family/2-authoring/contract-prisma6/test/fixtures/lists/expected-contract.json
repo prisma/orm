@@ -19,8 +19,7 @@
                   "kind": "scalar",
                   "codecId": "mongo/objectId@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "tags": {
                 "type": {
@@ -128,10 +127,10 @@
   },
   "capabilities": {},
   "extensions": {},
-  "profileHash": "251b3ce23f6c9f561892e7c1af9d2cc941a13d64ba1aa7226b90036b09568cc3",
+  "profileHash": "8fe2b3350db5a83e2473520e59e52262982215115e17bb22a76239170eee6e69",
   "meta": {},
   "storage": {
-    "storageHash": "e6d057cae9c68e89ed7207907298557efb1fdf16c57f31373bd9cffaec8b65be",
+    "storageHash": "8076cce9a83024488a13b17e55d1b7bf06e067ea7ebc0bc13773e718cd77ffa0",
     "namespaces": {
       "__unbound__": {
         "id": "__unbound__",

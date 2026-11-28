@@ -138,14 +138,7 @@ export async function executeContractEmit(
     try {
       const familyInstance = config.family.create(stack);
       const deserializedContract = validateLoadedContract({ config, familyInstance, contract });
-      // Each target's descriptor ships a `contractSerializer` SPI; the
-      // framework canonicalizer threads its `serializeContract` so the
-      // on-disk JSON envelope is constructed by target-owned code
-      // rather than by walking the in-memory contract with
-      // `Object.entries` (which would leak runtime-only class API
-      // fields into the persisted shape). The optional `shouldPreserveEmpty`
-      // and `sortStorage` hooks let the family contribute storage-specific
-      // canonicalization rules without the framework importing family code.
+      // The target's serializer builds the on-disk envelope, so runtime-only class fields stay out of it, and its `normalizeStorage` is the family's normal form of `storage`, given without the framework importing family code.
       const { contractSerializer } = config.target;
       const serializeContract = (c: Contract): JsonObject =>
         contractSerializer.serializeContract(c);
@@ -155,8 +148,7 @@ export async function executeContractEmit(
           serializeContract,
           deserializeContract: (json) => familyInstance.deserializeContract(json),
           typesModule,
-          ...ifDefined('shouldPreserveEmpty', contractSerializer.shouldPreserveEmpty),
-          ...ifDefined('sortStorage', contractSerializer.sortStorage),
+          normalizeStorage: contractSerializer.normalizeStorage,
           ...ifDefined('supportsNamespaces', config.target.supportsNamespaces),
         }),
       );

@@ -1,0 +1,141 @@
+{
+  "formatVersion": 1,
+  "target": "mongo",
+  "targetFamily": "mongo",
+  "roots": {
+    "Post": {
+      "namespace": "__unbound__",
+      "model": "Post"
+    }
+  },
+  "domain": {
+    "namespaces": {
+      "__unbound__": {
+        "models": {
+          "Post": {
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/objectId@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "createdAt": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/date@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "updatedAt": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/date@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "touchedAt": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/date@1"
+                },
+                "nullable": false,
+                "many": false
+              }
+            },
+            "relations": {},
+            "storage": {
+              "collection": "Post",
+              "fields": {
+                "id": {
+                  "field": "_id"
+                },
+                "createdAt": {
+                  "field": "createdAt"
+                },
+                "updatedAt": {
+                  "field": "updatedAt"
+                },
+                "touchedAt": {
+                  "field": "touchedAt"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "capabilities": {},
+  "extensions": {},
+  "profileHash": "8fe2b3350db5a83e2473520e59e52262982215115e17bb22a76239170eee6e69",
+  "meta": {},
+  "execution": {
+    "executionHash": "a47600af698523af2871083263fccc3d428dd16b41bac0b431619ba9ad8887b7",
+    "mutations": {
+      "defaults": [
+        {
+          "ref": {
+            "namespace": "__unbound__",
+            "entry": "Post",
+            "field": "createdAt"
+          },
+          "onCreate": {
+            "kind": "generator",
+            "id": "timestampNow"
+          }
+        },
+        {
+          "ref": {
+            "namespace": "__unbound__",
+            "entry": "Post",
+            "field": "touchedAt"
+          },
+          "onCreate": {
+            "kind": "generator",
+            "id": "timestampNow"
+          },
+          "onUpdate": {
+            "kind": "generator",
+            "id": "timestampNow"
+          }
+        },
+        {
+          "ref": {
+            "namespace": "__unbound__",
+            "entry": "Post",
+            "field": "updatedAt"
+          },
+          "onCreate": {
+            "kind": "generator",
+            "id": "timestampNow"
+          },
+          "onUpdate": {
+            "kind": "generator",
+            "id": "timestampNow"
+          }
+        }
+      ]
+    }
+  },
+  "storage": {
+    "storageHash": "7fac2a713339efe2193dd603dfe74dd065ad95ef487e35312267118e7e356bad",
+    "namespaces": {
+      "__unbound__": {
+        "id": "__unbound__",
+        "kind": "mongo-database",
+        "entries": {
+          "collection": {
+            "Post": {
+              "kind": "mongo-collection"
+            }
+          }
+        }
+      }
+    }
+  }
+}

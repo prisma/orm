@@ -18,11 +18,11 @@ import type {
 } from '@internal/postgres/contract-types';
 
 export type StorageHash =
-  StorageHashBase<'f0d3ecd4ff246b498feac7c944f8ce95e2187a314981cd04a7432dd91f081936'>;
+  StorageHashBase<'023d02309f0f61ac646c17683f32d62a9cacf705e445817397e1157b82c7cd9c'>;
 export type ExecutionHash =
-  ExecutionHashBase<'3f7dfdae975361c5f7ff5ae07d5519df163b7502f39d63a8bf3c4c050c1ba98c'>;
+  ExecutionHashBase<'845b57a720d3e12642b5b26ac257226bc2fe7a78f0aab2c98011611b871cf201'>;
 export type ProfileHash =
-  ProfileHashBase<'3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2'>;
+  ProfileHashBase<'18654d8be351e94d940c57892ee3d3b92824fc145d7dd67c5f57168eea52c619'>;
 
 export type CodecTypes = PgTypes;
 export type LaneCodecTypes = CodecTypes;

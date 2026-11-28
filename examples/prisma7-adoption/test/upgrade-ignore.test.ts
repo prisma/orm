@@ -71,8 +71,8 @@ function expectRecordsIgnoredObjects(plan: Record<string, unknown>, hashes: Hash
     'column.public.User.name',
     'index.Tag.Tag_name_key',
     'index._PostToTag._PostToTag_B_index',
-    'foreignKey._PostToTag._PostToTag_A_fkey',
     'foreignKey._PostToTag._PostToTag_B_fkey',
+    'foreignKey._PostToTag._PostToTag_A_fkey',
   ]);
 }
 

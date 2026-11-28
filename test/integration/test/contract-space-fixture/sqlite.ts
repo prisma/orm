@@ -7,7 +7,7 @@ import { type Contract, coreHash, profileHash } from '@internal/contract/types';
 import type { SqlControlExtensionDescriptor } from '@internal/family-sql/control';
 import type { ContractSpace, MigrationPackage } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
-import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonicalization-hooks';
+import { normalizeSqlStorage } from '@internal/sql-contract/normal-form';
 import { SqlStorage } from '@internal/sql-contract/types';
 import sqliteTargetDescriptor from '@internal/target-sqlite/control';
 import { sqliteCreateNamespace } from '@internal/target-sqlite/types';
@@ -42,7 +42,7 @@ export const TEST_SQLITE_HEAD_HASH = computeStorageHash({
   target: TARGET,
   targetFamily: TARGET_FAMILY,
   storage: storageBody,
-  ...sqlContractCanonicalizationHooks,
+  normalizeStorage: normalizeSqlStorage,
 });
 
 const testSqliteSpaceContract: Contract<SqlStorage> = {

@@ -22,6 +22,27 @@ Each subpath namespace consolidates one internal framework module; a bare namesp
 | `/type-implementations` | value logic that more than one target's codecs, data types and `now()` generators share |
 | `/target-package-config` | what a database package uses to restate its components' type declarations with its own module |
 
+## Holding contract hashes fixed
+
+Prisma records a contract's storage, profile and execution hashes in files and databases, and the rules that compute them do not change within a major version. A family or target built outside this repository can check that its own contracts keep their hashes: save a few emitted `contract.json` files, write down their hashes, and call `assertContractHashes` from a test with the family's normal form of `storage`. The storage hash covers the contract's `storage`, the profile hash its `capabilities` and the execution hash its `execution`, each with its `target` and `targetFamily`. A SQL target passes the SQL family's `normalizeSqlStorage`, as below. It throws a `CONTRACT.HASH_MISMATCH` error naming each contract and hash that differs; the hashes the files store are ignored. The test holds only what its saved contracts contain, so they must hold every field the family's normal form leaves out or orders, once written out and once absent.
+
+```ts
+import { readFileSync } from 'node:fs';
+import { normalizeSqlStorage } from '@prisma/orm-family-sql/contract/normal-form';
+import { assertContractHashes } from '@prisma/orm-framework/contract/hashing';
+
+const contract = JSON.parse(readFileSync(new URL('fixtures/users.json', import.meta.url), 'utf8'));
+
+assertContractHashes({
+  contracts: [{ name: 'users', contract, storageHash: '…', profileHash: '…', executionHash: '…' }],
+  normalizeStorage: normalizeSqlStorage,
+});
+```
+
+A family outside the SQL family passes its own normal form the same way.
+
+Only a family names fields to leave out; every field of an entry kind that a target or an extension pack defines is hashed exactly as given. So an author who defines an entry kind gives each field one form: make it required, or have the constructor always write the default out, or always leave the field out when its value is the default. A value written out and the same value left out otherwise give two storage hashes, which cannot be fixed within the major.
+
 ## Responsibilities
 
 Everything runtime and authoring code needs independently of a concrete database: contract representation and validation, component wiring, PSL handling, and shared utilities. No database drivers, no build tooling (that is `@prisma/orm-toolchain`).

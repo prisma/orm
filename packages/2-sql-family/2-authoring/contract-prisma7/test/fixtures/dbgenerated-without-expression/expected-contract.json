@@ -25,16 +25,14 @@
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "a": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/text@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               }
             },
             "relations": {}
@@ -51,10 +49,10 @@
   },
   "extensions": {},
   "capabilities": {},
-  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "profileHash": "ae77f23935a24b8a63c81ef26bb0f186581670a56e603cef8314a629414e2632",
   "meta": {},
   "storage": {
-    "storageHash": "02224299ebd04f0a3b5fa76c198144a92c0979ae82885a1fe48d4ec7ce8d40dd",
+    "storageHash": "b73a3255c611b5c57fa98db36adab72e5da00a16aa653d372be23c7132e47088",
     "namespaces": {
       "public": {
         "id": "public",

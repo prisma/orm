@@ -152,7 +152,7 @@
 (not exported) type ClosedWhenEmpty<T> = [keyof T] extends [never] ? Record<string, never> : T
 (not exported) type CodecType<CodecTypes, CodecId, TypeParams, ParameterizedOutputs extends ParameterizedOutputTypesFunction, Side extends ValueTypeSide> = Side extends 'output' ? NonEmptyTypeParams<TypeParams> extends (infer Params extends Record<string, unknown>) ? ParameterizedOutputType<ParameterizedOutputs, CodecId, Params, PlainCodecType<CodecTypes, CodecId, Side>> : PlainCodecType<CodecTypes, CodecId, Side> : PlainCodecType<CodecTypes, CodecId, Side>
 (not exported) type ColumnHelperParams<D extends CodecDescriptorTemplate<any>> = Parameters<D['factory']>[0] extends Record<string, unknown> ? Parameters<D['factory']>[0] : undefined
-(not exported) type ComputeStorageHashArgs = { target: string; targetFamily: string; storage: Record<string, unknown>; readonly shouldPreserveEmpty?: PreserveEmptyPredicate; readonly sortStorage?: StorageSort; }
+(not exported) type ComputeStorageHashArgs = { target: string; targetFamily: string; storage: Record<string, unknown>; readonly normalizeStorage: NormalizeStorage; }
 (not exported) type ContextForRequirement<Req extends ArgTypeContext> = Req extends 'field' ? FieldAttributeCtx : Req extends 'model' ? ModelAttributeCtx : AttributeCtx
 (not exported) type ContractParts<StorageNamespaces, Overrides> = { readonly storage: StorageNamespaces; readonly overrides: Overrides; }
 (not exported) type ContributionsOf<Component> = Component extends { readonly generatorFunctions?: infer Contributions; } ? Contributions extends readonly (infer Contribution)[] ? Contribution : never : never
@@ -1006,9 +1006,7 @@
 ./components/control: interface CheckExpectation
 ./components/control: interface CheckExpectation, readonly required property expects: 'absent' | 'present'
 ./components/control: interface CheckExpectation, readonly required property object: string
-./components/control: interface ContractSerializer, readonly optional property hashCanonicalizationHooks?: { readonly shouldPreserveEmpty?: PreserveEmptyPredicate; readonly sortStorage?: StorageSort; }
-./components/control: interface ContractSerializer, readonly optional property shouldPreserveEmpty?: PreserveEmptyPredicate
-./components/control: interface ContractSerializer, readonly optional property sortStorage?: StorageSort
+./components/control: interface ContractSerializer, readonly required property normalizeStorage: NormalizeStorage
 ./components/control: interface ContractSerializer, required method deserializeContract<T extends TContract = TContract>(json: unknown): T
 ./components/control: interface ContractSerializer, required method serializeContract(contract: TContract): JsonObject
 ./components/control: interface ContractSerializer<TContract>
@@ -2610,9 +2608,7 @@
 ./components: interface ContractComponentRequirementsCheckResult, readonly optional property familyMismatch?: undefined | { readonly expected: string; readonly actual: string; }
 ./components: interface ContractComponentRequirementsCheckResult, readonly optional property targetMismatch?: undefined | { readonly expected: string; readonly actual: string; }
 ./components: interface ContractComponentRequirementsCheckResult, readonly required property missingExtensionPackIds: readonly string[]
-./components: interface ContractSerializer, readonly optional property hashCanonicalizationHooks?: { readonly shouldPreserveEmpty?: PreserveEmptyPredicate; readonly sortStorage?: StorageSort; }
-./components: interface ContractSerializer, readonly optional property shouldPreserveEmpty?: PreserveEmptyPredicate
-./components: interface ContractSerializer, readonly optional property sortStorage?: StorageSort
+./components: interface ContractSerializer, readonly required property normalizeStorage: NormalizeStorage
 ./components: interface ContractSerializer, required method deserializeContract<T extends TContract = TContract>(json: unknown): T
 ./components: interface ContractSerializer, required method serializeContract(contract: TContract): JsonObject
 ./components: interface ContractSerializer<TContract>
@@ -3936,28 +3932,38 @@
 ./contract/format-version: type StoredDocument = Readonly<Record<string, unknown>>
 ./contract/hashing-utils: function compareByNameProperty(a: unknown, b: unknown): number
 ./contract/hashing-utils: function compareCodeUnits(a: string, b: string): number
-./contract/hashing-utils: function createPreserveEmptyPredicate(patterns: readonly PathPattern[]): PreserveEmptyPredicate
-./contract/hashing-utils: function createStorageSort(targets: readonly NamedArraySortTarget[], compare?: (a: unknown, b: unknown) => number): StorageSort
-./contract/hashing-utils: function matchesPathPattern(path: readonly string[], pattern: PathPattern): boolean
+./contract/hashing-utils: function createStorageSort(targets: readonly NamedArraySortTarget[], compare?: (a: unknown, b: unknown) => number): NormalizeStorage
 ./contract/hashing-utils: interface NamedArraySortTarget
 ./contract/hashing-utils: interface NamedArraySortTarget, readonly required property arrayKeys: readonly string[]
 ./contract/hashing-utils: interface NamedArraySortTarget, readonly required property path: readonly StorageSortPathSegment[]
-./contract/hashing-utils: type PathPattern = readonly PreserveEmptyPathSegment[]
-./contract/hashing-utils: type PreserveEmptyPathSegment = '*' | readonly string[] | string
 ./contract/hashing-utils: type StorageSortPathSegment = '*' | string
+./contract/hashing: function assertContractHashes(options: AssertContractHashesOptions): void
 ./contract/hashing: function buildExecutionSection(input: { readonly target: string; readonly targetFamily: string; readonly defaults: ReadonlyArray<ExecutionMutationDefault>; }): ContractExecutionSection | undefined
 ./contract/hashing: function canonicalizeContract(contract: Contract, options: CanonicalizeContractOptions): string
 ./contract/hashing: function canonicalizeContractToObject(contract: Contract, options: CanonicalizeContractOptions): Record<string, unknown>
 ./contract/hashing: function computeExecutionHash(args: { target: string; targetFamily: string; execution: Record<string, unknown>; }): ExecutionHashBase<string>
 ./contract/hashing: function computeProfileHash(args: { target: string; targetFamily: string; capabilities: Record<string, Record<string, boolean>>; }): ProfileHashBase<string>
 ./contract/hashing: function computeStorageHash(args: ComputeStorageHashArgs): StorageHashBase<string>
+./contract/hashing: interface AssertContractHashesOptions
+./contract/hashing: interface AssertContractHashesOptions, readonly required property contracts: readonly SavedContractHashes[]
+./contract/hashing: interface AssertContractHashesOptions, readonly required property normalizeStorage: NormalizeStorage
 ./contract/hashing: interface CanonicalizeContractOptions
-./contract/hashing: interface CanonicalizeContractOptions, readonly optional property shouldPreserveEmpty?: PreserveEmptyPredicate
-./contract/hashing: interface CanonicalizeContractOptions, readonly optional property sortStorage?: StorageSort
+./contract/hashing: interface CanonicalizeContractOptions, readonly required property normalizeStorage: NormalizeStorage
 ./contract/hashing: interface CanonicalizeContractOptions, readonly required property serializeContract: SerializeContract
-./contract/hashing: type PreserveEmptyPredicate = (path: readonly string[]) => boolean
+./contract/hashing: interface HashedContractSections
+./contract/hashing: interface HashedContractSections, readonly optional property execution?: Record<string, unknown>
+./contract/hashing: interface HashedContractSections, readonly required property capabilities: Record<string, Record<string, boolean>>
+./contract/hashing: interface HashedContractSections, readonly required property storage: Record<string, unknown>
+./contract/hashing: interface HashedContractSections, readonly required property target: string
+./contract/hashing: interface HashedContractSections, readonly required property targetFamily: string
+./contract/hashing: interface SavedContractHashes
+./contract/hashing: interface SavedContractHashes, readonly optional property executionHash?: string
+./contract/hashing: interface SavedContractHashes, readonly required property contract: HashedContractSections
+./contract/hashing: interface SavedContractHashes, readonly required property name: string
+./contract/hashing: interface SavedContractHashes, readonly required property profileHash: string
+./contract/hashing: interface SavedContractHashes, readonly required property storageHash: string
+./contract/hashing: type NormalizeStorage = (storage: unknown) => unknown
 ./contract/hashing: type SerializeContract = (contract: Contract) => JsonObject
-./contract/hashing: type StorageSort = (storage: unknown) => unknown
 ./contract/internal/format-version: const CONTRACT_FORMAT: StoredFormat<typeof CONTRACT_FORMAT_VERSIONS_READ>
 ./contract/internal/format-version: const CONTRACT_FORMAT_VERSIONS_READ: readonly [0, 1]
 ./contract/internal/format-version: const NEWEST_CONTRACT_FORMAT_VERSION: NewestContractFormatVersion
@@ -4186,6 +4192,7 @@
 ./contract: export type const $: unique symbol
 ./contract: function applySpecifierDefaultControlPolicy(contract: Contract, specifierDefault: ControlPolicy | undefined): Contract
 ./contract: function asNamespaceId(value: string): NamespaceId
+./contract: function assertContractHashes(options: AssertContractHashesOptions): void
 ./contract: function buildEnumsMapForNamespace(domain: { readonly namespaces: Readonly<Record<string, { readonly enum?: Readonly<Record<string, ContractEnum>>; }>>; }, namespaceId: string, codecFor: EnumMemberCodecFor): Record<string, EnumAccessor>
 ./contract: function buildExecutionSection(input: { readonly target: string; readonly targetFamily: string; readonly defaults: ReadonlyArray<ExecutionMutationDefault>; }): ContractExecutionSection | undefined
 ./contract: function buildNamespacedEnums<TContract extends Contract>(domain: TContract['domain'], codecFor: EnumMemberCodecFor): NamespacedEnums<TContract>
@@ -4199,8 +4206,7 @@
 ./contract: function convertContractDocument(document: unknown, location?: ContractFileLocation): StoredDocument
 ./contract: function coreHash<const T extends string>(value: T): StorageHashBase<T>
 ./contract: function createEnumAccessor(contractEnum: ContractEnum, codec?: EnumMemberCodec): EnumAccessor
-./contract: function createPreserveEmptyPredicate(patterns: readonly PathPattern[]): PreserveEmptyPredicate
-./contract: function createStorageSort(targets: readonly NamedArraySortTarget[], compare?: (a: unknown, b: unknown) => number): StorageSort
+./contract: function createStorageSort(targets: readonly NamedArraySortTarget[], compare?: (a: unknown, b: unknown) => number): NormalizeStorage
 ./contract: function crossRef(model: string, namespace?: string, space?: string): CrossReference
 ./contract: function domainModelsAtDefaultNamespace(domain: ApplicationDomain): Record<string, ContractModelBase>
 ./contract: function effectiveControlPolicy(nodeControl: ControlPolicy | undefined, defaultControlPolicy: ControlPolicy | undefined): ControlPolicy
@@ -4211,7 +4217,6 @@
 ./contract: function isExecutionMutationDefaultValue(value: unknown): value is ExecutionMutationDefaultValue
 ./contract: function isFormatVersionError(error: unknown): error is StructuredError
 ./contract: function isPlainRecord(value: unknown): value is Readonly<Record<string, unknown>>
-./contract: function matchesPathPattern(path: readonly string[], pattern: PathPattern): boolean
 ./contract: function profileHash<const T extends string>(value: T): ProfileHashBase<T>
 ./contract: function removedDomainKeyProblems(contract: unknown): readonly string[]
 ./contract: function resolveDomainModel(domain: ApplicationDomain, modelName: string): ResolvedDomainModel | undefined
@@ -4226,9 +4231,11 @@
 ./contract: interface ApplicationDomainNamespace
 ./contract: interface ApplicationDomainNamespace, readonly optional property enum?: Record<string, ContractEnum>
 ./contract: interface ApplicationDomainNamespace, readonly required property models: Record<string, ContractModelBase>
+./contract: interface AssertContractHashesOptions
+./contract: interface AssertContractHashesOptions, readonly required property contracts: readonly SavedContractHashes[]
+./contract: interface AssertContractHashesOptions, readonly required property normalizeStorage: NormalizeStorage
 ./contract: interface CanonicalizeContractOptions
-./contract: interface CanonicalizeContractOptions, readonly optional property shouldPreserveEmpty?: PreserveEmptyPredicate
-./contract: interface CanonicalizeContractOptions, readonly optional property sortStorage?: StorageSort
+./contract: interface CanonicalizeContractOptions, readonly required property normalizeStorage: NormalizeStorage
 ./contract: interface CanonicalizeContractOptions, readonly required property serializeContract: SerializeContract
 ./contract: interface Contract, readonly optional property defaultControlPolicy?: ControlPolicy
 ./contract: interface Contract, readonly optional property execution?: ContractExecutionSection
@@ -4311,6 +4318,12 @@
 ./contract: interface FieldType, readonly optional property properties?: Record<string, FieldType>
 ./contract: interface FieldType, readonly required property nullable: boolean
 ./contract: interface FieldType, readonly required property type: string
+./contract: interface HashedContractSections
+./contract: interface HashedContractSections, readonly optional property execution?: Record<string, unknown>
+./contract: interface HashedContractSections, readonly required property capabilities: Record<string, Record<string, boolean>>
+./contract: interface HashedContractSections, readonly required property storage: Record<string, unknown>
+./contract: interface HashedContractSections, readonly required property target: string
+./contract: interface HashedContractSections, readonly required property targetFamily: string
 ./contract: interface LedgerEntryRecord
 ./contract: interface LedgerEntryRecord, readonly required property appliedAt: Date
 ./contract: interface LedgerEntryRecord, readonly required property from: null | string
@@ -4335,6 +4348,12 @@
 ./contract: interface ResolvedDomainModel
 ./contract: interface ResolvedDomainModel, readonly required property model: ContractModelBase
 ./contract: interface ResolvedDomainModel, readonly required property namespaceId: string
+./contract: interface SavedContractHashes
+./contract: interface SavedContractHashes, readonly optional property executionHash?: string
+./contract: interface SavedContractHashes, readonly required property contract: HashedContractSections
+./contract: interface SavedContractHashes, readonly required property name: string
+./contract: interface SavedContractHashes, readonly required property profileHash: string
+./contract: interface SavedContractHashes, readonly required property storageHash: string
 ./contract: interface Source
 ./contract: interface Source, readonly optional property capabilities?: Record<string, boolean>
 ./contract: interface Source, readonly optional property origin?: Record<string, unknown>
@@ -4400,17 +4419,14 @@
 ./contract: type NamespaceId = string & { readonly __brand: 'NamespaceId'; }
 ./contract: type NamespacedEnums<TContract extends Contract> = { readonly [Ns in keyof TContract['domain']['namespaces']]: NamespaceEnumAccessors<TContract, Ns>; }
 ./contract: type NewestContractFormatVersion = NewestFormatVersion<typeof CONTRACT_FORMAT_VERSIONS_READ>
+./contract: type NormalizeStorage = (storage: unknown) => unknown
 ./contract: type ParameterizedOutputType<TypeFunctions extends ParameterizedOutputTypesFunction, CodecId, TypeParams extends Record<string, unknown>, Plain> = [RefinedOutputType<TypeFunctions, CodecId, TypeParams>] extends [never] ? Plain : RefinedOutputType<TypeFunctions, CodecId, TypeParams>
-./contract: type PathPattern = readonly PreserveEmptyPathSegment[]
-./contract: type PreserveEmptyPathSegment = '*' | readonly string[] | string
-./contract: type PreserveEmptyPredicate = (path: readonly string[]) => boolean
 ./contract: type ProfileHashBase<THash extends string> = THash & Brand<'ProfileHash'>
 ./contract: type ReferenceRelationKeys<TModels extends Record<string, { readonly relations: Record<string, ContractRelation>; }>, ModelName extends string & keyof TModels> = { [K in keyof TModels[ModelName]['relations']]: TModels[ModelName]['relations'][K] extends ContractReferenceRelation ? K : never; }[keyof TModels[ModelName]['relations']]
 ./contract: type ScalarFieldType = { readonly kind: 'scalar'; readonly codecId: string; readonly typeParams?: Record<string, unknown>; }
 ./contract: type SerializeContract = (contract: Contract) => JsonObject
 ./contract: type StorageEntitySlot = Readonly<Record<string, unknown>>
 ./contract: type StorageHashBase<THash extends string> = THash & Brand<'StorageHash'>
-./contract: type StorageSort = (storage: unknown) => unknown
 ./contract: type StorageSortPathSegment = '*' | string
 ./contract: type StoredDocument = Readonly<Record<string, unknown>>
 ./contract: type StoredValueType<Item, CodecId, TypeParams, Override, CodecTypes, ParameterizedOutputs extends ParameterizedOutputTypesFunction, Side extends ValueTypeSide> = Item extends { readonly many?: infer Many; readonly dict?: infer Dictionary; } ? ScalarValueType<CodecId, TypeParams, Override, NullableFlag<Item>, Many, Dictionary, CodecTypes, ParameterizedOutputs, Side> : never

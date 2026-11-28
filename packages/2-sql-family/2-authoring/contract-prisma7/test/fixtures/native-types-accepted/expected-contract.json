@@ -85,8 +85,7 @@
                   "kind": "scalar",
                   "codecId": "pg/text@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "varChar": {
                 "type": {
@@ -96,8 +95,7 @@
                     "length": 255
                   }
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "char": {
                 "type": {
@@ -107,72 +105,63 @@
                     "length": 10
                   }
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "uuid": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/uuid@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "inet": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/inet@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "boolean": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/bool@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "integer": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "smallInt": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/int2@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "bigInt": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/int8@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "real": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/float4@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "doublePrecision": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/float8@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "decimal": {
                 "type": {
@@ -183,8 +172,7 @@
                     "scale": 2
                   }
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "timestamp": {
                 "type": {
@@ -194,8 +182,7 @@
                     "precision": 6
                   }
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "timestamptz": {
                 "type": {
@@ -205,16 +192,14 @@
                     "precision": 6
                   }
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "date": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/date-string@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "time": {
                 "type": {
@@ -224,8 +209,7 @@
                     "precision": 6
                   }
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "timetz": {
                 "type": {
@@ -235,32 +219,28 @@
                     "precision": 6
                   }
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "json": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/json@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "jsonB": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/jsonb@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "byteA": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/bytea@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "varCharList": {
                 "type": {
@@ -283,8 +263,7 @@
                     "precision": 3
                   }
                 },
-                "nullable": true,
-                "many": false
+                "nullable": true
               }
             },
             "relations": {}
@@ -301,10 +280,10 @@
   },
   "extensions": {},
   "capabilities": {},
-  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "profileHash": "ae77f23935a24b8a63c81ef26bb0f186581670a56e603cef8314a629414e2632",
   "meta": {},
   "storage": {
-    "storageHash": "8838cef0f08f8f027e855e594f549c3f55e8fdc5723c6338f5151cc7e903e932",
+    "storageHash": "bb1a054c8d0387fe2cc91b0058a2c8adafcf71b91baef5431e8ceeb687385b14",
     "namespaces": {
       "public": {
         "id": "public",

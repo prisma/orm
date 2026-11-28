@@ -88,6 +88,8 @@ export function checkRunPolicies(args: {
   readonly inForce: DatabasePolicies;
   readonly ref: NamedRef | undefined;
   readonly permitPolicyChange: boolean;
+  /** Run even when the change policy forbids the command (`db sign --force`). Every other check still applies. */
+  readonly overrideChangePolicy: boolean;
   /** The contract the run moves the database to: the ref's, when there is one. */
   readonly targetHash: string;
   readonly invocation: CliInvocation | undefined;
@@ -108,7 +110,7 @@ export function checkRunPolicies(args: {
   const required = STRATEGY_OF[args.command];
   const declaresChange = toWrite !== undefined && declared?.change !== undefined;
   const change = toWrite?.policies.change ?? inForce.change;
-  if (!change.includes(required)) {
+  if (!change.includes(required) && !args.overrideChangePolicy) {
     return notOk(
       errorChangePolicyForbids({
         spaceId: appSpaceId,

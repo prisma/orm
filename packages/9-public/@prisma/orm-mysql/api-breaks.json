@@ -27,6 +27,114 @@
     "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
   },
   {
+    "path": "./contract",
+    "export": "PathPattern",
+    "test": "exists",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "e3b0c44298fc1c14",
+    "reason": "Removed with the path patterns the framework used to leave out empty values: each family's `normalizeStorage` now names the defaults it leaves out, and `StorageSort` is renamed `NormalizeStorage` (ADR 010)."
+  },
+  {
+    "path": "./contract",
+    "export": "PreserveEmptyPathSegment",
+    "test": "exists",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "e3b0c44298fc1c14",
+    "reason": "Removed with the path patterns the framework used to leave out empty values: each family's `normalizeStorage` now names the defaults it leaves out, and `StorageSort` is renamed `NormalizeStorage` (ADR 010)."
+  },
+  {
+    "path": "./contract",
+    "export": "PreserveEmptyPredicate",
+    "test": "exists",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "e3b0c44298fc1c14",
+    "reason": "Removed with the path patterns the framework used to leave out empty values: each family's `normalizeStorage` now names the defaults it leaves out, and `StorageSort` is renamed `NormalizeStorage` (ADR 010)."
+  },
+  {
+    "path": "./contract",
+    "export": "StorageSort",
+    "test": "exists",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "e3b0c44298fc1c14",
+    "reason": "Removed with the path patterns the framework used to leave out empty values: each family's `normalizeStorage` now names the defaults it leaves out, and `StorageSort` is renamed `NormalizeStorage` (ADR 010)."
+  },
+  {
+    "path": "./contract",
+    "export": "createPreserveEmptyPredicate",
+    "test": "exists",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "e3b0c44298fc1c14",
+    "reason": "Removed with the path patterns the framework used to leave out empty values: each family's `normalizeStorage` now names the defaults it leaves out, and `StorageSort` is renamed `NormalizeStorage` (ADR 010)."
+  },
+  {
+    "path": "./contract",
+    "export": "matchesPathPattern",
+    "test": "exists",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "e3b0c44298fc1c14",
+    "reason": "Removed with the path patterns the framework used to leave out empty values: each family's `normalizeStorage` now names the defaults it leaves out, and `StorageSort` is renamed `NormalizeStorage` (ADR 010)."
+  },
+  {
+    "path": "./contract/hashing",
+    "export": "PreserveEmptyPredicate",
+    "test": "exists",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "e3b0c44298fc1c14",
+    "reason": "Removed with the path patterns the framework used to leave out empty values: each family's `normalizeStorage` now names the defaults it leaves out, and `StorageSort` is renamed `NormalizeStorage` (ADR 010)."
+  },
+  {
+    "path": "./contract/hashing",
+    "export": "StorageSort",
+    "test": "exists",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "e3b0c44298fc1c14",
+    "reason": "Removed with the path patterns the framework used to leave out empty values: each family's `normalizeStorage` now names the defaults it leaves out, and `StorageSort` is renamed `NormalizeStorage` (ADR 010)."
+  },
+  {
+    "path": "./contract/hashing-utils",
+    "export": "PathPattern",
+    "test": "exists",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "e3b0c44298fc1c14",
+    "reason": "Removed with the path patterns the framework used to leave out empty values: each family's `normalizeStorage` now names the defaults it leaves out, and `StorageSort` is renamed `NormalizeStorage` (ADR 010)."
+  },
+  {
+    "path": "./contract/hashing-utils",
+    "export": "PreserveEmptyPathSegment",
+    "test": "exists",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "e3b0c44298fc1c14",
+    "reason": "Removed with the path patterns the framework used to leave out empty values: each family's `normalizeStorage` now names the defaults it leaves out, and `StorageSort` is renamed `NormalizeStorage` (ADR 010)."
+  },
+  {
+    "path": "./contract/hashing-utils",
+    "export": "createPreserveEmptyPredicate",
+    "test": "exists",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "e3b0c44298fc1c14",
+    "reason": "Removed with the path patterns the framework used to leave out empty values: each family's `normalizeStorage` now names the defaults it leaves out, and `StorageSort` is renamed `NormalizeStorage` (ADR 010)."
+  },
+  {
+    "path": "./contract/hashing-utils",
+    "export": "matchesPathPattern",
+    "test": "exists",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "e3b0c44298fc1c14",
+    "reason": "Removed with the path patterns the framework used to leave out empty values: each family's `normalizeStorage` now names the defaults it leaves out, and `StorageSort` is renamed `NormalizeStorage` (ADR 010)."
+  },
+  {
     "path": "./control",
     "export": "createMysqlControlClient",
     "test": "value",
@@ -34,6 +142,33 @@
     "lastRelease": "8.0.0-rc.25",
     "fingerprint": "53948b4b5df4622a",
     "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./family-contract",
+    "export": "sqlContractCanonicalizationHooks",
+    "test": "exists",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "e3b0c44298fc1c14",
+    "reason": "Removed with the path patterns the framework used to leave out empty values: each family's `normalizeStorage` now names the defaults it leaves out, and `StorageSort` is renamed `NormalizeStorage` (ADR 010)."
+  },
+  {
+    "path": "./family-contract/canonicalization-hooks",
+    "export": "*",
+    "test": "path",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "e3b0c44298fc1c14",
+    "reason": "Renamed to `contract/normal-form`: the module now holds the family's normal form of storage, which also leaves out the family's defaults, not only hash hooks (ADR 010)."
+  },
+  {
+    "path": "./migration-tools/contract-snapshot-store",
+    "export": "SnapshotCanonicalizationHooks",
+    "test": "exists",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "e3b0c44298fc1c14",
+    "reason": "Removed with the path patterns the framework used to leave out empty values: each family's `normalizeStorage` now names the defaults it leaves out, and `StorageSort` is renamed `NormalizeStorage` (ADR 010)."
   },
   {
     "path": "./runtime",

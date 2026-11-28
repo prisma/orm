@@ -2,6 +2,15 @@
 
 The spec is [spec.md](spec.md). Four pull requests, then a close-out. The stream has no tracker tickets, so each pull request is named here by what it does.
 
+## Status
+
+| Part | State |
+| --- | --- |
+| 1. Format versions | Merged (prisma/orm#31200) |
+| 2. Hashes | Merged (prisma/orm#31203) |
+| 3. The runtime marker check | Merged (prisma/orm#31198) |
+| 4. Saved samples | Built on branch `ga-compat-samples` with sets from `8.0.0-rc.26`; to be written again from a release that includes parts 1 and 2 |
+
 ## Order
 
 1. Format versions.

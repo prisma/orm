@@ -18,10 +18,10 @@ import type {
 } from '@internal/mongo/contract-types';
 
 export type StorageHash =
-  StorageHashBase<'d21d62bad0c6f37a80ff22bff4936a8336d4a20cb2361cec4342553b0fbd8af0'>;
+  StorageHashBase<'1764e024688fb17343df46e91f115bf396d97daea18d2cb7c24f0ea21ffc0329'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
-  ProfileHashBase<'251b3ce23f6c9f561892e7c1af9d2cc941a13d64ba1aa7226b90036b09568cc3'>;
+  ProfileHashBase<'8fe2b3350db5a83e2473520e59e52262982215115e17bb22a76239170eee6e69'>;
 
 export type CodecTypes = MongoCodecTypes;
 

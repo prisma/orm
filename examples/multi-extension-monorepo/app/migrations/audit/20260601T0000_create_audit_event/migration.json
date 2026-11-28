@@ -1,10 +1,10 @@
 {
   "formatVersion": 1,
   "from": null,
-  "to": "d60ebdd877de6283fafbbe0dc9a4fa13c1197009a53ba95ed37ba04fa3640cb1",
+  "to": "a78f4666e0ce078c5ecc67b7b04350c33058008caced8bd6808b2cdc08c43e45",
   "providedInvariants": [
     "audit:create-audit_event-v1"
   ],
   "createdAt": "2026-05-09T04:24:04.431Z",
-  "migrationHash": "8178c0cc351ff8c834c1ded25bb858ab8c4db568c78c489377e8b34046170186"
+  "migrationHash": "4bdc1464d96e02e40ed764adef690b84bc28d071ac2b4416c27da818bc788503"
 }

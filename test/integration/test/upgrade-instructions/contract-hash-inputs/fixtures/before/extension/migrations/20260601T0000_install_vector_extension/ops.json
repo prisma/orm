@@ -1,0 +1,36 @@
+[
+  {
+    "id": "pgvector.install-vector-extension",
+    "label": "Enable extension \"vector\"",
+    "operationClass": "additive",
+    "invariantId": "pgvector:install-vector-v1",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "dependency",
+        "name": "vector"
+      }
+    },
+    "precheck": [
+      {
+        "description": "verify extension \"vector\" is not already enabled",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_extension\" WHERE \"extname\" = $1) AS \"result\"",
+        "params": ["vector"]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create extension \"vector\"",
+        "sql": "CREATE EXTENSION IF NOT EXISTS vector"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "confirm extension \"vector\" is enabled",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_extension\" WHERE \"extname\" = $1) AS \"result\"",
+        "params": ["vector"]
+      }
+    ]
+  }
+]

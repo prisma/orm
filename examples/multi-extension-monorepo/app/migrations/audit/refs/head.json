@@ -1,5 +1,5 @@
 {
   "formatVersion": 1,
-  "hash": "d60ebdd877de6283fafbbe0dc9a4fa13c1197009a53ba95ed37ba04fa3640cb1",
+  "hash": "a78f4666e0ce078c5ecc67b7b04350c33058008caced8bd6808b2cdc08c43e45",
   "invariants": ["audit:create-audit_event-v1"]
 }

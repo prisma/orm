@@ -25,10 +25,10 @@ import type {
 } from '@internal/postgres/contract-types';
 
 export type StorageHash =
-  StorageHashBase<'018544d82152345e985ce99a09f122369935d2fba23e35a960117a2464dbb38d'>;
+  StorageHashBase<'fb869394053396e5e17917a383c1dfef85caa8e34d0a25500938ad7c46edddfd'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
-  ProfileHashBase<'3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2'>;
+  ProfileHashBase<'18654d8be351e94d940c57892ee3d3b92824fc145d7dd67c5f57168eea52c619'>;
 
 export type CodecTypes = PgTypes & PgVectorTypes & PostgisTypes;
 export type LaneCodecTypes = CodecTypes;

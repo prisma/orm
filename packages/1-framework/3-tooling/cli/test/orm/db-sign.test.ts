@@ -293,6 +293,52 @@ describe('db sign', () => {
       ]);
     });
 
+    it('offers no db update for a database whose change policy permits only migrations, and repeats --force', async () => {
+      const dir = await projectDir();
+      mocks.dbSign.mockResolvedValue(
+        ok({ spaces: [failedSpace('app', HASH_A)], changePolicy: ['migrate'] }),
+      );
+
+      const run = await harness(ormConfig()).run(['db', 'sign', '--force', '--json'], {
+        cwd: dir,
+      });
+
+      expect(run.exitCode).toBe(4);
+      expect(diagnosticsOf(run)[0]?.nextActions).toEqual([
+        {
+          kind: 'run-command',
+          label:
+            'If the database is at an earlier contract, sign that contract by the directory of the last migration it applied, then run db migrate',
+          command: 'prisma-test db sign <migration directory> --force',
+        },
+        {
+          kind: 'user-choice',
+          label:
+            'Otherwise author migrations that bring the database back onto the migration graph, then run db migrate',
+        },
+        {
+          kind: 'user-choice',
+          label:
+            'Or change the contract source to describe the database as it is, re-run contract emit, then sign again',
+        },
+      ]);
+    });
+
+    it('offers db update for a database whose change policy permits reconcile', async () => {
+      const dir = await projectDir();
+      mocks.dbSign.mockResolvedValue(
+        ok({ spaces: [failedSpace('app', HASH_A)], changePolicy: ['migrate', 'reconcile'] }),
+      );
+
+      const run = await harness(ormConfig()).run(['db', 'sign', '--json'], { cwd: dir });
+
+      expect(diagnosticsOf(run)[0]?.nextActions?.[0]).toEqual({
+        kind: 'run-command',
+        label: 'Change the database to match the contract, then sign again',
+        command: 'prisma-test db update',
+      });
+    });
+
     it('draws the drift under the failed space and closes with the failing summary', async () => {
       const dir = await projectDir();
       appFailsExtensionSigns();
@@ -630,6 +676,25 @@ describe('db sign', () => {
     });
   });
 
+  it('signs with the change policy overridden only when --force is given', async () => {
+    const dir = await projectDir();
+
+    await harness(ormConfig()).run(['db', 'sign', '--json'], { cwd: dir });
+    await harness(ormConfig()).run(['db', 'sign', '--force', '--json'], { cwd: dir });
+
+    expect(mocks.dbSign.mock.calls.map(([options]) => options.force)).toEqual([false, true]);
+  });
+
+  it('describes --force in --help', async () => {
+    const dir = await projectDir();
+
+    const run = await harness(ormConfig()).run(['db', 'sign', '--help'], { cwd: dir });
+
+    expect(`${run.stdout}${run.stderr}`).toMatch(
+      /--force +Sign even if the database's change policy permits only migrations; the schema is still verified and the policies are kept/,
+    );
+  });
+
   it('spells its exit codes in --help, which does not render the exitCodes map', async () => {
     const dir = await projectDir();
 
@@ -680,5 +745,29 @@ describe('db sign when the policies move while it runs', () => {
         },
       ],
     });
+  });
+
+  it('repeats --force in the command to sign again only when the user gave it', async () => {
+    mocks.dbSign.mockImplementation(async (options: { invocation: CliInvocation }) =>
+      notOk(
+        errorDatabasePoliciesMovedDuringSign({
+          spaceId: 'app',
+          checked: DEFAULT_DATABASE_POLICIES,
+          found: { ...DEFAULT_DATABASE_POLICIES, change: ['migrate'] },
+          invocation: options.invocation,
+        }),
+      ),
+    );
+    const dir = await projectDir();
+
+    const forced = await harness(ormConfig()).run(['db', 'sign', '--force', '--json'], {
+      cwd: dir,
+    });
+    const plain = await harness(ormConfig()).run(['db', 'sign', '--json'], { cwd: dir });
+
+    expect([envelopeOf(forced)?.error, envelopeOf(plain)?.error]).toMatchObject([
+      { nextActions: [{ command: 'prisma-test db sign --force' }] },
+      { nextActions: [{ command: 'prisma-test db sign' }] },
+    ]);
   });
 });

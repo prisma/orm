@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "targetFamily": "sql",
   "target": "postgres",
-  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "profileHash": "18654d8be351e94d940c57892ee3d3b92824fc145d7dd67c5f57168eea52c619",
   "roots": {
     "group": {
       "model": "Group",
@@ -456,25 +456,6 @@
               "foreignKeys": [
                 {
                   "index": {
-                    "name": "userGroup_userId_idx_a489d58a"
-                  },
-                  "source": {
-                    "columns": [
-                      "userId"
-                    ],
-                    "namespaceId": "public",
-                    "tableName": "userGroup"
-                  },
-                  "target": {
-                    "columns": [
-                      "id"
-                    ],
-                    "namespaceId": "public",
-                    "tableName": "user"
-                  }
-                },
-                {
-                  "index": {
                     "name": "userGroup_groupId_idx_e2fb5578"
                   },
                   "source": {
@@ -490,6 +471,25 @@
                     ],
                     "namespaceId": "public",
                     "tableName": "group"
+                  }
+                },
+                {
+                  "index": {
+                    "name": "userGroup_userId_idx_a489d58a"
+                  },
+                  "source": {
+                    "columns": [
+                      "userId"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "userGroup"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "user"
                   }
                 }
               ],
@@ -525,7 +525,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "0b8c448833b28b9e7a1d18384276a9a4990e7fc5eb40f051d8ede7993ab820ba"
+    "storageHash": "ef6ba5caa4c2219782898fecc78a13e2a7ffa7846b3dfa4ebde5bc089a13efd7"
   },
   "capabilities": {
     "postgres": {

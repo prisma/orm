@@ -506,6 +506,7 @@ class ControlClientImpl implements ControlClient {
       extensions: this.options.extensions ?? [],
       frameworkComponents,
       invocation: options.invocation,
+      ...ifDefined('force', options.force),
       ...ifDefined('verifySnapshotContent', this.snapshotVerifier),
       ...ifDefined('onProgress', onProgress),
     });
@@ -802,8 +803,7 @@ class ControlClientImpl implements ControlClient {
       serializeContract: (c) => contractSerializer.serializeContract(c),
       deserializeContract: (json) => familyInstance.deserializeContract(json),
       typesModule,
-      ...ifDefined('shouldPreserveEmpty', contractSerializer.shouldPreserveEmpty),
-      ...ifDefined('sortStorage', contractSerializer.sortStorage),
+      normalizeStorage: contractSerializer.normalizeStorage,
       ...ifDefined('supportsNamespaces', this.options.target.supportsNamespaces),
     });
   }

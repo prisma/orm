@@ -18,10 +18,10 @@ import type {
 } from '@internal/postgres/contract-types';
 
 export type StorageHash =
-  StorageHashBase<'71a5e0c028d667ca33af317bb1556e495d2283015a1670800588d30c025d89e4'>;
+  StorageHashBase<'738ad27b9e45076b9ecb19dea30d23f7ce4fe078e7519eb6a15633ac5bcf46ef'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
-  ProfileHashBase<'3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2'>;
+  ProfileHashBase<'18654d8be351e94d940c57892ee3d3b92824fc145d7dd67c5f57168eea52c619'>;
 
 export type CodecTypes = PgTypes;
 export type LaneCodecTypes = CodecTypes;
@@ -467,11 +467,11 @@ type ContractBase = Omit<
                   readonly source: {
                     readonly namespaceId: 'public' & NamespaceId;
                     readonly tableName: 'postCategory';
-                    readonly columns: readonly ['postId'];
+                    readonly columns: readonly ['categoryId'];
                   };
                   readonly target: {
                     readonly namespaceId: 'public' & NamespaceId;
-                    readonly tableName: 'post';
+                    readonly tableName: 'category';
                     readonly columns: readonly ['id'];
                   };
                 },
@@ -479,11 +479,11 @@ type ContractBase = Omit<
                   readonly source: {
                     readonly namespaceId: 'public' & NamespaceId;
                     readonly tableName: 'postCategory';
-                    readonly columns: readonly ['categoryId'];
+                    readonly columns: readonly ['postId'];
                   };
                   readonly target: {
                     readonly namespaceId: 'public' & NamespaceId;
-                    readonly tableName: 'category';
+                    readonly tableName: 'post';
                     readonly columns: readonly ['id'];
                   };
                 },

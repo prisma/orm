@@ -16,10 +16,10 @@ import type {
 } from '@prisma/orm-mariadb/contract-types';
 
 export type StorageHash =
-  StorageHashBase<'8a090b49a6a45e10bb29d909e12cb460ddee912d908102948b32b8a636a7d41c'>;
+  StorageHashBase<'8f0d2d7e5896ac1ae8e7e479af606f0e1b04b22f2776169d7306c95ba1b9e25c'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
-  ProfileHashBase<'c3165876e6069b3fd8cde4fadadb0b534082345d678b2c81c8c83e9225ce21d8'>;
+  ProfileHashBase<'3d8dc347b4e4421c35fa29ce4db91822d5726765f0ebf8d3a5deea2103a4027f'>;
 
 export type CodecTypes = MariadbTypes;
 export type LaneCodecTypes = CodecTypes;

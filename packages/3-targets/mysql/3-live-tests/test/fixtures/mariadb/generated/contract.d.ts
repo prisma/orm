@@ -16,10 +16,10 @@ import type {
 } from '@internal/mariadb/contract-types';
 
 export type StorageHash =
-  StorageHashBase<'4ac60b45c34e468ab20c6bfa9a22a2898ea50ac83b0ef69a77de85a8d4bafc2b'>;
+  StorageHashBase<'6e8a33a70cfc173ca9ca45838ca12ee27a4ffc462a7fce4dc84d8c2d78d979c9'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
-  ProfileHashBase<'c3165876e6069b3fd8cde4fadadb0b534082345d678b2c81c8c83e9225ce21d8'>;
+  ProfileHashBase<'3d8dc347b4e4421c35fa29ce4db91822d5726765f0ebf8d3a5deea2103a4027f'>;
 
 export type CodecTypes = MariadbTypes;
 export type LaneCodecTypes = CodecTypes;

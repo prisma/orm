@@ -1,11 +1,11 @@
 #!/usr/bin/env -S node
 import { Migration, MigrationCLI } from '@prisma/orm-postgres/migration';
-import type { Contract as Start } from '../../snapshots/76f9a7585ee104f29508fd0ba31f78665ef252d0a42d9d78e1f0ad1ff4dfbe01/contract';
-import startContract from '../../snapshots/76f9a7585ee104f29508fd0ba31f78665ef252d0a42d9d78e1f0ad1ff4dfbe01/contract.json' with {
+import type { Contract as End } from '../../snapshots/6c01c7bf566e073fc66946ed1890f9825cbd37707435b19f0aab4b6e46c2604e/contract';
+import endContract from '../../snapshots/6c01c7bf566e073fc66946ed1890f9825cbd37707435b19f0aab4b6e46c2604e/contract.json' with {
   type: 'json',
 };
-import type { Contract as End } from '../../snapshots/d82c665884d8cf0745edfcc24be8b374ccbe89dffb5e3e6ab10357cad4d5f03f/contract';
-import endContract from '../../snapshots/d82c665884d8cf0745edfcc24be8b374ccbe89dffb5e3e6ab10357cad4d5f03f/contract.json' with {
+import type { Contract as Start } from '../../snapshots/81291ef0071d05ca539b065438b9c038f05fe05c7a29a2fa46b2c9d77740e758/contract';
+import startContract from '../../snapshots/81291ef0071d05ca539b065438b9c038f05fe05c7a29a2fa46b2c9d77740e758/contract.json' with {
   type: 'json',
 };
 

@@ -5,7 +5,7 @@
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import type { PrismaConfig } from '@internal/config-loader';
-import { createControlStack } from '@internal/framework-components/control';
+import { APP_SPACE_ID, createControlStack } from '@internal/framework-components/control';
 import type {
   ContractSpaceAggregate,
   IntegrityViolation,
@@ -36,6 +36,7 @@ import { ifDefined } from '@internal/utils/defined';
 import { isInternalError } from '@internal/utils/internal-error';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { isStructuredError } from '@internal/utils/structured-error';
+import { APP_UPGRADE_GUIDES_URL } from '@internal/utils/upgrade-guides';
 import { basename, join, relative } from 'pathe';
 import type { CheckFailure, MigrationCheckResult } from '../../commands/json/schemas';
 import { INTEGRITY_FAILED, OK, PRECONDITION } from '../../commands/migration-check/exit-codes';
@@ -154,6 +155,19 @@ async function checkSnapshotConsistency(
     },
     { refNames },
   );
+  const withoutUpgrade = repairActions.filter((action) => action.kind !== 'open-url');
+  const mismatchActions: CheckFailure['nextActions'] =
+    spaceId === APP_SPACE_ID
+      ? [
+          {
+            kind: 'open-url',
+            label:
+              'If the project was upgraded from an earlier release of Prisma 8, follow the app upgrade instructions, which rewrite every contract hash',
+            url: APP_UPGRADE_GUIDES_URL,
+          },
+          ...withoutUpgrade,
+        ]
+      : withoutUpgrade;
   let raw: unknown;
   try {
     raw = await readContractSnapshotJson(migrationsDir, pkg.metadata.to);
@@ -161,10 +175,7 @@ async function checkSnapshotConsistency(
     if (MigrationToolsError.is(error) && error.code === 'MIGRATION.CONTRACT_SNAPSHOT_MISSING') {
       return null;
     }
-    return unreadable(
-      reasonOf(error),
-      repairActions.filter((action) => action.kind !== 'open-url'),
-    );
+    return unreadable(reasonOf(error), withoutUpgrade);
   }
   const record = raw !== null && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
   const storage = record['storage'] as Record<string, unknown> | undefined;
@@ -175,7 +186,7 @@ async function checkSnapshotConsistency(
       code: 'MIGRATION.CHECK_SNAPSHOT_HASH_MISMATCH',
       where: migrationPathRelative(space.cwd, pkg.dirPath),
       why: `Migration "${pkg.dirName}" declares to=${pkg.metadata.to} but its contract snapshot has storageHash=${snapshotHash}`,
-      nextActions: repairActions.filter((action) => action.kind !== 'open-url'),
+      nextActions: mismatchActions,
     };
   }
   if (space.verifySnapshotContent !== undefined) {
@@ -193,7 +204,7 @@ async function checkSnapshotConsistency(
         code: 'MIGRATION.CHECK_SNAPSHOT_CONTENT_MISMATCH',
         where: migrationPathRelative(space.cwd, jsonPath),
         why: `Migration "${pkg.dirName}": ${error.why}`,
-        nextActions: repairActions.filter((action) => action.kind !== 'open-url'),
+        nextActions: mismatchActions,
       };
     }
   }

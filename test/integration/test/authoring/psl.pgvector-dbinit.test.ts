@@ -12,7 +12,7 @@ import {
   postgresContractCapabilities,
   postgresDriver,
 } from '@internal/postgres/config';
-import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonicalization-hooks';
+import { normalizeSqlStorage } from '@internal/sql-contract/normal-form';
 import { sqlEmission } from '@internal/sql-contract-emitter';
 import { prismaContract } from '@internal/sql-contract-psl/provider';
 import postgres from '@internal/target-postgres/control';
@@ -108,12 +108,9 @@ describe(
 
       const enrichedIR = enrichContract(pslResult.value, frameworkComponents);
 
-      // Thread the SQL family's canonicalization hooks so the emitted
-      // contract preserves the empty `uniques`/`indexes`/`foreignKeys`
-      // arrays the SQL contract validator requires — production emit gets
-      // these from `descriptor.contractSerializer`; this inline emit must
-      // supply them the same way the side-by-side fixture test does.
-      const emitted = await emit(enrichedIR, stack, sqlEmission, sqlContractCanonicalizationHooks);
+      const emitted = await emit(enrichedIR, stack, sqlEmission, {
+        normalizeStorage: normalizeSqlStorage,
+      });
       return JSON.parse(emitted.contractJson) as Record<string, unknown>;
     }
 

@@ -119,8 +119,9 @@ withTempDir(({ createTempDir }) => {
         await emit(ctx, 'contract-additive');
 
         const summary = await statusSummary(ctx);
+        const [firstEnd, secondEnd] = [phone, bio].sort();
         expect(summary).toContain(
-          `has more than one end, so replace <contract> with one of \`${phone}\`, \`${bio}\``,
+          `has more than one end, so replace <contract> with one of \`${firstEnd}\`, \`${secondEnd}\``,
         );
         await planAsAdvised(ctx, summary, ['--delete', 'User.bio'], bio);
 

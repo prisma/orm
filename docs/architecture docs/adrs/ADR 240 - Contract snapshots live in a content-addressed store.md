@@ -8,7 +8,7 @@ Related: [ADR 199 — Storage-only migration identity](ADR%20199%20-%20Storage-o
 
 ## Decision
 
-Every distinct migration contract is stored exactly once per migrations root, in a content-addressed store at `migrations/snapshots/<hex>/contract.json` + `contract.d.ts`, where `<hex>` is the contract's `storage.storageHash` (bare 64-hex since [ADR 010](ADR%20010%20-%20Canonicalization%20Rules.md)'s 2026-07 revision dropped the `sha256:` prefix). A migration package directory carries only `migration.ts`, `migration.json`, and `ops.json` — its bookend contracts resolve through the store by hash, not from files inside the package. Per-package sibling copies (`start-contract.*` / `end-contract.*`) and per-space head copies (`migrations/<space-id>/contract.*`) no longer exist.
+Every distinct migration contract is stored exactly once per migrations root, in a content-addressed store at `migrations/snapshots/<hex>/contract.json` + `contract.d.ts`, where `<hex>` is the contract's `storage.storageHash` (bare 64-hex, [ADR 010](ADR%20010%20-%20Canonicalization%20Rules.md)). A migration package directory carries only `migration.ts`, `migration.json`, and `ops.json` — its bookend contracts resolve through the store by hash, not from files inside the package. Per-package sibling copies (`start-contract.*` / `end-contract.*`) and per-space head copies (`migrations/<space-id>/contract.*`) no longer exist.
 
 A rendered `migration.ts` imports the store directly:
 

@@ -1,0 +1,458 @@
+[
+  {
+    "id": "validator.orders.update",
+    "label": "Update validator on orders",
+    "operationClass": "destructive",
+    "precheck": [
+      {
+        "description": "collection orders exists",
+        "source": {
+          "kind": "listCollections"
+        },
+        "filter": {
+          "kind": "field",
+          "field": "name",
+          "op": "$eq",
+          "value": "orders"
+        },
+        "expect": "exists",
+        "object": "collection \"orders\""
+      }
+    ],
+    "execute": [
+      {
+        "description": "modify orders",
+        "command": {
+          "kind": "collMod",
+          "collection": "orders",
+          "validator": {
+            "$jsonSchema": {
+              "additionalProperties": false,
+              "bsonType": "object",
+              "properties": {
+                "_id": {
+                  "bsonType": "objectId"
+                },
+                "items": {
+                  "bsonType": "array",
+                  "items": {
+                    "additionalProperties": false,
+                    "bsonType": "object",
+                    "properties": {
+                      "amount": {
+                        "bsonType": "int"
+                      },
+                      "brand": {
+                        "bsonType": "string"
+                      },
+                      "image": {
+                        "additionalProperties": false,
+                        "bsonType": "object",
+                        "properties": {
+                          "url": {
+                            "bsonType": "string"
+                          }
+                        },
+                        "required": ["url"]
+                      },
+                      "name": {
+                        "bsonType": "string"
+                      },
+                      "price": {
+                        "additionalProperties": false,
+                        "bsonType": "object",
+                        "properties": {
+                          "amount": {
+                            "bsonType": "double"
+                          },
+                          "currency": {
+                            "bsonType": "string"
+                          }
+                        },
+                        "required": ["amount", "currency"]
+                      },
+                      "productId": {
+                        "bsonType": "string"
+                      }
+                    },
+                    "required": ["amount", "brand", "image", "name", "price", "productId"]
+                  }
+                },
+                "shippingAddress": {
+                  "bsonType": "string"
+                },
+                "statusHistory": {
+                  "bsonType": "array",
+                  "items": {
+                    "additionalProperties": false,
+                    "bsonType": "object",
+                    "properties": {
+                      "status": {
+                        "bsonType": "string"
+                      },
+                      "timestamp": {
+                        "bsonType": "date"
+                      }
+                    },
+                    "required": ["status", "timestamp"]
+                  }
+                },
+                "type": {
+                  "bsonType": "string",
+                  "enum": ["delivery", "pickup"]
+                },
+                "userId": {
+                  "bsonType": "objectId"
+                }
+              },
+              "required": ["_id", "items", "shippingAddress", "statusHistory", "type", "userId"]
+            }
+          },
+          "validationLevel": "strict",
+          "validationAction": "error"
+        }
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "validator applied on orders",
+        "source": {
+          "kind": "listCollections"
+        },
+        "filter": {
+          "kind": "and",
+          "exprs": [
+            {
+              "kind": "field",
+              "field": "name",
+              "op": "$eq",
+              "value": "orders"
+            },
+            {
+              "kind": "field",
+              "field": "options.validationLevel",
+              "op": "$eq",
+              "value": "strict"
+            },
+            {
+              "kind": "field",
+              "field": "options.validationAction",
+              "op": "$eq",
+              "value": "error"
+            },
+            {
+              "kind": "field",
+              "field": "options.validator.$jsonSchema",
+              "op": "$eq",
+              "value": {
+                "additionalProperties": false,
+                "bsonType": "object",
+                "properties": {
+                  "_id": {
+                    "bsonType": "objectId"
+                  },
+                  "items": {
+                    "bsonType": "array",
+                    "items": {
+                      "additionalProperties": false,
+                      "bsonType": "object",
+                      "properties": {
+                        "amount": {
+                          "bsonType": "int"
+                        },
+                        "brand": {
+                          "bsonType": "string"
+                        },
+                        "image": {
+                          "additionalProperties": false,
+                          "bsonType": "object",
+                          "properties": {
+                            "url": {
+                              "bsonType": "string"
+                            }
+                          },
+                          "required": ["url"]
+                        },
+                        "name": {
+                          "bsonType": "string"
+                        },
+                        "price": {
+                          "additionalProperties": false,
+                          "bsonType": "object",
+                          "properties": {
+                            "amount": {
+                              "bsonType": "double"
+                            },
+                            "currency": {
+                              "bsonType": "string"
+                            }
+                          },
+                          "required": ["amount", "currency"]
+                        },
+                        "productId": {
+                          "bsonType": "string"
+                        }
+                      },
+                      "required": ["amount", "brand", "image", "name", "price", "productId"]
+                    }
+                  },
+                  "shippingAddress": {
+                    "bsonType": "string"
+                  },
+                  "statusHistory": {
+                    "bsonType": "array",
+                    "items": {
+                      "additionalProperties": false,
+                      "bsonType": "object",
+                      "properties": {
+                        "status": {
+                          "bsonType": "string"
+                        },
+                        "timestamp": {
+                          "bsonType": "date"
+                        }
+                      },
+                      "required": ["status", "timestamp"]
+                    }
+                  },
+                  "type": {
+                    "bsonType": "string",
+                    "enum": ["delivery", "pickup"]
+                  },
+                  "userId": {
+                    "bsonType": "objectId"
+                  }
+                },
+                "required": ["_id", "items", "shippingAddress", "statusHistory", "type", "userId"]
+              }
+            }
+          ]
+        },
+        "expect": "exists"
+      }
+    ]
+  },
+  {
+    "id": "validator.products.update",
+    "label": "Update validator on products",
+    "operationClass": "destructive",
+    "precheck": [
+      {
+        "description": "collection products exists",
+        "source": {
+          "kind": "listCollections"
+        },
+        "filter": {
+          "kind": "field",
+          "field": "name",
+          "op": "$eq",
+          "value": "products"
+        },
+        "expect": "exists",
+        "object": "collection \"products\""
+      }
+    ],
+    "execute": [
+      {
+        "description": "modify products",
+        "command": {
+          "kind": "collMod",
+          "collection": "products",
+          "validator": {
+            "$jsonSchema": {
+              "additionalProperties": false,
+              "bsonType": "object",
+              "properties": {
+                "_id": {
+                  "bsonType": "objectId"
+                },
+                "articleType": {
+                  "bsonType": "string"
+                },
+                "brand": {
+                  "bsonType": "string"
+                },
+                "code": {
+                  "bsonType": "string"
+                },
+                "description": {
+                  "bsonType": "string"
+                },
+                "embedding": {
+                  "bsonType": "array",
+                  "items": {
+                    "bsonType": "double"
+                  }
+                },
+                "image": {
+                  "additionalProperties": false,
+                  "bsonType": "object",
+                  "properties": {
+                    "url": {
+                      "bsonType": "string"
+                    }
+                  },
+                  "required": ["url"]
+                },
+                "name": {
+                  "bsonType": "string"
+                },
+                "price": {
+                  "additionalProperties": false,
+                  "bsonType": "object",
+                  "properties": {
+                    "amount": {
+                      "bsonType": "double"
+                    },
+                    "currency": {
+                      "bsonType": "string"
+                    }
+                  },
+                  "required": ["amount", "currency"]
+                },
+                "primaryCategory": {
+                  "bsonType": "string"
+                },
+                "status": {
+                  "bsonType": "string",
+                  "enum": ["active", "discontinued", "out-of-stock"]
+                },
+                "subCategory": {
+                  "bsonType": "string"
+                }
+              },
+              "required": [
+                "_id",
+                "articleType",
+                "brand",
+                "code",
+                "description",
+                "image",
+                "name",
+                "price",
+                "primaryCategory",
+                "status",
+                "subCategory"
+              ]
+            }
+          },
+          "validationLevel": "strict",
+          "validationAction": "error"
+        }
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "validator applied on products",
+        "source": {
+          "kind": "listCollections"
+        },
+        "filter": {
+          "kind": "and",
+          "exprs": [
+            {
+              "kind": "field",
+              "field": "name",
+              "op": "$eq",
+              "value": "products"
+            },
+            {
+              "kind": "field",
+              "field": "options.validationLevel",
+              "op": "$eq",
+              "value": "strict"
+            },
+            {
+              "kind": "field",
+              "field": "options.validationAction",
+              "op": "$eq",
+              "value": "error"
+            },
+            {
+              "kind": "field",
+              "field": "options.validator.$jsonSchema",
+              "op": "$eq",
+              "value": {
+                "additionalProperties": false,
+                "bsonType": "object",
+                "properties": {
+                  "_id": {
+                    "bsonType": "objectId"
+                  },
+                  "articleType": {
+                    "bsonType": "string"
+                  },
+                  "brand": {
+                    "bsonType": "string"
+                  },
+                  "code": {
+                    "bsonType": "string"
+                  },
+                  "description": {
+                    "bsonType": "string"
+                  },
+                  "embedding": {
+                    "bsonType": "array",
+                    "items": {
+                      "bsonType": "double"
+                    }
+                  },
+                  "image": {
+                    "additionalProperties": false,
+                    "bsonType": "object",
+                    "properties": {
+                      "url": {
+                        "bsonType": "string"
+                      }
+                    },
+                    "required": ["url"]
+                  },
+                  "name": {
+                    "bsonType": "string"
+                  },
+                  "price": {
+                    "additionalProperties": false,
+                    "bsonType": "object",
+                    "properties": {
+                      "amount": {
+                        "bsonType": "double"
+                      },
+                      "currency": {
+                        "bsonType": "string"
+                      }
+                    },
+                    "required": ["amount", "currency"]
+                  },
+                  "primaryCategory": {
+                    "bsonType": "string"
+                  },
+                  "status": {
+                    "bsonType": "string",
+                    "enum": ["active", "discontinued", "out-of-stock"]
+                  },
+                  "subCategory": {
+                    "bsonType": "string"
+                  }
+                },
+                "required": [
+                  "_id",
+                  "articleType",
+                  "brand",
+                  "code",
+                  "description",
+                  "image",
+                  "name",
+                  "price",
+                  "primaryCategory",
+                  "status",
+                  "subCategory"
+                ]
+              }
+            }
+          ]
+        },
+        "expect": "exists"
+      }
+    ]
+  }
+]

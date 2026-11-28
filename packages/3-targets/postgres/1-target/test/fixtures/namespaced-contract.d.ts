@@ -23,10 +23,10 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'656d4d700b70dcb6e5aab5bc75eea6c4104e60be7151a476663fee2318963385'>;
+  StorageHashBase<'0b9d23238b60d4cc22403da8f4ba0fe53638b9c3cf125f8e07313fd0494a0520'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
-  ProfileHashBase<'3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2'>;
+  ProfileHashBase<'e2405a89956ec126f943d6f407865e58297711d231a76e0b85ba1743293a4e04'>;
 
 export type CodecTypes = PgTypes;
 export type LaneCodecTypes = CodecTypes;

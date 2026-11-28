@@ -285,6 +285,7 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
       ),
       ref: options.ref,
       permitPolicyChange: options.permitPolicyChange,
+      overrideChangePolicy: false,
       targetHash: contract.storage.storageHash,
       invocation: options.invocation,
       migrationPlan,

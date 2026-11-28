@@ -1,5 +1,6 @@
 import { ContractValidationError } from '@internal/contract/contract-validation-error';
 import { CliStructuredError } from '@internal/errors/control';
+import { APP_UPGRADE_GUIDES_URL, UPGRADE_GUIDES_URL } from '@internal/utils/upgrade-guides';
 import { join } from 'pathe';
 import { describe, expect, it } from 'vitest';
 import {
@@ -365,16 +366,59 @@ describe('errorInvalidRefFile', () => {
   });
 });
 
-describe('errorContractSnapshotContentMismatch', () => {
-  it('advises restoring the snapshot, or deleting it and writing it again, never re-running a command over it', () => {
-    const error = errorContractSnapshotContentMismatch({
-      storageHash: 'a'.repeat(64),
-      computedHash: 'b'.repeat(64),
-      jsonPath: `/p/migrations/snapshots/${'a'.repeat(64)}/contract.json`,
+describe('errorDescriptorHeadHashMismatch', () => {
+  it('names an extension built for an earlier release as the likely cause, and tells the application and the author what to do', () => {
+    const error = errorDescriptorHeadHashMismatch({
+      extensionId: 'vectors',
+      recomputedHash: 'a'.repeat(64),
+      headRefHash: 'b'.repeat(64),
     });
+    expect({ why: error.why, fix: error.fix, nextActions: error.nextActions }).toEqual({
+      why: `The extension "vectors" names its contract by the hash ${'b'.repeat(64)}, but this release of Prisma computes ${'a'.repeat(64)} for it. The extension was most likely built for an earlier release of Prisma 8, whose hash rules differ; otherwise its contract changed without its build running again.`,
+      fix: `In an application, upgrade "vectors" to its version for this release of Prisma, as the app upgrade instructions say (${APP_UPGRADE_GUIDES_URL}); if there is none, ask its author to publish one. Its author follows the extension upgrade instructions of each release since the one it was built for, which rewrite every contract hash (${UPGRADE_GUIDES_URL}/extension), or, if it was built for this release, runs its build again, and publishes a new version.`,
+      nextActions: [
+        {
+          kind: 'open-url',
+          label:
+            'In an application, upgrade the extension to its version for this release, as the app upgrade instructions say',
+          url: APP_UPGRADE_GUIDES_URL,
+        },
+        {
+          kind: 'open-url',
+          label:
+            "If you are the extension's author, follow the extension upgrade instructions, which rewrite every contract hash, and publish a new version",
+          url: `${UPGRADE_GUIDES_URL}/extension`,
+        },
+      ],
+    });
+  });
+});
 
-    expect(error.fix).toBe(
-      'Restore the snapshot from version control. If it is the snapshot of the emitted contract or the head snapshot of an extension, you can instead delete its folder and write it again, since a command writes a snapshot only where none exists. For the emitted contract, run `{bin} db migrate --advance-ref db` when a migration ends at it, which first applies any pending migrations to the configured database, or `{bin} db sign` when none does, which first checks that the configured database matches contract.json and records that in the database; each then moves the db ref to contract.json and writes the snapshot from it. For an extension, run `{bin} contract emit`, which also emits contract.json from the contract source.',
-    );
+describe('errorContractSnapshotContentMismatch', () => {
+  it('names the hash upgrade as the likely cause, then advises restoring the snapshot, or deleting it and writing it again where a command does', () => {
+    const hash = 'a'.repeat(64);
+    const jsonPath = `/p/migrations/snapshots/${hash}/contract.json`;
+    const error = errorContractSnapshotContentMismatch({
+      storageHash: hash,
+      computedHash: 'b'.repeat(64),
+      jsonPath,
+    });
+    const recipe =
+      'If it is the snapshot of the emitted contract or the head snapshot of an extension, you can instead delete its folder and write it again, since a command writes a snapshot only where none exists. For the emitted contract, run `{bin} db migrate --advance-ref db` when a migration ends at it, which first applies any pending migrations to the configured database, or `{bin} db sign` when none does, which first checks that the configured database matches contract.json and records that in the database; each then moves the db ref to contract.json and writes the snapshot from it. For an extension, run `{bin} contract emit`, which also emits contract.json from the contract source.';
+
+    expect({ why: error.why, fix: error.fix, nextActions: error.nextActions }).toEqual({
+      why: `The contract snapshot at "${jsonPath}" is addressed by storage hash ${hash}, but its content recomputes to ${'b'.repeat(64)}. Either the project was upgraded from an earlier release of Prisma 8 without the upgrade step that rewrites every contract hash, or the file has been edited (or corrupted) since it was written.`,
+      fix: `If the project was upgraded from an earlier release of Prisma 8, follow the app upgrade instructions of each release since, which rewrite every contract hash: ${APP_UPGRADE_GUIDES_URL}. Otherwise restore the snapshot from version control. ${recipe}`,
+      nextActions: [
+        {
+          kind: 'open-url',
+          label:
+            'If the project was upgraded from an earlier release of Prisma 8, follow the app upgrade instructions, which rewrite every contract hash',
+          url: APP_UPGRADE_GUIDES_URL,
+        },
+        { kind: 'user-choice', label: 'Otherwise restore the snapshot from version control' },
+        { kind: 'user-choice', label: recipe },
+      ],
+    });
   });
 });

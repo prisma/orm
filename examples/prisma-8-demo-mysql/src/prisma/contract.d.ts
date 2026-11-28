@@ -16,10 +16,10 @@ import type {
 } from '@prisma/orm-mysql/contract-types';
 
 export type StorageHash =
-  StorageHashBase<'5e81775de42c006fbb5fcc3d03a8f0ad5a11e28e7f9d382bf5ef4e676cd46fb9'>;
+  StorageHashBase<'830c1f9f99482cc314ddb14721e47c4de93723363e9ac7bab71519db37917560'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
-  ProfileHashBase<'5212eb1a1220f2d24de13f4efadd4c703f3a1098a5f57e09da0dc26ebb7201d0'>;
+  ProfileHashBase<'ee8405be69c28f45e79c40c3c7d60135a2860ef72b192ab25d0cbac6cc2d3ca6'>;
 
 export type CodecTypes = MysqlTypes;
 export type LaneCodecTypes = CodecTypes;

@@ -258,6 +258,7 @@ export async function executeMigrateShowPlan(
         inForce,
         ref: namedRef,
         permitPolicyChange: options.permitPolicyChange ?? false,
+        overrideChangePolicy: false,
         targetHash,
         invocation: options.invocation,
       });

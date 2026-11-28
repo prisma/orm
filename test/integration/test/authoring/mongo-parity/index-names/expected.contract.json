@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "targetFamily": "mongo",
   "target": "mongo",
-  "profileHash": "251b3ce23f6c9f561892e7c1af9d2cc941a13d64ba1aa7226b90036b09568cc3",
+  "profileHash": "8fe2b3350db5a83e2473520e59e52262982215115e17bb22a76239170eee6e69",
   "roots": {
     "users": {
       "model": "User",
@@ -72,8 +72,7 @@
                     }
                   ],
                   "kind": "mongo-index",
-                  "name": "User_email_key",
-                  "unique": true
+                  "name": "User_email_idx"
                 },
                 {
                   "keys": [
@@ -83,7 +82,8 @@
                     }
                   ],
                   "kind": "mongo-index",
-                  "name": "User_email_idx"
+                  "name": "User_email_key",
+                  "unique": true
                 },
                 {
                   "keys": [
@@ -136,7 +136,7 @@
         "kind": "mongo-database"
       }
     },
-    "storageHash": "0e1f1710e77bb6092a2a6a1534537c78db2a7ee4242af118c65a8d26082ff09a"
+    "storageHash": "9393aab9b88afa8aa0d15b66b69da1036a1faef74636e35aaa62a5b4e2a4142a"
   },
   "capabilities": {},
   "extensions": {},

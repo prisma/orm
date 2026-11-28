@@ -8,12 +8,12 @@ import {
   primaryKey,
   sql,
 } from '@prisma/orm-mysql/migration';
-import type { Contract as End } from '../../snapshots/5e81775de42c006fbb5fcc3d03a8f0ad5a11e28e7f9d382bf5ef4e676cd46fb9/contract';
-import endContract from '../../snapshots/5e81775de42c006fbb5fcc3d03a8f0ad5a11e28e7f9d382bf5ef4e676cd46fb9/contract.json' with {
+import type { Contract as End } from '../../snapshots/830c1f9f99482cc314ddb14721e47c4de93723363e9ac7bab71519db37917560/contract';
+import endContract from '../../snapshots/830c1f9f99482cc314ddb14721e47c4de93723363e9ac7bab71519db37917560/contract.json' with {
   type: 'json',
 };
-import type { Contract as Start } from '../../snapshots/e5204ea7419455b72c116d69a1487d13716cb36a17aaf355fd880275065a9a23/contract';
-import startContract from '../../snapshots/e5204ea7419455b72c116d69a1487d13716cb36a17aaf355fd880275065a9a23/contract.json' with {
+import type { Contract as Start } from '../../snapshots/4820625c0b0682fb9498c8ddb6fae0972c9d995485a3224ab19503bccd614085/contract';
+import startContract from '../../snapshots/4820625c0b0682fb9498c8ddb6fae0972c9d995485a3224ab19503bccd614085/contract.json' with {
   type: 'json',
 };
 

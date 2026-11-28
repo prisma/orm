@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "targetFamily": "sql",
   "target": "postgres",
-  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "profileHash": "18654d8be351e94d940c57892ee3d3b92824fc145d7dd67c5f57168eea52c619",
   "roots": {
     "media": {
       "model": "Media",
@@ -233,25 +233,6 @@
               "foreignKeys": [
                 {
                   "index": {
-                    "name": "postMedia_postId_idx_a7a72715"
-                  },
-                  "source": {
-                    "columns": [
-                      "postId"
-                    ],
-                    "namespaceId": "public",
-                    "tableName": "postMedia"
-                  },
-                  "target": {
-                    "columns": [
-                      "id"
-                    ],
-                    "namespaceId": "public",
-                    "tableName": "post"
-                  }
-                },
-                {
-                  "index": {
                     "name": "postMedia_mediaId_idx_6b06655c"
                   },
                   "source": {
@@ -267,6 +248,25 @@
                     ],
                     "namespaceId": "public",
                     "tableName": "media"
+                  }
+                },
+                {
+                  "index": {
+                    "name": "postMedia_postId_idx_a7a72715"
+                  },
+                  "source": {
+                    "columns": [
+                      "postId"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "postMedia"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "post"
                   }
                 }
               ],
@@ -308,10 +308,10 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "912cec075e29cfcbbf7bb1d132e9559bd290b8407dd2e6db2d513cbc6880b05f"
+    "storageHash": "74a404328fe665cfe2a54ce926149ac445e10ff91dd5cb2144632dbfeb226e5c"
   },
   "execution": {
-    "executionHash": "cb5920d1539620a0cc34be80def320ed2a7a2507350ebb5eebd8d51847f18961",
+    "executionHash": "f6b60b220ac2fa14f80b38e1ee72dd489abeac37ca28a1769504a153fc694e02",
     "mutations": {
       "defaults": [
         {

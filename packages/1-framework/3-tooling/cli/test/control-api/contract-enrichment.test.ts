@@ -1,10 +1,12 @@
-import { type Contract, coreHash, profileHash } from '@internal/contract/types';
+import { computeProfileHash } from '@internal/contract/hashing';
+import { type Contract, coreHash } from '@internal/contract/types';
 import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { enrichContract } from '../../src/control-api/contract-enrichment';
 
 function makeIR(overrides?: Partial<Contract>): Contract {
+  const capabilities = overrides?.capabilities ?? {};
   return {
     targetFamily: 'sql',
     target: 'postgres',
@@ -12,8 +14,8 @@ function makeIR(overrides?: Partial<Contract>): Contract {
     domain: applicationDomainOf({ models: {} }),
     storage: { storageHash: coreHash('test'), namespaces: {} },
     extensions: {},
-    capabilities: {},
-    profileHash: profileHash('test'),
+    capabilities,
+    profileHash: computeProfileHash({ target: 'postgres', targetFamily: 'sql', capabilities }),
     meta: {},
     ...overrides,
   };
@@ -105,6 +107,48 @@ describe('enrichContract', () => {
       sql: { select: true },
       postgres: { returning: true },
     });
+  });
+
+  it('writes the profile hash of the capabilities it writes, not the one its source computed over fewer', () => {
+    const ir = makeIR({ capabilities: { sql: { select: true } } });
+    const adapter = makeAdapter({
+      capabilities: { postgres: { lateral: true, returning: true } },
+    });
+
+    const result = enrichContract(ir, [adapter]);
+
+    expect(result.profileHash).not.toBe(ir.profileHash);
+    expect(result.profileHash).toBe(
+      computeProfileHash({
+        target: 'postgres',
+        targetFamily: 'sql',
+        capabilities: {
+          postgres: { lateral: true, returning: true },
+          sql: { select: true },
+        },
+      }),
+    );
+  });
+
+  it('writes and hashes only enabled flags, so a namespace whose flags are all false is left out of both', () => {
+    const ir = makeIR();
+    const adapter = makeAdapter({
+      capabilities: { postgres: { lateral: true, returning: false } },
+    });
+    const extension = makeExtension({
+      capabilities: { pgvector: { cosine: false } },
+    });
+
+    const result = enrichContract(ir, [adapter, extension]);
+
+    expect(result.capabilities).toEqual({ postgres: { lateral: true } });
+    expect(result.profileHash).toBe(
+      computeProfileHash({
+        target: 'postgres',
+        targetFamily: 'sql',
+        capabilities: { postgres: { lateral: true } },
+      }),
+    );
   });
 
   it('extracts extension pack metadata from extension descriptors', () => {

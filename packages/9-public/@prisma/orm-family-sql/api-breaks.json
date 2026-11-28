@@ -54,6 +54,24 @@
     "reason": "A column name that several joined tables share must now name its table (prisma/orm#31150)."
   },
   {
+    "path": "./contract",
+    "export": "sqlContractCanonicalizationHooks",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "e3b0c44298fc1c14",
+    "reason": "Removed with the path patterns the framework used to leave out empty values: each family's `normalizeStorage` now names the defaults it leaves out, and `StorageSort` is renamed `NormalizeStorage` (ADR 010)."
+  },
+  {
+    "path": "./contract/canonicalization-hooks",
+    "export": "*",
+    "test": "path",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "e3b0c44298fc1c14",
+    "reason": "Renamed to `contract/normal-form`: the module now holds the family's normal form of storage, which also leaves out the family's defaults, not only hash hooks (ADR 010)."
+  },
+  {
     "path": "./family",
     "export": "CodecControlHooks",
     "test": "type",
@@ -97,6 +115,42 @@
     "lastRelease": "8.0.0-rc.25",
     "fingerprint": "e4deed8f0a00855e",
     "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./family",
+    "export": "SqlContractSerializer",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "8f554f25f6bc0827",
+    "reason": "Each family now supplies its normal form of storage as a required `normalizeStorage`, which the framework applies when it writes and when it hashes; the framework's canonicalizer no longer leaves out defaults or empty values by path, so the earlier hooks are gone (ADR 010, ADR 332)."
+  },
+  {
+    "path": "./family",
+    "export": "SqlContractSerializer",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "8f554f25f6bc0827",
+    "reason": "Each family now supplies its normal form of storage as a required `normalizeStorage`, which the framework applies when it writes and when it hashes; the framework's canonicalizer no longer leaves out defaults or empty values by path, so the earlier hooks are gone (ADR 010, ADR 332)."
+  },
+  {
+    "path": "./family",
+    "export": "SqlContractSerializerBase",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "81aac9dfdd5fb63f",
+    "reason": "Each family now supplies its normal form of storage as a required `normalizeStorage`, which the framework applies when it writes and when it hashes; the framework's canonicalizer no longer leaves out defaults or empty values by path, so the earlier hooks are gone (ADR 010, ADR 332)."
+  },
+  {
+    "path": "./family",
+    "export": "SqlContractSerializerBase",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "81aac9dfdd5fb63f",
+    "reason": "Each family now supplies its normal form of storage as a required `normalizeStorage`, which the framework applies when it writes and when it hashes; the framework's canonicalizer no longer leaves out defaults or empty values by path, so the earlier hooks are gone (ADR 010, ADR 332)."
   },
   {
     "path": "./family",
@@ -520,6 +574,42 @@
     "lastRelease": "8.0.0-rc.25",
     "fingerprint": "31d95ed37a99a324",
     "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./family/ir",
+    "export": "SqlContractSerializer",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "8f554f25f6bc0827",
+    "reason": "Each family now supplies its normal form of storage as a required `normalizeStorage`, which the framework applies when it writes and when it hashes; the framework's canonicalizer no longer leaves out defaults or empty values by path, so the earlier hooks are gone (ADR 010, ADR 332)."
+  },
+  {
+    "path": "./family/ir",
+    "export": "SqlContractSerializer",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "8f554f25f6bc0827",
+    "reason": "Each family now supplies its normal form of storage as a required `normalizeStorage`, which the framework applies when it writes and when it hashes; the framework's canonicalizer no longer leaves out defaults or empty values by path, so the earlier hooks are gone (ADR 010, ADR 332)."
+  },
+  {
+    "path": "./family/ir",
+    "export": "SqlContractSerializerBase",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "81aac9dfdd5fb63f",
+    "reason": "Each family now supplies its normal form of storage as a required `normalizeStorage`, which the framework applies when it writes and when it hashes; the framework's canonicalizer no longer leaves out defaults or empty values by path, so the earlier hooks are gone (ADR 010, ADR 332)."
+  },
+  {
+    "path": "./family/ir",
+    "export": "SqlContractSerializerBase",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "81aac9dfdd5fb63f",
+    "reason": "Each family now supplies its normal form of storage as a required `normalizeStorage`, which the framework applies when it writes and when it hashes; the framework's canonicalizer no longer leaves out defaults or empty values by path, so the earlier hooks are gone (ADR 010, ADR 332)."
   },
   {
     "path": "./family/ir",

@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "targetFamily": "sql",
   "target": "postgres",
-  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "profileHash": "18654d8be351e94d940c57892ee3d3b92824fc145d7dd67c5f57168eea52c619",
   "roots": {
     "user": {
       "model": "User",
@@ -66,13 +66,14 @@
             }
           }
         },
-        "id": "public"
+        "id": "public",
+        "kind": "postgres-schema"
       }
     },
-    "storageHash": "830905e44be0bb12cf973ad122d2ef3bc9ca8e77c170f13627660fcef9288a5f"
+    "storageHash": "ade72265d9714eab2ce3ce39af10ff2231e8af081b8fd6d7a3ddd109b1b7c553"
   },
   "execution": {
-    "executionHash": "1e4310839dcb085ba3be4e6b01b30c5d7b435ed08453c28f267c7bf6c0ae123b",
+    "executionHash": "ad3d29ef7f92b99252ff22a08cd21ce5d610ac44b7db85a5263fdb94cd46a69a",
     "mutations": {
       "defaults": [
         {

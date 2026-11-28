@@ -36,6 +36,7 @@ import type { JsonValue } from '@internal/contract/types';
 import { UNBOUND_DOMAIN_NAMESPACE_ID } from '@internal/contract/types';
 import type { Codec, CodecRef, DataTypeValue } from '@internal/framework-components/codec';
 import { dataTypeValuesEqual, validateCodecTypeParams } from '@internal/framework-components/codec';
+import { normalizeSqlStorage } from '@internal/sql-contract/normal-form';
 import { SqlStorage } from '@internal/sql-contract/types';
 import {
   ColumnRef,
@@ -170,7 +171,12 @@ function buildConformanceContract(): SqliteContract {
   const namespaces = {};
   const storage = new SqlStorage({
     namespaces,
-    storageHash: computeStorageHash({ target, targetFamily, storage: { namespaces } }),
+    storageHash: computeStorageHash({
+      target,
+      targetFamily,
+      storage: { namespaces },
+      normalizeStorage: normalizeSqlStorage,
+    }),
   });
 
   return {

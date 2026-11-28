@@ -5,6 +5,7 @@ import type {
   ControlTargetDescriptor,
 } from '@internal/framework-components/control';
 import { createControlStack } from '@internal/framework-components/control';
+import { normalizeSqlStorage } from '@internal/sql-contract/normal-form';
 import {
   SQL_EXPRESSION_DATA_TYPE_ID,
   sqlExpressionRegistration,
@@ -52,6 +53,7 @@ function makeStack(extensionDataTypes: readonly DataType[]): ControlStack<'sql',
       contractSerializer: {
         deserializeContract: (json) => json as never,
         serializeContract: (contract) => contract as never,
+        normalizeStorage: normalizeSqlStorage,
       },
       create: () => ({ familyId: 'sql', targetId: 'postgres' }),
     } as ControlTargetDescriptor<'sql', 'postgres'>,

@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "targetFamily": "sql",
   "target": "postgres",
-  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "profileHash": "18654d8be351e94d940c57892ee3d3b92824fc145d7dd67c5f57168eea52c619",
   "roots": {
     "categoriesOnPostsManyToMany": {
       "model": "CategoriesOnPostsManyToMany",
@@ -204,25 +204,6 @@
               "foreignKeys": [
                 {
                   "index": {
-                    "name": "categoriesOnPostsManyToMany_postId_idx_a7a72715"
-                  },
-                  "source": {
-                    "columns": [
-                      "postId"
-                    ],
-                    "namespaceId": "public",
-                    "tableName": "categoriesOnPostsManyToMany"
-                  },
-                  "target": {
-                    "columns": [
-                      "id"
-                    ],
-                    "namespaceId": "public",
-                    "tableName": "postManyToMany"
-                  }
-                },
-                {
-                  "index": {
                     "name": "categoriesOnPostsManyToMany_categoryId_idx_15c304f2"
                   },
                   "source": {
@@ -238,6 +219,25 @@
                     ],
                     "namespaceId": "public",
                     "tableName": "categoryManyToMany"
+                  }
+                },
+                {
+                  "index": {
+                    "name": "categoriesOnPostsManyToMany_postId_idx_a7a72715"
+                  },
+                  "source": {
+                    "columns": [
+                      "postId"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "categoriesOnPostsManyToMany"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "postManyToMany"
                   }
                 }
               ],
@@ -317,7 +317,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "0b11bd09acea653931896bb3e888d11d0fc23f544bcb46a71092fcfaf58314aa"
+    "storageHash": "f7670000d88666d9ee1e54d66cb1735548f02d2d5af07d67a77c5bbcf2341a38"
   },
   "capabilities": {
     "postgres": {

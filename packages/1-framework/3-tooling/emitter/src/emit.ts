@@ -1,7 +1,9 @@
-import { canonicalizeContractToObject } from '@internal/contract/hashing';
+import { canonicalizeContractToObject, computeStorageHash } from '@internal/contract/hashing';
 import type { Contract } from '@internal/contract/types';
 import type { EmissionSpi } from '@internal/framework-components/emission';
+import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
+import { InternalError } from '@internal/utils/internal-error';
 import { format } from 'prettier';
 import { getEmittedArtifactPaths } from './artifact-paths';
 import type { EmitOptions, EmitResult, EmitStackInput } from './emit-types';
@@ -33,9 +35,9 @@ export async function emit(
 
   const canonicalized = canonicalizeContractToObject(contract, {
     serializeContract: options.serializeContract,
-    ...ifDefined('shouldPreserveEmpty', options.shouldPreserveEmpty),
-    ...ifDefined('sortStorage', options.sortStorage),
+    normalizeStorage: options.normalizeStorage,
   });
+  requireWrittenStorageToHashTo(storageHash, contract, canonicalized, options);
   const contractJsonString = JSON.stringify(
     {
       ...canonicalized,
@@ -85,4 +87,27 @@ export async function emit(
     ...ifDefined('executionHash', executionHash),
     profileHash,
   };
+}
+
+function requireWrittenStorageToHashTo(
+  storageHash: string,
+  contract: Contract,
+  canonicalized: Record<string, unknown>,
+  options: EmitOptions,
+): void {
+  const { storageHash: _stored, ...writtenStorage } = blindCast<
+    Record<string, unknown>,
+    'canonicalizeContractToObject writes the contract storage section as an object'
+  >(canonicalized['storage']);
+  const writtenHash = computeStorageHash({
+    target: contract.target,
+    targetFamily: contract.targetFamily,
+    storage: writtenStorage,
+    normalizeStorage: options.normalizeStorage,
+  });
+  if (writtenHash !== storageHash) {
+    throw new InternalError(
+      `The written storage section hashes to ${writtenHash}, but the storage hash of the contract for family "${contract.targetFamily}" and target "${contract.target}" is ${storageHash}. The storage hash was computed with a different normal form of storage, or over storage that changed afterwards, or is a placeholder. Compute \`storage.storageHash\` with \`computeStorageHash\` and the same \`normalizeStorage\` that is passed to \`emit\`, over the storage as it is passed.`,
+    );
+  }
 }

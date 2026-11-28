@@ -4,7 +4,7 @@ import type { ContractSourceContext } from '@internal/cli/config-types';
 import { loadConfig, type PrismaConfig } from '@internal/config-loader';
 import type { ControlStack } from '@internal/framework-components/control';
 import { createControlStack } from '@internal/framework-components/control';
-import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonicalization-hooks';
+import { normalizeSqlStorage } from '@internal/sql-contract/normal-form';
 import { sqlEmission } from '@internal/sql-contract-emitter';
 import { timeouts } from '@repo/test-utils';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -86,7 +86,7 @@ describe('emitContract API', () => {
 
       const result = await emit(contractRaw, stack, sqlEmission, {
         serializeContract: (c) => config.target.contractSerializer.serializeContract(c),
-        ...sqlContractCanonicalizationHooks,
+        normalizeStorage: normalizeSqlStorage,
       });
 
       expect(result).toBeDefined();
@@ -135,7 +135,7 @@ describe('emitContract API', () => {
 
       const result = await emit(contractRaw, stack, sqlEmission, {
         serializeContract: (c) => config.target.contractSerializer.serializeContract(c),
-        ...sqlContractCanonicalizationHooks,
+        normalizeStorage: normalizeSqlStorage,
       });
 
       const contractJsonPath = resolve(testDir, contractConfig.output);
@@ -178,7 +178,7 @@ describe('emitContract API', () => {
 
         const result = await emit(contractRaw, stack, sqlEmission, {
           serializeContract: (c) => config.target.contractSerializer.serializeContract(c),
-          ...sqlContractCanonicalizationHooks,
+          normalizeStorage: normalizeSqlStorage,
         });
 
         const contractJsonPath = resolve(customTestDir, contractConfig.output);
@@ -214,7 +214,7 @@ describe('emitContract API', () => {
 
       const result = await emit(contractRaw, stack, sqlEmission, {
         serializeContract: (c) => config.target.contractSerializer.serializeContract(c),
-        ...sqlContractCanonicalizationHooks,
+        normalizeStorage: normalizeSqlStorage,
       });
 
       expect(typeof result.profileHash).toBe('string');
@@ -241,7 +241,7 @@ describe('emitContract API', () => {
 
       const result = await emit(contractRaw, stack, sqlEmission, {
         serializeContract: (c) => config.target.contractSerializer.serializeContract(c),
-        ...sqlContractCanonicalizationHooks,
+        normalizeStorage: normalizeSqlStorage,
       });
 
       expect(result.storageHash).toBeDefined();

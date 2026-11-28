@@ -54,6 +54,15 @@
     "reason": "A MongoDB contract now refuses a field, relation or PSL enum named __proto__ (prisma/orm#31185)."
   },
   {
+    "path": "./contract/canonicalization-hooks",
+    "export": "*",
+    "test": "path",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "e3b0c44298fc1c14",
+    "reason": "Renamed to `contract/normal-form`: the module now holds the family's normal form of storage, which also leaves out the family's defaults, not only hash hooks (ADR 010)."
+  },
+  {
     "path": "./family",
     "export": "Migration",
     "test": "constructor",
@@ -79,6 +88,42 @@
     "lastRelease": "8.0.0-rc.25",
     "fingerprint": "f65b93763bae9055",
     "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./family",
+    "export": "MongoContractSerializer",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "ac62faf8791a8e7c",
+    "reason": "Each family now supplies its normal form of storage as a required `normalizeStorage`, which the framework applies when it writes and when it hashes; the framework's canonicalizer no longer leaves out defaults or empty values by path, so the earlier hooks are gone (ADR 010, ADR 332)."
+  },
+  {
+    "path": "./family",
+    "export": "MongoContractSerializer",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "ac62faf8791a8e7c",
+    "reason": "Each family now supplies its normal form of storage as a required `normalizeStorage`, which the framework applies when it writes and when it hashes; the framework's canonicalizer no longer leaves out defaults or empty values by path, so the earlier hooks are gone (ADR 010, ADR 332)."
+  },
+  {
+    "path": "./family",
+    "export": "MongoContractSerializerBase",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "876ba42b3c806714",
+    "reason": "Each family now supplies its normal form of storage as a required `normalizeStorage`, which the framework applies when it writes and when it hashes; the framework's canonicalizer no longer leaves out defaults or empty values by path, so the earlier hooks are gone (ADR 010, ADR 332)."
+  },
+  {
+    "path": "./family",
+    "export": "MongoContractSerializerBase",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "876ba42b3c806714",
+    "reason": "Each family now supplies its normal form of storage as a required `normalizeStorage`, which the framework applies when it writes and when it hashes; the framework's canonicalizer no longer leaves out defaults or empty values by path, so the earlier hooks are gone (ADR 010, ADR 332)."
   },
   {
     "path": "./family",
@@ -214,6 +259,42 @@
     "lastRelease": "8.0.0-rc.25",
     "fingerprint": "70320a9c21586364",
     "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./family/ir",
+    "export": "MongoContractSerializer",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "ac62faf8791a8e7c",
+    "reason": "Each family now supplies its normal form of storage as a required `normalizeStorage`, which the framework applies when it writes and when it hashes; the framework's canonicalizer no longer leaves out defaults or empty values by path, so the earlier hooks are gone (ADR 010, ADR 332)."
+  },
+  {
+    "path": "./family/ir",
+    "export": "MongoContractSerializer",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "ac62faf8791a8e7c",
+    "reason": "Each family now supplies its normal form of storage as a required `normalizeStorage`, which the framework applies when it writes and when it hashes; the framework's canonicalizer no longer leaves out defaults or empty values by path, so the earlier hooks are gone (ADR 010, ADR 332)."
+  },
+  {
+    "path": "./family/ir",
+    "export": "MongoContractSerializerBase",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "876ba42b3c806714",
+    "reason": "Each family now supplies its normal form of storage as a required `normalizeStorage`, which the framework applies when it writes and when it hashes; the framework's canonicalizer no longer leaves out defaults or empty values by path, so the earlier hooks are gone (ADR 010, ADR 332)."
+  },
+  {
+    "path": "./family/ir",
+    "export": "MongoContractSerializerBase",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "876ba42b3c806714",
+    "reason": "Each family now supplies its normal form of storage as a required `normalizeStorage`, which the framework applies when it writes and when it hashes; the framework's canonicalizer no longer leaves out defaults or empty values by path, so the earlier hooks are gone (ADR 010, ADR 332)."
   },
   {
     "path": "./family/ir",

@@ -277,6 +277,58 @@ describe('db verify', () => {
       expect(diagnosticsOf(run).map((entry) => entry.code)).toEqual(['CONTRACT.MARKER_MISMATCH']);
     });
 
+    it('advises signing, not migrating, when only the profile hash differs', async () => {
+      const dir = await projectDir();
+      mocks.verify.mockResolvedValue(
+        verified({
+          ok: false,
+          code: 'CONTRACT.MARKER_MISMATCH',
+          summary: 'Marker does not match',
+          contract: { storageHash: HASH_A, profileHash: HASH_A },
+          marker: { storageHash: HASH_A, profileHash: HASH_B },
+        }),
+      );
+
+      const run = await harness(ormConfig()).run(['db', 'verify', '--json'], { cwd: dir });
+      const [finding] = diagnosticsOf(run);
+
+      expect(run.exitCode).toBe(4);
+      expect({
+        code: finding?.code,
+        why: finding?.why,
+        nextActions: finding?.nextActions,
+      }).toEqual({
+        code: 'CONTRACT.MARKER_MISMATCH',
+        why: "Contract profileHash does not match database marker. The database matches the contract's storage, but it was signed for another list of capabilities.",
+        nextActions: [
+          {
+            kind: 'run-command',
+            label:
+              "Sign the database, which first checks that it provides the contract's capabilities and then records the contract's profile hash in its marker",
+            command: 'prisma-test db sign',
+          },
+        ],
+      });
+    });
+
+    it('keeps the migrate advice when the storage hash differs', async () => {
+      const dir = await projectDir();
+      mocks.verify.mockResolvedValue(
+        verified({
+          ok: false,
+          code: 'CONTRACT.MARKER_MISMATCH',
+          summary: 'Marker does not match',
+          marker: { storageHash: HASH_B },
+        }),
+      );
+
+      const run = await harness(ormConfig()).run(['db', 'verify', '--json'], { cwd: dir });
+
+      expect(diagnosticsOf(run)[0]?.nextActions).toEqual([
+        { kind: 'user-choice', label: 'Migrate database or re-sign if intentional' },
+      ]);
+    });
+
     it('reports a target mismatch under its own code', async () => {
       const dir = await projectDir();
       mocks.verify.mockResolvedValue(

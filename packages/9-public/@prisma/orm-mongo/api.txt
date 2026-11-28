@@ -101,9 +101,9 @@
 ./driver/runtime: everything from @prisma/orm-target-mongo/driver/runtime
 ./driver/runtime: export default from @prisma/orm-target-mongo/driver/runtime
 ./driver: everything from @prisma/orm-target-mongo/driver
-./family-contract/canonicalization-hooks: everything from @prisma/orm-family-mongo/contract/canonicalization-hooks
 ./family-contract/data-type: everything from @prisma/orm-family-mongo/contract/data-type
 ./family-contract/entity-kinds: everything from @prisma/orm-family-mongo/contract/entity-kinds
+./family-contract/normal-form: everything from @prisma/orm-family-mongo/contract/normal-form
 ./family-contract: everything from @prisma/orm-family-mongo/contract
 ./family-runtime: everything from @prisma/orm-family-mongo/runtime
 ./family/control-adapter: everything from @prisma/orm-family-mongo/family/control-adapter

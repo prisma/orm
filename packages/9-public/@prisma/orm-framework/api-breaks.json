@@ -5,8 +5,8 @@
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "440a3ed32050305a",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+    "fingerprint": "2cf06ed9c7f8477c",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). Each family now supplies its normal form of storage as a required `normalizeStorage`, which the framework applies when it writes and when it hashes; the framework's canonicalizer no longer leaves out defaults or empty values by path, so the earlier hooks are gone (ADR 010, ADR 332)."
   },
   {
     "path": "./components",
@@ -14,8 +14,8 @@
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "440a3ed32050305a",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+    "fingerprint": "2cf06ed9c7f8477c",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). Each family now supplies its normal form of storage as a required `normalizeStorage`, which the framework applies when it writes and when it hashes; the framework's canonicalizer no longer leaves out defaults or empty values by path, so the earlier hooks are gone (ADR 010, ADR 332)."
   },
   {
     "path": "./components",
@@ -32,8 +32,8 @@
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "440a3ed32050305a",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+    "fingerprint": "2cf06ed9c7f8477c",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). Each family now supplies its normal form of storage as a required `normalizeStorage`, which the framework applies when it writes and when it hashes; the framework's canonicalizer no longer leaves out defaults or empty values by path, so the earlier hooks are gone (ADR 010, ADR 332)."
   },
   {
     "path": "./components",
@@ -41,8 +41,8 @@
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "619b059c1de8c793",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+    "fingerprint": "d2fcc4055d632764",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). Each family now supplies its normal form of storage as a required `normalizeStorage`, which the framework applies when it writes and when it hashes; the framework's canonicalizer no longer leaves out defaults or empty values by path, so the earlier hooks are gone (ADR 010, ADR 332)."
   },
   {
     "path": "./components",
@@ -50,8 +50,8 @@
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "5f8a3328df3f7562",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+    "fingerprint": "eea1681330bf07aa",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). A target's contract serializer also supplies the required `normalizeStorage`, the family's normal form of storage, which the framework applies when it writes and when it hashes (ADR 010, ADR 332)."
   },
   {
     "path": "./components",
@@ -176,8 +176,8 @@
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "580079d42905baee",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+    "fingerprint": "64995d1d37bedaf9",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). Each family now supplies its normal form of storage as a required `normalizeStorage`, which the framework applies when it writes and when it hashes; the framework's canonicalizer no longer leaves out defaults or empty values by path, so the earlier hooks are gone (ADR 010, ADR 332)."
   },
   {
     "path": "./components",
@@ -203,8 +203,8 @@
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "1259e5e8248767aa",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+    "fingerprint": "657546d043dabb0d",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). Each family now supplies its normal form of storage as a required `normalizeStorage`, which the framework applies when it writes and when it hashes; the framework's canonicalizer no longer leaves out defaults or empty values by path, so the earlier hooks are gone (ADR 010, ADR 332)."
   },
   {
     "path": "./components",
@@ -293,8 +293,8 @@
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "440a3ed32050305a",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+    "fingerprint": "2cf06ed9c7f8477c",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). Each family now supplies its normal form of storage as a required `normalizeStorage`, which the framework applies when it writes and when it hashes; the framework's canonicalizer no longer leaves out defaults or empty values by path, so the earlier hooks are gone (ADR 010, ADR 332)."
   },
   {
     "path": "./components/control",
@@ -302,8 +302,8 @@
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "440a3ed32050305a",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+    "fingerprint": "2cf06ed9c7f8477c",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). Each family now supplies its normal form of storage as a required `normalizeStorage`, which the framework applies when it writes and when it hashes; the framework's canonicalizer no longer leaves out defaults or empty values by path, so the earlier hooks are gone (ADR 010, ADR 332)."
   },
   {
     "path": "./components/control",
@@ -320,8 +320,8 @@
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "440a3ed32050305a",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+    "fingerprint": "2cf06ed9c7f8477c",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). Each family now supplies its normal form of storage as a required `normalizeStorage`, which the framework applies when it writes and when it hashes; the framework's canonicalizer no longer leaves out defaults or empty values by path, so the earlier hooks are gone (ADR 010, ADR 332)."
   },
   {
     "path": "./components/control",
@@ -329,8 +329,8 @@
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "619b059c1de8c793",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+    "fingerprint": "d2fcc4055d632764",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). Each family now supplies its normal form of storage as a required `normalizeStorage`, which the framework applies when it writes and when it hashes; the framework's canonicalizer no longer leaves out defaults or empty values by path, so the earlier hooks are gone (ADR 010, ADR 332)."
   },
   {
     "path": "./components/control",
@@ -338,8 +338,8 @@
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "5f8a3328df3f7562",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+    "fingerprint": "eea1681330bf07aa",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). A target's contract serializer also supplies the required `normalizeStorage`, the family's normal form of storage, which the framework applies when it writes and when it hashes (ADR 010, ADR 332)."
   },
   {
     "path": "./components/control",
@@ -464,8 +464,8 @@
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "580079d42905baee",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+    "fingerprint": "64995d1d37bedaf9",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). Each family now supplies its normal form of storage as a required `normalizeStorage`, which the framework applies when it writes and when it hashes; the framework's canonicalizer no longer leaves out defaults or empty values by path, so the earlier hooks are gone (ADR 010, ADR 332)."
   },
   {
     "path": "./components/control",
@@ -491,8 +491,8 @@
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "1259e5e8248767aa",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+    "fingerprint": "657546d043dabb0d",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). Each family now supplies its normal form of storage as a required `normalizeStorage`, which the framework applies when it writes and when it hashes; the framework's canonicalizer no longer leaves out defaults or empty values by path, so the earlier hooks are gone (ADR 010, ADR 332)."
   },
   {
     "path": "./components/control",
@@ -581,8 +581,8 @@
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "21ba537b3e284905",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+    "fingerprint": "1e6e821151f5b892",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). Each family now supplies its normal form of storage as a required `normalizeStorage`, which the framework applies when it writes and when it hashes; the framework's canonicalizer no longer leaves out defaults or empty values by path, so the earlier hooks are gone (ADR 010, ADR 332)."
   },
   {
     "path": "./config",
@@ -590,8 +590,8 @@
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "ce24738f65287bec",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+    "fingerprint": "232d35def51952fa",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). Each family now supplies its normal form of storage as a required `normalizeStorage`, which the framework applies when it writes and when it hashes; the framework's canonicalizer no longer leaves out defaults or empty values by path, so the earlier hooks are gone (ADR 010, ADR 332)."
   },
   {
     "path": "./config/config-types",
@@ -599,8 +599,8 @@
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "21ba537b3e284905",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+    "fingerprint": "1e6e821151f5b892",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). Each family now supplies its normal form of storage as a required `normalizeStorage`, which the framework applies when it writes and when it hashes; the framework's canonicalizer no longer leaves out defaults or empty values by path, so the earlier hooks are gone (ADR 010, ADR 332)."
   },
   {
     "path": "./config/config-types",
@@ -608,7 +608,169 @@
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "ce24738f65287bec",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+    "fingerprint": "232d35def51952fa",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). Each family now supplies its normal form of storage as a required `normalizeStorage`, which the framework applies when it writes and when it hashes; the framework's canonicalizer no longer leaves out defaults or empty values by path, so the earlier hooks are gone (ADR 010, ADR 332)."
+  },
+  {
+    "path": "./contract",
+    "export": "PathPattern",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "e3b0c44298fc1c14",
+    "reason": "Removed with the path patterns the framework used to leave out empty values: each family's `normalizeStorage` now names the defaults it leaves out, and `StorageSort` is renamed `NormalizeStorage` (ADR 010)."
+  },
+  {
+    "path": "./contract",
+    "export": "PreserveEmptyPathSegment",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "e3b0c44298fc1c14",
+    "reason": "Removed with the path patterns the framework used to leave out empty values: each family's `normalizeStorage` now names the defaults it leaves out, and `StorageSort` is renamed `NormalizeStorage` (ADR 010)."
+  },
+  {
+    "path": "./contract",
+    "export": "PreserveEmptyPredicate",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "e3b0c44298fc1c14",
+    "reason": "Removed with the path patterns the framework used to leave out empty values: each family's `normalizeStorage` now names the defaults it leaves out, and `StorageSort` is renamed `NormalizeStorage` (ADR 010)."
+  },
+  {
+    "path": "./contract",
+    "export": "StorageSort",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "e3b0c44298fc1c14",
+    "reason": "Removed with the path patterns the framework used to leave out empty values: each family's `normalizeStorage` now names the defaults it leaves out, and `StorageSort` is renamed `NormalizeStorage` (ADR 010)."
+  },
+  {
+    "path": "./contract",
+    "export": "canonicalizeContract",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "37d9777fda7750c0",
+    "reason": "Each family now supplies its normal form of storage as a required `normalizeStorage`, which the framework applies when it writes and when it hashes; the framework's canonicalizer no longer leaves out defaults or empty values by path, so the earlier hooks are gone (ADR 010, ADR 332)."
+  },
+  {
+    "path": "./contract",
+    "export": "canonicalizeContractToObject",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "9a37899c51e8529f",
+    "reason": "Each family now supplies its normal form of storage as a required `normalizeStorage`, which the framework applies when it writes and when it hashes; the framework's canonicalizer no longer leaves out defaults or empty values by path, so the earlier hooks are gone (ADR 010, ADR 332)."
+  },
+  {
+    "path": "./contract",
+    "export": "computeStorageHash",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "fb2de15d92e3a7a2",
+    "reason": "Each family now supplies its normal form of storage as a required `normalizeStorage`, which the framework applies when it writes and when it hashes; the framework's canonicalizer no longer leaves out defaults or empty values by path, so the earlier hooks are gone (ADR 010, ADR 332)."
+  },
+  {
+    "path": "./contract",
+    "export": "createPreserveEmptyPredicate",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "e3b0c44298fc1c14",
+    "reason": "Removed with the path patterns the framework used to leave out empty values: each family's `normalizeStorage` now names the defaults it leaves out, and `StorageSort` is renamed `NormalizeStorage` (ADR 010)."
+  },
+  {
+    "path": "./contract",
+    "export": "matchesPathPattern",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "e3b0c44298fc1c14",
+    "reason": "Removed with the path patterns the framework used to leave out empty values: each family's `normalizeStorage` now names the defaults it leaves out, and `StorageSort` is renamed `NormalizeStorage` (ADR 010)."
+  },
+  {
+    "path": "./contract/hashing",
+    "export": "PreserveEmptyPredicate",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "e3b0c44298fc1c14",
+    "reason": "Removed with the path patterns the framework used to leave out empty values: each family's `normalizeStorage` now names the defaults it leaves out, and `StorageSort` is renamed `NormalizeStorage` (ADR 010)."
+  },
+  {
+    "path": "./contract/hashing",
+    "export": "StorageSort",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "e3b0c44298fc1c14",
+    "reason": "Removed with the path patterns the framework used to leave out empty values: each family's `normalizeStorage` now names the defaults it leaves out, and `StorageSort` is renamed `NormalizeStorage` (ADR 010)."
+  },
+  {
+    "path": "./contract/hashing",
+    "export": "canonicalizeContract",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "37d9777fda7750c0",
+    "reason": "Each family now supplies its normal form of storage as a required `normalizeStorage`, which the framework applies when it writes and when it hashes; the framework's canonicalizer no longer leaves out defaults or empty values by path, so the earlier hooks are gone (ADR 010, ADR 332)."
+  },
+  {
+    "path": "./contract/hashing",
+    "export": "canonicalizeContractToObject",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "9a37899c51e8529f",
+    "reason": "Each family now supplies its normal form of storage as a required `normalizeStorage`, which the framework applies when it writes and when it hashes; the framework's canonicalizer no longer leaves out defaults or empty values by path, so the earlier hooks are gone (ADR 010, ADR 332)."
+  },
+  {
+    "path": "./contract/hashing",
+    "export": "computeStorageHash",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "fb2de15d92e3a7a2",
+    "reason": "Each family now supplies its normal form of storage as a required `normalizeStorage`, which the framework applies when it writes and when it hashes; the framework's canonicalizer no longer leaves out defaults or empty values by path, so the earlier hooks are gone (ADR 010, ADR 332)."
+  },
+  {
+    "path": "./contract/hashing-utils",
+    "export": "PathPattern",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "e3b0c44298fc1c14",
+    "reason": "Removed with the path patterns the framework used to leave out empty values: each family's `normalizeStorage` now names the defaults it leaves out, and `StorageSort` is renamed `NormalizeStorage` (ADR 010)."
+  },
+  {
+    "path": "./contract/hashing-utils",
+    "export": "PreserveEmptyPathSegment",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "e3b0c44298fc1c14",
+    "reason": "Removed with the path patterns the framework used to leave out empty values: each family's `normalizeStorage` now names the defaults it leaves out, and `StorageSort` is renamed `NormalizeStorage` (ADR 010)."
+  },
+  {
+    "path": "./contract/hashing-utils",
+    "export": "createPreserveEmptyPredicate",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "e3b0c44298fc1c14",
+    "reason": "Removed with the path patterns the framework used to leave out empty values: each family's `normalizeStorage` now names the defaults it leaves out, and `StorageSort` is renamed `NormalizeStorage` (ADR 010)."
+  },
+  {
+    "path": "./contract/hashing-utils",
+    "export": "matchesPathPattern",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "e3b0c44298fc1c14",
+    "reason": "Removed with the path patterns the framework used to leave out empty values: each family's `normalizeStorage` now names the defaults it leaves out, and `StorageSort` is renamed `NormalizeStorage` (ADR 010)."
   }
 ]

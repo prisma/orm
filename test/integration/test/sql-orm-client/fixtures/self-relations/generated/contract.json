@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "targetFamily": "sql",
   "target": "postgres",
-  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "profileHash": "18654d8be351e94d940c57892ee3d3b92824fc145d7dd67c5f57168eea52c619",
   "roots": {
     "people": {
       "model": "Person",
@@ -574,11 +574,11 @@
               "foreignKeys": [
                 {
                   "index": {
-                    "name": "person_follows_follower_id_idx_e343d705"
+                    "name": "person_follows_followee_id_idx_c86a372f"
                   },
                   "source": {
                     "columns": [
-                      "follower_id"
+                      "followee_id"
                     ],
                     "namespaceId": "public",
                     "tableName": "person_follows"
@@ -593,11 +593,11 @@
                 },
                 {
                   "index": {
-                    "name": "person_follows_followee_id_idx_c86a372f"
+                    "name": "person_follows_follower_id_idx_e343d705"
                   },
                   "source": {
                     "columns": [
-                      "followee_id"
+                      "follower_id"
                     ],
                     "namespaceId": "public",
                     "tableName": "person_follows"
@@ -643,7 +643,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "d4bf8b9a0fb4f51652c81415c3e05b502c3c501e0ae6226140f8c8a56a4ae0ba"
+    "storageHash": "21d73865e3cd087b26429b7ba7457bcfb0a3348109ebea70eebdbe4ea0f8e208"
   },
   "capabilities": {
     "postgres": {

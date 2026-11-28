@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "targetFamily": "sql",
   "target": "postgres",
-  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "profileHash": "18654d8be351e94d940c57892ee3d3b92824fc145d7dd67c5f57168eea52c619",
   "roots": {
     "auth.notes": {
       "model": "Note",
@@ -367,7 +367,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "2f851f453c95158df2c91c35cea6f70f3ac6c7504b26968eff8957ba5cf4e2dd"
+    "storageHash": "c0a6ee02605208a600342a3e61d7be2f208ad2b6af4ff4211c079c662dc63018"
   },
   "capabilities": {
     "postgres": {

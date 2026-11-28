@@ -56,6 +56,21 @@ const describeDatabase = (retry: string) => ({
   label: `Or change the contract source to describe the database as it is, re-run contract emit, then ${retry}`,
 });
 
+const BY_DB_UPDATE = { kind: 'db-update' } as const;
+const SIGN_EARLIER = '{bin} db sign <migration directory> --force';
+const BY_MIGRATIONS = { kind: 'migrations', signEarlier: SIGN_EARLIER } as const;
+const signEarlier = {
+  kind: 'run-command',
+  label:
+    'If the database is at an earlier contract, sign that contract by the directory of the last migration it applied, then run db migrate',
+  command: SIGN_EARLIER,
+};
+const authorMigrations = {
+  kind: 'user-choice',
+  label:
+    'Otherwise author migrations that bring the database back onto the migration graph, then run db migrate',
+};
+
 describe('schemaDriftNextActions', () => {
   it('offers db update, then a change to the contract source, for db sign', () => {
     expect(
@@ -63,6 +78,7 @@ describe('schemaDriftNextActions', () => {
         verb: 'sign',
         contractRef: undefined,
         issues: [],
+        recovery: BY_DB_UPDATE,
         databaseRefused: false,
       }),
     ).toEqual([dbUpdate('sign'), describeDatabase('sign again')]);
@@ -74,6 +90,7 @@ describe('schemaDriftNextActions', () => {
         verb: 'verify',
         contractRef: undefined,
         issues: [plain],
+        recovery: BY_DB_UPDATE,
         databaseRefused: false,
       }),
     ).toEqual([dbUpdate('verify'), describeDatabase('verify again')]);
@@ -85,6 +102,7 @@ describe('schemaDriftNextActions', () => {
         verb: 'sign',
         contractRef: 'staging',
         issues: [],
+        recovery: BY_DB_UPDATE,
         databaseRefused: false,
       }),
     ).toEqual([
@@ -99,6 +117,7 @@ describe('schemaDriftNextActions', () => {
         verb: 'verify',
         contractRef: undefined,
         issues: [possiblyEquivalent],
+        recovery: BY_DB_UPDATE,
         databaseRefused: false,
       }),
     ).toEqual([writeAsStored('verify again'), dbUpdate('verify')]);
@@ -110,6 +129,7 @@ describe('schemaDriftNextActions', () => {
         verb: 'sign',
         contractRef: 'staging',
         issues: [possiblyEquivalent],
+        recovery: BY_DB_UPDATE,
         databaseRefused: false,
       }),
     ).toEqual([
@@ -124,6 +144,7 @@ describe('schemaDriftNextActions', () => {
         verb: 'verify',
         contractRef: undefined,
         issues: [possiblyEquivalent, plain, possiblyEquivalent],
+        recovery: BY_DB_UPDATE,
         databaseRefused: false,
       }),
     ).toEqual([
@@ -139,6 +160,7 @@ describe('schemaDriftNextActions', () => {
         verb: 'verify',
         contractRef: undefined,
         issues: [differs],
+        recovery: BY_DB_UPDATE,
         databaseRefused: false,
       }),
     ).toEqual([dbUpdate('verify'), describeDatabase('verify again')]);
@@ -150,6 +172,7 @@ describe('schemaDriftNextActions', () => {
         verb: 'verify',
         contractRef: undefined,
         issues: [differs, possiblyEquivalent],
+        recovery: BY_DB_UPDATE,
         databaseRefused: false,
       }),
     ).toEqual([
@@ -159,12 +182,41 @@ describe('schemaDriftNextActions', () => {
     ]);
   });
 
+  it('offers no db update when the change policy permits only migrations: signing the contract the database is at, or migrations', () => {
+    expect(
+      schemaDriftNextActions({
+        verb: 'sign',
+        contractRef: undefined,
+        issues: [plain],
+        recovery: BY_MIGRATIONS,
+        databaseRefused: false,
+      }),
+    ).toEqual([signEarlier, authorMigrations, describeDatabase('sign again')]);
+  });
+
+  it('keeps writing the stored form first when the change policy permits only migrations', () => {
+    expect(
+      schemaDriftNextActions({
+        verb: 'sign',
+        contractRef: 'staging',
+        issues: [possiblyEquivalent],
+        recovery: BY_MIGRATIONS,
+        databaseRefused: false,
+      }),
+    ).toEqual([
+      writeAsStored('sign the emitted contract instead of "staging"'),
+      signEarlier,
+      authorMigrations,
+    ]);
+  });
+
   it('offers nothing in a run whose database does not provide what a contract requires, which db update, db init and db migrate refuse', () => {
     expect(
       schemaDriftNextActions({
         verb: 'sign',
         contractRef: undefined,
         issues: [databaseCapabilitiesNotProvided, possiblyEquivalent],
+        recovery: BY_DB_UPDATE,
         databaseRefused: true,
       }),
     ).toEqual([]);
@@ -176,6 +228,7 @@ describe('schemaDriftNextActions', () => {
         verb: 'verify',
         contractRef: undefined,
         issues: [differs],
+        recovery: BY_DB_UPDATE,
         databaseRefused: true,
       }),
     ).toEqual([]);

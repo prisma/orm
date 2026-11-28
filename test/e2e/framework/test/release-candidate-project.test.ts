@@ -1,5 +1,5 @@
 /**
- * A project exactly as the last release candidate left it keeps working: its config, its contract source and its emitted `contract.json` and `contract.d.ts` type-check against this release (the e2e package's typecheck covers the fixtures and this file), emit succeeds with a warning that says what to add, and a client created from the emitted contract warns nothing and runs a query and `transaction()`.
+ * A project exactly as the last release candidate left it type-checks, emits and runs against a new database: its config, its contract source and its emitted `contract.json` and `contract.d.ts` type-check against this release (the e2e package's typecheck covers the fixtures and this file), emit succeeds with a warning that says what to add, and a client created from the emitted contract, on a database set up from that same contract, warns nothing and runs a query and `transaction()`. A database the release candidate signed is not covered: the contract emitted again has new hashes, so that database needs the contract hash upgrade step.
  *
  * The fixtures under `fixtures/release-candidate/` are copied unchanged from the tag `v8.0.0-rc.25` with `git show v8.0.0-rc.25:<path>`, and must never be emitted again in place:
  *

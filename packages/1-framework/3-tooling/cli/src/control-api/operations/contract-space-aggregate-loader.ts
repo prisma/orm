@@ -274,11 +274,7 @@ export interface BuildAggregateInputs<TFamilyId extends string, TTargetId extend
   readonly appContract: Contract;
   readonly extensions: ReadonlyArray<ControlExtensionDescriptor<TFamilyId, TTargetId>>;
   readonly deserializeContract: (contractJson: unknown) => Contract;
-  /**
-   * Content check for contract snapshots resolved through the aggregate;
-   * build it with `snapshotVerifierFor(config)` so the recompute uses the
-   * target's canonicalization hooks.
-   */
+  /** Content check for contract snapshots resolved through the aggregate; build it with `snapshotVerifierFor(config)` so the recompute uses the family's `normalizeStorage`. */
   readonly verifySnapshotContent?: SnapshotContentVerifier;
   /**
    * What the load does with a ref or migration whose file it could not read: refuse (the default), or keep the aggregate without the file, for a command that only lists and reports each one with {@link unreadableFiles}. A command that acts on the migrations refuses, so a file it could not read is never silently left out.

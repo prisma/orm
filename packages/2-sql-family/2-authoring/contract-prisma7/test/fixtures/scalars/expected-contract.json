@@ -100,16 +100,14 @@
                   "kind": "scalar",
                   "codecId": "pg/text@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "stringOpt": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/text@1"
                 },
-                "nullable": true,
-                "many": false
+                "nullable": true
               },
               "stringList": {
                 "type": {
@@ -126,16 +124,14 @@
                   "kind": "scalar",
                   "codecId": "pg/bool@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "booleanOpt": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/bool@1"
                 },
-                "nullable": true,
-                "many": false
+                "nullable": true
               },
               "booleanList": {
                 "type": {
@@ -152,16 +148,14 @@
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "intOpt": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
                 },
-                "nullable": true,
-                "many": false
+                "nullable": true
               },
               "intList": {
                 "type": {
@@ -178,16 +172,14 @@
                   "kind": "scalar",
                   "codecId": "pg/int8@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "bigIntOpt": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/int8@1"
                 },
-                "nullable": true,
-                "many": false
+                "nullable": true
               },
               "bigIntList": {
                 "type": {
@@ -204,16 +196,14 @@
                   "kind": "scalar",
                   "codecId": "pg/float8@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "floatOpt": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/float8@1"
                 },
-                "nullable": true,
-                "many": false
+                "nullable": true
               },
               "floatList": {
                 "type": {
@@ -234,8 +224,7 @@
                     "scale": 30
                   }
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "decimalOpt": {
                 "type": {
@@ -246,8 +235,7 @@
                     "scale": 30
                   }
                 },
-                "nullable": true,
-                "many": false
+                "nullable": true
               },
               "decimalList": {
                 "type": {
@@ -271,8 +259,7 @@
                     "precision": 3
                   }
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "dateTimeOpt": {
                 "type": {
@@ -282,8 +269,7 @@
                     "precision": 3
                   }
                 },
-                "nullable": true,
-                "many": false
+                "nullable": true
               },
               "dateTimeList": {
                 "type": {
@@ -303,16 +289,14 @@
                   "kind": "scalar",
                   "codecId": "pg/jsonb@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "jsonOpt": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/jsonb@1"
                 },
-                "nullable": true,
-                "many": false
+                "nullable": true
               },
               "jsonList": {
                 "type": {
@@ -329,16 +313,14 @@
                   "kind": "scalar",
                   "codecId": "pg/bytea@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "bytesOpt": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/bytea@1"
                 },
-                "nullable": true,
-                "many": false
+                "nullable": true
               },
               "bytesList": {
                 "type": {
@@ -365,10 +347,10 @@
   },
   "extensions": {},
   "capabilities": {},
-  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "profileHash": "ae77f23935a24b8a63c81ef26bb0f186581670a56e603cef8314a629414e2632",
   "meta": {},
   "storage": {
-    "storageHash": "1578dc0d71fb46e51ae88d63cbaad7cb666f0a37b99de9921ea55d88892603e7",
+    "storageHash": "18b4e7196e9add3658b711f752e5f836bb77e67005f2e3c6aad7400e07d82a7f",
     "namespaces": {
       "public": {
         "id": "public",

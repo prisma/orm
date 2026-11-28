@@ -41,6 +41,7 @@ import {
   validateCodecTypeParams,
 } from '@internal/framework-components/codec';
 import { sqlBaseName, sqlDataTypeOfCodec } from '@internal/sql-contract/data-type';
+import { normalizeSqlStorage } from '@internal/sql-contract/normal-form';
 import { SqlStorage } from '@internal/sql-contract/types';
 import {
   CastExpr,
@@ -192,7 +193,12 @@ function buildConformanceContract(): PostgresContract {
   const namespaces = {};
   const storage = new SqlStorage({
     namespaces,
-    storageHash: computeStorageHash({ target, targetFamily, storage: { namespaces } }),
+    storageHash: computeStorageHash({
+      target,
+      targetFamily,
+      storage: { namespaces },
+      normalizeStorage: normalizeSqlStorage,
+    }),
   });
 
   return {

@@ -3,8 +3,15 @@ export {
   type CanonicalizeContractOptions,
   canonicalizeContract,
   canonicalizeContractToObject,
-  type PreserveEmptyPredicate,
+  type NormalizeStorage,
   type SerializeContract,
-  type StorageSort,
 } from '../canonicalization';
-export { computeExecutionHash, computeProfileHash, computeStorageHash } from '../hashing';
+export {
+  type AssertContractHashesOptions,
+  assertContractHashes,
+  computeExecutionHash,
+  computeProfileHash,
+  computeStorageHash,
+  type HashedContractSections,
+  type SavedContractHashes,
+} from '../hashing';

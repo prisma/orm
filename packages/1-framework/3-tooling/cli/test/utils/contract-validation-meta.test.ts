@@ -1,5 +1,8 @@
 import { ContractValidationError } from '@internal/contract/contract-validation-error';
-import { errorContractDeserializationFailed } from '@internal/migration-tools/errors';
+import {
+  errorContractDeserializationFailed,
+  errorContractSnapshotMissing,
+} from '@internal/migration-tools/errors';
 import { structuredError } from '@internal/utils/structured-error';
 import { describe, expect, it } from 'vitest';
 import { mapContractAtError } from '../../src/control-api/operations/contract-at-errors';
@@ -38,6 +41,17 @@ describe('mapContractAtError on a snapshot the family refused', () => {
     expect(mapped.ok ? undefined : mapped.failure).toMatchObject({
       code: 'CONTRACT.VALIDATION_FAILED',
       meta: { refusedDefaults },
+    });
+  });
+});
+
+describe('mapContractAtError on a missing snapshot', () => {
+  it('gives the steps that write the snapshot again', () => {
+    const missing = errorContractSnapshotMissing('sha256:abc', '/m/snapshots/abc/contract.json');
+    const mapped = mapContractAtError(missing);
+    expect(mapped.ok ? undefined : mapped.failure).toMatchObject({
+      code: 'CLI.FILE_NOT_FOUND',
+      fix: missing.fix,
     });
   });
 });

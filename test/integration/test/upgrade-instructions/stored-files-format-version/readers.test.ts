@@ -11,12 +11,15 @@ import {
   assertDescriptorSelfConsistency,
   contractSpaceFromJson,
 } from '@internal/migration-tools/spaces';
-import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonicalization-hooks';
+import { normalizeSqlStorage } from '@internal/sql-contract/normal-form';
 import { PostgresContractSerializer } from '@internal/target-postgres/runtime';
 import { join } from 'pathe';
-import { describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
+import { runScript as runContractHashInputsScript } from '../contract-hash-inputs/test-helpers';
 import { detectionPatterns } from '../guide-detections';
-import { fixturesDir, fixtureTree, GUIDE_PATHS } from './test-helpers';
+import { copyFixture, fixturesDir, fixtureTree, GUIDE_PATHS, removeWorkDirs } from './test-helpers';
+
+afterAll(removeWorkDirs);
 
 const projects = {
   app: {
@@ -47,11 +50,15 @@ function nonEmpty(list: string[], what: string): string[] {
 }
 
 function migrationDirs(side: Side, spaceDir: string): string[] {
+  return migrationDirsIn(path(side, spaceDir), `${side}/${spaceDir}`);
+}
+
+function migrationDirsIn(dir: string, label: string): string[] {
   return nonEmpty(
-    readdirSync(path(side, spaceDir), { withFileTypes: true })
+    readdirSync(dir, { withFileTypes: true })
       .filter((entry) => entry.isDirectory() && /^\d{8}T\d{4}_/.test(entry.name))
       .map((entry) => entry.name),
-    `migration packages in ${side}/${spaceDir}`,
+    `migration packages in ${label}`,
   );
 }
 
@@ -122,33 +129,45 @@ describe('the app project after the script', () => {
 describe('the extension package after the script', () => {
   const extension = projects.extension;
 
-  function bundledSpace(side: Side) {
+  function bundledSpace(root: string) {
+    const json = (relative: string): unknown =>
+      JSON.parse(readFileSync(join(root, relative), 'utf8'));
     return contractSpaceFromJson({
       spaceId: 'fixture-extension',
-      contractJson: readJson(side, extension.contract),
-      migrations: migrationDirs(side, extension.spaceDir).map((dirName) => ({
-        dirName,
-        metadata: readJson(side, join(extension.spaceDir, dirName, 'migration.json')),
-        ops: readJson(side, join(extension.spaceDir, dirName, 'ops.json')),
-      })),
-      headRef: readJson(side, join(extension.spaceDir, 'refs/head.json')),
+      contractJson: json(extension.contract),
+      migrations: migrationDirsIn(join(root, extension.spaceDir), extension.spaceDir).map(
+        (dirName) => ({
+          dirName,
+          metadata: json(join(extension.spaceDir, dirName, 'migration.json')),
+          ops: json(join(extension.spaceDir, dirName, 'ops.json')),
+        }),
+      ),
+      headRef: json(join(extension.spaceDir, 'refs/head.json')),
     });
   }
 
-  it('is accepted as a bundled contract space whose head ref matches its contract', () => {
-    const space = bundledSpace('after');
+  it('is accepted as a bundled contract space whose head ref matches its contract once the contract hash step has run', () => {
+    const root = copyFixture('after');
+    const hashInputs = runContractHashInputsScript(join(root, 'extension'), 'extension');
+    expect({ status: hashInputs.status, stderr: hashInputs.stderr }).toEqual({
+      status: 0,
+      stderr: '',
+    });
+    const space = bundledSpace(root);
     expect(() =>
       assertDescriptorSelfConsistency({
         extensionId: 'citext',
         contractJson: space.contractJson,
         headRefHash: space.headRef.hash,
-        ...sqlContractCanonicalizationHooks,
+        normalizeStorage: normalizeSqlStorage,
       }),
     ).not.toThrow();
   });
 
   it('is read before the script as the same bundled contract space, in the newest format version', () => {
-    expect(bundledSpace('before')).toEqual(bundledSpace('after'));
+    expect(bundledSpace(join(fixturesDir, 'before'))).toEqual(
+      bundledSpace(join(fixturesDir, 'after')),
+    );
   });
 });
 

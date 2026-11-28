@@ -40,6 +40,7 @@
 (not exported) interface DescriptorMigrationPackage, readonly required property metadata: MigrationMetadata
 (not exported) interface DescriptorMigrationPackage, readonly required property ops: MigrationOps
 (not exported) interface ExecuteDbSignSuccess
+(not exported) interface ExecuteDbSignSuccess, readonly required property changePolicy: readonly ChangeStrategy[] | undefined
 (not exported) interface ExecuteDbSignSuccess, readonly required property spaces: readonly DbSignSpaceOutcome[]
 (not exported) interface ExecuteDbVerifySuccess
 (not exported) interface ExecuteDbVerifySuccess, readonly required property appSpaceId: string
@@ -491,6 +492,7 @@
 ./cli/control-api: interface DbInitSuccess, readonly required property summary: string
 ./cli/control-api: interface DbSignOptions
 ./cli/control-api: interface DbSignOptions, readonly optional property connection?: unknown
+./cli/control-api: interface DbSignOptions, readonly optional property force?: boolean
 ./cli/control-api: interface DbSignOptions, readonly optional property onProgress?: OnControlProgress
 ./cli/control-api: interface DbSignOptions, readonly required property contract: Contract
 ./cli/control-api: interface DbSignOptions, readonly required property invocation: CliInvocation
@@ -571,6 +573,7 @@
 ./cli/control-api: interface ExecuteDbInitOptions, readonly required property mode: 'apply' | 'plan'
 ./cli/control-api: interface ExecuteDbInitOptions, readonly required property targetId: TTargetId
 ./cli/control-api: interface ExecuteDbInitOptions<TFamilyId extends string, TTargetId extends string> extends PlannerWarningsListener, UnrecordedSnapshotListener
+./cli/control-api: interface ExecuteDbSignOptions, readonly optional property force?: boolean
 ./cli/control-api: interface ExecuteDbSignOptions, readonly optional property onProgress?: OnControlProgress
 ./cli/control-api: interface ExecuteDbSignOptions, readonly optional property verifySnapshotContent?: SnapshotContentVerifier
 ./cli/control-api: interface ExecuteDbSignOptions, readonly required property contract: Contract
@@ -879,10 +882,9 @@
 ./emitter: function typesImportRequirements(imports: ReadonlyArray<TypesImportSpec>): ImportRequirement[]
 ./emitter: interface EmitOptions
 ./emitter: interface EmitOptions, readonly optional property outputJsonPath?: string
-./emitter: interface EmitOptions, readonly optional property shouldPreserveEmpty?: PreserveEmptyPredicate
-./emitter: interface EmitOptions, readonly optional property sortStorage?: StorageSort
 ./emitter: interface EmitOptions, readonly optional property supportsNamespaces?: boolean
 ./emitter: interface EmitOptions, readonly required property deserializeContract: (json: Record<string, unknown>) => Contract
+./emitter: interface EmitOptions, readonly required property normalizeStorage: NormalizeStorage
 ./emitter: interface EmitOptions, readonly required property serializeContract: SerializeContract
 ./emitter: interface EmitOptions, readonly required property typesModule: string
 ./emitter: interface EmitResult
@@ -1035,7 +1037,7 @@
 ./migration-tools/constants: const EMPTY_CONTRACT_HASH: "empty"
 ./migration-tools/contract-snapshot-store: function contractSnapshotDir(migrationsDir: string, storageHash: string): string
 ./migration-tools/contract-snapshot-store: function contractSnapshotFiles(input: ContractSnapshotInput): { readonly contractJson: string; readonly contractDts: string; }
-./migration-tools/contract-snapshot-store: function createSnapshotContentVerifier(hooks?: SnapshotCanonicalizationHooks): SnapshotContentVerifier
+./migration-tools/contract-snapshot-store: function createSnapshotContentVerifier(normalizeStorage: NormalizeStorage): SnapshotContentVerifier
 ./migration-tools/contract-snapshot-store: function hasContractSnapshot(migrationsDir: string, storageHash: string): Promise<boolean>
 ./migration-tools/contract-snapshot-store: function readContractSnapshotJson(migrationsDir: string, storageHash: string, verifyContent?: SnapshotContentVerifier): Promise<unknown>
 ./migration-tools/contract-snapshot-store: function readContractSnapshotJsonTolerant(migrationsDir: string, storageHash: string, verifyContent?: SnapshotContentVerifier): Promise<undefined | unknown>
@@ -1045,9 +1047,6 @@
 ./migration-tools/contract-snapshot-store: interface ContractSnapshotInput
 ./migration-tools/contract-snapshot-store: interface ContractSnapshotInput, readonly required property contractDts: string
 ./migration-tools/contract-snapshot-store: interface ContractSnapshotInput, readonly required property contractJson: unknown
-./migration-tools/contract-snapshot-store: interface SnapshotCanonicalizationHooks
-./migration-tools/contract-snapshot-store: interface SnapshotCanonicalizationHooks, readonly optional property shouldPreserveEmpty?: PreserveEmptyPredicate
-./migration-tools/contract-snapshot-store: interface SnapshotCanonicalizationHooks, readonly optional property sortStorage?: StorageSort
 ./migration-tools/contract-snapshot-store: interface SnapshotContentVerifier
 ./migration-tools/contract-snapshot-store: interface SnapshotContentVerifier, required method assertSnapshotContentMatches(contractJson: unknown, storageHash: string, jsonPath: string): void
 ./migration-tools/errors: class MigrationToolsError extends CliStructuredError
@@ -1268,11 +1267,10 @@
 ./migration-tools/spaces: interface ContractSpaceHeadRecord, readonly required property hash: string
 ./migration-tools/spaces: interface ContractSpaceHeadRecord, readonly required property invariants: readonly string[]
 ./migration-tools/spaces: interface DescriptorSelfConsistencyInputs
-./migration-tools/spaces: interface DescriptorSelfConsistencyInputs, readonly optional property shouldPreserveEmpty?: PreserveEmptyPredicate
-./migration-tools/spaces: interface DescriptorSelfConsistencyInputs, readonly optional property sortStorage?: StorageSort
 ./migration-tools/spaces: interface DescriptorSelfConsistencyInputs, readonly required property contractJson: unknown
 ./migration-tools/spaces: interface DescriptorSelfConsistencyInputs, readonly required property extensionId: string
 ./migration-tools/spaces: interface DescriptorSelfConsistencyInputs, readonly required property headRefHash: string
+./migration-tools/spaces: interface DescriptorSelfConsistencyInputs, readonly required property normalizeStorage: NormalizeStorage
 ./migration-tools/spaces: interface DiskContractSpaceState
 ./migration-tools/spaces: interface DiskContractSpaceState, readonly required property headRefsBySpace: ReadonlyMap<string, ContractSpaceHeadRecord>
 ./migration-tools/spaces: interface DiskContractSpaceState, readonly required property spaceDirsOnDisk: readonly string[]
@@ -1355,7 +1353,7 @@
 ./migration-tools: function copyFilesWithRename(destDir: string, files: readonly { readonly sourcePath: string; readonly destName: string; }[]): Promise<void>
 ./migration-tools: function createAggregateContractSpace(args: { readonly spaceId: string; readonly packages: readonly OnDiskMigrationPackage[]; readonly refs: Refs; readonly headRef: ContractSpaceHeadRecord | null; readonly refsDir: string; readonly migrationsDir: string; readonly resolveContract: () => Contract; readonly deserializeContract: (raw: unknown) => Contract; readonly verifySnapshotContent?: SnapshotContentVerifier; }): AggregateContractSpace
 ./migration-tools: function createContractSpaceAggregate(args: { readonly targetId: string; readonly app: AggregateContractSpace; readonly extensions: readonly AggregateContractSpace[]; readonly checkIntegrity: (opts?: IntegrityQueryOptions) => readonly IntegrityViolation[]; }): ContractSpaceAggregate
-./migration-tools: function createSnapshotContentVerifier(hooks?: SnapshotCanonicalizationHooks): SnapshotContentVerifier
+./migration-tools: function createSnapshotContentVerifier(normalizeStorage: NormalizeStorage): SnapshotContentVerifier
 ./migration-tools: function deleteRef(refsDir: string, name: string): Promise<void>
 ./migration-tools: function deriveProvidedInvariants(ops: MigrationOps): readonly string[]
 ./migration-tools: function detectCycles(graph: MigrationGraph): readonly string[][]
@@ -1494,11 +1492,10 @@
 ./migration-tools: interface DeclaredExtensionEntry, readonly required property id: string
 ./migration-tools: interface DeclaredExtensionEntry, readonly required property targetId: string
 ./migration-tools: interface DescriptorSelfConsistencyInputs
-./migration-tools: interface DescriptorSelfConsistencyInputs, readonly optional property shouldPreserveEmpty?: PreserveEmptyPredicate
-./migration-tools: interface DescriptorSelfConsistencyInputs, readonly optional property sortStorage?: StorageSort
 ./migration-tools: interface DescriptorSelfConsistencyInputs, readonly required property contractJson: unknown
 ./migration-tools: interface DescriptorSelfConsistencyInputs, readonly required property extensionId: string
 ./migration-tools: interface DescriptorSelfConsistencyInputs, readonly required property headRefHash: string
+./migration-tools: interface DescriptorSelfConsistencyInputs, readonly required property normalizeStorage: NormalizeStorage
 ./migration-tools: interface DiskContractSpaceState
 ./migration-tools: interface DiskContractSpaceState, readonly required property headRefsBySpace: ReadonlyMap<string, ContractSpaceHeadRecord>
 ./migration-tools: interface DiskContractSpaceState, readonly required property spaceDirsOnDisk: readonly string[]
@@ -1637,9 +1634,6 @@
 ./migration-tools: interface SchemaCheckSection
 ./migration-tools: interface SchemaCheckSection, readonly required property perSpace: ReadonlyMap<string, VerifyDatabaseSchemaResult>
 ./migration-tools: interface SchemaCheckSection, readonly required property unclaimed: readonly string[]
-./migration-tools: interface SnapshotCanonicalizationHooks
-./migration-tools: interface SnapshotCanonicalizationHooks, readonly optional property shouldPreserveEmpty?: PreserveEmptyPredicate
-./migration-tools: interface SnapshotCanonicalizationHooks, readonly optional property sortStorage?: StorageSort
 ./migration-tools: interface SnapshotContentVerifier
 ./migration-tools: interface SnapshotContentVerifier, required method assertSnapshotContentMatches(contractJson: unknown, storageHash: string, jsonPath: string): void
 ./migration-tools: interface SpaceApplyInput, readonly required property currentMarkerHash: null | string

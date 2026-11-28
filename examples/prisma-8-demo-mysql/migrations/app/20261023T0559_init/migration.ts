@@ -8,8 +8,8 @@ import {
   sql,
   unique,
 } from '@prisma/orm-mysql/migration';
-import type { Contract as End } from '../../snapshots/429ca5218dc113a8f28a4e8890ff6764e9810dff5c9a4c3924969488fb9dbb33/contract';
-import endContract from '../../snapshots/429ca5218dc113a8f28a4e8890ff6764e9810dff5c9a4c3924969488fb9dbb33/contract.json' with {
+import type { Contract as End } from '../../snapshots/73a74ebec7b2307f44dddf78f7d8932c27656351f9769f15254ecbfd91112607/contract';
+import endContract from '../../snapshots/73a74ebec7b2307f44dddf78f7d8932c27656351f9769f15254ecbfd91112607/contract.json' with {
   type: 'json',
 };
 

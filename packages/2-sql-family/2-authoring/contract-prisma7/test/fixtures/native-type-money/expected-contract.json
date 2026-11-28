@@ -28,16 +28,14 @@
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "value": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/money@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "list": {
                 "type": {
@@ -64,10 +62,10 @@
   },
   "extensions": {},
   "capabilities": {},
-  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "profileHash": "ae77f23935a24b8a63c81ef26bb0f186581670a56e603cef8314a629414e2632",
   "meta": {},
   "storage": {
-    "storageHash": "58f2babcc3f1f242a8a04397aa08951c4b58929aea38c0ec91dec6d57fea04a3",
+    "storageHash": "0d2e8a6dfefce274f5370e465779a77d68aeefd70f1b1de2e102c6fad965d46f",
     "namespaces": {
       "public": {
         "id": "public",

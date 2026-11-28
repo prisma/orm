@@ -25,8 +25,7 @@
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "role": {
                 "type": {
@@ -36,8 +35,7 @@
                     "typeName": "Role"
                   }
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               }
             },
             "relations": {}
@@ -54,10 +52,10 @@
   },
   "extensions": {},
   "capabilities": {},
-  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "profileHash": "ae77f23935a24b8a63c81ef26bb0f186581670a56e603cef8314a629414e2632",
   "meta": {},
   "storage": {
-    "storageHash": "8580197458756e6a1e30023c012e5bdd69dd8980bd87b7df46888aae1ae3e02a",
+    "storageHash": "826b524dadb9b246aa6296150465caba5bcc1a0d31e6286983047b90fa9dba92",
     "namespaces": {
       "public": {
         "id": "public",
