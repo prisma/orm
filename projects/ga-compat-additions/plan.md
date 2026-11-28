@@ -6,7 +6,7 @@ Spec: [spec.md](spec.md). Stream plan: `projects/ga-compatibility/plan.md` on br
 
 | Slice | State | Pull request |
 | --- | --- | --- |
-| 1. Open and closed sets, outside the framework domain | In review | (this pull request) |
+| 1. Open and closed sets, outside the framework domain | In review | prisma/orm#31246 |
 | 1b. Open and closed sets in the framework domain | Waits for agreement to change that domain; 145 sets listed `pending` with a recommended status | |
 | 2. Error codes do not disappear | Merged | prisma/orm#31245 |
 | 3. The name rule | Proposal with Will | |
