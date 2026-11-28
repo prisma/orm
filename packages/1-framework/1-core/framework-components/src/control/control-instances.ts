@@ -37,7 +37,7 @@ export interface ControlFamilyInstance<TFamilyId extends string, TSchemaIR>
    */
   accessChangesOf(operations: readonly MigrationPlanOperation[]): readonly MigrationAccessChange[];
 
-  /** Where the database keeps the contract markers, as messages name it to the user, such as `_prisma.marker` on PostgreSQL. The control adapter names it. */
+  /** Where the database keeps the contract markers, as messages name it to the user, such as `_prisma.signatures` on PostgreSQL. The control adapter names it. */
   readonly markerLocation: string;
 
   verify(options: {
