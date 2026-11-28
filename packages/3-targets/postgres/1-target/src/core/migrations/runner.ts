@@ -67,6 +67,9 @@ import {
   DEPENDENT_OBJECTS_STILL_EXIST,
   dependentsOf,
   dependentsSummary,
+  describedDependents,
+  TABLE_DEPENDENTS_SQL,
+  tableDependentsOf,
 } from './dependent-objects';
 import { MARKER_LOCK_KEY, MARKER_LOCK_SQL } from './marker-lock';
 import { holdingStoredValue } from './operations/stored-values';
@@ -496,6 +499,32 @@ class PostgresMigrationRunner implements SqlMigrationRunner<PostgresPlanTargetDe
             meta: {
               failedCheck: { operationId: operation.id, phase, description: step.description },
               blockingObjects,
+            },
+          });
+        }
+        const dependedOn = tableDependentsOf(step);
+        const dependents =
+          dependedOn === undefined
+            ? []
+            : describedDependents(
+                (
+                  await driver.query<{ readonly object: string }>(TABLE_DEPENDENTS_SQL, [
+                    dependedOn.schema,
+                    dependedOn.table,
+                  ])
+                ).rows,
+              );
+        if (dependedOn !== undefined && dependents.length > 0) {
+          const details = {
+            schema: dependedOn.schema,
+            objectType: 'table',
+            name: dependedOn.table,
+          } as const;
+          return runnerFailure(code, dependentsSummary(details, operation.label, dependents), {
+            why: failed,
+            meta: {
+              failedCheck: { operationId: operation.id, phase, description: step.description },
+              blockingObjects: dependents,
             },
           });
         }

@@ -184,7 +184,7 @@
         "params": ["prisma_contract"]
       },
       {
-        "description": "The role that runs this command must have the privileges of the role that owns table \"prisma_contract\".\"marker\", because a later migration of Prisma's own tables may add a column to it, and that needs those privileges. Give the schema and its tables to the migrating role with ALTER SCHEMA \"prisma_contract\" OWNER TO <migrating role>, then ALTER TABLE \"prisma_contract\".\"marker\" OWNER TO <migrating role>, ALTER TABLE \"prisma_contract\".\"ledger\" OWNER TO <migrating role>, ALTER TABLE \"prisma_contract\".\"contract\" OWNER TO <migrating role>.",
+        "description": "The role that runs this command must have the privileges of the role that owns table \"prisma_contract\".\"marker\", because this migration drops it once its rows are moved into \"_prisma\".\"signatures\" and \"_prisma\".\"config\", and dropping a table needs those privileges. Give the schema and its tables to the migrating role with ALTER SCHEMA \"prisma_contract\" OWNER TO <migrating role>, then ALTER TABLE \"prisma_contract\".\"marker\" OWNER TO <migrating role>, ALTER TABLE \"prisma_contract\".\"ledger\" OWNER TO <migrating role>, ALTER TABLE \"prisma_contract\".\"contract\" OWNER TO <migrating role>.",
         "sql": "SELECT (SELECT rolsuper FROM pg_roles WHERE rolname = current_user) OR NOT EXISTS (\n  SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2 AND NOT pg_has_role(current_user, c.relowner, 'USAGE')\n) AS \"result\"",
         "params": ["prisma_contract", "marker"]
       },
@@ -197,6 +197,17 @@
         "description": "The role that runs this command must have the privileges of the role that owns table \"prisma_contract\".\"contract\", because a later migration of Prisma's own tables may add a column to it, and that needs those privileges. Give the schema and its tables to the migrating role with ALTER SCHEMA \"prisma_contract\" OWNER TO <migrating role>, then ALTER TABLE \"prisma_contract\".\"marker\" OWNER TO <migrating role>, ALTER TABLE \"prisma_contract\".\"ledger\" OWNER TO <migrating role>, ALTER TABLE \"prisma_contract\".\"contract\" OWNER TO <migrating role>.",
         "sql": "SELECT (SELECT rolsuper FROM pg_roles WHERE rolname = current_user) OR NOT EXISTS (\n  SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2 AND NOT pg_has_role(current_user, c.relowner, 'USAGE')\n) AS \"result\"",
         "params": ["prisma_contract", "contract"]
+      },
+      {
+        "description": "No object outside table \"prisma_contract\".\"marker\" may depend on it, because this migration drops it once its rows are moved into \"_prisma\".\"signatures\" and \"_prisma\".\"config\", and PostgreSQL does not drop a table another object depends on. Drop each such object, such as a view over the table, then create them again over \"_prisma\".\"signatures\" once the command has run.",
+        "sql": "WITH \"table\" AS (\n  SELECT c.oid, c.reltype FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n  WHERE n.nspname = $1 AND c.relname = $2\n)\nSELECT NOT EXISTS (\n  SELECT 1 FROM pg_depend d JOIN \"table\" t\n    ON (d.refclassid = 'pg_class'::regclass AND d.refobjid = t.oid)\n    OR (d.refclassid = 'pg_type'::regclass AND d.refobjid = t.reltype)\n  WHERE d.deptype = 'n' AND NOT (d.classid = 'pg_class'::regclass AND d.objid = t.oid)\n) AS \"result\"",
+        "params": ["prisma_contract", "marker"],
+        "meta": {
+          "tableDependents": {
+            "schema": "prisma_contract",
+            "table": "marker"
+          }
+        }
       },
       {
         "description": "The role that runs this command must have the CREATE privilege on the database, because renaming schema \"prisma_contract\" needs it. Grant it with GRANT CREATE ON DATABASE <database> TO <migrating role>, or run the command once as a role that has it.",

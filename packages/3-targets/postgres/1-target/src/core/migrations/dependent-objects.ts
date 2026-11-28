@@ -1,4 +1,6 @@
+import type { SqlMigrationPlanOperationStep } from '@internal/family-sql/control';
 import type { BlockingObject } from '@internal/framework-components/control';
+import { type } from 'arktype';
 import type { PostgresPlanTargetDetails } from './planner-target-details';
 
 /** Postgres's error code for a statement that would remove an object others depend on. */
@@ -31,4 +33,43 @@ export function dependentsSummary(
   return details.objectType === 'table' && details.table === undefined
     ? `Table "${details.schema}"."${details.name}" cannot be dropped while ${named} ${depend} on it.`
     : `${label} cannot run while ${named} ${depend} on what it changes.`;
+}
+
+const TableDependentsMeta = type({ tableDependents: { schema: 'string', table: 'string' } });
+
+/** The table a step checks has no dependents, from its meta; when the check fails, the runner names them. */
+export function tableDependentsOf(
+  step: SqlMigrationPlanOperationStep,
+): { readonly schema: string; readonly table: string } | undefined {
+  const meta = TableDependentsMeta(step.meta ?? {});
+  return meta instanceof type.errors ? undefined : meta.tableDependents;
+}
+
+/**
+ * The objects that keep `DROP TABLE` without `CASCADE` from dropping table `$2` in schema `$1`: those that depend normally on the table or on its row type, outside the table itself, each described as Postgres describes it in a refused drop. A view is named, not its rewrite rule.
+ */
+export const TABLE_DEPENDENTS_SQL = `WITH "table" AS (
+  SELECT c.oid, c.reltype FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+  WHERE n.nspname = $1 AND c.relname = $2
+)
+SELECT DISTINCT CASE WHEN d.classid = 'pg_catalog.pg_rewrite'::regclass
+    THEN pg_catalog.pg_describe_object('pg_catalog.pg_class'::regclass, r.ev_class, 0)
+    ELSE pg_catalog.pg_describe_object(d.classid, d.objid, d.objsubid)
+  END AS "object"
+FROM pg_catalog.pg_depend d
+JOIN "table" t
+  ON (d.refclassid = 'pg_catalog.pg_class'::regclass AND d.refobjid = t.oid)
+  OR (d.refclassid = 'pg_catalog.pg_type'::regclass AND d.refobjid = t.reltype)
+LEFT JOIN pg_catalog.pg_rewrite r ON d.classid = 'pg_catalog.pg_rewrite'::regclass AND r.oid = d.objid
+WHERE d.deptype = 'n' AND NOT (d.classid = 'pg_catalog.pg_class'::regclass AND d.objid = t.oid)
+ORDER BY 1`;
+
+/** The objects {@link TABLE_DEPENDENTS_SQL} found, split into the kind and name Postgres writes. */
+export function describedDependents(
+  rows: ReadonlyArray<{ readonly object: string }>,
+): readonly BlockingObject[] {
+  return rows.map(({ object }) => {
+    const space = object.indexOf(' ');
+    return { kind: object.slice(0, space), name: object.slice(space + 1) };
+  });
 }

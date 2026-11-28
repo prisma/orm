@@ -277,6 +277,49 @@ describe("applying the Postgres target's _prisma contract space", { concurrent: 
     });
   });
 
+  it("stops, names them and changes nothing when other objects depend on the release candidate's marker table", {
+    timeout: testTimeout,
+  }, async () => {
+    await createReleaseCandidateTables();
+    await driver.query(
+      'create view public.marker_report as select space, core_hash from prisma_contract.marker',
+    );
+    await driver.query(
+      'create function public.latest_marker() returns prisma_contract.marker language sql as $$ select * from prisma_contract.marker limit 1 $$',
+    );
+
+    try {
+      const result = await apply();
+
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect({
+        code: result.failure.code,
+        summary: result.failure.message,
+        why: result.failure.why,
+        dependents: result.failure.meta.blockingObjects,
+        schemas: await schemas(),
+        markers: (await driver.query('select space from prisma_contract.marker')).rows,
+      }).toEqual({
+        code: 'MIGRATION.PRECHECK_FAILED',
+        summary:
+          'Table "prisma_contract"."marker" cannot be dropped while function latest_marker() and view marker_report depend on it.',
+        why: expect.stringContaining(
+          'then create them again over "_prisma"."signatures" once the command has run.',
+        ),
+        dependents: [
+          { kind: 'function', name: 'latest_marker()' },
+          { kind: 'view', name: 'marker_report' },
+        ],
+        schemas: ['prisma_contract'],
+        markers: [{ space: 'app' }],
+      });
+    } finally {
+      await driver.query('drop view public.marker_report');
+      await driver.query('drop function public.latest_marker()');
+    }
+  });
+
   it('stops when the old schema exists and the new one holds a table', {
     timeout: testTimeout,
   }, async () => {

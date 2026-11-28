@@ -159,8 +159,27 @@ const absentOrHasTableOwnerPrivileges = `SELECT ${isSuperuser} OR NOT EXISTS (
   SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
   WHERE n.nspname = $1 AND c.relname = $2 AND NOT pg_has_role(current_user, c.relowner, 'USAGE')
 ) AS "result"`;
+/** `DROP TABLE` without `CASCADE` refuses exactly when an object outside the table depends normally on it or on its row type. Reads only the catalogues, like the checks of ownership. */
+const absentOrNothingDependsOnTable = `WITH "table" AS (
+  SELECT c.oid, c.reltype FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+  WHERE n.nspname = $1 AND c.relname = $2
+)
+SELECT NOT EXISTS (
+  SELECT 1 FROM pg_depend d JOIN "table" t
+    ON (d.refclassid = 'pg_class'::regclass AND d.refobjid = t.oid)
+    OR (d.refclassid = 'pg_type'::regclass AND d.refobjid = t.reltype)
+  WHERE d.deptype = 'n' AND NOT (d.classid = 'pg_class'::regclass AND d.objid = t.oid)
+) AS "result"`;
 const mayCreateInDatabase = `SELECT ${isSuperuser}
   OR has_database_privilege(current_database(), 'CREATE') AS "result"`;
+
+const ownerPrivilegesReason: Record<ReleaseCandidateTableName, string> = {
+  marker: `this migration drops it once its rows are moved into ${qualified('signatures')} and ${qualified('config')}, and dropping a table needs those privileges`,
+  ledger:
+    "a later migration of Prisma's own tables may add a column to it, and that needs those privileges",
+  contract:
+    "a later migration of Prisma's own tables may add a column to it, and that needs those privileges",
+};
 
 const giveToMigratingRole = `Give the schema and its tables to the migrating role with ALTER SCHEMA "${RELEASE_CANDIDATE_SCHEMA}" OWNER TO <migrating role>, then ${releaseCandidateTables
   .map(
@@ -236,10 +255,16 @@ export default class M extends Migration {
             params: [RELEASE_CANDIDATE_SCHEMA],
           },
           ...releaseCandidateTables.map((table) => ({
-            description: `The role that runs this command must have the privileges of the role that owns table ${qualified(table.name, RELEASE_CANDIDATE_SCHEMA)}, because a later migration of Prisma's own tables may add a column to it, and that needs those privileges. ${giveToMigratingRole}`,
+            description: `The role that runs this command must have the privileges of the role that owns table ${qualified(table.name, RELEASE_CANDIDATE_SCHEMA)}, because ${ownerPrivilegesReason[table.name]}. ${giveToMigratingRole}`,
             sql: absentOrHasTableOwnerPrivileges,
             params: [RELEASE_CANDIDATE_SCHEMA, table.name],
           })),
+          {
+            description: `No object outside table ${qualified('marker', RELEASE_CANDIDATE_SCHEMA)} may depend on it, because this migration drops it once its rows are moved into ${qualified('signatures')} and ${qualified('config')}, and PostgreSQL does not drop a table another object depends on. Drop each such object, such as a view over the table, then create them again over ${qualified('signatures')} once the command has run.`,
+            sql: absentOrNothingDependsOnTable,
+            params: [RELEASE_CANDIDATE_SCHEMA, 'marker'],
+            meta: { tableDependents: { schema: RELEASE_CANDIDATE_SCHEMA, table: 'marker' } },
+          },
           {
             description: `The role that runs this command must have the CREATE privilege on the database, because renaming schema "${RELEASE_CANDIDATE_SCHEMA}" needs it. Grant it with GRANT CREATE ON DATABASE <database> TO <migrating role>, or run the command once as a role that has it.`,
             sql: mayCreateInDatabase,

@@ -117,21 +117,32 @@ describe("the first migration of the Postgres target's _prisma space", () => {
     }).toEqual({ checks: 4, missing: [] });
   });
 
-  it('says why it needs the owner of each table without promising a later change, and finds only the owners of tables', () => {
+  it('says why it needs the owner of each table, and finds only the owners of tables', () => {
     const rename = ops.find((op) => op.id === '_prisma.rename-release-candidate-schema');
     const descriptions = (rename?.precheck ?? []).map((check) => check.description);
+    const reasonFor = (table: string) =>
+      descriptions
+        .filter((description) => description.includes(`owns table "prisma_contract"."${table}"`))
+        .map((description) => description.slice(0, description.indexOf(' Give the schema')));
+    const later = (table: string) =>
+      `The role that runs this command must have the privileges of the role that owns table "prisma_contract"."${table}", because a later migration of Prisma's own tables may add a column to it, and that needs those privileges.`;
     expect({
-      tableChecks: descriptions.filter((description) =>
-        description.includes(
-          "because a later migration of Prisma's own tables may add a column to it, and that needs those privileges.",
-        ),
-      ).length,
+      marker: reasonFor('marker'),
+      ledger: reasonFor('ledger'),
+      contract: reasonFor('contract'),
       ownerQuery: descriptions.some((description) =>
         description.includes(
           "SELECT relname, relowner::regrole FROM pg_class WHERE relnamespace = to_regnamespace('prisma_contract') AND relkind = 'r'",
         ),
       ),
-    }).toEqual({ tableChecks: 3, ownerQuery: true });
+    }).toEqual({
+      marker: [
+        'The role that runs this command must have the privileges of the role that owns table "prisma_contract"."marker", because this migration drops it once its rows are moved into "_prisma"."signatures" and "_prisma"."config", and dropping a table needs those privileges.',
+      ],
+      ledger: [later('ledger')],
+      contract: [later('contract')],
+      ownerQuery: true,
+    });
   });
 
   it('ends at the contract its snapshot holds', () => {
