@@ -219,7 +219,7 @@ A family built outside this repository names its defaults in its own documentati
 Two sections outside `storage` follow the same idea:
 
 - A family leaves its own defaults out of the `domain` section when it writes it, for example a model field's `many: false`. `domain` is in no hash.
-- The framework code that builds the capability list, before the contract is hashed, leaves out a capability flag that is off, so `capabilities` holds only flags that are on. This is a rule of how the list is built, not of the encoding.
+- The profile hash leaves out a capability flag that is off, and a namespace with no flag on, so a list that writes `false` and one that leaves the flag out have the same hash. The framework owns the capability list's shape, so this rule is the framework's, as a family's defaults are the family's. The code that builds the list leaves those flags out of the written file too.
 
 ### What an author of an entry kind does
 

@@ -37,7 +37,7 @@ That holds because each hash is computed from a small, fixed input, by rules tha
 | Hash | Covers | Tells Prisma |
 | --- | --- | --- |
 | Storage hash | `targetFamily`, `target`, and `storage` in its normal form | Which contract a database matches; where each migration starts and ends; the name of each snapshot |
-| Profile hash | `targetFamily`, `target`, `capabilities` | Which capabilities the contract requires of the database and the connection |
+| Profile hash | `targetFamily`, `target`, and the capabilities in `capabilities` that are on | Which capabilities the contract requires of the database and the connection |
 | Execution hash | `targetFamily`, `target`, `execution` | Which defaults the client applies when it writes rows, such as an `id` the client generates |
 
 Nothing else in the file enters a hash, not even the file's `formatVersion` ([ADR 331](ADR%20331%20-%20Stored%20files%20carry%20a%20format%20version%2C%20and%20a%20reader%20refuses%20one%20it%20does%20not%20know.md)).
