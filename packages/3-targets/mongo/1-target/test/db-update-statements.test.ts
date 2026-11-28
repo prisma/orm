@@ -146,7 +146,7 @@ describe('db update with statements on MongoDB', () => {
       { app_users: { required: ['email'] } },
     );
     await writeContractSnapshot(migrationsDir, from.storage.storageHash, {
-      contractJson: from,
+      contractJson: { formatVersion: 1, ...from },
       contractDts: '',
     });
     const result = await executeDbUpdate({
@@ -221,7 +221,7 @@ describe('db update with statements on MongoDB', () => {
       tempDirs.push(dir);
       const migrationsDir = join(dir, 'migrations');
       await writeContractSnapshot(migrationsDir, from.storage.storageHash, {
-        contractJson: from,
+        contractJson: { formatVersion: 1, ...from },
         contractDts: '',
       });
       const result = await executeDbUpdate({
