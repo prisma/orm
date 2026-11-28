@@ -58,6 +58,34 @@ describe('prismaSpaceRunnerFailureError', () => {
     );
   });
 
+  it('names each object in the way, with its schema, after the check it failed', () => {
+    const dependentsCheck =
+      'No object outside table "prisma_contract"."marker" may depend on it. Drop each such object, such as a view over the table.';
+    const failure = migrationRunnerFailure(
+      'MIGRATION.PRECHECK_FAILED',
+      'Table "prisma_contract"."marker" cannot be dropped while view public.marker_view depends on it.',
+      {
+        meta: {
+          failingSpace: '_prisma',
+          databaseUnchanged: true,
+          failedCheck: {
+            operationId: '_prisma.rename-release-candidate-schema',
+            phase: 'precheck',
+            description: dependentsCheck,
+          },
+          blockingObjects: [
+            { kind: 'function', name: 'public.count_markers(prisma_contract.marker[])' },
+            { kind: 'view', name: 'public.marker_view' },
+          ],
+        },
+      },
+    );
+
+    expect(prismaSpaceRunnerFailureError(failure).why).toBe(
+      `${dependentsCheck} In this database, those objects are function public.count_markers(prisma_contract.marker[]) and view public.marker_view.`,
+    );
+  });
+
   it('names no check when none failed', () => {
     const failure = migrationRunnerFailure(
       'MIGRATION.EXECUTION_FAILED',

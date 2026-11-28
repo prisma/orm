@@ -749,16 +749,23 @@ function migrateSchemaCheckAdvice(
   ];
 }
 
+/** Objects in the database as a sentence names them, such as `function f() and view public.v`. */
+export function listedBlockingObjects(objects: readonly BlockingObject[]): string {
+  const named = objects.map(({ kind, name }) => `${kind} ${name}`);
+  return named.length === 1
+    ? (named[0] ?? '')
+    : `${named.slice(0, -1).join(', ')} and ${named.at(-1)}`;
+}
+
 /** The way out when objects in the database keep an operation from running. */
 export function blockingObjectsAdvice(
   objects: readonly BlockingObject[],
   rerun: string,
 ): RunnerAdvice {
-  const named = objects.map(({ kind, name }) => `${kind} ${name}`);
-  const listed =
-    named.length === 1 ? named[0] : `${named.slice(0, -1).join(', ')} and ${named.at(-1)}`;
   return [
-    chooseAction(`Drop or change ${listed} in the database yourself, then re-run \`${rerun}\``),
+    chooseAction(
+      `Drop or change ${listedBlockingObjects(objects)} in the database yourself, then re-run \`${rerun}\``,
+    ),
   ];
 }
 
