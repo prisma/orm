@@ -33,7 +33,7 @@ export interface SqlExplainResult<Row = Record<string, unknown>> {
   readonly rows: ReadonlyArray<Row>;
 }
 
-export type SqlDriverState = 'unbound' | 'connected' | 'closed' | (string & {});
+export type SqlDriverState = 'unbound' | 'connected' | 'closed';
 
 /**
  * A SQL driver never resends a statement after its connection fails (ADR 337). A pooled SQL driver confirms that a pooled database connection which sat idle is alive before it uses it; the Postgres driver checks it itself, and the MySQL and MariaDB drivers through their connector.

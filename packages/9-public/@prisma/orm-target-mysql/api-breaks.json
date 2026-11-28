@@ -63,51 +63,6 @@
     "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
   },
   {
-    "path": "./driver",
-    "export": "MysqlRuntimeDriver",
-    "test": "type",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "597df791c0c6c382",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
-  },
-  {
-    "path": "./driver",
-    "export": "createMysqlRuntimeDriverDescriptor",
-    "test": "value",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "479fbd94ea3b319a",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
-  },
-  {
-    "path": "./driver/runtime",
-    "export": "MysqlRuntimeDriver",
-    "test": "type",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "597df791c0c6c382",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
-  },
-  {
-    "path": "./driver/runtime",
-    "export": "createMysqlRuntimeDriverDescriptor",
-    "test": "value",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "479fbd94ea3b319a",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
-  },
-  {
-    "path": "./driver/runtime",
-    "export": "default",
-    "test": "value",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "f80b9d581e571c2c",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
-  },
-  {
     "path": "./target",
     "export": "Migration",
     "test": "constructor",

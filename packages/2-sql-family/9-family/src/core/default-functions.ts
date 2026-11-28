@@ -3,7 +3,7 @@ import type {
   LoweredDefaultResult,
 } from '@internal/framework-components/control';
 
-export type SqlDefaultFunctionName = 'autoincrement' | 'now' | (string & {});
+export type SqlDefaultFunctionName = 'autoincrement' | 'now';
 
 /**
  * The SQL family's default functions, each a database default: `autoincrement()` and `now()`. A value the client generates is a generator function, written `@onCreate(...)`.

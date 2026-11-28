@@ -7,6 +7,7 @@ import type {
 import type { DataTypeParamsProblem } from '@internal/framework-components/codec';
 import type { GeneratorPhase } from '@internal/framework-components/components';
 import type { FieldOwner, MongoContractRefusal } from '@internal/mongo-contract';
+import { InternalError } from '@internal/utils/internal-error';
 
 /** The part of a definition a refusal is about, by names and positions the definition carries. */
 export type RefusalKey =
@@ -257,7 +258,8 @@ export type BuildRefusal =
       readonly kind: 'validator';
       readonly key: RefusalKey;
       readonly refusal: MongoContractRefusal;
-    };
+    }
+  | { readonly kind: '%future added value'; readonly key: RefusalKey; readonly reason: string };
 
 /** Something the builder accepts but the author probably did not mean, or a warning the source collected. */
 export type BuildWarning = { readonly kind: 'source'; readonly warning: AuthoringWarning };
@@ -284,5 +286,9 @@ export function validatorRefusalKey(refusal: MongoContractRefusal): RefusalKey {
       return { kind: 'field', owner: refusal.owner, field: refusal.fieldName };
     case 'documentId':
       return modelFieldKey(refusal.modelName, refusal.fieldName);
+    default:
+      throw new InternalError(
+        `The contract builder has no key for the validator refusal "${refusal.kind}" of its own release.`,
+      );
   }
 }

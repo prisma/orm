@@ -1501,7 +1501,7 @@
 ./contract-ts/contract-builder: type ManyOptions = { readonly elementsNullable: false; } | { readonly elementsNullable: true; }
 ./contract-ts/contract-builder: type MergeEnums<ScaffoldEnums extends Record<string, EnumTypeHandle>, FactoryEnums extends Record<string, EnumTypeHandle>> = LiteralEnums<ScaffoldEnums> & LiteralEnums<FactoryEnums>
 ./contract-ts/contract-builder: type ModelLike = { readonly stageOne: { readonly modelName?: string; readonly namespace?: string | undefined; readonly fields: Record<string, ScalarFieldBuilder>; readonly relations: Record<string, RelationBuilder<RelationState>>; }; readonly __attributes: ModelAttributesSpec | undefined; readonly __sql: SqlStageSpec | undefined; readonly __duplicateNames: undefined; buildAttributesSpec(): ModelAttributesSpec | undefined; buildSqlSpec(): SqlStageSpec | undefined; }
-./contract-ts/contract-builder: type SharedTableRefusal<ForeignKey> = { readonly kind: 'defaultedForeignKey'; readonly variant: string; readonly foreignKey: ForeignKey; readonly columns: readonly string[]; } | { readonly kind: 'foreignKey'; readonly variant: string; readonly foreignKey: ForeignKey; readonly columns: readonly string[]; readonly other: string; readonly otherIsBase: boolean; readonly otherDeclaresOne: boolean; } | { readonly kind: 'index'; readonly variant: string; readonly index: IndexNode; readonly namedDifferentlyBy: string | undefined; } | { readonly kind: 'unique'; readonly variant: string; readonly unique: UniqueConstraintNode; }
+./contract-ts/contract-builder: type SharedTableRefusal<ForeignKey> = { readonly kind: '%future added value'; readonly variant: string; } | { readonly kind: 'defaultedForeignKey'; readonly variant: string; readonly foreignKey: ForeignKey; readonly columns: readonly string[]; } | { readonly kind: 'foreignKey'; readonly variant: string; readonly foreignKey: ForeignKey; readonly columns: readonly string[]; readonly other: string; readonly otherIsBase: boolean; readonly otherDeclaresOne: boolean; } | { readonly kind: 'index'; readonly variant: string; readonly index: IndexNode; readonly namedDifferentlyBy: string | undefined; } | { readonly kind: 'unique'; readonly variant: string; readonly unique: UniqueConstraintNode; }
 ./contract-ts/contract-builder: type SqlNamespaceFactory = (input: SqlNamespaceInput) => SqlNamespaceBase
 ./contract-ts/contract-builder: type TargetFieldRef<ModelName extends string = string, FieldName extends string = string, TSpaceId extends string = string> = { readonly kind: 'targetFieldRef'; readonly source: TargetFieldRefSource; readonly modelName: ModelName; readonly fieldName: FieldName; readonly spaceId?: TSpaceId extends '<self>' ? never : TSpaceId; readonly namespaceId?: string; readonly tableName?: string; readonly columnName?: string; }
 ./contract-ts: class ContractModelBuilder, constructor(stageOne: { readonly modelName?: ModelName; readonly namespace?: Namespace; readonly fields: Fields; readonly relations: Relations; }, attributesFactory?: StageInput<AttributeContext<Fields>, AttributesSpec> | undefined, sqlFactory?: StageInput<SqlContext<Fields, IndexTypes>, SqlSpec> | undefined, spaceId?: TSpaceId | undefined, tableName?: string | undefined)
@@ -1740,7 +1740,7 @@
 ./contract-ts: type ManyOptions = { readonly elementsNullable: false; } | { readonly elementsNullable: true; }
 ./contract-ts: type MergeEnums<ScaffoldEnums extends Record<string, EnumTypeHandle>, FactoryEnums extends Record<string, EnumTypeHandle>> = LiteralEnums<ScaffoldEnums> & LiteralEnums<FactoryEnums>
 ./contract-ts: type ModelLike = { readonly stageOne: { readonly modelName?: string; readonly namespace?: string | undefined; readonly fields: Record<string, ScalarFieldBuilder>; readonly relations: Record<string, RelationBuilder<RelationState>>; }; readonly __attributes: ModelAttributesSpec | undefined; readonly __sql: SqlStageSpec | undefined; readonly __duplicateNames: undefined; buildAttributesSpec(): ModelAttributesSpec | undefined; buildSqlSpec(): SqlStageSpec | undefined; }
-./contract-ts: type SharedTableRefusal<ForeignKey> = { readonly kind: 'defaultedForeignKey'; readonly variant: string; readonly foreignKey: ForeignKey; readonly columns: readonly string[]; } | { readonly kind: 'foreignKey'; readonly variant: string; readonly foreignKey: ForeignKey; readonly columns: readonly string[]; readonly other: string; readonly otherIsBase: boolean; readonly otherDeclaresOne: boolean; } | { readonly kind: 'index'; readonly variant: string; readonly index: IndexNode; readonly namedDifferentlyBy: string | undefined; } | { readonly kind: 'unique'; readonly variant: string; readonly unique: UniqueConstraintNode; }
+./contract-ts: type SharedTableRefusal<ForeignKey> = { readonly kind: '%future added value'; readonly variant: string; } | { readonly kind: 'defaultedForeignKey'; readonly variant: string; readonly foreignKey: ForeignKey; readonly columns: readonly string[]; } | { readonly kind: 'foreignKey'; readonly variant: string; readonly foreignKey: ForeignKey; readonly columns: readonly string[]; readonly other: string; readonly otherIsBase: boolean; readonly otherDeclaresOne: boolean; } | { readonly kind: 'index'; readonly variant: string; readonly index: IndexNode; readonly namedDifferentlyBy: string | undefined; } | { readonly kind: 'unique'; readonly variant: string; readonly unique: UniqueConstraintNode; }
 ./contract-ts: type SqlNamespaceFactory = (input: SqlNamespaceInput) => SqlNamespaceBase
 ./contract-ts: type TargetFieldRef<ModelName extends string = string, FieldName extends string = string, TSpaceId extends string = string> = { readonly kind: 'targetFieldRef'; readonly source: TargetFieldRefSource; readonly modelName: ModelName; readonly fieldName: FieldName; readonly spaceId?: TSpaceId extends '<self>' ? never : TSpaceId; readonly namespaceId?: string; readonly tableName?: string; readonly columnName?: string; }
 ./contract-ts: type TypeScriptContractFromPathOptions = (ConfigTarget & TypeScriptContractSpecifierOptions) | (ConfigTarget & { readonly defaultControlPolicy?: never; readonly createNamespace?: never; })
@@ -1779,11 +1779,11 @@
 ./contract/codec-json-type: const JSON_TYPES: readonly ["string", "number", "boolean", "object", "array", "any"]
 ./contract/codec-json-type: function declaredJsonType(descriptor: object): JsonType | undefined
 ./contract/codec-json-type: function isJsonType(value: unknown): value is JsonType
-./contract/codec-json-type: type JsonType = (string & {}) | (typeof JSON_TYPES)[number]
+./contract/codec-json-type: type JsonType = (typeof JSON_TYPES)[number]
 ./contract/contract-view: const SQL_BUILTIN_KINDS: readonly ["table", "valueSet", "valueObject"]
 ./contract/contract-view: function buildSqlSchemaQualifiedView<TContract extends Contract<SqlStorage>>(contract: TContract): SqlSchemaQualifiedView<TContract>
 ./contract/contract-view: function buildSqlSingleNamespaceView<TContract extends Contract<SqlStorage>>(contract: TContract): SqlSingleNamespaceView<TContract>
-./contract/contract-view: type SqlBuiltinKind = (string & {}) | (typeof SQL_BUILTIN_KINDS)[number]
+./contract/contract-view: type SqlBuiltinKind = (typeof SQL_BUILTIN_KINDS)[number]
 ./contract/contract-view: type SqlSchemaQualifiedView<TContract extends Contract<SqlStorage>> = TContract & { readonly namespace: NamespacedEntities<TContract['storage'], SqlBuiltinKind>; }
 ./contract/contract-view: type SqlSingleNamespaceAccessors<TContract extends Contract<SqlStorage>> = SingleNamespaceView<SqlEntries<TContract>, SqlBuiltinKind>
 ./contract/contract-view: type SqlSingleNamespaceView<TContract extends Contract<SqlStorage>> = TContract & SqlSingleNamespaceAccessors<TContract> & { readonly namespace: NamespacedEntities<TContract['storage'], SqlBuiltinKind>; }
@@ -2653,7 +2653,7 @@
 ./contract: type IndexInput = IndexElements & { readonly naming: SqlObjectNaming; readonly where: string | undefined; readonly unique: boolean; readonly type: string | undefined; readonly options: Record<string, unknown> | undefined; }
 ./contract: type IndexTypeMap = { readonly [K in string]: { readonly options: unknown; }; }
 ./contract: type IsOptionalCreateColumn<C, Column, NsId extends string, TableName extends string, ColumnName extends string> = [Column] extends [{ readonly nullable: false; }] ? [Column] extends [{ readonly default: unknown; }] ? true : HasExecutionCreateDefault<C, NsId, TableName, ColumnName> : true
-./contract: type JsonType = (string & {}) | (typeof JSON_TYPES)[number]
+./contract: type JsonType = (typeof JSON_TYPES)[number]
 ./contract: type NamespacedFieldTypeMap = Record<string, Record<string, Record<string, unknown>>>
 ./contract: type NamespacedStorageColumnTypeMap = Record<string, Record<string, Record<string, unknown>>>
 ./contract: type QueryOperationReturn = { readonly returnType: { readonly codecId: string; readonly nullable: boolean; }; }
@@ -2667,7 +2667,7 @@
 ./contract: type ResolvedPslModelRefs = Readonly<Record<string, { readonly namespaceId: string; readonly tableName: string; }>>
 ./contract: type ResolvedValueObjectFieldType = { readonly kind: 'anyObject'; } | { readonly kind: 'scalar'; readonly jsonType: JsonType; readonly values: readonly (number | string)[] | undefined; } | { readonly kind: 'valueObject'; readonly valueObject: ResolvedValueObject; }
 ./contract: type SerializedIndex = IndexElements & { readonly name: string; readonly prefix?: string; readonly where?: string; readonly unique: boolean; readonly type?: string; readonly options?: Record<string, unknown>; }
-./contract: type SqlBuiltinKind = (string & {}) | (typeof SQL_BUILTIN_KINDS)[number]
+./contract: type SqlBuiltinKind = (typeof SQL_BUILTIN_KINDS)[number]
 ./contract: type SqlModelFieldStorage = { readonly column: string; readonly codecId?: string; readonly nullable?: boolean; }
 ./contract: type SqlModelStorage = { readonly table: string; readonly namespaceId: string; readonly fields: Record<string, SqlModelFieldStorage>; }
 ./contract: type SqlNamespaceEntries = Readonly<Record<string, Readonly<Record<string, unknown>>>> & { readonly table?: Readonly<Record<string, StorageTable>>; readonly valueSet?: Readonly<Record<string, StorageValueSet>>; readonly valueObject?: Readonly<Record<string, StorageValueObject>>; }
@@ -3281,7 +3281,7 @@
 ./family/control: type ReportedLiteralDefault = { readonly kind: 'list'; readonly elements: readonly (ReportedBody | null)[]; } | { readonly kind: 'value'; readonly body: ReportedBody; }
 ./family/control: type SameName = (left: string, right: string) => boolean
 ./family/control: type SqlDatabaseCapabilitiesNotProvidedFn = (input: { readonly contract: Contract<SqlStorage>; readonly schema: SqlSchemaIRNode; }) => DatabaseCapabilitiesNotProvided | undefined
-./family/control: type SqlDefaultFunctionName = 'autoincrement' | 'now' | (string & {})
+./family/control: type SqlDefaultFunctionName = 'autoincrement' | 'now'
 ./family/control: type SqlMigrationRunnerErrorCode = 'MIGRATION.DATABASE_CAPABILITIES_NOT_PROVIDED' | 'MIGRATION.DESTINATION_CONTRACT_MISMATCH' | 'MIGRATION.EXECUTION_FAILED' | 'MIGRATION.FOREIGN_KEY_VIOLATION' | 'MIGRATION.MARKER_CAS_FAILURE' | 'MIGRATION.MARKER_ORIGIN_MISMATCH' | 'MIGRATION.POLICY_VIOLATION' | 'MIGRATION.POSTCHECK_FAILED' | 'MIGRATION.PRECHECK_FAILED' | 'MIGRATION.SCHEMA_VERIFY_FAILED' | (`MIGRATION.${string}` & {})
 ./family/control: type SqlMigrationRunnerResult = Result<SqlMigrationRunnerSuccessValue, SqlMigrationRunnerFailure>
 ./family/control: type SqlOperationsReader<TTargetDetails> = (operations: readonly unknown[], location?: SqlOperationsLocation) => readonly SqlMigrationPlanOperation<TTargetDetails>[]
@@ -4122,7 +4122,7 @@
 ./family: type ReportedLiteralDefault = { readonly kind: 'list'; readonly elements: readonly (ReportedBody | null)[]; } | { readonly kind: 'value'; readonly body: ReportedBody; }
 ./family: type SameName = (left: string, right: string) => boolean
 ./family: type SqlDatabaseCapabilitiesNotProvidedFn = (input: { readonly contract: Contract<SqlStorage>; readonly schema: SqlSchemaIRNode; }) => DatabaseCapabilitiesNotProvided | undefined
-./family: type SqlDefaultFunctionName = 'autoincrement' | 'now' | (string & {})
+./family: type SqlDefaultFunctionName = 'autoincrement' | 'now'
 ./family: type SqlEntityHydrationFactory = (entry: unknown) => unknown
 ./family: type SqlMigrationRunnerErrorCode = 'MIGRATION.DATABASE_CAPABILITIES_NOT_PROVIDED' | 'MIGRATION.DESTINATION_CONTRACT_MISMATCH' | 'MIGRATION.EXECUTION_FAILED' | 'MIGRATION.FOREIGN_KEY_VIOLATION' | 'MIGRATION.MARKER_CAS_FAILURE' | 'MIGRATION.MARKER_ORIGIN_MISMATCH' | 'MIGRATION.POLICY_VIOLATION' | 'MIGRATION.POSTCHECK_FAILED' | 'MIGRATION.PRECHECK_FAILED' | 'MIGRATION.SCHEMA_VERIFY_FAILED' | (`MIGRATION.${string}` & {})
 ./family: type SqlMigrationRunnerResult = Result<SqlMigrationRunnerSuccessValue, SqlMigrationRunnerFailure>
@@ -5154,7 +5154,7 @@
 ./relational-core/ast: type RawPart = AnyExpression | DeleteAst | InsertAst | SelectAst | UpdateAst | string
 ./relational-core/ast: type RawQueryResult = { readonly kind: 'affected-count'; } | { readonly kind: 'rows'; readonly columns: Readonly<Record<string, RawQueryColumn>>; }
 ./relational-core/ast: type RawSqlLiteral = Uint8Array | bigint | boolean | number | string
-./relational-core/ast: type SqlDriverState = 'closed' | 'connected' | 'unbound' | (string & {})
+./relational-core/ast: type SqlDriverState = 'closed' | 'connected' | 'unbound'
 ./relational-core/ast: type WhereArg = AnyExpression | ToWhereExpr
 ./relational-core/ast: type WindowFn = 'dense_rank' | 'rank' | 'row_number'
 ./relational-core/codec-descriptor-registry: function buildCodecDescriptorRegistry(allDescriptors: ReadonlyArray<AnyCodecDescriptor>, storage?: SqlStorage): CodecDescriptorRegistry
@@ -6336,7 +6336,7 @@
 ./relational-core: type RowReturningStatement<RowType extends Record<string, ScopeField>> = { readonly [RowReturningStatementMarker]?: RowType; buildAst(): DeleteAst | InsertAst | UpdateAst; }
 ./relational-core: type ScalarListExpression<CodecId extends string, Nullable extends boolean> = Expression<{ codecId: CodecId; nullable: Nullable; many: true; }>
 ./relational-core: type ScopeField = { codecId: string; nullable: boolean; many?: boolean; codec?: CodecRef; input?: unknown; }
-./relational-core: type SqlDriverState = 'closed' | 'connected' | 'unbound' | (string & {})
+./relational-core: type SqlDriverState = 'closed' | 'connected' | 'unbound'
 ./relational-core: type SqlOrmPlan<Row = unknown> = SqlExecutionPlan<Row> | SqlQueryPlan<Row>
 ./relational-core: type SqlPlan<Row = unknown> = SqlExecutionPlan<Row>
 ./relational-core: type StorageColumnScopeField<Column extends { readonly codecId: string; readonly nullable: boolean; }, Input = never> = { codecId: Column['codecId']; nullable: Column['nullable']; } & (Column extends { many: true; } ? { many: true; } : Record<never, never>) & ([Input] extends [never] ? Record<never, never> : { input?: Input; })
@@ -6467,7 +6467,7 @@
 ./runtime: interface ActivityHandle<K extends ClientActivityKind> extends RuntimeQueryable, ActivitySource, ActivitySourceTarget
 ./runtime: interface ActivityRoute
 ./runtime: interface ActivityRoute, readonly required property runtimeWork: boolean
-./runtime: interface ActivityRoute, readonly required property scope: 'connection' | 'runtime' | 'transaction'
+./runtime: interface ActivityRoute, readonly required property scope: ActivityContext['scope']
 ./runtime: interface ActivityRoute, readonly required property transaction: <R>(parent: ActivityParent, fn: (tx: TransactionContext) => PromiseLike<R>, options?: RuntimeTransactionOptions) => Promise<R>
 ./runtime: interface ActivityRoute, required method execute(plan: SqlExecutionPlan<unknown> | SqlQueryPlan<unknown>, options: ActivityExecuteOptions): Promise<SqlStatementStats>
 ./runtime: interface ActivityRoute, required method parent(): ActivityParent | undefined

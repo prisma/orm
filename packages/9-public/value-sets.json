@@ -1,988 +1,1375 @@
 {
   "sets": [
     {
+      "package": "@prisma/orm-extension-middleware-cache",
+      "type": "CachedValue",
+      "status": "closed",
+      "reason": "A store keeps these values and, if it serialises them, branches on kind; a new kind changes what every store must handle, so it is a major change."
+    },
+    {
       "package": "@prisma/orm-family-mongo",
       "type": "AnyMongoCommand",
       "status": "closed",
-      "reason": "A union of MongoDB command classes defined only in our packages; an extension cannot add a kind and sends any other command as a raw command, so a new kind is our change and is made in a major version."
+      "reason": "MongoDB commands we send; renderers and visitors are exhaustive over them, and any other command goes as a raw command, so in 8.x no new command kind is added and the set changes only in a major version."
     },
     {
       "package": "@prisma/orm-family-mongo",
       "type": "AnyMongoDdlCommand",
       "status": "closed",
-      "reason": "Each kind has a required method on MongoDdlCommandVisitor, so a new kind is already a break for every visitor; the kinds change only in a major version."
+      "reason": "Each kind has a required method on MongoDdlCommandVisitor, an interface users implement, so a new kind is already a break for every visitor; the set changes only in a major version."
     },
     {
       "package": "@prisma/orm-family-mongo",
       "type": "AnyMongoDdlWireCommand",
       "status": "closed",
-      "reason": "A union of MongoDB command classes defined only in our packages; an extension cannot add a kind and sends any other command as a raw command, so a new kind is our change and is made in a major version."
+      "reason": "MongoDB commands we send; renderers and visitors are exhaustive over them, and any other command goes as a raw command, so in 8.x no new command kind is added and the set changes only in a major version."
     },
     {
       "package": "@prisma/orm-family-mongo",
       "type": "AnyMongoDmlWireCommand",
       "status": "closed",
-      "reason": "A union of MongoDB command classes defined only in our packages; an extension cannot add a kind and sends any other command as a raw command, so a new kind is our change and is made in a major version."
+      "reason": "MongoDB commands we send; renderers and visitors are exhaustive over them, and any other command goes as a raw command, so in 8.x no new command kind is added and the set changes only in a major version."
     },
     {
       "package": "@prisma/orm-family-mongo",
       "type": "AnyMongoInspectionCommand",
       "status": "closed",
-      "reason": "Each kind has a required method on MongoInspectionCommandVisitor, so a new kind is already a break for every visitor; the kinds change only in a major version."
+      "reason": "Each kind has a required method on MongoInspectionCommandVisitor, an interface users implement, so a new kind is already a break for every visitor; the set changes only in a major version."
     },
     {
       "package": "@prisma/orm-family-mongo",
       "type": "AnyMongoWireCommand",
       "status": "closed",
-      "reason": "A union of MongoDB command classes defined only in our packages; an extension cannot add a kind and sends any other command as a raw command, so a new kind is our change and is made in a major version."
+      "reason": "MongoDB commands we send; renderers and visitors are exhaustive over them, and any other command goes as a raw command, so in 8.x no new command kind is added and the set changes only in a major version."
+    },
+    {
+      "package": "@prisma/orm-family-mongo",
+      "type": "ApplyScopeResult",
+      "status": "closed",
+      "reason": "Fixed by its meaning: applying a scope succeeds or conflicts."
     },
     {
       "package": "@prisma/orm-family-mongo",
       "type": "CollModCommand.validationAction",
-      "status": "closed",
-      "reason": "Matches the MongoDB Node.js driver's own type for this option, which the value is passed to unchanged; a value the driver adds reaches this set only in a major version."
+      "status": "input",
+      "reason": "Users write it in the contract and we read it; MongoDB may add values (the driver types the option as a string), which we add as an addition that breaks no one, and a catch-all member would remove the spelling check."
     },
     {
       "package": "@prisma/orm-family-mongo",
       "type": "CollModCommand.validationLevel",
-      "status": "closed",
-      "reason": "Matches the MongoDB Node.js driver's own type for this option, which the value is passed to unchanged; a value the driver adds reaches this set only in a major version."
+      "status": "input",
+      "reason": "Users write it in the contract and we read it; MongoDB may add values (the driver types the option as a string), which we add as an addition that breaks no one, and a catch-all member would remove the spelling check."
     },
     {
       "package": "@prisma/orm-family-mongo",
       "type": "CollModOptions.validationAction",
-      "status": "closed",
-      "reason": "Matches the MongoDB Node.js driver's own type for this option, which the value is passed to unchanged; a value the driver adds reaches this set only in a major version."
+      "status": "input",
+      "reason": "Users write it in the contract and we read it; MongoDB may add values (the driver types the option as a string), which we add as an addition that breaks no one, and a catch-all member would remove the spelling check."
     },
     {
       "package": "@prisma/orm-family-mongo",
       "type": "CollModOptions.validationLevel",
-      "status": "closed",
-      "reason": "Matches the MongoDB Node.js driver's own type for this option, which the value is passed to unchanged; a value the driver adds reaches this set only in a major version."
+      "status": "input",
+      "reason": "Users write it in the contract and we read it; MongoDB may add values (the driver types the option as a string), which we add as an addition that breaks no one, and a catch-all member would remove the spelling check."
     },
     {
       "package": "@prisma/orm-family-mongo",
       "type": "CollModWireCommand.validationAction",
-      "status": "closed",
-      "reason": "Matches the MongoDB Node.js driver's own type for this option, which the value is passed to unchanged; a value the driver adds reaches this set only in a major version."
+      "status": "input",
+      "reason": "Users write it in the contract and we read it; MongoDB may add values (the driver types the option as a string), which we add as an addition that breaks no one, and a catch-all member would remove the spelling check."
     },
     {
       "package": "@prisma/orm-family-mongo",
       "type": "CollModWireCommand.validationLevel",
-      "status": "closed",
-      "reason": "Matches the MongoDB Node.js driver's own type for this option, which the value is passed to unchanged; a value the driver adds reaches this set only in a major version."
+      "status": "input",
+      "reason": "Users write it in the contract and we read it; MongoDB may add values (the driver types the option as a string), which we add as an addition that breaks no one, and a catch-all member would remove the spelling check."
     },
     {
       "package": "@prisma/orm-family-mongo",
       "type": "CreateCollectionCommand.validationAction",
-      "status": "closed",
-      "reason": "Matches the MongoDB Node.js driver's own type for this option, which the value is passed to unchanged; a value the driver adds reaches this set only in a major version."
+      "status": "input",
+      "reason": "Users write it in the contract and we read it; MongoDB may add values (the driver types the option as a string), which we add as an addition that breaks no one, and a catch-all member would remove the spelling check."
     },
     {
       "package": "@prisma/orm-family-mongo",
       "type": "CreateCollectionCommand.validationLevel",
-      "status": "closed",
-      "reason": "Matches the MongoDB Node.js driver's own type for this option, which the value is passed to unchanged; a value the driver adds reaches this set only in a major version."
+      "status": "input",
+      "reason": "Users write it in the contract and we read it; MongoDB may add values (the driver types the option as a string), which we add as an addition that breaks no one, and a catch-all member would remove the spelling check."
     },
     {
       "package": "@prisma/orm-family-mongo",
       "type": "CreateCollectionOptions.validationAction",
-      "status": "closed",
-      "reason": "Matches the MongoDB Node.js driver's own type for this option, which the value is passed to unchanged; a value the driver adds reaches this set only in a major version."
+      "status": "input",
+      "reason": "Users write it in the contract and we read it; MongoDB may add values (the driver types the option as a string), which we add as an addition that breaks no one, and a catch-all member would remove the spelling check."
     },
     {
       "package": "@prisma/orm-family-mongo",
       "type": "CreateCollectionOptions.validationLevel",
-      "status": "closed",
-      "reason": "Matches the MongoDB Node.js driver's own type for this option, which the value is passed to unchanged; a value the driver adds reaches this set only in a major version."
+      "status": "input",
+      "reason": "Users write it in the contract and we read it; MongoDB may add values (the driver types the option as a string), which we add as an addition that breaks no one, and a catch-all member would remove the spelling check."
     },
     {
       "package": "@prisma/orm-family-mongo",
       "type": "CreateCollectionWireCommand.validationAction",
-      "status": "closed",
-      "reason": "Matches the MongoDB Node.js driver's own type for this option, which the value is passed to unchanged; a value the driver adds reaches this set only in a major version."
+      "status": "input",
+      "reason": "Users write it in the contract and we read it; MongoDB may add values (the driver types the option as a string), which we add as an addition that breaks no one, and a catch-all member would remove the spelling check."
     },
     {
       "package": "@prisma/orm-family-mongo",
       "type": "CreateCollectionWireCommand.validationLevel",
-      "status": "closed",
-      "reason": "Matches the MongoDB Node.js driver's own type for this option, which the value is passed to unchanged; a value the driver adds reaches this set only in a major version."
+      "status": "input",
+      "reason": "Users write it in the contract and we read it; MongoDB may add values (the driver types the option as a string), which we add as an addition that breaks no one, and a catch-all member would remove the spelling check."
     },
     {
       "package": "@prisma/orm-family-mongo",
       "type": "EmbedRelationNode.cardinality",
       "status": "closed",
-      "reason": "The relation cardinalities; one-to-one, one-to-many, many-to-one and many-to-many are all there are."
+      "reason": "Fixed by its meaning: one-to-one, one-to-many and many-to-one are all the cardinalities a MongoDB relation has."
+    },
+    {
+      "package": "@prisma/orm-family-mongo",
+      "type": "FieldOwner",
+      "status": "closed",
+      "reason": "Fixed by its meaning: a field belongs to a model or to a value object, the only things in a contract that have fields."
     },
     {
       "package": "@prisma/orm-family-mongo",
       "type": "FindAndModifyEnabled",
-      "status": "not-cases",
+      "status": "type-parameter",
       "reason": "A type-level marker of the query builder's state; no value of it exists at run time."
     },
     {
       "package": "@prisma/orm-family-mongo",
       "type": "FindOneAndUpdateCommand.returnDocument",
       "status": "closed",
-      "reason": "MongoDB returns the document as it was before or after the update; there is no third choice."
+      "reason": "Fixed by its meaning: MongoDB returns the document as it was before or after the update."
     },
     {
       "package": "@prisma/orm-family-mongo",
       "type": "FindOneAndUpdateWireCommand.returnDocument",
       "status": "closed",
-      "reason": "MongoDB returns the document as it was before or after the update; there is no third choice."
+      "reason": "Fixed by its meaning: MongoDB returns the document as it was before or after the update."
     },
     {
       "package": "@prisma/orm-family-mongo",
       "type": "MongoAggExpr",
       "status": "closed",
-      "reason": "Each kind has a required method on MongoAggExprVisitor, so a new kind is already a break for every visitor; the kinds change only in a major version."
+      "reason": "Each kind has a required method on MongoAggExprVisitor, an interface users implement, so a new kind is already a break for every visitor; the set changes only in a major version."
     },
     {
       "package": "@prisma/orm-family-mongo",
       "type": "MongoBackRelationCandidate.cardinality",
       "status": "closed",
-      "reason": "The relation cardinalities; one-to-one, one-to-many, many-to-one and many-to-many are all there are."
+      "reason": "Fixed by its meaning: one-to-one, one-to-many and many-to-one are all the cardinalities a MongoDB relation has."
     },
     {
       "package": "@prisma/orm-family-mongo",
       "type": "MongoCollationAlternate",
-      "status": "closed",
-      "reason": "The values MongoDB defines for this collation option."
+      "status": "input",
+      "reason": "Users write it in the contract and we read it; MongoDB may add values (the driver types the option as a string), which we add as an addition that breaks no one, and a catch-all member would remove the spelling check."
     },
     {
       "package": "@prisma/orm-family-mongo",
       "type": "MongoCollationCaseFirst",
-      "status": "closed",
-      "reason": "The values MongoDB defines for this collation option."
+      "status": "input",
+      "reason": "Users write it in the contract and we read it; MongoDB may add values (the driver types the option as a string), which we add as an addition that breaks no one, and a catch-all member would remove the spelling check."
     },
     {
       "package": "@prisma/orm-family-mongo",
       "type": "MongoCollationMaxVariable",
-      "status": "closed",
-      "reason": "The values MongoDB defines for this collation option."
+      "status": "input",
+      "reason": "Users write it in the contract and we read it; MongoDB may add values (the driver types the option as a string), which we add as an addition that breaks no one, and a catch-all member would remove the spelling check."
     },
     {
       "package": "@prisma/orm-family-mongo",
       "type": "MongoCollationStrength",
-      "status": "closed",
-      "reason": "The values MongoDB defines for this collation option."
+      "status": "input",
+      "reason": "Users write it in the contract and we read it; MongoDB may add values (the driver types the option as a string), which we add as an addition that breaks no one, and a catch-all member would remove the spelling check."
     },
     {
       "package": "@prisma/orm-family-mongo",
       "type": "MongoDmlCheck.expect",
       "status": "closed",
-      "reason": "A check expects a match or no match; there is no third outcome."
+      "reason": "Fixed by its meaning: a check expects a match or no match."
+    },
+    {
+      "package": "@prisma/orm-family-mongo",
+      "type": "MongoFieldShape",
+      "status": "closed",
+      "reason": "The shapes of a document value the result type describes; a new shape changes every result type, which is a major change."
     },
     {
       "package": "@prisma/orm-family-mongo",
       "type": "MongoFilterExpr",
       "status": "closed",
-      "reason": "Each kind has a required method on MongoFilterVisitor, so a new kind is already a break for every visitor; the kinds change only in a major version."
+      "reason": "Each kind has a required method on MongoFilterVisitor, an interface users implement, so a new kind is already a break for every visitor; the set changes only in a major version."
     },
     {
       "package": "@prisma/orm-family-mongo",
       "type": "MongoIndexFieldValue",
-      "status": "closed",
-      "reason": "Matches the MongoDB Node.js driver's own type for this option, which the value is passed to unchanged; a value the driver adds reaches this set only in a major version."
+      "status": "input",
+      "reason": "Users write it in the contract and we read it; MongoDB may add values (the driver types the option as a string), which we add as an addition that breaks no one, and a catch-all member would remove the spelling check."
     },
     {
       "package": "@prisma/orm-family-mongo",
       "type": "MongoIndexKeyDirection",
-      "status": "closed",
-      "reason": "Matches the MongoDB Node.js driver's own type for this option, which the value is passed to unchanged; a value the driver adds reaches this set only in a major version."
+      "status": "input",
+      "reason": "Users write it in the contract and we read it; MongoDB may add values (the driver types the option as a string), which we add as an addition that breaks no one, and a catch-all member would remove the spelling check."
     },
     {
       "package": "@prisma/orm-family-mongo",
       "type": "MongoIndexOptionKey",
-      "status": "not-cases",
-      "reason": "Names the options of an index, which users write; no user code receives one to handle."
+      "status": "input",
+      "reason": "Names the options of an index, which users write; Users write these values and pass them to us; adding one never breaks them, and a catch-all member would remove the spelling check, so it stays a plain union."
+    },
+    {
+      "package": "@prisma/orm-family-mongo",
+      "type": "MongoLoweredDraft",
+      "status": "closed",
+      "reason": "MongoDB commands we send; renderers and visitors are exhaustive over them, and any other command goes as a raw command, so in 8.x no new command kind is added and the set changes only in a major version."
     },
     {
       "package": "@prisma/orm-family-mongo",
       "type": "MongoMigrationCheck.expect",
       "status": "closed",
-      "reason": "A check expects a match or no match; there is no third outcome."
+      "reason": "Fixed by its meaning: a check expects a match or no match."
     },
     {
       "package": "@prisma/orm-family-mongo",
       "type": "MongoPipelineStage",
       "status": "closed",
-      "reason": "Each kind has a required method on MongoStageVisitor, so a new kind is already a break for every visitor; the kinds change only in a major version."
+      "reason": "Each kind has a required method on MongoStageVisitor, an interface users implement, so a new kind is already a break for every visitor; the set changes only in a major version."
+    },
+    {
+      "package": "@prisma/orm-family-mongo",
+      "type": "MongoResultShape",
+      "status": "closed",
+      "reason": "The shapes of a document value the result type describes; a new shape changes every result type, which is a major change."
     },
     {
       "package": "@prisma/orm-family-mongo",
       "type": "MongoSchemaValidator.validationAction",
-      "status": "closed",
-      "reason": "Matches the MongoDB Node.js driver's own type for this option, which the value is passed to unchanged; a value the driver adds reaches this set only in a major version."
+      "status": "input",
+      "reason": "Users write it in the contract and we read it; MongoDB may add values (the driver types the option as a string), which we add as an addition that breaks no one, and a catch-all member would remove the spelling check."
     },
     {
       "package": "@prisma/orm-family-mongo",
       "type": "MongoSchemaValidator.validationLevel",
-      "status": "closed",
-      "reason": "Matches the MongoDB Node.js driver's own type for this option, which the value is passed to unchanged; a value the driver adds reaches this set only in a major version."
+      "status": "input",
+      "reason": "Users write it in the contract and we read it; MongoDB may add values (the driver types the option as a string), which we add as an addition that breaks no one, and a catch-all member would remove the spelling check."
     },
     {
       "package": "@prisma/orm-family-mongo",
       "type": "MongoSchemaValidatorOptions.validationAction",
-      "status": "closed",
-      "reason": "Matches the MongoDB Node.js driver's own type for this option, which the value is passed to unchanged; a value the driver adds reaches this set only in a major version."
+      "status": "input",
+      "reason": "Users write it in the contract and we read it; MongoDB may add values (the driver types the option as a string), which we add as an addition that breaks no one, and a catch-all member would remove the spelling check."
     },
     {
       "package": "@prisma/orm-family-mongo",
       "type": "MongoSchemaValidatorOptions.validationLevel",
-      "status": "closed",
-      "reason": "Matches the MongoDB Node.js driver's own type for this option, which the value is passed to unchanged; a value the driver adds reaches this set only in a major version."
+      "status": "input",
+      "reason": "Users write it in the contract and we read it; MongoDB may add values (the driver types the option as a string), which we add as an addition that breaks no one, and a catch-all member would remove the spelling check."
     },
     {
       "package": "@prisma/orm-family-mongo",
       "type": "MongoTimeSeriesGranularity",
-      "status": "closed",
-      "reason": "The three granularities MongoDB defines for a time-series collection."
+      "status": "input",
+      "reason": "Users write it in the contract and we read it; MongoDB may add values (the driver types the option as a string), which we add as an addition that breaks no one, and a catch-all member would remove the spelling check."
     },
     {
       "package": "@prisma/orm-family-mongo",
       "type": "MongoUpdatePipelineStage",
       "status": "closed",
-      "reason": "Each kind has a required method on MongoStageVisitor, so a new kind is already a break for every visitor; the kinds change only in a major version."
+      "reason": "Each kind has a required method on MongoStageVisitor, an interface users implement, so a new kind is already a break for every visitor; the set changes only in a major version."
     },
     {
       "package": "@prisma/orm-family-mongo",
       "type": "MongoValidatorValidationAction",
-      "status": "closed",
-      "reason": "Matches the MongoDB Node.js driver's own type for this option, which the value is passed to unchanged; a value the driver adds reaches this set only in a major version."
+      "status": "input",
+      "reason": "Users write it in the contract and we read it; MongoDB may add values (the driver types the option as a string), which we add as an addition that breaks no one, and a catch-all member would remove the spelling check."
     },
     {
       "package": "@prisma/orm-family-mongo",
       "type": "MongoValidatorValidationLevel",
-      "status": "closed",
-      "reason": "Matches the MongoDB Node.js driver's own type for this option, which the value is passed to unchanged; a value the driver adds reaches this set only in a major version."
+      "status": "input",
+      "reason": "Users write it in the contract and we read it; MongoDB may add values (the driver types the option as a string), which we add as an addition that breaks no one, and a catch-all member would remove the spelling check."
     },
     {
       "package": "@prisma/orm-family-mongo",
       "type": "RawFindOneAndUpdateCommand.returnDocument",
       "status": "closed",
-      "reason": "MongoDB returns the document as it was before or after the update; there is no third choice."
+      "reason": "Fixed by its meaning: MongoDB returns the document as it was before or after the update."
     },
     {
       "package": "@prisma/orm-family-mongo",
       "type": "RawMongoCommand",
       "status": "closed",
-      "reason": "A union of MongoDB command classes defined only in our packages; an extension cannot add a kind and sends any other command as a raw command, so a new kind is our change and is made in a major version."
+      "reason": "MongoDB commands we send; renderers and visitors are exhaustive over them, and any other command goes as a raw command, so in 8.x no new command kind is added and the set changes only in a major version."
     },
     {
       "package": "@prisma/orm-family-mongo",
       "type": "ReferenceRelationNode.cardinality",
       "status": "closed",
-      "reason": "The relation cardinalities; one-to-one, one-to-many, many-to-one and many-to-many are all there are."
+      "reason": "Fixed by its meaning: one-to-one, one-to-many and many-to-one are all the cardinalities a MongoDB relation has."
+    },
+    {
+      "package": "@prisma/orm-family-mongo",
+      "type": "RefusalKey",
+      "status": "closed",
+      "reason": "The parts of a contract definition a refusal can point at; a new part is a change of the definition language, which needs a major version. The refusals themselves (BuildRefusal) are open."
     },
     {
       "package": "@prisma/orm-family-mongo",
       "type": "UpdateEnabled",
-      "status": "not-cases",
+      "status": "type-parameter",
       "reason": "A type-level marker of the query builder's state; no value of it exists at run time."
     },
     {
-      "package": "@prisma/orm-family-sql",
-      "type": "ActivityRoute.scope",
-      "status": "closed",
-      "reason": "Passed unchanged to the framework's ActivityContext.scope, which is closed today; it can open only together with that type."
+      "package": "@prisma/orm-family-mongo",
+      "type": "UpdateOperator",
+      "status": "input",
+      "reason": "Built by the field accessors and handed back to us by a user's updater; users do not branch on it. Produced by a target, driver or codec author and read by our code; adding a value is an addition for them, and a catch-all member would remove their spelling check."
     },
     {
       "package": "@prisma/orm-family-sql",
       "type": "AggregateFn",
       "status": "closed",
-      "reason": "The SQL aggregate alphabet of ADR 020; an extension adds an aggregate as an operation of its own, not as a member of this set."
+      "reason": "The SQL aggregate alphabet; ADR 020 keeps it closed because renderers are exhaustive over it, and an extension adds an aggregate as an operation of its own."
     },
     {
       "package": "@prisma/orm-family-sql",
       "type": "AggregateOpFn",
       "status": "closed",
-      "reason": "The SQL aggregate alphabet of ADR 020; an extension adds an aggregate as an operation of its own, not as a member of this set."
+      "reason": "The SQL aggregate alphabet; ADR 020 keeps it closed because renderers are exhaustive over it, and an extension adds an aggregate as an operation of its own."
     },
     {
       "package": "@prisma/orm-family-sql",
       "type": "AnyDdlColumnDefault",
       "status": "closed",
-      "reason": "A union of SQL syntax-tree classes defined only in our packages; an extension cannot add a kind, and contributes an operation (OperationExpr) or raw SQL instead, so a new kind is our change and is made in a major version. A catch-all member would also lack the methods the classes share (accept, rewrite)."
+      "reason": "Code users write over the SQL syntax tree is exhaustive over its kinds, as our renderers and ExprVisitor are, and new SQL functions and operators arrive as contributed operations (OperationExpr), as ADR 020 sets out for aggregates; so in 8.x the tree gains no new kind and the set changes only in a major version. A catch-all member would also lack the methods the classes share (accept, rewrite)."
     },
     {
       "package": "@prisma/orm-family-sql",
       "type": "AnyExpression",
       "status": "closed",
-      "reason": "Each kind has a required method on ExprVisitor, so a new kind is already a break for every visitor; the kinds change only in a major version."
+      "reason": "Each kind has a required method on ExprVisitor, an interface users implement, so a new kind is already a break for every visitor; the set changes only in a major version."
     },
     {
       "package": "@prisma/orm-family-sql",
       "type": "AnyFromSource",
       "status": "closed",
-      "reason": "A union of SQL syntax-tree classes defined only in our packages; an extension cannot add a kind, and contributes an operation (OperationExpr) or raw SQL instead, so a new kind is our change and is made in a major version. A catch-all member would also lack the methods the classes share (accept, rewrite)."
+      "reason": "Code users write over the SQL syntax tree is exhaustive over its kinds, as our renderers and ExprVisitor are, and new SQL functions and operators arrive as contributed operations (OperationExpr), as ADR 020 sets out for aggregates; so in 8.x the tree gains no new kind and the set changes only in a major version. A catch-all member would also lack the methods the classes share (accept, rewrite)."
     },
     {
       "package": "@prisma/orm-family-sql",
       "type": "AnyInsertOnConflictAction",
       "status": "closed",
-      "reason": "A union of SQL syntax-tree classes defined only in our packages; an extension cannot add a kind, and contributes an operation (OperationExpr) or raw SQL instead, so a new kind is our change and is made in a major version. A catch-all member would also lack the methods the classes share (accept, rewrite)."
+      "reason": "Code users write over the SQL syntax tree is exhaustive over its kinds, as our renderers and ExprVisitor are, and new SQL functions and operators arrive as contributed operations (OperationExpr), as ADR 020 sets out for aggregates; so in 8.x the tree gains no new kind and the set changes only in a major version. A catch-all member would also lack the methods the classes share (accept, rewrite)."
     },
     {
       "package": "@prisma/orm-family-sql",
       "type": "AnyInsertValue",
       "status": "closed",
-      "reason": "A union of SQL syntax-tree classes defined only in our packages; an extension cannot add a kind, and contributes an operation (OperationExpr) or raw SQL instead, so a new kind is our change and is made in a major version. A catch-all member would also lack the methods the classes share (accept, rewrite)."
+      "reason": "Code users write over the SQL syntax tree is exhaustive over its kinds, as our renderers and ExprVisitor are, and new SQL functions and operators arrive as contributed operations (OperationExpr), as ADR 020 sets out for aggregates; so in 8.x the tree gains no new kind and the set changes only in a major version. A catch-all member would also lack the methods the classes share (accept, rewrite)."
     },
     {
       "package": "@prisma/orm-family-sql",
       "type": "AnyJsonValueProjection",
       "status": "closed",
-      "reason": "Each kind has a required method on JsonValueProjectionVisitor, so a new kind is already a break for every visitor; the kinds change only in a major version."
+      "reason": "Each kind has a required method on JsonValueProjectionVisitor, an interface users implement, so a new kind is already a break for every visitor; the set changes only in a major version."
     },
     {
       "package": "@prisma/orm-family-sql",
       "type": "AnyOperationArg",
       "status": "closed",
-      "reason": "A union of SQL syntax-tree classes defined only in our packages; an extension cannot add a kind, and contributes an operation (OperationExpr) or raw SQL instead, so a new kind is our change and is made in a major version. A catch-all member would also lack the methods the classes share (accept, rewrite)."
+      "reason": "Code users write over the SQL syntax tree is exhaustive over its kinds, as our renderers and ExprVisitor are, and new SQL functions and operators arrive as contributed operations (OperationExpr), as ADR 020 sets out for aggregates; so in 8.x the tree gains no new kind and the set changes only in a major version. A catch-all member would also lack the methods the classes share (accept, rewrite)."
     },
     {
       "package": "@prisma/orm-family-sql",
       "type": "AnyParamRef",
       "status": "closed",
-      "reason": "A union of SQL syntax-tree classes defined only in our packages; an extension cannot add a kind, and contributes an operation (OperationExpr) or raw SQL instead, so a new kind is our change and is made in a major version. A catch-all member would also lack the methods the classes share (accept, rewrite)."
+      "reason": "Code users write over the SQL syntax tree is exhaustive over its kinds, as our renderers and ExprVisitor are, and new SQL functions and operators arrive as contributed operations (OperationExpr), as ADR 020 sets out for aggregates; so in 8.x the tree gains no new kind and the set changes only in a major version. A catch-all member would also lack the methods the classes share (accept, rewrite)."
     },
     {
       "package": "@prisma/orm-family-sql",
       "type": "AnyQueryAst",
       "status": "closed",
-      "reason": "A union of SQL syntax-tree classes defined only in our packages; an extension cannot add a kind, and contributes an operation (OperationExpr) or raw SQL instead, so a new kind is our change and is made in a major version. A catch-all member would also lack the methods the classes share (accept, rewrite)."
+      "reason": "Code users write over the SQL syntax tree is exhaustive over its kinds, as our renderers and ExprVisitor are, and new SQL functions and operators arrive as contributed operations (OperationExpr), as ADR 020 sets out for aggregates; so in 8.x the tree gains no new kind and the set changes only in a major version. A catch-all member would also lack the methods the classes share (accept, rewrite)."
     },
     {
       "package": "@prisma/orm-family-sql",
       "type": "BinaryOp",
       "status": "closed",
-      "reason": "Part of the SQL AST, whose node kinds ExprVisitor already holds closed; a new operator or function reaches users as a contributed operation (OperationExpr), as ADR 020 does for aggregates."
+      "reason": "Part of the SQL syntax tree; new operators arrive as contributed operations (OperationExpr), as ADR 020 sets out for aggregates, so in 8.x this set gains no operator."
     },
     {
       "package": "@prisma/orm-family-sql",
       "type": "CheckKind",
-      "status": "not-cases",
-      "reason": "Which derived CHECK constraint a check is; our naming code turns it into the suffix of the constraint's database name, and user code has no reason to branch on it."
+      "status": "input",
+      "reason": "Produced by implementers of CheckExpressionRenderer and read by our naming code; Produced by a target, driver or codec author and read by our code; adding a value is an addition for them, and a catch-all member would remove their spelling check."
     },
     {
       "package": "@prisma/orm-family-sql",
       "type": "CloseRefusal",
-      "status": "not-cases",
-      "reason": "An option users pass in; no user code receives it to handle. A new value is an addition, not a break."
+      "status": "input",
+      "reason": "An option users pass in; adding a value never breaks them, and a catch-all member would remove the spelling check."
     },
     {
       "package": "@prisma/orm-family-sql",
       "type": "DdlTableConstraint",
       "status": "closed",
-      "reason": "A union of SQL syntax-tree classes defined only in our packages; an extension cannot add a kind, and contributes an operation (OperationExpr) or raw SQL instead, so a new kind is our change and is made in a major version. A catch-all member would also lack the methods the classes share (accept, rewrite)."
+      "reason": "Code users write over the SQL syntax tree is exhaustive over its kinds, as our renderers and ExprVisitor are, and new SQL functions and operators arrive as contributed operations (OperationExpr), as ADR 020 sets out for aggregates; so in 8.x the tree gains no new kind and the set changes only in a major version. A catch-all member would also lack the methods the classes share (accept, rewrite)."
     },
     {
       "package": "@prisma/orm-family-sql",
       "type": "Direction",
       "status": "closed",
-      "reason": "A sort runs ascending or descending; there is no third direction."
+      "reason": "Fixed by its meaning: a sort runs ascending or descending."
+    },
+    {
+      "package": "@prisma/orm-family-sql",
+      "type": "EncodedLiteralDefault",
+      "status": "closed",
+      "reason": "Fixed by its meaning: an encoded default is SQL NULL or a wire value."
     },
     {
       "package": "@prisma/orm-family-sql",
       "type": "Expr",
       "status": "closed",
-      "reason": "A union of SQL syntax-tree classes defined only in our packages; an extension cannot add a kind, and contributes an operation (OperationExpr) or raw SQL instead, so a new kind is our change and is made in a major version. A catch-all member would also lack the methods the classes share (accept, rewrite)."
+      "reason": "Code users write over the SQL syntax tree is exhaustive over its kinds, as our renderers and ExprVisitor are, and new SQL functions and operators arrive as contributed operations (OperationExpr), as ADR 020 sets out for aggregates; so in 8.x the tree gains no new kind and the set changes only in a major version. A catch-all member would also lack the methods the classes share (accept, rewrite)."
+    },
+    {
+      "package": "@prisma/orm-family-sql",
+      "type": "FieldStorageEffect",
+      "status": "closed",
+      "reason": "Fixed by its meaning: a rename changes a column or table name, moves a table, or changes nothing in storage."
+    },
+    {
+      "package": "@prisma/orm-family-sql",
+      "type": "GeneratedIdColumnAlias",
+      "status": "input",
+      "reason": "The aliases users write for a generated id column; Users write these values and pass them to us; adding one never breaks them, and a catch-all member would remove the spelling check, so it stays a plain union."
     },
     {
       "package": "@prisma/orm-family-sql",
       "type": "InsertValue",
       "status": "closed",
-      "reason": "A union of SQL syntax-tree classes defined only in our packages; an extension cannot add a kind, and contributes an operation (OperationExpr) or raw SQL instead, so a new kind is our change and is made in a major version. A catch-all member would also lack the methods the classes share (accept, rewrite)."
+      "reason": "Code users write over the SQL syntax tree is exhaustive over its kinds, as our renderers and ExprVisitor are, and new SQL functions and operators arrive as contributed operations (OperationExpr), as ADR 020 sets out for aggregates; so in 8.x the tree gains no new kind and the set changes only in a major version. A catch-all member would also lack the methods the classes share (accept, rewrite)."
     },
     {
       "package": "@prisma/orm-family-sql",
       "type": "JoinAst.joinType",
       "status": "closed",
-      "reason": "Part of the SQL syntax tree, which is closed in 8.x; a new join type or empty-array behaviour reaches users as a contributed operation or raw SQL."
+      "reason": "Code users write over the SQL syntax tree is exhaustive over its kinds, as our renderers and ExprVisitor are, and new SQL functions and operators arrive as contributed operations (OperationExpr), as ADR 020 sets out for aggregates; so in 8.x the tree gains no new kind and the set changes only in a major version. A catch-all member would also lack the methods the classes share (accept, rewrite)."
     },
     {
       "package": "@prisma/orm-family-sql",
       "type": "JoinOnExpr",
       "status": "closed",
-      "reason": "A union of SQL syntax-tree classes defined only in our packages; an extension cannot add a kind, and contributes an operation (OperationExpr) or raw SQL instead, so a new kind is our change and is made in a major version. A catch-all member would also lack the methods the classes share (accept, rewrite)."
+      "reason": "Code users write over the SQL syntax tree is exhaustive over its kinds, as our renderers and ExprVisitor are, and new SQL functions and operators arrive as contributed operations (OperationExpr), as ADR 020 sets out for aggregates; so in 8.x the tree gains no new kind and the set changes only in a major version. A catch-all member would also lack the methods the classes share (accept, rewrite)."
     },
     {
       "package": "@prisma/orm-family-sql",
       "type": "JsonArrayAggExpr.onEmpty",
       "status": "closed",
-      "reason": "Part of the SQL syntax tree, which is closed in 8.x; a new join type or empty-array behaviour reaches users as a contributed operation or raw SQL."
+      "reason": "Code users write over the SQL syntax tree is exhaustive over its kinds, as our renderers and ExprVisitor are, and new SQL functions and operators arrive as contributed operations (OperationExpr), as ADR 020 sets out for aggregates; so in 8.x the tree gains no new kind and the set changes only in a major version. A catch-all member would also lack the methods the classes share (accept, rewrite)."
+    },
+    {
+      "package": "@prisma/orm-family-sql",
+      "type": "JsonPathStep",
+      "status": "input",
+      "reason": "Produced by a target, driver or codec author and read by our code; adding a value is an addition for them, and a catch-all member would remove their spelling check."
+    },
+    {
+      "package": "@prisma/orm-family-sql",
+      "type": "JsonType",
+      "status": "input",
+      "reason": "A codec author declares it as jsonType and our code reads it; Produced by a target, driver or codec author and read by our code; adding a value is an addition for them, and a catch-all member would remove their spelling check."
     },
     {
       "package": "@prisma/orm-family-sql",
       "type": "LintsOptions.fallbackWhenAstMissing",
-      "status": "not-cases",
-      "reason": "An option users pass in; no user code receives it to handle."
+      "status": "input",
+      "reason": "An option users pass in; adding a value never breaks them, and a catch-all member would remove the spelling check."
     },
     {
       "package": "@prisma/orm-family-sql",
       "type": "LockStrength",
-      "status": "closed",
-      "reason": "The four row-lock strengths SQL defines; users pass them to lock(), where the catch-all member would accept any text."
+      "status": "input",
+      "reason": "Users pass it to lock(); Users write these values and pass them to us; adding one never breaks them, and a catch-all member would remove the spelling check, so it stays a plain union."
     },
     {
       "package": "@prisma/orm-family-sql",
       "type": "LockWaitPolicy",
+      "status": "input",
+      "reason": "Users pass it to lock(); Users write these values and pass them to us; adding one never breaks them, and a catch-all member would remove the spelling check, so it stays a plain union."
+    },
+    {
+      "package": "@prisma/orm-family-sql",
+      "type": "LoweredParam",
+      "status": "input",
+      "reason": "Produced by a target, driver or codec author and read by our code; adding a value is an addition for them, and a catch-all member would remove their spelling check."
+    },
+    {
+      "package": "@prisma/orm-family-sql",
+      "type": "MarkerReadResult",
       "status": "closed",
-      "reason": "NOWAIT and SKIP LOCKED are the only alternatives to waiting for a lock; users pass them to lock(), where the catch-all member would accept any text."
+      "reason": "Fixed by its meaning: the marker row is present, absent, or its table is missing."
+    },
+    {
+      "package": "@prisma/orm-family-sql",
+      "type": "ModelStorageEffect",
+      "status": "closed",
+      "reason": "Fixed by its meaning: a rename changes a column or table name, moves a table, or changes nothing in storage."
     },
     {
       "package": "@prisma/orm-family-sql",
       "type": "OrderByNulls",
       "status": "closed",
-      "reason": "SQL places nulls first or last; there is no third placement."
+      "reason": "Fixed by its meaning: SQL places nulls first or last."
     },
     {
       "package": "@prisma/orm-family-sql",
       "type": "ProjectionExpr",
       "status": "closed",
-      "reason": "A union of SQL syntax-tree classes defined only in our packages; an extension cannot add a kind, and contributes an operation (OperationExpr) or raw SQL instead, so a new kind is our change and is made in a major version. A catch-all member would also lack the methods the classes share (accept, rewrite)."
+      "reason": "Code users write over the SQL syntax tree is exhaustive over its kinds, as our renderers and ExprVisitor are, and new SQL functions and operators arrive as contributed operations (OperationExpr), as ADR 020 sets out for aggregates; so in 8.x the tree gains no new kind and the set changes only in a major version. A catch-all member would also lack the methods the classes share (accept, rewrite)."
+    },
+    {
+      "package": "@prisma/orm-family-sql",
+      "type": "RawQueryResult",
+      "status": "closed",
+      "reason": "Fixed by its meaning: a raw query returns rows or an affected count."
     },
     {
       "package": "@prisma/orm-family-sql",
       "type": "ReferentialAction",
       "status": "closed",
-      "reason": "The five referential actions the SQL standard defines."
+      "reason": "Fixed by its meaning: the five referential actions the SQL standard defines."
     },
     {
       "package": "@prisma/orm-family-sql",
       "type": "RelationNode.cardinality",
       "status": "closed",
-      "reason": "The relation cardinalities; one-to-one, one-to-many, many-to-one and many-to-many are all there are."
+      "reason": "Fixed by its meaning: one-to-one, one-to-many, many-to-one and many-to-many are all the cardinalities there are."
+    },
+    {
+      "package": "@prisma/orm-family-sql",
+      "type": "ReportedLiteralDefault",
+      "status": "input",
+      "reason": "Produced by a target, driver or codec author and read by our code; adding a value is an addition for them, and a catch-all member would remove their spelling check."
+    },
+    {
+      "package": "@prisma/orm-family-sql",
+      "type": "ResolvedEntityHandleRef",
+      "status": "closed",
+      "reason": "Fixed by its meaning: an entity handle resolves in this contract space or in another one."
+    },
+    {
+      "package": "@prisma/orm-family-sql",
+      "type": "ResolvedValueObjectFieldType",
+      "status": "closed",
+      "reason": "The field types a value object's schema can hold, following the contract's field-type alphabet; a new one is a change of the contract format, which needs a major version."
+    },
+    {
+      "package": "@prisma/orm-family-sql",
+      "type": "SqlBuiltinKind",
+      "status": "type-parameter",
+      "reason": "The TBuiltinKinds argument of the contract view: it splits the built-in kinds from view.entries, so a catch-all member would empty entries. A new built-in kind changes the view's shape, which is a major change."
+    },
+    {
+      "package": "@prisma/orm-family-sql",
+      "type": "SqlDefaultFunctionName",
+      "status": "type-parameter",
+      "reason": "The keys of the record sqlDefaultFunctions() returns; a catch-all member would turn the record into an index signature."
+    },
+    {
+      "package": "@prisma/orm-family-sql",
+      "type": "SqlDriverState",
+      "status": "input",
+      "reason": "Returned by a driver's state getter and read by our runtime; Produced by a target, driver or codec author and read by our code; adding a value is an addition for them, and a catch-all member would remove their spelling check."
+    },
+    {
+      "package": "@prisma/orm-family-sql",
+      "type": "SqlPlannerResult",
+      "status": "closed",
+      "reason": "Fixed by its meaning: a plan succeeds or fails."
     },
     {
       "package": "@prisma/orm-family-sql",
       "type": "SqlReferentialAction",
       "status": "closed",
-      "reason": "The five referential actions the SQL standard defines."
+      "reason": "Fixed by its meaning: the five referential actions the SQL standard defines."
+    },
+    {
+      "package": "@prisma/orm-family-sql",
+      "type": "SqlSlot",
+      "status": "input",
+      "reason": "Produced by a target, driver or codec author and read by our code; adding a value is an addition for them, and a catch-all member would remove their spelling check."
+    },
+    {
+      "package": "@prisma/orm-family-sql",
+      "type": "StatementOperations",
+      "status": "closed",
+      "reason": "Fixed by its meaning: a statement's operations are listed or come from the diff."
     },
     {
       "package": "@prisma/orm-family-sql",
       "type": "VerifyMarkerOption",
-      "status": "not-cases",
-      "reason": "An option users pass in; no user code receives it to handle. A new value is an addition, not a break."
+      "status": "input",
+      "reason": "An option users pass in; adding a value never breaks them, and a catch-all member would remove the spelling check."
     },
     {
       "package": "@prisma/orm-family-sql",
       "type": "WindowFn",
       "status": "closed",
-      "reason": "Part of the SQL AST, whose node kinds ExprVisitor already holds closed; a new operator or function reaches users as a contributed operation (OperationExpr), as ADR 020 does for aggregates."
+      "reason": "Part of the SQL syntax tree; in 8.x it gains no window function, and until 9.0 a new one arrives as a contributed operation (OperationExpr), as ADR 020 sets out for aggregates."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "AccessWideningLevel",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open."
+      "status": "pending",
+      "recommended": "input",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "Activity",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open with the kind sentinel (middleware may see new activity kinds)."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "ActivityContext.scope",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "ActivityFinalizedResult.outcome",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
+    },
+    {
+      "package": "@prisma/orm-framework",
+      "type": "AggregateInputMatch",
+      "status": "pending",
+      "recommended": "closed",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "AggregateOutputCodec",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended closed (an aggregate's output is its input's codec or a named one)."
+      "status": "pending",
+      "recommended": "closed",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "ArgTypeKind",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain. The PSL syntax tree and its tokens: users only receive them, and new PSL syntax may add kinds, so open; where the members are classes with shared methods, closed, because the sentinel cannot carry those methods."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "AttributeLevel",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended closed (PSL has block, field and model attributes only)."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain. The PSL syntax tree and its tokens: users only receive them, and new PSL syntax may add kinds, so open; where the members are classes with shared methods, closed, because the sentinel cannot carry those methods."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "AttributeSymbol.level",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended closed (PSL has block, field and model attributes only)."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain. The PSL syntax tree and its tokens: users only receive them, and new PSL syntax may add kinds, so open; where the members are classes with shared methods, closed, because the sentinel cannot carry those methods."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "AuthoringNamespaceKey",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "BuiltinGeneratorId",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open."
+      "status": "pending",
+      "recommended": "input",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
+    },
+    {
+      "package": "@prisma/orm-framework",
+      "type": "CastRefusal",
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "ChangeStrategy",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "CheckExpectation.expects",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "CliErrorEnvelope.severity",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "CliStructuredError.severity",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "ClientActivityEnd.outcome",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "ClientActivityEnded.outcome",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "ClientActivityEnded.source",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "CodecTrait",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended closed (ADR 214 relies on the trait set staying closed)."
+      "status": "pending",
+      "recommended": "closed",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain. ADR 214 relies on the built-in trait set staying closed, but has each extension cast its namespaced traits into a CodecTrait array, so at run time the array already holds values outside the type; closed with that caveat, or type the array to include the namespaced form."
+    },
+    {
+      "package": "@prisma/orm-framework",
+      "type": "ColumnDefault",
+      "status": "pending",
+      "recommended": "closed",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
+    },
+    {
+      "package": "@prisma/orm-framework",
+      "type": "ContractFieldType",
+      "status": "pending",
+      "recommended": "closed",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "ContractSourceDiagnostic.severity",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "ContractSourceFormat",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open."
+      "status": "pending",
+      "recommended": "input",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "ContractValidationPhase",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "ContributedTypeDescriptor",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended closed (part of the PSL syntax tree, which only our parser builds)."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain. The PSL syntax tree and its tokens: users only receive them, and new PSL syntax may add kinds, so open; where the members are classes with shared methods, closed, because the sentinel cannot carry those methods."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "ControlPolicy",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open."
+      "status": "pending",
+      "recommended": "input",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "DataLossLevel",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open."
+      "status": "pending",
+      "recommended": "input",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
+    },
+    {
+      "package": "@prisma/orm-framework",
+      "type": "DataTypeWrittenForm",
+      "status": "pending",
+      "recommended": "input",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
+    },
+    {
+      "package": "@prisma/orm-framework",
+      "type": "DatabaseCapabilitiesNotProvidedFinding",
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "DateTimeShape",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open."
+      "status": "pending",
+      "recommended": "input",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "DateTimeStoredTextOptions.maxFractionDigits",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended not-cases (an option users pass in)."
+      "status": "pending",
+      "recommended": "input",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "Diagnostic.severity",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "DiffSubjectGranularity",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "Direction",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended closed (a syntax-tree walk goes to the next or the previous sibling)."
+      "status": "pending",
+      "recommended": "closed",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
+    },
+    {
+      "package": "@prisma/orm-framework",
+      "type": "DiscriminatorRefusal",
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "EntityDeclaration",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended closed (part of the PSL syntax tree, which only our parser builds)."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain. The PSL syntax tree and its tokens: users only receive them, and new PSL syntax may add kinds, so open; where the members are classes with shared methods, closed, because the sentinel cannot carry those methods."
+    },
+    {
+      "package": "@prisma/orm-framework",
+      "type": "EntitySelector",
+      "status": "pending",
+      "recommended": "input",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "ExpectationFailureReason",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
+    },
+    {
+      "package": "@prisma/orm-framework",
+      "type": "Expr",
+      "status": "pending",
+      "recommended": "closed",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "FailedCast.reason",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "FailedCheck.phase",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "FailedConversion.reason",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "FormatOptions.newline",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended not-cases (an option users pass in)."
+      "status": "pending",
+      "recommended": "input",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "FormatterConfig.newline",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended not-cases (an option users pass in)."
+      "status": "pending",
+      "recommended": "input",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "GeneratorPhase",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open."
+      "status": "pending",
+      "recommended": "input",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "GeneratorStability",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open."
+      "status": "pending",
+      "recommended": "input",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "GreenElement",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended closed (part of the PSL syntax tree, which only our parser builds)."
+      "status": "pending",
+      "recommended": "closed",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain. The PSL syntax tree and its tokens: users only receive them, and new PSL syntax may add kinds, so open; where the members are classes with shared methods, closed, because the sentinel cannot carry those methods."
+    },
+    {
+      "package": "@prisma/orm-framework",
+      "type": "IdentifierArgType",
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain. The PSL syntax tree and its tokens: users only receive them, and new PSL syntax may add kinds, so open; where the members are classes with shared methods, closed, because the sentinel cannot carry those methods."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "ImportRequirement.kind",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended closed (an import is a default or a named one)."
+      "status": "pending",
+      "recommended": "closed",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
+    },
+    {
+      "package": "@prisma/orm-framework",
+      "type": "MarkerDatabasePoliciesComparison",
+      "status": "pending",
+      "recommended": "closed",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "MigrationDataLossKind",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "MigrationOperationClass",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "MigrationPlannerResult",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended closed (a plan succeeds or fails)."
+      "status": "pending",
+      "recommended": "closed",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "MutationDefaultsOp",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "NextAction.kind",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "NodeMismatchExplanation.cause",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "NumberClassification.form",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "OperationKind",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended closed (a query reads or writes)."
+      "status": "pending",
+      "recommended": "closed",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
+    },
+    {
+      "package": "@prisma/orm-framework",
+      "type": "ParsedWrittenScalar",
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain. The PSL syntax tree and its tokens: users only receive them, and new PSL syntax may add kinds, so open; where the members are classes with shared methods, closed, because the sentinel cannot carry those methods."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "PslAttributeArgument",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended closed (part of the PSL syntax tree, which only our parser builds)."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain. The PSL syntax tree and its tokens: users only receive them, and new PSL syntax may add kinds, so open; where the members are classes with shared methods, closed, because the sentinel cannot carry those methods."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "PslAttributeTarget",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain. The PSL syntax tree and its tokens: users only receive them, and new PSL syntax may add kinds, so open; where the members are classes with shared methods, closed, because the sentinel cannot carry those methods."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "PslDefaultFunctionValue.name",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain. The PSL syntax tree and its tokens: users only receive them, and new PSL syntax may add kinds, so open; where the members are classes with shared methods, closed, because the sentinel cannot carry those methods."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "PslDefaultValue",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended closed (part of the PSL syntax tree, which only our parser builds)."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain. The PSL syntax tree and its tokens: users only receive them, and new PSL syntax may add kinds, so open; where the members are classes with shared methods, closed, because the sentinel cannot carry those methods."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "PslDiagnosticCode",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open (error codes)."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "PslGrammar",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open."
+      "status": "pending",
+      "recommended": "input",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "PslNamespaceEntry",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended closed (part of the PSL syntax tree, which only our parser builds)."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain. The PSL syntax tree and its tokens: users only receive them, and new PSL syntax may add kinds, so open; where the members are classes with shared methods, closed, because the sentinel cannot carry those methods."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "PslSymbol",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended closed (part of the PSL syntax tree, which only our parser builds)."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain. The PSL syntax tree and its tokens: users only receive them, and new PSL syntax may add kinds, so open; where the members are classes with shared methods, closed, because the sentinel cannot carry those methods."
+    },
+    {
+      "package": "@prisma/orm-framework",
+      "type": "ReadRefusal",
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "RefusalDescription.code",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open (error codes)."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
+    },
+    {
+      "package": "@prisma/orm-framework",
+      "type": "Resolution",
+      "status": "pending",
+      "recommended": "closed",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "ResolvedAttributeArg.kind",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended closed (an argument is named or positional)."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain. The PSL syntax tree and its tokens: users only receive them, and new PSL syntax may add kinds, so open; where the members are classes with shared methods, closed, because the sentinel cannot carry those methods."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "ResolvedMigrationStatement",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open with the kind sentinel (new migration statements are likely)."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "ResolvedRenameStatement",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open with the kind sentinel (new things to rename are likely)."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "RowsWithoutValue.reason",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "RuntimeAbortedPhase",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "RuntimeErrorEnvelope.category",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "RuntimeExecuteOptions.scope",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open."
+      "status": "pending",
+      "recommended": "input",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "RuntimeMode",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open."
+      "status": "pending",
+      "recommended": "input",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "SchemaLabelPartRole",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "SchemaViewNodeKind",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
+    },
+    {
+      "package": "@prisma/orm-framework",
+      "type": "ScopeResolution",
+      "status": "pending",
+      "recommended": "closed",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "StatementActivity.returns",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "StoredFileKind",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open."
+      "status": "pending",
+      "recommended": "closed",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "StringLiteralQuote",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended closed (the three JavaScript quote characters)."
+      "status": "pending",
+      "recommended": "closed",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "StructuredError.severity",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "StructuredErrorOptions.severity",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open."
+      "status": "pending",
+      "recommended": "input",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "SyntaxKind",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain. The PSL syntax tree and its tokens: users only receive them, and new PSL syntax may add kinds, so open; where the members are classes with shared methods, closed, because the sentinel cannot carry those methods."
+    },
+    {
+      "package": "@prisma/orm-framework",
+      "type": "TemporalTag",
+      "status": "input",
+      "reason": "A codec author passes it to temporalToText and names it in a codec's identity; Produced by a target, driver or codec author and read by our code; adding a value is an addition for them, and a catch-all member would remove their spelling check."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "ToOneRelationNullabilityContradiction",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "TokenKind",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open (new PSL syntax adds tokens); its import path psl-parser/tokenizer is removed by the export reduction."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain. The PSL syntax tree and its tokens: users only receive them, and new PSL syntax may add kinds, so open; where the members are classes with shared methods, closed, because the sentinel cannot carry those methods. Its import path psl-parser/tokenizer is removed by the export reduction."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "TransactionEnded.outcome",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
+    },
+    {
+      "package": "@prisma/orm-framework",
+      "type": "TypeAliasBase",
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain. The PSL syntax tree and its tokens: users only receive them, and new PSL syntax may add kinds, so open; where the members are classes with shared methods, closed, because the sentinel cannot carry those methods."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "TypeAttributeSubject.kind",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain. The PSL syntax tree and its tokens: users only receive them, and new PSL syntax may add kinds, so open; where the members are classes with shared methods, closed, because the sentinel cannot carry those methods."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "UnsupportedAttribute.level",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended closed (PSL has block, field and model attributes only)."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain. The PSL syntax tree and its tokens: users only receive them, and new PSL syntax may add kinds, so open; where the members are classes with shared methods, closed, because the sentinel cannot carry those methods."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "ValueTypeSide",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended closed (a value is read or written)."
+      "status": "pending",
+      "recommended": "closed",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "VerificationStatus",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "VerifierIssueCategory",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-framework",
       "type": "VerifierOutcome",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
+    },
+    {
+      "package": "@prisma/orm-framework",
+      "type": "WrittenValue",
+      "status": "pending",
+      "recommended": "input",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
+    },
+    {
+      "package": "@prisma/orm-postgres",
+      "type": "PostgresBinding",
+      "status": "input",
+      "reason": "Produced by a target, driver or codec author and read by our code; adding a value is an addition for them, and a catch-all member would remove their spelling check."
+    },
+    {
+      "package": "@prisma/orm-target-mongo",
+      "type": "MongoBinding",
+      "status": "input",
+      "reason": "Produced by a target, driver or codec author and read by our code; adding a value is an addition for them, and a catch-all member would remove their spelling check."
+    },
+    {
+      "package": "@prisma/orm-target-mongo",
+      "type": "PlanCallsResult",
+      "status": "closed",
+      "reason": "Fixed by its meaning: planning calls succeeds or fails."
     },
     {
       "package": "@prisma/orm-target-mysql",
       "type": "MysqlIsolationLevel",
-      "status": "not-cases",
-      "reason": "An isolation level users pass to a transaction; no user code receives one to handle."
+      "status": "input",
+      "reason": "Users write these values and pass them to us; adding one never breaks them, and a catch-all member would remove the spelling check, so it stays a plain union."
+    },
+    {
+      "package": "@prisma/orm-target-mysql",
+      "type": "MysqlReportedDefault",
+      "status": "input",
+      "reason": "Produced by a target, driver or codec author and read by our code; adding a value is an addition for them, and a catch-all member would remove their spelling check."
     },
     {
       "package": "@prisma/orm-target-postgres",
       "type": "AnyAlterTableAction",
       "status": "closed",
-      "reason": "Each kind has a required method on AlterTableActionVisitor, so a new kind is already a break for every visitor; the kinds change only in a major version."
+      "reason": "Each kind has a required method on AlterTableActionVisitor, an interface users implement, so a new kind is already a break for every visitor; the set changes only in a major version."
     },
     {
       "package": "@prisma/orm-target-postgres",
       "type": "AnyPostgresDdlNode",
       "status": "closed",
-      "reason": "Each kind has a required method on PostgresDdlVisitor, so a new kind is already a break for every visitor; the kinds change only in a major version."
+      "reason": "Each kind has a required method on PostgresDdlVisitor, an interface users implement, so a new kind is already a break for every visitor; the set changes only in a major version."
+    },
+    {
+      "package": "@prisma/orm-target-postgres",
+      "type": "ColumnTypeCheck",
+      "status": "input",
+      "reason": "Produced by a target, driver or codec author and read by our code; adding a value is an addition for them, and a catch-all member would remove their spelling check."
     },
     {
       "package": "@prisma/orm-target-postgres",
@@ -993,176 +1380,330 @@
     {
       "package": "@prisma/orm-target-postgres",
       "type": "FullTextSearchLanguage",
-      "status": "not-cases",
-      "reason": "A text-search language users choose; no user code receives one to handle. A new language is an addition, not a break."
+      "status": "input",
+      "reason": "Users write these values and pass them to us; adding one never breaks them, and a catch-all member would remove the spelling check, so it stays a plain union."
+    },
+    {
+      "package": "@prisma/orm-target-postgres",
+      "type": "PostgresBinding",
+      "status": "input",
+      "reason": "Produced by a target, driver or codec author and read by our code; adding a value is an addition for them, and a catch-all member would remove their spelling check."
     },
     {
       "package": "@prisma/orm-target-postgres",
       "type": "PostgresIsolationLevel",
-      "status": "not-cases",
-      "reason": "An isolation level users pass to a transaction; no user code receives one to handle."
+      "status": "input",
+      "reason": "Users write these values and pass them to us; adding one never breaks them, and a catch-all member would remove the spelling check, so it stays a plain union."
+    },
+    {
+      "package": "@prisma/orm-target-postgres",
+      "type": "PostgresReportedDefault",
+      "status": "input",
+      "reason": "Produced by a target, driver or codec author and read by our code; adding a value is an addition for them, and a catch-all member would remove their spelling check."
+    },
+    {
+      "package": "@prisma/orm-target-postgres",
+      "type": "PostgresVersion",
+      "status": "input",
+      "reason": "The PostgreSQL versions users may give as the server version in config; Users write these values and pass them to us; adding one never breaks them, and a catch-all member would remove the spelling check, so it stays a plain union."
     },
     {
       "package": "@prisma/orm-target-postgres",
       "type": "RlsPolicyOperation",
       "status": "closed",
-      "reason": "The five commands PostgreSQL's CREATE POLICY accepts."
+      "reason": "Fixed by its meaning: the five commands PostgreSQL's CREATE POLICY accepts."
     },
     {
       "package": "@prisma/orm-target-postgres",
       "type": "SetDefaultCall.operationClass",
       "status": "closed",
-      "reason": "Setting a default only ever adds to or widens what a column accepts; the other operation classes cannot apply."
+      "reason": "Fixed by its meaning: setting a default only ever adds to or widens what a column accepts."
+    },
+    {
+      "package": "@prisma/orm-target-sqlite",
+      "type": "SqliteReportedDefault",
+      "status": "input",
+      "reason": "Produced by a target, driver or codec author and read by our code; adding a value is an addition for them, and a catch-all member would remove their spelling check."
     },
     {
       "package": "@prisma/orm-toolchain",
       "type": "BuildAggregateInputs.whenFileUnreadable",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended not-cases (an option users pass in)."
+      "status": "pending",
+      "recommended": "input",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-toolchain",
       "type": "ConfigSection",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
+    },
+    {
+      "package": "@prisma/orm-toolchain",
+      "type": "ContractEntryInput",
+      "status": "pending",
+      "recommended": "input",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
+    },
+    {
+      "package": "@prisma/orm-toolchain",
+      "type": "ContractRefProvenance",
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-toolchain",
       "type": "ContractSpaceSeedPhaseRecord.action",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-toolchain",
       "type": "ControlActionName",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
+    },
+    {
+      "package": "@prisma/orm-toolchain",
+      "type": "ControlProgressEvent",
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-toolchain",
       "type": "DbInitOptions.mode",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended not-cases (an option users pass in)."
+      "status": "pending",
+      "recommended": "input",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-toolchain",
       "type": "DbInitSuccess.mode",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-toolchain",
       "type": "DbUpdateOptions.mode",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended not-cases (an option users pass in)."
+      "status": "pending",
+      "recommended": "input",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-toolchain",
       "type": "DbUpdateSuccess.mode",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-toolchain",
       "type": "EmitFailureCode",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open (error codes)."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-toolchain",
       "type": "ExecuteDbInitOptions.mode",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended not-cases (an option users pass in)."
+      "status": "pending",
+      "recommended": "input",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-toolchain",
       "type": "ExecuteDbUpdateOptions.mode",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended not-cases (an option users pass in)."
+      "status": "pending",
+      "recommended": "input",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-toolchain",
       "type": "ExecuteDbVerifyOptions.mode",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended not-cases (an option users pass in)."
+      "status": "pending",
+      "recommended": "input",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
+    },
+    {
+      "package": "@prisma/orm-toolchain",
+      "type": "ExtensionSpaceApplyPathOutcome",
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
+    },
+    {
+      "package": "@prisma/orm-toolchain",
+      "type": "FromResolution",
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-toolchain",
       "type": "GatingDisabledReason",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
+    },
+    {
+      "package": "@prisma/orm-toolchain",
+      "type": "InitProbeResult",
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
+    },
+    {
+      "package": "@prisma/orm-toolchain",
+      "type": "IntegrityViolation",
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
+    },
+    {
+      "package": "@prisma/orm-toolchain",
+      "type": "MarkerCheckResult",
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
+    },
+    {
+      "package": "@prisma/orm-toolchain",
+      "type": "MigrationPlanArgument",
+      "status": "pending",
+      "recommended": "input",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
+    },
+    {
+      "package": "@prisma/orm-toolchain",
+      "type": "MigrationRefProvenance",
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
+    },
+    {
+      "package": "@prisma/orm-toolchain",
+      "type": "PackageLoadProblem",
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-toolchain",
       "type": "PerSpacePlan.strategy",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-toolchain",
       "type": "PlanQuestionVerb",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
+    },
+    {
+      "package": "@prisma/orm-toolchain",
+      "type": "PlannerError",
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-toolchain",
       "type": "PrismaVitePluginOptions.logLevel",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended not-cases (an option users pass in)."
+      "status": "pending",
+      "recommended": "input",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-toolchain",
       "type": "RefResolutionAmbiguous.grammar",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-toolchain",
       "type": "RefResolutionError",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open with the kind sentinel (error kinds)."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-toolchain",
       "type": "RefResolutionNotFound.grammar",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-toolchain",
       "type": "RefResolutionWrongGrammar.expectedGrammar",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-toolchain",
       "type": "RenderContractDtsFailureCode",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open (error codes)."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-toolchain",
       "type": "ResolveContractRefToSnapshotSuccess.source",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
+    },
+    {
+      "package": "@prisma/orm-toolchain",
+      "type": "ResolveRecordedPathOutcome",
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-toolchain",
       "type": "ScaffoldRuntime",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open."
+      "status": "pending",
+      "recommended": "input",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
+    },
+    {
+      "package": "@prisma/orm-toolchain",
+      "type": "SpaceVerifierViolation",
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
+    },
+    {
+      "package": "@prisma/orm-toolchain",
+      "type": "StatementOrigin",
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-toolchain",
       "type": "StatementVerb",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended open."
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     },
     {
       "package": "@prisma/orm-toolchain",
       "type": "VerifierInput.mode",
-      "status": "undecided",
-      "reason": "In the framework domain (packages/1-framework), so it stays undecided until we agree whether this work may change that domain; recommended not-cases (an option users pass in)."
+      "status": "pending",
+      "recommended": "input",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
     }
   ]
 }

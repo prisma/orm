@@ -9,7 +9,8 @@ export type MarkerSwapFailure =
   | { readonly kind: 'storageHashMoved'; readonly found: ContractMarkerRecord | null }
   | { readonly kind: 'policiesMoved'; readonly found: DatabasePolicies }
   | { readonly kind: 'policiesUnreadable'; readonly why: string }
-  | { readonly kind: 'markerChanged'; readonly found: ContractMarkerRecord };
+  | { readonly kind: 'markerChanged'; readonly found: ContractMarkerRecord }
+  | { readonly kind: '%future added value' };
 
 /**
  * Why the swap of a marker expected at `expectedStorageHash`, guarded by `checkedPolicies` when given,

@@ -1,24 +1,6 @@
 [
   {
     "path": "./adapter",
-    "export": "PostgresAdapterOptions",
-    "test": "type",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "1da3c053f72490fb",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
-  },
-  {
-    "path": "./adapter",
-    "export": "PostgresCodecRegistry",
-    "test": "type",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "bd995abb1a3f29f4",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
-  },
-  {
-    "path": "./adapter",
     "export": "PostgresControlAdapter",
     "test": "type",
     "kind": "break",
@@ -34,24 +16,6 @@
     "lastRelease": "8.0.0-rc.25",
     "fingerprint": "4bd1ba09fce7f6d2",
     "reason": "The PostgreSQL schema tree holds the server's version as the number `serverVersionNumber`, read from `server_version_num`, in place of the text `pgVersion` (prisma/orm#31218)."
-  },
-  {
-    "path": "./adapter",
-    "export": "createPostgresBuiltinCodecLookup",
-    "test": "value",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "8cfaad74883a7cf5",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
-  },
-  {
-    "path": "./adapter",
-    "export": "createPostgresCodecRegistryWithBuiltins",
-    "test": "value",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "1c9ffc3dbece2667",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
   },
   {
     "path": "./adapter",
@@ -106,24 +70,6 @@
     "lastRelease": "8.0.0-rc.25",
     "fingerprint": "4bd1ba09fce7f6d2",
     "reason": "The PostgreSQL schema tree holds the server's version as the number `serverVersionNumber`, read from `server_version_num`, in place of the text `pgVersion` (prisma/orm#31218)."
-  },
-  {
-    "path": "./adapter/control",
-    "export": "createPostgresBuiltinCodecLookup",
-    "test": "value",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "8cfaad74883a7cf5",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
-  },
-  {
-    "path": "./adapter/control",
-    "export": "createPostgresCodecRegistryWithBuiltins",
-    "test": "value",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "1c9ffc3dbece2667",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
   },
   {
     "path": "./adapter/control",
@@ -135,66 +81,12 @@
     "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
   },
   {
-    "path": "./adapter/types",
-    "export": "PostgresAdapterOptions",
-    "test": "type",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "1da3c053f72490fb",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
-  },
-  {
-    "path": "./adapter/types",
-    "export": "PostgresCodecRegistry",
-    "test": "type",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "bd995abb1a3f29f4",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
-  },
-  {
-    "path": "./driver",
-    "export": "PostgresRuntimeDriver",
-    "test": "type",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "d4f655f35e1b5245",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
-  },
-  {
-    "path": "./driver/runtime",
-    "export": "PostgresRuntimeDriver",
-    "test": "type",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "d4f655f35e1b5245",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
-  },
-  {
-    "path": "./driver/runtime",
-    "export": "default",
-    "test": "value",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "df4c22ef8522b304",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
-  },
-  {
     "path": "./target",
-    "export": "AdaptedPostgresCodecDescriptor",
+    "export": "FullTextIndexProblem",
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "8f1f9cde947b3906",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
-  },
-  {
-    "path": "./target",
-    "export": "AnyPostgresCodecDescriptor",
-    "test": "type",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "2e5ff88b9f7ec019",
+    "fingerprint": "694d0f7ae59a2e1e",
     "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
   },
   {
@@ -223,42 +115,6 @@
     "lastRelease": "8.0.0-rc.25",
     "fingerprint": "8db32054212a5c03",
     "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
-  },
-  {
-    "path": "./target",
-    "export": "PostgresCodecDescriptor",
-    "test": "type",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "3ca4f5541391f2a7",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
-  },
-  {
-    "path": "./target",
-    "export": "PostgresCodecDescriptor",
-    "test": "value",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "3ca4f5541391f2a7",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
-  },
-  {
-    "path": "./target",
-    "export": "PostgresCodecDescriptorRegistry",
-    "test": "type",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "4bbe7946a77ba521",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
-  },
-  {
-    "path": "./target",
-    "export": "PostgresCodecRegistry",
-    "test": "type",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "bd995abb1a3f29f4",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
   },
   {
     "path": "./target",
@@ -325,33 +181,6 @@
   },
   {
     "path": "./target",
-    "export": "assemblePostgresCodecRegistry",
-    "test": "value",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "e1bb0b5dae67cf9d",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
-  },
-  {
-    "path": "./target",
-    "export": "assemblePostgresCodecRegistryWithBuiltins",
-    "test": "value",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "976b69ae81dfe76a",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
-  },
-  {
-    "path": "./target",
-    "export": "buildPostgresCodecDescriptorRegistry",
-    "test": "value",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "e808b62fbb1038cb",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
-  },
-  {
-    "path": "./target",
     "export": "buildPostgresPlanDiff",
     "test": "value",
     "kind": "break",
@@ -379,24 +208,6 @@
   },
   {
     "path": "./target",
-    "export": "createPostgresBuiltinCodecLookup",
-    "test": "value",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "8cfaad74883a7cf5",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
-  },
-  {
-    "path": "./target",
-    "export": "createPostgresCodecRegistryWithBuiltins",
-    "test": "value",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "1c9ffc3dbece2667",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
-  },
-  {
-    "path": "./target",
     "export": "createPostgresMigrationPlanner",
     "test": "value",
     "kind": "break",
@@ -406,11 +217,11 @@
   },
   {
     "path": "./target",
-    "export": "isPostgresCodecDescriptor",
+    "export": "fullTextIndexProblems",
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "47db617c344231b9",
+    "fingerprint": "4530c1b622b3500b",
     "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
   },
   {
@@ -424,155 +235,11 @@
   },
   {
     "path": "./target",
-    "export": "postgresCodec",
-    "test": "value",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "c739cbc900443efb",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
-  },
-  {
-    "path": "./target",
-    "export": "postgresCodecDescriptorRegistry",
-    "test": "value",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "b3052b2eb37d8907",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
-  },
-  {
-    "path": "./target",
     "export": "resolveIdentityValue",
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
     "fingerprint": "d21c7b510b365c09",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
-  },
-  {
-    "path": "./target/codec-descriptor",
-    "export": "AdaptedPostgresCodecDescriptor",
-    "test": "type",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "8f1f9cde947b3906",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
-  },
-  {
-    "path": "./target/codec-descriptor",
-    "export": "AnyPostgresCodecDescriptor",
-    "test": "type",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "2e5ff88b9f7ec019",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
-  },
-  {
-    "path": "./target/codec-descriptor",
-    "export": "PostgresCodecDescriptor",
-    "test": "type",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "3ca4f5541391f2a7",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
-  },
-  {
-    "path": "./target/codec-descriptor",
-    "export": "PostgresCodecDescriptor",
-    "test": "value",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "3ca4f5541391f2a7",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
-  },
-  {
-    "path": "./target/codec-descriptor",
-    "export": "PostgresCodecDescriptorRegistry",
-    "test": "type",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "4bbe7946a77ba521",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
-  },
-  {
-    "path": "./target/codec-descriptor",
-    "export": "buildPostgresCodecDescriptorRegistry",
-    "test": "value",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "e808b62fbb1038cb",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
-  },
-  {
-    "path": "./target/codec-descriptor",
-    "export": "isPostgresCodecDescriptor",
-    "test": "value",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "47db617c344231b9",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
-  },
-  {
-    "path": "./target/codec-descriptor",
-    "export": "postgresCodec",
-    "test": "value",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "c739cbc900443efb",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
-  },
-  {
-    "path": "./target/codecs",
-    "export": "PostgresCodecRegistry",
-    "test": "type",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "bd995abb1a3f29f4",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
-  },
-  {
-    "path": "./target/codecs",
-    "export": "assemblePostgresCodecRegistry",
-    "test": "value",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "e1bb0b5dae67cf9d",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
-  },
-  {
-    "path": "./target/codecs",
-    "export": "assemblePostgresCodecRegistryWithBuiltins",
-    "test": "value",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "976b69ae81dfe76a",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
-  },
-  {
-    "path": "./target/codecs",
-    "export": "createPostgresBuiltinCodecLookup",
-    "test": "value",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "8cfaad74883a7cf5",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
-  },
-  {
-    "path": "./target/codecs",
-    "export": "createPostgresCodecRegistryWithBuiltins",
-    "test": "value",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "1c9ffc3dbece2667",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
-  },
-  {
-    "path": "./target/codecs",
-    "export": "postgresCodecDescriptorRegistry",
-    "test": "value",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "b3052b2eb37d8907",
     "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
   },
   {
@@ -592,6 +259,24 @@
     "lastRelease": "8.0.0-rc.25",
     "fingerprint": "6a75978f479c23b9",
     "reason": "The PostgreSQL schema tree holds the server's version as the number `serverVersionNumber`, read from `server_version_num`, in place of the text `pgVersion` (prisma/orm#31218)."
+  },
+  {
+    "path": "./target/full-text-index-authoring",
+    "export": "FullTextIndexProblem",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "694d0f7ae59a2e1e",
+    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
+  },
+  {
+    "path": "./target/full-text-index-authoring",
+    "export": "fullTextIndexProblems",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "4530c1b622b3500b",
+    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
   },
   {
     "path": "./target/issue-planner",

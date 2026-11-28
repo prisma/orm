@@ -117,15 +117,6 @@
     "reason": "A column name that several joined tables share must now name its table (prisma/orm#31150), and `transaction()` is a type error for a contract that does not require `sql.interactiveTransactions`; a release candidate's contract may still call it (prisma/orm#31218)."
   },
   {
-    "path": "./serverless",
-    "export": "default",
-    "test": "value",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "60bfac749b693f9d",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
-  },
-  {
     "path": "./static",
     "export": "PostgresStaticContext",
     "test": "type",

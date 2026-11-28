@@ -6,7 +6,8 @@ import { bsonTypesOfCodec } from './mongo-data-type';
  */
 export type FieldBsonTypeRefusal =
   | { readonly kind: 'unknownCodec'; readonly reason: string }
-  | { readonly kind: 'notMongoDataType'; readonly reason: string; readonly dataType: string };
+  | { readonly kind: 'notMongoDataType'; readonly reason: string; readonly dataType: string }
+  | { readonly kind: '%future added value'; readonly reason: string };
 
 const CANNOT_GIVE = 'so its BSON type is unknown and the contract cannot describe the field.';
 

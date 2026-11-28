@@ -26,9 +26,14 @@ function codecRefusalError(
       meta: { ...meta, codecId },
     });
   }
+  if (refusal.kind === 'notMongoDataType') {
+    return contractError('CONTRACT.PACK_CONTRIBUTION_INVALID', `${subject} ${refusal.reason}`, {
+      fix: 'Use a codec whose data type is a MongoDB data type, declared with mongoDataType.',
+      meta: { ...meta, codecId, dataType: refusal.dataType, reason: 'data-type-not-mongo' },
+    });
+  }
   return contractError('CONTRACT.PACK_CONTRIBUTION_INVALID', `${subject} ${refusal.reason}`, {
-    fix: 'Use a codec whose data type is a MongoDB data type, declared with mongoDataType.',
-    meta: { ...meta, codecId, dataType: refusal.dataType, reason: 'data-type-not-mongo' },
+    meta: { ...meta, codecId, reason: refusal.kind },
   });
 }
 
@@ -105,6 +110,10 @@ function validatorRefusalError(refusal: MongoContractRefusal): StructuredError {
           },
         },
       );
+    default:
+      return contractError('CONTRACT.ARGUMENT_INVALID', refusal.reason, {
+        meta: { reason: refusal.kind },
+      });
   }
 }
 
@@ -650,6 +659,10 @@ export function refusalError(refusal: BuildRefusal): StructuredError {
       );
     case 'validator':
       return validatorRefusalError(refusal.refusal);
+    default:
+      return contractError('CONTRACT.ARGUMENT_INVALID', refusal.reason, {
+        meta: { reason: refusal.kind },
+      });
   }
 }
 

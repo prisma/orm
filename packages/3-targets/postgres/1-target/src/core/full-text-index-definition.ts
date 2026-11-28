@@ -44,7 +44,8 @@ export type FullTextIndexProblem =
   | { readonly kind: 'empty-group'; readonly position: number }
   | { readonly kind: 'duplicate-field'; readonly field: string }
   | { readonly kind: 'not-text'; readonly field: string; readonly codecId: string | undefined }
-  | { readonly kind: 'unique' };
+  | { readonly kind: 'unique' }
+  | { readonly kind: '%future added value' };
 
 /**
  * The rules of a full-text index, stated once: one to four weight groups, none empty, each field
@@ -102,6 +103,8 @@ export function describeFullTextIndexProblem(
       return `${subject} indexes text columns, but "${fieldLabel(problem.field)}" is ${problem.codecId === undefined ? 'not a stored scalar field' : `stored as \`${problem.codecId}\``}.`;
     case 'unique':
       return `${subject} is unique, but Postgres builds no unique gin index.`;
+    default:
+      return `${subject} breaks the full-text index rule "${problem.kind}".`;
   }
 }
 

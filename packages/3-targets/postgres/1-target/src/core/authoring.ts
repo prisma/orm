@@ -727,13 +727,17 @@ function isFieldName(value: unknown): value is string {
  */
 type PslFullTextIndexProblem = Exclude<
   FullTextIndexProblem,
-  { readonly kind: 'unique' | 'no-fields' }
+  { readonly kind: 'unique' | 'no-fields' | '%future added value' }
 >;
 
 function isPslFullTextIndexProblem(
   problem: FullTextIndexProblem,
 ): problem is PslFullTextIndexProblem {
-  return problem.kind !== 'unique' && problem.kind !== 'no-fields';
+  return (
+    problem.kind !== 'unique' &&
+    problem.kind !== 'no-fields' &&
+    problem.kind !== '%future added value'
+  );
 }
 
 const FULL_TEXT_INDEX_PROBLEM_CODES: Record<

@@ -116,6 +116,45 @@ describe('findValueSets', () => {
       { name: 'OpenNode', shape: 'objects', open: true, paths: ['./a'] },
     ]);
   });
+
+  it('finds a union of object types written inline, and its open form with shared members', () => {
+    const sets = findValueSets(
+      api(
+        "./a: type Refusal = { readonly kind: 'a'; readonly reason: string; } | { readonly kind: 'b'; }",
+        "./a: type OpenRefusal = { readonly kind: 'a'; } | { readonly kind: '%future added value'; readonly reason: string; }",
+        './a: type Shapes = { readonly size: number; } | { readonly kind: "b"; }',
+      ),
+    );
+    deepStrictEqual(
+      sets.map(({ name, shape, open }) => [name, shape, open]),
+      [
+        ['OpenRefusal', 'objects', true],
+        ['Refusal', 'objects', false],
+      ],
+    );
+  });
+
+  it('reads a generic alias, a generic member and the keys of a constant', () => {
+    const sets = findValueSets(
+      api(
+        "./a: type Refusal<Key extends string = 'x'> = { readonly kind: 'a'; readonly key: Key; } | { readonly kind: 'b'; }",
+        './a: type Wrapped = Refusal<string> | { readonly kind: "c"; }',
+        './a: const aliases: { readonly uuid: Alias; readonly cuid: Alias; }',
+        './a: type AliasName = keyof typeof aliases',
+      ),
+    );
+    deepStrictEqual(
+      sets.map(({ name }) => name),
+      ['AliasName', 'Refusal', 'Wrapped'],
+    );
+  });
+
+  it('drops null and undefined from a property union', () => {
+    const [set] = findValueSets(
+      api("./a: interface Row, readonly required property status: 'applied' | 'pending' | null"),
+    );
+    strictEqual(set.name, 'Row.status');
+  });
 });
 
 describe('checkValueSets', () => {
@@ -170,6 +209,45 @@ describe('checkValueSets', () => {
     match(problems[1], /Unmarked: status "shut" is not one of/);
   });
 
+  it('fails on two entries for one set', () => {
+    const problems = checkValueSets(lists, [
+      closedDirection,
+      { ...closedDirection, type: 'Unmarked' },
+      { ...closedDirection, status: 'input' },
+    ]);
+    deepStrictEqual(problems.length, 1);
+    match(problems[0], /Direction is declared twice/);
+  });
+
+  it('allows pending only in the framework domain, with a recommendation', () => {
+    const framework = {
+      package: '@prisma/orm-framework',
+      text: api(
+        "./components: type Phase = 'a' | 'b'",
+        "./type-implementations: type Tag = 'a' | 'b'",
+      ),
+    };
+    const pending = {
+      package: '@prisma/orm-framework',
+      type: 'Phase',
+      status: 'pending',
+      reason: 'Waits.',
+    };
+    const problems = checkValueSets(
+      [...lists, framework],
+      [
+        closedDirection,
+        { ...pending, type: 'Unmarked', package: PACKAGE, recommended: 'open' },
+        pending,
+        { ...pending, type: 'Tag', recommended: 'open' },
+      ],
+    );
+    deepStrictEqual(problems.length, 3);
+    match(problems[0], /Unmarked is pending, but it is not in the framework domain/);
+    match(problems[1], /Phase: a pending declaration needs "recommended"/);
+    match(problems[2], /Tag is pending, but it is not in the framework domain/);
+  });
+
   it('passes when every set is open or declared', () => {
     deepStrictEqual(
       checkValueSets(lists, [closedDirection, { ...closedDirection, type: 'Unmarked' }]),
@@ -189,40 +267,86 @@ describe('the committed lists', () => {
 });
 
 describe('what each catch-all member allows', () => {
-  const source = `
-    interface Sel { readonly kind: 'select'; readonly table: string }
-    interface Ins { readonly kind: 'insert'; readonly rows: number }
-    type Strings = 'a' | 'b' | (string & {});
-    type Sentinel = Sel | Ins | { readonly kind: '%future added value' };
-    type WideKind = Sel | Ins | { readonly kind: string & {} };
-    declare const sentinel: Sentinel;
-    declare const wide: WideKind;
-    export const narrowsSentinel = sentinel.kind === 'select' ? sentinel.table : '';
-    export const narrowsWide = wide.kind === 'select' ? wide.table : '';
-    export function strings(x: Strings) {
-      switch (x) { case 'a': case 'b': return x; default: { const unreachable: never = x; return unreachable; } }
-    }
-    export function objects(x: Sentinel) {
-      switch (x.kind) { case 'select': return x.table; case 'insert': return x.rows; default: { const unreachable: never = x; return unreachable; } }
-    }
-  `;
-  const errorLines = () => {
-    const host = ts.createCompilerHost({});
-    const file = ts.createSourceFile('sets.ts', source, ts.ScriptTarget.Latest, true);
-    const getSourceFile = host.getSourceFile;
-    host.getSourceFile = (name, ...rest) =>
-      name === 'sets.ts' ? file : getSourceFile.call(host, name, ...rest);
-    const program = ts.createProgram(['sets.ts'], { strict: true, noEmit: true, types: [] }, host);
-    return ts
-      .getPreEmitDiagnostics(program)
-      .map((d) => source.split('\n')[file.getLineAndCharacterOfPosition(d.start).line].trim());
+  const source = [
+    "interface Sel { readonly kind: 'select'; readonly table: string }",
+    "interface Ins { readonly kind: 'insert'; readonly rows: number }",
+    "type Strings = 'a' | 'b' | (string & {});",
+    "type Codes = 'M.A' | 'M.B' | (`M.${string}` & {});",
+    'type Versions = 15 | 16 | (number & {});',
+    "type Sentinel = Sel | Ins | { readonly kind: '%future added value' };",
+    'type WideKind = Sel | Ins | { readonly kind: string & {} };',
+    'declare const sentinel: Sentinel;',
+    'declare const wide: WideKind;',
+    "export const narrowsSentinel = sentinel.kind === 'select' ? sentinel.table : '';",
+    "export const narrowsWide = wide.kind === 'select' ? wide.table : '';",
+    "export const namedString: Strings = 'a';",
+    "export const namedCode: Codes = 'M.A';",
+    'export const namedVersion: Versions = 15;',
+    "export const keepsPrefix: Codes = 'X.A';",
+    'export function strings(x: Strings) {',
+    "  if (x === 'a' || x === 'b') return x;",
+    '  const neverString: never = x;',
+    '  return neverString;',
+    '}',
+    'export function codes(x: Codes) {',
+    "  if (x === 'M.A' || x === 'M.B') return x;",
+    '  const neverCode: never = x;',
+    '  return neverCode;',
+    '}',
+    'export function versions(x: Versions) {',
+    '  if (x === 15 || x === 16) return x;',
+    '  const neverVersion: never = x;',
+    '  return neverVersion;',
+    '}',
+    'export function objects(x: Sentinel) {',
+    "  if (x.kind === 'select') return x.table;",
+    "  if (x.kind === 'insert') return x.rows;",
+    '  const neverObject: never = x;',
+    '  return neverObject;',
+    '}',
+    "export const complete: Strings = '';",
+  ].join('\n');
+  const options = { strict: true, noEmit: true, types: [], target: ts.ScriptTarget.ES2022 };
+  const host = {
+    getScriptFileNames: () => ['sets.ts'],
+    getScriptVersion: () => '1',
+    getScriptSnapshot: (name) => {
+      if (name === 'sets.ts') return ts.ScriptSnapshot.fromString(source);
+      const text = ts.sys.readFile(name);
+      return text === undefined ? undefined : ts.ScriptSnapshot.fromString(text);
+    },
+    getCurrentDirectory: () => root,
+    getCompilationSettings: () => options,
+    getDefaultLibFileName: (settings) => ts.getDefaultLibFilePath(settings),
+    fileExists: (name) => name === 'sets.ts' || ts.sys.fileExists(name),
+    readFile: (name) => (name === 'sets.ts' ? source : ts.sys.readFile(name)),
   };
+  const service = ts.createLanguageService(host);
+  const lines = source.split('\n');
+  const errorLines = ts
+    .getPreEmitDiagnostics(service.getProgram())
+    .map((d) => lines[d.file.getLineAndCharacterOfPosition(d.start).line].trim())
+    .sort();
 
-  it('stops a never check on strings, keeps narrowing with a sentinel kind, and loses it with a string kind', () => {
-    const lines = errorLines();
-    deepStrictEqual(lines.length, 3);
-    match(lines[0], /^export const narrowsWide/);
-    match(lines[1], /^switch \(x\) \{ case 'a'/);
-    match(lines[2], /^switch \(x\.kind\)/);
+  it('stops a never check over every open form, keeps narrowing with the sentinel, and keeps a prefix', () => {
+    deepStrictEqual(errorLines, [
+      'const neverCode: never = x;',
+      'const neverObject: never = x;',
+      'const neverString: never = x;',
+      'const neverVersion: never = x;',
+      "export const keepsPrefix: Codes = 'X.A';",
+      "export const narrowsWide = wide.kind === 'select' ? wide.table : '';",
+    ]);
+  });
+
+  it('still offers the named values in completion', () => {
+    const position = source.lastIndexOf("''") + 1;
+    const names = service
+      .getCompletionsAtPosition('sets.ts', position, {})
+      ?.entries.map(({ name }) => name);
+    deepStrictEqual(
+      ['a', 'b'].filter((name) => names?.includes(name)),
+      ['a', 'b'],
+    );
   });
 });

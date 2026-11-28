@@ -1,15 +1,14 @@
 // Fails when a published package exports a set of values that user code may handle case by case,
 // and the set is neither open nor declared. Open means its type carries a catch-all member, so a
 // `never` exhaustiveness check over it cannot compile and a later release may add a value.
-// Declared means packages/9-public/value-sets.json lists it, with a status and a reason. The
+// Declared means packages/9-public/value-sets.json lists it with a status and a reason. The
 // policy is in docs/Public API Compatibility.md, under "Sets of values". Only Node built-ins.
 //
-// A set is a type alias in an api.txt whose members are all literals, or all declarations with a
-// `kind` property, or a property of an exported class or interface whose type is written as a union
-// of literals, which is named `Type.property`. A member may name another such alias of the same package, or be the values of
-// a constant (`(typeof X)[number]`, `(typeof X)[keyof typeof X]`). The catch-all member is
-// `(string & {})`, `(number & {})` or a template literal `& {}` for literals, and
-// `{ readonly kind: '%future added value' }` for declarations, which keeps narrowing on `kind`.
+// A set is a type alias, generic or not, whose members are all literals or all objects told apart
+// by a literal `kind` (a declaration with a `kind` property, or an object type written inline), or
+// a property of an exported class or interface whose type is written as a union of literals, named
+// `Type.property`. A member may name another such alias of the same package, or be the values or
+// keys of a constant (`(typeof X)[number]`, `(typeof X)[keyof typeof X]`, `keyof typeof X`).
 
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -17,14 +16,22 @@ import { fileURLToPath } from 'node:url';
 import { compareCodeUnits } from './api-lines.mjs';
 
 export const DECLARATIONS_FILE = 'packages/9-public/value-sets.json';
-export const STATUSES = ['closed', 'not-cases', 'undecided'];
+export const STATUSES = ['closed', 'input', 'type-parameter', 'pending'];
+export const RECOMMENDATIONS = ['open', 'closed', 'input', 'type-parameter'];
+
+const FRAMEWORK_DOMAIN = {
+  '@prisma/orm-toolchain': () => true,
+  '@prisma/orm-framework': (path) => !path.startsWith('./type-implementations'),
+};
 
 const LIST_FILE = 'api.txt';
 const LINE_PREFIX = /^(?:(\.[^:]*): |\(not exported\) )(?:deprecated: )?/;
-const ALIAS = /^type ([A-Za-z_$][\w$]*) = (.*)$/;
 const CONST = /^const ([A-Za-z_$][\w$]*): (.*)$/;
 const TUPLE_ITEM = /^\(typeof ([A-Za-z_$][\w$]*)\)\[number\]$/;
 const OBJECT_VALUE = /^\(typeof ([A-Za-z_$][\w$]*)\)\[keyof typeof \1\]$/;
+const OBJECT_KEY = /^keyof typeof ([A-Za-z_$][\w$]*)$/;
+const GENERIC_NAME = /^([A-Za-z_$][\w$]*)<.*>$/s;
+const KIND_MEMBER = /^(?:readonly )?kind\??: (.*)$/;
 const PROPERTY =
   /^(?:abstract )?(?:class|interface) ([A-Za-z_$][\w$]*), (?:(?:readonly|static|protected|public) )*(?:required|optional) property ([A-Za-z_$][\w$]*)\??: (.*)$/;
 const KIND_PROPERTY =
@@ -32,7 +39,7 @@ const KIND_PROPERTY =
 const LITERAL = /^(?:'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"|-?\d+(?:\.\d+)?|true|false)$/;
 const NAME = /^[A-Za-z_$][\w$]*$/;
 const OPEN_LITERALS = /^\(?(?:string|number|`[^`]*`) & \{\s*\}\)?$/;
-const OPEN_OBJECTS = /^\{\s*(?:readonly )?kind: (['"])%future added value\1;?\s*\}$/;
+const SENTINEL = /^(['"])%future added value\1$/;
 
 function splitTopLevel(text, separator) {
   const members = [];
@@ -56,6 +63,31 @@ function splitTopLevel(text, separator) {
   return members.filter((member) => member !== '');
 }
 
+function aliasOf(declaration) {
+  const head = /^type ([A-Za-z_$][\w$]*)/.exec(declaration);
+  if (!head) return undefined;
+  let rest = declaration.slice(head[0].length);
+  if (rest.startsWith('<')) {
+    let depth = 0;
+    let end = 0;
+    for (; end < rest.length; end++) {
+      if (rest[end] === '<') depth++;
+      else if (rest[end] === '>' && rest[end - 1] !== '=' && --depth === 0) break;
+    }
+    rest = rest.slice(end + 1);
+  }
+  return rest.startsWith(' = ') ? [head[1], rest.slice(3)] : undefined;
+}
+
+function inlineKind(member) {
+  if (!member.startsWith('{') || !member.endsWith('}')) return undefined;
+  for (const property of splitTopLevel(member.slice(1, -1), ';')) {
+    const kind = KIND_MEMBER.exec(property);
+    if (kind && LITERAL.test(kind[1])) return kind[1];
+  }
+  return undefined;
+}
+
 function readList(text) {
   const aliases = new Map();
   const withKind = new Set();
@@ -72,7 +104,9 @@ function readList(text) {
     if (constant) consts.set(constant[1], constant[2]);
     const property = PROPERTY.exec(declaration);
     if (property && path !== undefined) {
-      const members = splitTopLevel(property[3], '|').filter((member) => member !== 'undefined');
+      const members = splitTopLevel(property[3], '|').filter(
+        (member) => member !== 'undefined' && member !== 'null',
+      );
       if (members.length > 1 && members.some((member) => LITERAL.test(member))) {
         const name = `${property[1]}.${property[2]}`;
         const entry = properties.get(name) ?? { members, paths: [] };
@@ -80,9 +114,9 @@ function readList(text) {
         properties.set(name, entry);
       }
     }
-    const alias = ALIAS.exec(declaration);
+    const alias = aliasOf(declaration);
     if (!alias) continue;
-    const [, name, body] = alias;
+    const [name, body] = alias;
     const entry = aliases.get(name) ?? { members: splitTopLevel(body, '|'), paths: [] };
     if (path !== undefined && !entry.paths.includes(path)) entry.paths.push(path);
     aliases.set(name, entry);
@@ -111,16 +145,17 @@ function shapeOfMembers(members, list, seen) {
     } else if (OPEN_LITERALS.test(member)) {
       shapes.add('literals');
       open = true;
-    } else if (OPEN_OBJECTS.test(member)) {
+    } else if (inlineKind(member) !== undefined) {
       shapes.add('objects');
-      open = true;
-    } else if (TUPLE_ITEM.test(member) || OBJECT_VALUE.test(member)) {
+      if (SENTINEL.test(inlineKind(member))) open = true;
+      else values++;
+    } else if (TUPLE_ITEM.test(member) || OBJECT_VALUE.test(member) || OBJECT_KEY.test(member)) {
       const items = constValues(member, list);
       if (items === undefined || !items.every((item) => LITERAL.test(item))) return {};
       shapes.add('literals');
       values += items.length;
-    } else if (NAME.test(member)) {
-      const inner = shapeOf(member, list, seen);
+    } else if (NAME.test(member) || GENERIC_NAME.test(member)) {
+      const inner = shapeOf(GENERIC_NAME.exec(member)?.[1] ?? member, list, seen);
       if (inner.shape === undefined) return {};
       shapes.add(inner.shape);
       open ||= inner.open;
@@ -134,7 +169,8 @@ function shapeOfMembers(members, list, seen) {
 
 function constValues(member, list) {
   const tuple = TUPLE_ITEM.exec(member);
-  const type = list.consts.get((tuple ?? OBJECT_VALUE.exec(member))[1]);
+  const key = OBJECT_KEY.exec(member);
+  const type = list.consts.get((tuple ?? key ?? OBJECT_VALUE.exec(member))[1]);
   if (type === undefined) return undefined;
   if (tuple) {
     const items = /^readonly \[(.*)\]$/.exec(type);
@@ -144,7 +180,9 @@ function constValues(member, list) {
   return (
     properties &&
     splitTopLevel(properties[1], ';').map((property) =>
-      property.replace(/^(?:readonly )?[\w$]+\??: /, ''),
+      key
+        ? `'${/^(?:readonly )?([\w$]+)\??: /.exec(property)?.[1]}'`
+        : property.replace(/^(?:readonly )?[\w$]+\??: /, ''),
     )
   );
 }
@@ -175,6 +213,10 @@ export function checkValueSets(lists, declarations) {
   const declared = new Set();
   for (const declaration of declarations) {
     const key = `${declaration.package}: ${declaration.type}`;
+    if (declared.has(key)) {
+      problems.push(`${key} is declared twice in ${DECLARATIONS_FILE}: keep one entry`);
+      continue;
+    }
     declared.add(key);
     if (!STATUSES.includes(declaration.status)) {
       problems.push(
@@ -186,8 +228,28 @@ export function checkValueSets(lists, declarations) {
       problems.push(`${key}: the declaration needs a reason, in ${DECLARATIONS_FILE}`);
       continue;
     }
+    if (declaration.status === 'pending' && !RECOMMENDATIONS.includes(declaration.recommended)) {
+      problems.push(
+        `${key}: a pending declaration needs "recommended", one of ${RECOMMENDATIONS.join(', ')}, in ${DECLARATIONS_FILE}`,
+      );
+      continue;
+    }
+    if (declaration.status !== 'pending' && declaration.recommended !== undefined) {
+      problems.push(
+        `${key}: only a pending declaration has "recommended", in ${DECLARATIONS_FILE}`,
+      );
+      continue;
+    }
     const set = exported.get(key);
-    if (set === undefined) {
+    if (
+      set !== undefined &&
+      declaration.status === 'pending' &&
+      !inFrameworkDomain(declaration.package, set)
+    ) {
+      problems.push(
+        `${key} is pending, but it is not in the framework domain: decide it as ${STATUSES.filter((status) => status !== 'pending').join(', ')} or open`,
+      );
+    } else if (set === undefined) {
       problems.push(
         `${declaration.type} is declared ${declaration.status} in ${DECLARATIONS_FILE}, but ${declaration.package} exports no such set: remove the entry`,
       );
@@ -200,10 +262,15 @@ export function checkValueSets(lists, declarations) {
   for (const [key, set] of exported) {
     if (set.open || declared.has(key)) continue;
     problems.push(
-      `${key} (${set.paths.join(', ')}) is neither open nor declared: add ${set.shape === 'literals' ? '`(string & {})`' : "`{ readonly kind: '%future added value' }`"} to its type, or list it in ${DECLARATIONS_FILE} with its reason`,
+      `${key} (${set.paths.join(', ')}) is neither open nor declared: add ${set.shape === 'literals' ? '`(string & {})`' : "`{ readonly kind: '%future added value' }`"} to its type, or list it in ${DECLARATIONS_FILE} as ${STATUSES.join(', ')}, with its reason`,
     );
   }
   return problems;
+}
+
+function inFrameworkDomain(pkg, set) {
+  const domain = FRAMEWORK_DOMAIN[pkg];
+  return domain !== undefined && set.paths.every(domain);
 }
 
 export function readPublishedLists(root) {

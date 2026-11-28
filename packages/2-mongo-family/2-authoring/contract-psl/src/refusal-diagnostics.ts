@@ -211,6 +211,10 @@ function validatorDiagnostic(
     }
     case 'embeddedModelHasVariants':
       throw new InternalError('A PSL schema writes no embed relations.');
+    default:
+      throw new InternalError(
+        `The PSL interpreter words every validator refusal of its own release, not "${refusal.kind}".`,
+      );
   }
 }
 
@@ -546,6 +550,7 @@ export function refusalDiagnostic(
     case 'listedVariantMissing':
     case 'baseUnknown':
     case 'variantWithoutValue':
+    default:
       throw new InternalError(`A PSL definition cannot be refused with "${refusal.kind}".`);
   }
 }

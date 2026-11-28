@@ -81,15 +81,6 @@
     "reason": "A column name that several joined tables share must now name its table (prisma/orm#31150)."
   },
   {
-    "path": "./runtime",
-    "export": "default",
-    "test": "value",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "4dd88ea7c2f8701e",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
-  },
-  {
     "path": "./static",
     "export": "SqliteStaticContext",
     "test": "type",
@@ -97,14 +88,5 @@
     "lastRelease": "8.0.0-rc.25",
     "fingerprint": "d32beb7504441c7e",
     "reason": "A column name that several joined tables share must now name its table (prisma/orm#31150)."
-  },
-  {
-    "path": "./static",
-    "export": "default",
-    "test": "value",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "fa3ef0ee34d713e3",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
   }
 ]

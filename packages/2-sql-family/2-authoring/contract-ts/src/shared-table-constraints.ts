@@ -66,7 +66,8 @@ export type SharedTableRefusal<ForeignKey> =
       readonly index: IndexNode;
       /** The base or the variant that already declares the same index under another name, when that is the reason. */
       readonly namedDifferentlyBy: string | undefined;
-    };
+    }
+  | { readonly kind: '%future added value'; readonly variant: string };
 
 export interface SharedTableMerge<ForeignKey> {
   readonly indexes: readonly IndexNode[];

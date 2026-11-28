@@ -54,201 +54,57 @@
     "reason": "A column name that several joined tables share must now name its table (prisma/orm#31150)."
   },
   {
-    "path": "./contract",
-    "export": "CheckExpressionInput",
+    "path": "./contract-ts",
+    "export": "SharedTableMerge",
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "3ff59890e1df4e8a",
+    "fingerprint": "ee248371d2bba7d1",
     "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
   },
   {
-    "path": "./contract",
-    "export": "JsonType",
+    "path": "./contract-ts",
+    "export": "SharedTableRefusal",
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "a9eaffdda389b3e2",
+    "fingerprint": "51ce182e2c4c7cb8",
     "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
   },
   {
-    "path": "./contract",
-    "export": "ResolvedColumnValueObject",
-    "test": "type",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "a928646168ec1dc9",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
-  },
-  {
-    "path": "./contract",
-    "export": "ResolvedValueObject",
-    "test": "type",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "310ba8d77cc8d6c4",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
-  },
-  {
-    "path": "./contract",
-    "export": "ResolvedValueObjectField",
-    "test": "type",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "310ba8d77cc8d6c4",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
-  },
-  {
-    "path": "./contract",
-    "export": "ResolvedValueObjectFieldType",
-    "test": "type",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "310ba8d77cc8d6c4",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
-  },
-  {
-    "path": "./contract",
-    "export": "SqlBuiltinKind",
-    "test": "type",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "9725795e873dc3c5",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
-  },
-  {
-    "path": "./contract",
-    "export": "declaredJsonType",
+    "path": "./contract-ts",
+    "export": "mergeSharedTable",
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "4f98131a70cc68b6",
+    "fingerprint": "348aa199d2df1137",
     "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
   },
   {
-    "path": "./contract",
-    "export": "isJsonType",
-    "test": "value",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "88780aa0965e5d06",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
-  },
-  {
-    "path": "./contract",
-    "export": "resolveColumnValueObject",
-    "test": "value",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "8e98828e4843270c",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
-  },
-  {
-    "path": "./contract",
-    "export": "resolveValueObject",
-    "test": "value",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "99292741784438d9",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
-  },
-  {
-    "path": "./contract/check-expressions",
-    "export": "CheckExpressionInput",
+    "path": "./contract-ts/contract-builder",
+    "export": "SharedTableMerge",
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "3ff59890e1df4e8a",
+    "fingerprint": "ee248371d2bba7d1",
     "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
   },
   {
-    "path": "./contract/check-expressions",
-    "export": "ResolvedColumnValueObject",
+    "path": "./contract-ts/contract-builder",
+    "export": "SharedTableRefusal",
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "a928646168ec1dc9",
+    "fingerprint": "51ce182e2c4c7cb8",
     "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
   },
   {
-    "path": "./contract/check-expressions",
-    "export": "ResolvedValueObject",
-    "test": "type",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "310ba8d77cc8d6c4",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
-  },
-  {
-    "path": "./contract/check-expressions",
-    "export": "ResolvedValueObjectField",
-    "test": "type",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "310ba8d77cc8d6c4",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
-  },
-  {
-    "path": "./contract/check-expressions",
-    "export": "ResolvedValueObjectFieldType",
-    "test": "type",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "310ba8d77cc8d6c4",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
-  },
-  {
-    "path": "./contract/check-expressions",
-    "export": "resolveColumnValueObject",
+    "path": "./contract-ts/contract-builder",
+    "export": "mergeSharedTable",
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "8e98828e4843270c",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
-  },
-  {
-    "path": "./contract/check-expressions",
-    "export": "resolveValueObject",
-    "test": "value",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "99292741784438d9",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
-  },
-  {
-    "path": "./contract/codec-json-type",
-    "export": "JsonType",
-    "test": "type",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "a9eaffdda389b3e2",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
-  },
-  {
-    "path": "./contract/codec-json-type",
-    "export": "declaredJsonType",
-    "test": "value",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "4f98131a70cc68b6",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
-  },
-  {
-    "path": "./contract/codec-json-type",
-    "export": "isJsonType",
-    "test": "value",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "88780aa0965e5d06",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
-  },
-  {
-    "path": "./contract/contract-view",
-    "export": "SqlBuiltinKind",
-    "test": "type",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "9725795e873dc3c5",
+    "fingerprint": "348aa199d2df1137",
     "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
   },
   {
@@ -331,15 +187,6 @@
     "lastRelease": "8.0.0-rc.25",
     "fingerprint": "a0b84c77b5cb713d",
     "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). A SQL target also gives `readOperations`, which reads a migration's `ops.json` and refuses a key the format does not define; the migrations a refusal names are typed as the runner's own migration edges (prisma/orm#31200). The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
-  },
-  {
-    "path": "./family",
-    "export": "SqlDefaultFunctionName",
-    "test": "type",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "1b1944c600a40ad3",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
   },
   {
     "path": "./family",
@@ -754,15 +601,6 @@
     "lastRelease": "8.0.0-rc.25",
     "fingerprint": "a0b84c77b5cb713d",
     "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). A SQL target also gives `readOperations`, which reads a migration's `ops.json` and refuses a key the format does not define; the migrations a refusal names are typed as the runner's own migration edges (prisma/orm#31200). The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
-  },
-  {
-    "path": "./family/control",
-    "export": "SqlDefaultFunctionName",
-    "test": "type",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "1b1944c600a40ad3",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
   },
   {
     "path": "./family/control",
@@ -1170,48 +1008,12 @@
     "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
   },
   {
-    "path": "./relational-core",
-    "export": "SqlDriver",
-    "test": "type",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "c3bbac35831e87a4",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
-  },
-  {
-    "path": "./relational-core",
-    "export": "SqlDriverState",
-    "test": "type",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "b0bd5a47624a4192",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
-  },
-  {
     "path": "./relational-core/ast",
     "export": "LockConflict",
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
     "fingerprint": "a40ca498e618f4c7",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
-  },
-  {
-    "path": "./relational-core/ast",
-    "export": "SqlDriver",
-    "test": "type",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "c3bbac35831e87a4",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
-  },
-  {
-    "path": "./relational-core/ast",
-    "export": "SqlDriverState",
-    "test": "type",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "b0bd5a47624a4192",
     "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
   },
   {
@@ -1225,15 +1027,6 @@
   },
   {
     "path": "./runtime",
-    "export": "RuntimeOptions",
-    "test": "type",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "b4a33934b46a3955",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
-  },
-  {
-    "path": "./runtime",
     "export": "RuntimeTelemetryEvent",
     "test": "type",
     "kind": "break",
@@ -1243,20 +1036,11 @@
   },
   {
     "path": "./runtime",
-    "export": "SqlExecutionStackWithDriver",
-    "test": "type",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "8cbf7f161bede23c",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
-  },
-  {
-    "path": "./runtime",
     "export": "SqlRuntimeBase",
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "f172690c6a61f52f",
+    "fingerprint": "4761c398c2f1b8f7",
     "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
   },
   {
@@ -1265,16 +1049,7 @@
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "f172690c6a61f52f",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
-  },
-  {
-    "path": "./runtime",
-    "export": "SqlRuntimeDriverInstance",
-    "test": "type",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "627abda5c1bc0dab",
+    "fingerprint": "4761c398c2f1b8f7",
     "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
   },
   {
@@ -1284,15 +1059,6 @@
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
     "fingerprint": "c85a8638e9d71881",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
-  },
-  {
-    "path": "./runtime",
-    "export": "createSqlExecutionStack",
-    "test": "value",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "ee86c9a8103bbc7a",
     "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
   },
   {

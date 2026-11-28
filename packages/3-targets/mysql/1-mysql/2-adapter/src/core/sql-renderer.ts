@@ -209,7 +209,7 @@ export class MysqlSqlRenderer {
 
   /** Why `RETURNING` on `statement` is refused: MySQL has none, so the SQL family's ORM reads written rows back with a select when the contract does not report `returning`. */
   protected returningRefusal(statement: ReturningStatement): string {
-    return `${this.target.displayName} cannot return the rows ${ARTICLED_STATEMENT[statement]} writes; it has no RETURNING`;
+    return `${this.target.displayName} cannot return the rows ${ARTICLED_STATEMENT[statement] ?? `a ${statement}`} writes; it has no RETURNING`;
   }
 
   /** Why an ordered JSON array is refused, or `undefined` where the renderer builds it, as MySQL's does. */

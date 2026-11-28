@@ -19,15 +19,6 @@
   },
   {
     "path": "./runtime",
-    "export": "MariadbClient",
-    "test": "type",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "98274fb2f8699577",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
-  },
-  {
-    "path": "./runtime",
     "export": "MariadbQueryMembers",
     "test": "type",
     "kind": "break",
@@ -52,23 +43,5 @@
     "lastRelease": "8.0.0-rc.25",
     "fingerprint": "f29653b726a834e9",
     "reason": "A column name that several joined tables share must now name its table (prisma/orm#31150)."
-  },
-  {
-    "path": "./runtime",
-    "export": "default",
-    "test": "value",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "545f7eae17e9115a",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
-  },
-  {
-    "path": "./static",
-    "export": "default",
-    "test": "value",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "57bc49ed96c50814",
-    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
   }
 ]
