@@ -140,7 +140,11 @@ function rehydrateSchema(jsonIr: object): ArktypeSchemaLike {
 
 function renderArktypeJsonOutputType(params: ArktypeJsonTypeParams): string {
   const expression = params.expression.trim();
-  return expression.length > 0 ? expression : 'unknown';
+  // ArkType omits the parameter name in index signatures. Match string literals whole.
+  return (expression || 'unknown').replace(
+    /"(?:\\.|[^"\\])*"|\[(string|symbol)\](?=:)/g,
+    (token, keyType: string | undefined) => (keyType ? `[key: ${keyType}]` : token),
+  );
 }
 
 export class ArktypeJsonCodecClass<TInferred> extends CodecImpl<

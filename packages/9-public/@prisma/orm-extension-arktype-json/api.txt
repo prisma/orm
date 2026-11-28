@@ -7,7 +7,7 @@
 (not exported) class ArktypeJsonCodecClass<TInferred> extends CodecImpl<typeof ARKTYPE_JSON_CODEC_ID, readonly ['equality'], JsonValue | string, TInferred>
 (not exported) const arktypeJsonPackMetaBase: { readonly kind: "extension"; readonly id: "arktype-json"; readonly familyId: "sql"; readonly targetId: "postgres"; readonly version: "0.0.1"; readonly capabilities: {}; readonly types: { readonly codecTypes: { readonly codecDescriptors: CodecDescriptor<unknown>[]; readonly import: { readonly package: `${string}/codec-types`; readonly named: "CodecTypes"; readonly alias: "ArktypeJsonTypes"; }; }; }; }
 (not exported) type ArktypeSchemaLike = ((value: unknown) => unknown) & { readonly expression: string; readonly json?: unknown; }
-./codec-types: type CodecTypes = { readonly 'arktype/json@1': { readonly input: unknown; readonly output: unknown; readonly traits: 'equality'; }; }
+./codec-types: type CodecTypes = { readonly 'arktype/json@1': { readonly input: unknown; readonly output: unknown; readonly json: JsonValue; readonly traits: 'equality'; }; }
 ./codecs: class ArktypeJsonDescriptor, protected required method jsonProjection(expression: ProjectionExpr): ProjectionExpr
 ./codecs: class ArktypeJsonDescriptor, readonly required property codecId: "arktype/json@1"
 ./codecs: class ArktypeJsonDescriptor, readonly required property dataType: DataTypeId

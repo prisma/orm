@@ -184,6 +184,31 @@ describe('arktypeJsonDescriptor.factory(params)', () => {
     expect(rendered).toBe(productSchema.expression);
   });
 
+  it.each([
+    {
+      name: 'string keys',
+      schema: type({ '[string]': 'number' }),
+      expected: '{ [key: string]: number }',
+    },
+    {
+      name: 'symbol keys',
+      schema: type({ '[symbol]': 'number' }),
+      expected: '{ [key: symbol]: number }',
+    },
+    {
+      name: 'nested records next to escaped string literals',
+      schema: type({
+        marker: type.unit('He said "[string]: number"'),
+        rates: { '[string]': 'number' },
+      }),
+      expected: '{ marker: "He said \\"[string]: number\\"", rates: { [key: string]: number } }',
+    },
+  ])('renderOutputType emits valid index signatures for $name', ({ schema, expected }) => {
+    expect(arktypeJsonDescriptor.renderOutputType(arktypeJsonColumn(schema).typeParams)).toBe(
+      expected,
+    );
+  });
+
   it("renderOutputType falls back to 'unknown' when the expression is whitespace-only", () => {
     expect(arktypeJsonDescriptor.renderOutputType({ expression: '   ', jsonIr: {} })).toBe(
       'unknown',
