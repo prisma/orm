@@ -1,6 +1,6 @@
 import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { SqlExecutionStackWithDriver, SqlRuntimeDriverInstance } from '../src/sql-context';
 import {
   assertInteractiveTransactionsListed,
@@ -214,6 +214,32 @@ describe('warnOfCapabilitiesNotProvided', () => {
     );
     warnOfCapabilitiesNotProvided(contract, stackDeclaring({}), { log, verifyMarker: false });
     expect(log.warn).not.toHaveBeenCalled();
+  });
+
+  it('does not throw when the log throws', () => {
+    const log = {
+      ...spyLog(),
+      warn: () => {
+        throw new Error('logger failed');
+      },
+    };
+    expect(() =>
+      warnOfCapabilitiesNotProvided(contract, stackDeclaring({}), { log }),
+    ).not.toThrow();
+  });
+
+  describe('given no log', () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('warns on console.warn', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      warnOfCapabilitiesNotProvided(contract, stackDeclaring({}), {});
+      expect(warn.mock.calls).toEqual([
+        [expect.objectContaining({ code: 'CONTRACT.CAPABILITIES_NOT_PROVIDED' })],
+      ]);
+    });
   });
 });
 

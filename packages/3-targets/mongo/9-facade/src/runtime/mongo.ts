@@ -1,6 +1,10 @@
 import mongoRuntimeAdapter from '@internal/adapter-mongo/runtime';
 import mongoRuntimeDriver, { type MongoBinding } from '@internal/driver-mongo/runtime';
-import { AsyncIterableResult, type RuntimeMode } from '@internal/framework-components/runtime';
+import {
+  AsyncIterableResult,
+  type RuntimeLog,
+  type RuntimeMode,
+} from '@internal/framework-components/runtime';
 import type {
   AnyMongoTypeMaps,
   MongoContract,
@@ -57,6 +61,8 @@ export interface MongoOptionsBase {
    * Optional middleware chain applied to every Mongo execution.
    */
   readonly middleware?: readonly MongoMiddleware[];
+  /** Receives the runtime's events. Without it, warnings and errors go to the console and debug events are dropped. */
+  readonly log?: RuntimeLog;
 }
 
 export interface MongoBindingOptions {
@@ -126,6 +132,7 @@ export default function mongo<
       driver,
       ...ifDefined('mode', options.mode),
       ...ifDefined('middleware', options.middleware),
+      ...ifDefined('log', options.log),
     });
     runtimeInstance = { runtime, driver };
     return runtimeInstance;

@@ -19,6 +19,7 @@ import type { SqlExecutionPlan } from '@internal/sql-relational-core/plan';
 import { applicationDomainOf } from '@repo/test-utils';
 import { vi } from 'vitest';
 import { createTestSqlNamespace } from '../../1-core/contract/test/test-support';
+import type { SqlMiddleware } from '../src/middleware/sql-middleware';
 import type {
   SqlRuntimeAdapterDescriptor,
   SqlRuntimeAdapterInstance,
@@ -155,6 +156,7 @@ interface BuildRuntimeOptions {
   readonly log?: RuntimeLog;
   readonly driver?: SqlDriver;
   readonly readMarkerSpy?: ReturnType<typeof vi.fn>;
+  readonly middleware?: readonly SqlMiddleware[];
 }
 
 export function buildRuntime({
@@ -163,6 +165,7 @@ export function buildRuntime({
   log,
   driver,
   readMarkerSpy,
+  middleware,
 }: BuildRuntimeOptions) {
   const codecs = createCodecs();
   const adapter = createStubAdapter(codecs, markerResult, readMarkerSpy);
@@ -184,6 +187,7 @@ export function buildRuntime({
     driver: driver ?? createDriver(),
     ...(verifyMarker !== undefined ? { verifyMarker } : {}),
     ...(log ? { log } : {}),
+    ...(middleware ? { middleware } : {}),
   });
 }
 

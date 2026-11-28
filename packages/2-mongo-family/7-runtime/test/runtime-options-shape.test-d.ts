@@ -1,3 +1,4 @@
+import type { RuntimeLog } from '@internal/framework-components/runtime';
 import type { MongoCodecRegistry } from '@internal/mongo-codec';
 import type { MongoContract } from '@internal/mongo-contract';
 import type { MongoAdapter } from '@internal/mongo-lowering';
@@ -19,7 +20,11 @@ test('the runtime takes the adapter beside the context, as the SQL runtime does'
   expectTypeOf<MongoExecutionStack>().not.toHaveProperty('driver');
 });
 
-test('runtime options accept only context, adapter, driver, middleware, and mode', () => {
+test('runtime options take the same log as the SQL runtime', () => {
+  expectTypeOf<MongoRuntimeOptions['log']>().toEqualTypeOf<RuntimeLog | undefined>();
+});
+
+test('runtime options accept only context, adapter, driver, middleware, mode, and log', () => {
   createMongoRuntime({ context: ctx, adapter, driver: {} as never });
 
   const validOptions = {
@@ -34,6 +39,7 @@ test('runtime options accept only context, adapter, driver, middleware, and mode
       },
     ],
     mode: 'permissive',
+    log: { info() {}, warn() {}, error() {} },
   } satisfies MongoRuntimeOptions;
 
   createMongoRuntime(validOptions);

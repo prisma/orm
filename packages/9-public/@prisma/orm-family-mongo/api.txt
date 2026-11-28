@@ -3204,6 +3204,7 @@
 ./runtime: interface MongoRuntimeExtensionDescriptor<TTargetId extends string = 'mongo'> extends RuntimeExtensionDescriptor<'mongo', TTargetId, MongoRuntimeExtensionInstance<TTargetId>>, MongoStaticContributions
 ./runtime: interface MongoRuntimeExtensionInstance<TTargetId extends string = 'mongo'> extends RuntimeExtensionInstance<'mongo', TTargetId>
 ./runtime: interface MongoRuntimeOptions
+./runtime: interface MongoRuntimeOptions, readonly optional property log?: RuntimeLog
 ./runtime: interface MongoRuntimeOptions, readonly optional property middleware?: readonly MongoMiddleware[]
 ./runtime: interface MongoRuntimeOptions, readonly optional property mode?: RuntimeMode
 ./runtime: interface MongoRuntimeOptions, readonly required property adapter: MongoAdapter

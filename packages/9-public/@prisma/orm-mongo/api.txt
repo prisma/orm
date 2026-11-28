@@ -7,6 +7,7 @@
 (not exported) interface MongoBindingOptions, readonly optional property url?: string
 (not exported) interface MongoOptionsBase
 (not exported) interface MongoOptionsBase, readonly optional property extensions?: readonly MongoRuntimeExtensionDescriptor<MongoTargetId>[]
+(not exported) interface MongoOptionsBase, readonly optional property log?: RuntimeLog
 (not exported) interface MongoOptionsBase, readonly optional property middleware?: readonly MongoMiddleware[]
 (not exported) interface MongoOptionsBase, readonly optional property mode?: RuntimeMode
 (not exported) type ExtensionsConstraint = MongoExtensionPacks | undefined

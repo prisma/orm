@@ -7,6 +7,7 @@ import {
   executeStatement,
   RuntimeCore,
   type RuntimeExecuteOptions,
+  type RuntimeLog,
   type RuntimeMode,
   type RuntimeStatementStats,
   runtimeError,
@@ -27,6 +28,7 @@ import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { type StructuredError, structuredError } from '@internal/utils/structured-error';
 import { decodeMongoRow } from './codecs/decoding';
+import { runtimeLog } from './console-log';
 import { computeMongoContentHash } from './content-hash';
 import type { MongoExecutionPlan } from './mongo-execution-plan';
 import type { MongoMiddleware, MongoMiddlewareContext } from './mongo-middleware';
@@ -58,8 +60,6 @@ type MongoStatementActivityRun = StatementActivityRun<
   MongoMiddlewareContext
 >;
 
-function noop() {}
-
 function isUnknownRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -90,6 +90,8 @@ export interface MongoRuntimeOptions {
   readonly driver: MongoDriver<unknown>;
   readonly middleware?: readonly MongoMiddleware[];
   readonly mode?: RuntimeMode;
+  /** Receives the runtime's events. Without it, warnings and errors go to the console and debug events are dropped. */
+  readonly log?: RuntimeLog;
 }
 
 export interface MongoRuntime extends MongoQueryExecutor {
@@ -153,7 +155,7 @@ class MongoRuntimeImpl
       contract: options.context.contract,
       mode: options.mode ?? 'strict',
       now: () => Date.now(),
-      log: { info: noop, warn: noop, error: noop },
+      log: runtimeLog(options.log),
       // ctx is only invoked by operation-specific middleware runner with execs this runtime lowered;
       // the framework parameter type is the cross-family base.
       contentHash: (exec) =>

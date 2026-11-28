@@ -214,7 +214,7 @@ These changes are not specific to a Prisma 7 schema. They apply to any Postgres 
 - `db.context`
 - `db.stack`
 
-Creating a client has no side effects. The pool is created on the first query, `db.runtime()` or `db.connect(...)`.
+Creating a client opens no connection; its only side effect is the `CONTRACT.CAPABILITIES_NOT_PROVIDED` warning, logged once when the client's connection does not provide a capability the contract requires, unless `verifyMarker: false` is passed, which also turns off the marker check (see `log` below). The pool is created on the first query, `db.runtime()` or `db.connect(...)`.
 Connection binding can be provided up front (`url`, `pg`, `binding`) or deferred via `db.connect(...)`.
 `postgres()` checks the database input when it is called and fails with `RUNTIME.BINDING_INVALID` if it is wrong: `null` or a value of the wrong type as `url`, `pg` or `binding`; more than one of them; a `url` that is empty, cannot be parsed or is not `postgres://` or `postgresql://`; a `binding` whose `kind` is not `'url'`, `'pgPool'` or `'pgClient'`; and a `binding` whose `url` is not such a string, or whose `pool` or `client` is not an object. The error never contains the value, so a connection string passed by mistake never puts its password in an error.
 
@@ -243,7 +243,19 @@ Reads are buffered by default. Pass `cursor` (typed `PostgresCursorOptions`, `{ 
 
 `supabase()` from `@internal/extension-supabase/runtime` takes the same options, `cursor` and `poolOptions` included, and the `url`, `pg` and `binding` inputs except a `pg.Client`.
 
-Pass `log` (an object with `info`, `warn`, `error` and an optional `debug` method, each taking one event object; `console` works, and the type is `Log` from `@prisma/orm-postgres/family-runtime`) to receive what the runtime logs: the marker-verification warnings `CONTRACT.MARKER_MISSING`, `CONTRACT.MARKER_MISMATCH`, `CONTRACT.MARKER_READ_FAILED` and `CONTRACT.MARKER_ROW_CORRUPT` from the client's first use of the database (its first query, connection or transaction), the warnings `lints()` emits for rules whose severity is `warn`, and the errors a middleware's `activityEnded` or `activityFinalized` hook throws, which the runtime logs and swallows. It also receives the warning `runtime.close.waiting-for-activities` when `close()` is waiting only for activities whose handles were never ended or for transactions still open, with the counts `openActivities` and `openTransactions`; `close()` waits for each such transaction until it commits or rolls back. If `log` has a `debug` method, it also receives debug events, for example when a middleware intercepts a statement. `budgets()` violations reach `log` only in `mode: 'permissive'` (see *Running plans and rendering SQL*). Without `log`, the runtime drops these events. `postgresServerless()` accepts the same option.
+Pass `log` to receive what the runtime logs. It is an object with `info`, `warn`, `error` and an optional `debug` method, each taking one event object; `console` works, and the type is `Log` from `@prisma/orm-postgres/family-runtime`. It receives:
+
+- the marker warnings `CONTRACT.MARKER_MISSING`, `CONTRACT.MARKER_MISMATCH`, `CONTRACT.MARKER_READ_FAILED` and `CONTRACT.MARKER_ROW_CORRUPT`, from the client's first use of the database (its first query, connection or transaction);
+- the warning `CONTRACT.CAPABILITIES_NOT_PROVIDED`, once, when the client is created and its connection does not provide a capability the contract requires;
+- the warnings `lints()` emits for rules whose severity is `warn`;
+- `budgets()` violations, only in `mode: 'permissive'` (see *Running plans and rendering SQL*);
+- the errors a middleware hook throws that the runtime logs and swallows instead of failing the call: an `activityEnded` error after the activity has already failed, and any `activityFinalized` error (an `activityEnded` error on an activity that succeeded fails the call instead);
+- the warning `runtime.close.waiting-for-activities` when `close()` is waiting only for activities whose handles were never ended or for transactions still open, with the counts `openActivities` and `openTransactions`; `close()` waits for each such transaction until it commits or rolls back;
+- debug events, such as a middleware intercepting a statement, if `log` has a `debug` method.
+
+Without `log`, the runtime logs to the console: errors to `console.error` and warnings to `console.warn`, which in Node write to standard error, info events to `console.info`, and debug events nowhere. To silence it, pass a logger that does nothing: `log: { info() {}, warn() {}, error() {} }`. `postgresServerless()` accepts the same option.
+
+`verifyMarker: false` turns off the marker check, its warnings and the capability warning.
 
 ### Running plans and rendering SQL
 

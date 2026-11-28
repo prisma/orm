@@ -48,6 +48,8 @@ The drivers decide what is a connection error. A server that does not answer, a 
 
 `verifyMarker: false` still skips the check.
 
+An application that passes no `log` sees these warnings on the console: the runtime's default logger passes each one to `console.warn`, which in Node writes to standard error ([ADR 340](ADR%20340%20-%20The%20client%20logs%20to%20the%20console%20when%20given%20no%20log.md)). An application that wants them elsewhere passes `log`, and one that wants none passes a logger whose methods do nothing.
+
 ## Why
 
 The marker is a record Prisma keeps for itself. A later release of Prisma 8 must work with a database an earlier one set up, and an application must never stop serving queries because of Prisma's own records. A marker that is unreadable says nothing about whether the application's tables match its contract. Refusing to run would turn a diagnostic into an outage, and the user could do nothing about it while the application is down.
@@ -63,8 +65,6 @@ A logger that throws does not fail the call either. The runtime discards an erro
 ## What does not change
 
 The control plane still stops on a marker it cannot read or decode. `prisma db verify`, `prisma db migrate` and `prisma db sign` report `CONTRACT.MARKER_READ_FAILED` and `CONTRACT.MARKER_ROW_CORRUPT` as errors, because they are about to act on what the marker says. An operator who wants a deploy to stop on drift runs `prisma db verify` in the deploy.
-
-The runtime's default logger discards warnings. An application sees them when it passes `log`.
 
 ## Alternatives considered
 
