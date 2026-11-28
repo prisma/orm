@@ -134,7 +134,7 @@ export function validatorDocumentShapesOf(jsonSchema: unknown): readonly Validat
 /** A shape of another validator of the collection that describes the same kind of document, and which rule of `sameKindOfDocumentIn` found it. */
 export interface SameKindOfDocument {
   readonly shape: ValidatorDocumentShape;
-  readonly matchedBy: 'key' | 'root' | 'discriminatorValue';
+  readonly matchedBy: 'key' | 'root' | 'discriminatorValue' | (string & {});
 }
 
 /**

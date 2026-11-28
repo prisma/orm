@@ -5,7 +5,8 @@
 // policy is in docs/Public API Compatibility.md, under "Sets of values". Only Node built-ins.
 //
 // A set is a type alias in an api.txt whose members are all literals, or all declarations with a
-// `kind` property. A member may name another such alias of the same package, or be the values of
+// `kind` property, or a property of an exported class or interface whose type is written as a union
+// of literals, which is named `Type.property`. A member may name another such alias of the same package, or be the values of
 // a constant (`(typeof X)[number]`, `(typeof X)[keyof typeof X]`). The catch-all member is
 // `(string & {})`, `(number & {})` or a template literal `& {}` for literals, and
 // `{ readonly kind: '%future added value' }` for declarations, which keeps narrowing on `kind`.
@@ -24,6 +25,8 @@ const ALIAS = /^type ([A-Za-z_$][\w$]*) = (.*)$/;
 const CONST = /^const ([A-Za-z_$][\w$]*): (.*)$/;
 const TUPLE_ITEM = /^\(typeof ([A-Za-z_$][\w$]*)\)\[number\]$/;
 const OBJECT_VALUE = /^\(typeof ([A-Za-z_$][\w$]*)\)\[keyof typeof \1\]$/;
+const PROPERTY =
+  /^(?:abstract )?(?:class|interface) ([A-Za-z_$][\w$]*), (?:(?:readonly|static|protected|public) )*(?:required|optional) property ([A-Za-z_$][\w$]*)\??: (.*)$/;
 const KIND_PROPERTY =
   /^(?:class|interface) ([A-Za-z_$][\w$]*), (?:readonly )?(?:required|optional) property kind\??: /;
 const LITERAL = /^(?:'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"|-?\d+(?:\.\d+)?|true|false)$/;
@@ -57,6 +60,7 @@ function readList(text) {
   const aliases = new Map();
   const withKind = new Set();
   const consts = new Map();
+  const properties = new Map();
   for (const line of text.split('\n')) {
     const prefix = LINE_PREFIX.exec(line);
     if (!prefix) continue;
@@ -66,6 +70,16 @@ function readList(text) {
     if (kind) withKind.add(kind[1]);
     const constant = CONST.exec(declaration);
     if (constant) consts.set(constant[1], constant[2]);
+    const property = PROPERTY.exec(declaration);
+    if (property && path !== undefined) {
+      const members = splitTopLevel(property[3], '|').filter((member) => member !== 'undefined');
+      if (members.length > 1 && members.some((member) => LITERAL.test(member))) {
+        const name = `${property[1]}.${property[2]}`;
+        const entry = properties.get(name) ?? { members, paths: [] };
+        if (!entry.paths.includes(path)) entry.paths.push(path);
+        properties.set(name, entry);
+      }
+    }
     const alias = ALIAS.exec(declaration);
     if (!alias) continue;
     const [, name, body] = alias;
@@ -73,7 +87,7 @@ function readList(text) {
     if (path !== undefined && !entry.paths.includes(path)) entry.paths.push(path);
     aliases.set(name, entry);
   }
-  return { aliases, withKind, consts };
+  return { aliases, withKind, consts, properties };
 }
 
 function shapeOf(name, list, seen = new Set()) {
@@ -83,10 +97,14 @@ function shapeOf(name, list, seen = new Set()) {
   }
   if (seen.has(name)) return {};
   seen.add(name);
+  return shapeOfMembers(alias.members, list, seen);
+}
+
+function shapeOfMembers(members, list, seen) {
   const shapes = new Set();
   let open = false;
   let values = 0;
-  for (const member of alias.members) {
+  for (const member of members) {
     if (LITERAL.test(member)) {
       shapes.add('literals');
       values++;
@@ -138,6 +156,11 @@ export function findValueSets(text) {
     if (paths.length === 0) continue;
     const { shape, open, values } = shapeOf(name, list);
     if (shape === undefined || (values < 2 && !open)) continue;
+    sets.push({ name, shape, open, paths: [...paths].sort(compareCodeUnits) });
+  }
+  for (const [name, { members, paths }] of list.properties) {
+    const { shape, open } = shapeOfMembers(members, list, new Set());
+    if (shape !== 'literals') continue;
     sets.push({ name, shape, open, paths: [...paths].sort(compareCodeUnits) });
   }
   return sets.sort((a, b) => compareCodeUnits(a.name, b.name));

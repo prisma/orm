@@ -21,7 +21,7 @@ const ConvertedColumnMeta = type({ convertedColumn: ConvertedColumnJson });
 export interface ConvertedColumn {
   readonly table: string;
   readonly column: string;
-  readonly by: 'cast' | 'conversion';
+  readonly by: 'cast' | 'conversion' | (string & {});
 }
 
 /**

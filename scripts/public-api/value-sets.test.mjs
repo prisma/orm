@@ -83,6 +83,25 @@ describe('findValueSets', () => {
     );
   });
 
+  it('finds a union of literals written on a property, once per type', () => {
+    const sets = findValueSets(
+      api(
+        "./a: interface Failure, readonly required property code: 'A' | 'B'",
+        "./b: interface Failure, readonly required property code: 'A' | 'B'",
+        "./a: interface Failure, readonly optional property hint?: 'x' | 'y' | undefined",
+        "./a: class Call, readonly required property kind: 'drop' | (string & {})",
+        "./a: interface Failure, readonly required property name: 'only'",
+        './a: interface Failure, readonly required property mixed: Node | Other',
+        "(not exported) interface Hidden, readonly required property code: 'A' | 'B'",
+      ),
+    );
+    deepStrictEqual(sets, [
+      { name: 'Call.kind', shape: 'literals', open: true, paths: ['./a'] },
+      { name: 'Failure.code', shape: 'literals', open: false, paths: ['./a', './b'] },
+      { name: 'Failure.hint', shape: 'literals', open: false, paths: ['./a'] },
+    ]);
+  });
+
   it('finds a union of declarations told apart by kind, and its open form', () => {
     const lines = [
       './a: interface Sel, readonly required property kind: "select"',

@@ -984,7 +984,7 @@
 ./contract: interface MongoValueSetInput, readonly required property kind: 'valueSet'
 ./contract: interface MongoValueSetInput, readonly required property values: readonly JsonValue[]
 ./contract: interface SameKindOfDocument
-./contract: interface SameKindOfDocument, readonly required property matchedBy: 'discriminatorValue' | 'key' | 'root'
+./contract: interface SameKindOfDocument, readonly required property matchedBy: 'discriminatorValue' | 'key' | 'root' | (string & {})
 ./contract: interface SameKindOfDocument, readonly required property shape: ValidatorDocumentShape
 ./contract: interface SelectedVariant
 ./contract: interface SelectedVariant, readonly required property field: string

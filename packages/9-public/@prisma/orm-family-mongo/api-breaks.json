@@ -1,5 +1,23 @@
 [
   {
+    "path": "./contract",
+    "export": "SameKindOfDocument",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "5fbbc7c224d3b0da",
+    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
+  },
+  {
+    "path": "./contract",
+    "export": "sameKindOfDocumentIn",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "0b6d028bae5771c7",
+    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
+  },
+  {
     "path": "./contract-ts",
     "export": "BuildFailure",
     "test": "type",
