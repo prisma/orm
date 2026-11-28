@@ -216,6 +216,18 @@ describe('warnOfCapabilitiesNotProvided', () => {
     expect(log.warn).not.toHaveBeenCalled();
   });
 
+  it('does not throw when the log throws', () => {
+    const log = {
+      ...spyLog(),
+      warn: () => {
+        throw new Error('logger failed');
+      },
+    };
+    expect(() =>
+      warnOfCapabilitiesNotProvided(contract, stackDeclaring({}), { log }),
+    ).not.toThrow();
+  });
+
   describe('given no log', () => {
     afterEach(() => {
       vi.restoreAllMocks();

@@ -5,7 +5,7 @@ import {
 } from '@internal/sql-contract/capability-messages';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { structuredError } from '@internal/utils/structured-error';
-import { consoleLog } from './console-log';
+import { runtimeLog } from './console-log';
 import type { SqlExecutionStackWithDriver } from './sql-context';
 import type { RuntimeExecutionOptions } from './sql-runtime';
 
@@ -60,7 +60,7 @@ export function warnOfCapabilitiesNotProvided(
   if (options.verifyMarker === false) return;
   const missing = capabilitiesNotProvided(contract, stack);
   if (missing.length === 0) return;
-  (options.log ?? consoleLog).warn({
+  runtimeLog(options.log).warn({
     code: 'CONTRACT.CAPABILITIES_NOT_PROVIDED',
     scope: 'stack-verification',
     missing,

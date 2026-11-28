@@ -78,7 +78,7 @@ import {
 } from './codecs/decoding';
 import { deriveParamMetadata, encodeParams, encodeParamsWithMetadata } from './codecs/encoding';
 import { validateCodecRegistryCompleteness } from './codecs/validation';
-import { consoleLog } from './console-log';
+import { runtimeLog } from './console-log';
 import { computeSqlContentHash } from './content-hash';
 import { computeSqlFingerprint } from './fingerprint';
 import { InFlightOperations } from './in-flight-operations';
@@ -377,7 +377,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
       contract: context.contract,
       mode: mode ?? 'strict',
       now: () => Date.now(),
-      log: log ?? consoleLog,
+      log: runtimeLog(log),
       // ctx is only invoked by operation-specific middleware runner with execs this runtime lowered; the framework parameter type is the cross-family base.
       contentHash: (exec) =>
         computeSqlContentHash(
@@ -1611,7 +1611,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
         throw unreachable;
       }
       const corrupt = isStructuredError(error) && error.code === 'CONTRACT.MARKER_ROW_CORRUPT';
-      this.warnAboutMarker({
+      this.sqlCtx.log.warn({
         code: corrupt ? 'CONTRACT.MARKER_ROW_CORRUPT' : 'CONTRACT.MARKER_READ_FAILED',
         scope: 'marker-verification',
         expected,
@@ -1625,7 +1625,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     }
 
     if (readResult.kind !== 'present') {
-      this.warnAboutMarker({
+      this.sqlCtx.log.warn({
         code: 'CONTRACT.MARKER_MISSING',
         scope: 'marker-verification',
         expected,
@@ -1641,21 +1641,13 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
       expectedProfileHash === null || marker.profileHash === expectedProfileHash;
 
     if (!storageHashMatch || !profileHashMatch) {
-      this.warnAboutMarker({
+      this.sqlCtx.log.warn({
         code: 'CONTRACT.MARKER_MISMATCH',
         scope: 'marker-verification',
         expected,
         actual: { storageHash: marker.storageHash, profileHash: marker.profileHash ?? null },
         message: 'Contract marker hash does not match runtime contract',
       });
-    }
-  }
-
-  private warnAboutMarker(entry: Record<string, unknown>): void {
-    try {
-      this.sqlCtx.log.warn(entry);
-    } catch {
-      // A logger that fails must not stop the application.
     }
   }
 

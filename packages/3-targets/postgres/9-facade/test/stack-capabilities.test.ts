@@ -50,6 +50,16 @@ describe.each(Object.entries(factories))(
       expect(log.warn.mock.calls).toEqual([[notProvided]]);
     });
 
+    it('creates the client when the log throws on the warning', () => {
+      const log = {
+        ...spyLog(),
+        warn: () => {
+          throw new Error('logger failed');
+        },
+      };
+      expect(() => create(requiringBatches, { log })).not.toThrow();
+    });
+
     it('warns nothing when the signature check is turned off', () => {
       const log = spyLog();
       create(requiringBatches, { log, verifyMarker: false });

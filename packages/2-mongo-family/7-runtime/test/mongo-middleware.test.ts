@@ -341,30 +341,36 @@ describe('MongoRuntime middleware lifecycle', () => {
   });
 
   it('provides working log and now on the middleware context', async () => {
-    let logWorks = false;
+    let now: number | undefined;
     const middleware: MongoMiddleware = {
       name: 'ctx-tester',
       async beforeEncode(_plan, ctx) {
-        ctx.log.info('test');
-        ctx.log.warn('test');
-        ctx.log.error('test');
-        ctx.now();
-        logWorks = true;
+        ctx.log.info('info');
+        ctx.log.warn('warn');
+        ctx.log.error('error');
+        now = ctx.now();
       },
     };
+    const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
     const adapter = createMockAdapter();
     const runtime = createMongoRuntime({
       ...makeExecution(adapter),
       driver: createMockDriver([]),
       middleware: [middleware],
+      log,
     });
 
     for await (const _row of runtime.query(createPlan())) {
       void _row;
     }
 
-    expect(logWorks).toBe(true);
+    expect({
+      info: log.info.mock.calls,
+      warn: log.warn.mock.calls,
+      error: log.error.mock.calls,
+      now: typeof now,
+    }).toEqual({ info: [['info']], warn: [['warn']], error: [['error']], now: 'number' });
   });
 
   it('exposes a working contentHash on the middleware context over the resolved plan', async () => {

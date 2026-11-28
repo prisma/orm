@@ -28,7 +28,7 @@ import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { type StructuredError, structuredError } from '@internal/utils/structured-error';
 import { decodeMongoRow } from './codecs/decoding';
-import { consoleLog } from './console-log';
+import { runtimeLog } from './console-log';
 import { computeMongoContentHash } from './content-hash';
 import type { MongoExecutionPlan } from './mongo-execution-plan';
 import type { MongoMiddleware, MongoMiddlewareContext } from './mongo-middleware';
@@ -155,7 +155,7 @@ class MongoRuntimeImpl
       contract: options.context.contract,
       mode: options.mode ?? 'strict',
       now: () => Date.now(),
-      log: options.log ?? consoleLog,
+      log: runtimeLog(options.log),
       // ctx is only invoked by operation-specific middleware runner with execs this runtime lowered;
       // the framework parameter type is the cross-family base.
       contentHash: (exec) =>
