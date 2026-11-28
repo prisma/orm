@@ -310,6 +310,50 @@ describe('PostgresMigrationRunner database policies', { concurrent: false }, () 
     }).toEqual({ started: [], invariants: [], policies: MIGRATE_ONLY });
   });
 
+  it('signs nothing when the policies in _prisma.config moved after the caller checked them, and goes ahead once they hold', {
+    timeout: testTimeout,
+  }, async () => {
+    await applyContract(MIGRATE_ONLY);
+    const signedBefore = await signedAt();
+    const sign = (checked: DatabasePolicies) =>
+      familyInstance.signSpaces({
+        driver,
+        spaces: [
+          {
+            space: APP_SPACE_ID,
+            contract,
+            expected: {
+              storageHash: contract.storage.storageHash,
+              profileHash: contract.profileHash,
+            },
+          },
+        ],
+        expectedDatabasePolicies: checked,
+      });
+
+    const refused = await sign(DEFAULT_DATABASE_POLICIES);
+    const signedAfterRefusal = await signedAt();
+    const held = await sign(MIGRATE_ONLY);
+
+    expect({
+      refused,
+      signedAfterRefusal,
+      held: held.map((signature) => signature.status),
+    }).toEqual({
+      refused: [
+        {
+          space: APP_SPACE_ID,
+          status: 'conflict',
+          reason: 'databasePolicies',
+          checked: DEFAULT_DATABASE_POLICIES,
+          comparison: { kind: 'moved', found: MIGRATE_ONLY },
+        },
+      ],
+      signedAfterRefusal: signedBefore,
+      held: ['unchanged'],
+    });
+  });
+
   it('reports policies in _prisma.config it cannot read under the lock as corrupt, keeping them', {
     timeout: testTimeout,
   }, async () => {
