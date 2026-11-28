@@ -171,6 +171,14 @@ SELECT NOT EXISTS (
     OR (d.refclassid = 'pg_type'::regclass AND d.refobjid IN (t.reltype, t.typarray))
   WHERE d.deptype = 'n' AND NOT (d.classid = 'pg_class'::regclass AND d.objid = t.oid)
 ) AS "result"`;
+/** Row-level security filters a read without an error, so a copy would move only the rows it shows and the drop would lose the rest. A superuser or a role with BYPASSRLS is not filtered, nor is the table's owner unless the table forces it. */
+const absentOrRowSecurityHidesNoRow = `SELECT ${isSuperuser}
+  OR (SELECT rolbypassrls FROM pg_roles WHERE rolname = current_user)
+  OR NOT EXISTS (
+    SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = $1 AND c.relname = $2 AND c.relrowsecurity
+      AND (c.relforcerowsecurity OR NOT pg_has_role(current_user, c.relowner, 'USAGE'))
+  ) AS "result"`;
 const mayCreateInDatabase = `SELECT ${isSuperuser}
   OR has_database_privilege(current_database(), 'CREATE') AS "result"`;
 
@@ -213,6 +221,14 @@ function checkColumns(
     execute: [],
     postcheck: [],
   });
+}
+
+function rowSecurityHidesNoMarkerRow(schema: string) {
+  return {
+    description: `Row-level security must not hide any row of table ${qualified('marker', schema)} from the role that runs this command, because this migration copies its rows into ${qualified('signatures')} and ${qualified('config')} and then drops it, so a row it cannot read would be lost. Turn off forced row-level security on the table with ALTER TABLE ${qualified('marker', schema)} NO FORCE ROW LEVEL SECURITY, or run the command once as a role that bypasses row-level security.`,
+    sql: absentOrRowSecurityHidesNoRow,
+    params: [schema, 'marker'],
+  };
 }
 
 export default class M extends Migration {
@@ -266,6 +282,7 @@ export default class M extends Migration {
             params: [RELEASE_CANDIDATE_SCHEMA, 'marker'],
             meta: { tableDependents: { schema: RELEASE_CANDIDATE_SCHEMA, table: 'marker' } },
           },
+          rowSecurityHidesNoMarkerRow(RELEASE_CANDIDATE_SCHEMA),
           {
             description: `The role that runs this command must have the CREATE privilege on the database, because renaming schema "${RELEASE_CANDIDATE_SCHEMA}" needs it. Grant it with GRANT CREATE ON DATABASE <database> TO <migrating role>, or run the command once as a role that has it and also owns the schema and its tables.`,
             sql: mayCreateInDatabase,
@@ -354,7 +371,7 @@ export default class M extends Migration {
           id: 'postgres',
           details: { schema: SCHEMA, objectType: 'table', name: 'marker' },
         },
-        precheck: [],
+        precheck: [rowSecurityHidesNoMarkerRow(SCHEMA)],
         execute: [
           {
             description: `copy each row of ${qualified('marker')} into ${qualified('signatures')}, with its hashes, its invariants and when it was written`,

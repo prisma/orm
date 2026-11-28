@@ -494,6 +494,46 @@ describe("applying the Postgres target's _prisma contract space", { concurrent: 
     expect(await schemas()).toEqual(['prisma_contract']);
   });
 
+  it("stops before anything changes when row-level security is forced on the release candidate's marker table", {
+    timeout: testTimeout,
+  }, async () => {
+    await createReleaseCandidateTables();
+    await giveReleaseCandidateTablesTo('prisma_migrator');
+    await driver.query('alter table prisma_contract.marker enable row level security');
+    await driver.query('alter table prisma_contract.marker force row level security');
+    const { rows } = await driver.query<{ name: string }>('select current_database() as name');
+    const database = `"${rows[0]?.name}"`;
+    await driver.query(`grant create on database ${database} to prisma_migrator`);
+    await allowDevelopmentServerLog('grant', 'to');
+
+    await driver.query('set role prisma_migrator');
+    let result: Awaited<ReturnType<typeof apply>>;
+    try {
+      result = await apply();
+    } finally {
+      await driver.query('reset role');
+      await driver.query(`revoke create on database ${database} from prisma_migrator`);
+      await allowDevelopmentServerLog('revoke', 'from');
+    }
+
+    const keptRows = (await schemas()).includes('prisma_contract')
+      ? 'select space from prisma_contract.marker'
+      : "select space from _prisma.signatures where space <> '_prisma'";
+    expect({
+      code: result.ok ? result.value.outcome : result.failure.code,
+      message: result.ok ? undefined : result.failure.message,
+      schemas: await schemas(),
+      markers: (await driver.query(keptRows)).rows,
+    }).toEqual({
+      code: 'MIGRATION.PRECHECK_FAILED',
+      message: expect.stringContaining(
+        'Row-level security must not hide any row of table "prisma_contract"."marker" from the role that runs this command',
+      ),
+      schemas: ['prisma_contract'],
+      markers: [{ space: 'app' }],
+    });
+  });
+
   it('touches nothing on a second call', { timeout: testTimeout }, async () => {
     await apply();
     const ledgerBefore = await ledger();
