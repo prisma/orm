@@ -525,6 +525,7 @@
 ./adapter/control: class PostgresControlAdapter, required method readLedger(driver: SqlControlDriverInstance<'postgres'>, space?: string): Promise<readonly LedgerEntryRecord[]>
 ./adapter/control: class PostgresControlAdapter, required method readMarker(driver: SqlControlDriverInstance<'postgres'>, space: string): Promise<ContractMarkerRecord | null>
 ./adapter/control: class PostgresControlAdapter, required method readMarkerDiscriminated(driver: SqlControlDriverInstance<'postgres'>, space: string): Promise<MarkerReadResult>
+./adapter/control: class PostgresControlAdapter, required method readSignatureDiscriminated(driver: SqlControlDriverInstance<'postgres'>, space: string): Promise<MarkerReadResult>
 ./adapter/control: class PostgresControlAdapter, required method renderColumnDefault(column: DdlColumn, table: string): Promise<string>
 ./adapter/control: class PostgresControlAdapter, required method updateMarker(driver: SqlControlDriverInstance<'postgres'>, space: string, expectedFrom: string, destination: MarkerDestination): Promise<boolean>
 ./adapter/control: class PostgresControlAdapter, required method withTransaction<T>(driver: SqlControlDriverInstance<'postgres'>, fn: () => Promise<T>): Promise<T>
@@ -573,6 +574,7 @@
 ./adapter: class PostgresControlAdapter, required method readLedger(driver: SqlControlDriverInstance<'postgres'>, space?: string): Promise<readonly LedgerEntryRecord[]>
 ./adapter: class PostgresControlAdapter, required method readMarker(driver: SqlControlDriverInstance<'postgres'>, space: string): Promise<ContractMarkerRecord | null>
 ./adapter: class PostgresControlAdapter, required method readMarkerDiscriminated(driver: SqlControlDriverInstance<'postgres'>, space: string): Promise<MarkerReadResult>
+./adapter: class PostgresControlAdapter, required method readSignatureDiscriminated(driver: SqlControlDriverInstance<'postgres'>, space: string): Promise<MarkerReadResult>
 ./adapter: class PostgresControlAdapter, required method renderColumnDefault(column: DdlColumn, table: string): Promise<string>
 ./adapter: class PostgresControlAdapter, required method updateMarker(driver: SqlControlDriverInstance<'postgres'>, space: string, expectedFrom: string, destination: MarkerDestination): Promise<boolean>
 ./adapter: class PostgresControlAdapter, required method withTransaction<T>(driver: SqlControlDriverInstance<'postgres'>, fn: () => Promise<T>): Promise<T>
