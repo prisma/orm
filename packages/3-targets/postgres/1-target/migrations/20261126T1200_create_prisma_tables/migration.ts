@@ -223,13 +223,16 @@ function checkColumns(
   });
 }
 
-function rowSecurityHidesNoMarkerRow(schema: string) {
+function rowSecurityHidesNoMarkerRow(schema: string, whatTheRoleCanDo: string) {
   return {
-    description: `Row-level security must not hide any row of table ${qualified('marker', schema)} from the role that runs this command, because this migration copies its rows into ${qualified('signatures')} and ${qualified('config')} and then drops it, so a row it cannot read would be lost. Turn off forced row-level security on the table with ALTER TABLE ${qualified('marker', schema)} NO FORCE ROW LEVEL SECURITY, or run the command once as a role that bypasses row-level security.`,
+    description: `Row-level security must not hide any row of table ${qualified('marker', schema)} from the role that runs this command, because this migration copies its rows into ${qualified('signatures')} and ${qualified('config')} and then drops it, so a row it cannot read would be lost. ${whatTheRoleCanDo}`,
     sql: absentOrRowSecurityHidesNoRow,
     params: [schema, 'marker'],
   };
 }
+
+const turnOffForcedRowSecurity = (schema: string) =>
+  `ALTER TABLE ${qualified('marker', schema)} NO FORCE ROW LEVEL SECURITY`;
 
 export default class M extends Migration {
   override describe() {
@@ -282,7 +285,10 @@ export default class M extends Migration {
             params: [RELEASE_CANDIDATE_SCHEMA, 'marker'],
             meta: { tableDependents: { schema: RELEASE_CANDIDATE_SCHEMA, table: 'marker' } },
           },
-          rowSecurityHidesNoMarkerRow(RELEASE_CANDIDATE_SCHEMA),
+          rowSecurityHidesNoMarkerRow(
+            RELEASE_CANDIDATE_SCHEMA,
+            `The role owns the table, as the checks before this one require, so it can turn off forced row-level security on it with ${turnOffForcedRowSecurity(RELEASE_CANDIDATE_SCHEMA)}. Or run the command once as a role that bypasses row-level security and also owns the schema and its tables.`,
+          ),
           {
             description: `The role that runs this command must have the CREATE privilege on the database, because renaming schema "${RELEASE_CANDIDATE_SCHEMA}" needs it. Grant it with GRANT CREATE ON DATABASE <database> TO <migrating role>, or run the command once as a role that has it and also owns the schema and its tables.`,
             sql: mayCreateInDatabase,
@@ -371,7 +377,12 @@ export default class M extends Migration {
           id: 'postgres',
           details: { schema: SCHEMA, objectType: 'table', name: 'marker' },
         },
-        precheck: [rowSecurityHidesNoMarkerRow(SCHEMA)],
+        precheck: [
+          rowSecurityHidesNoMarkerRow(
+            SCHEMA,
+            `A role that owns the table can turn off forced row-level security on it with ${turnOffForcedRowSecurity(SCHEMA)}, then run the command. A role that does not own the table can do neither that nor the drop, so run the command as the table's owner, or as a role that bypasses row-level security and also owns the table.`,
+          ),
+        ],
         execute: [
           {
             description: `copy each row of ${qualified('marker')} into ${qualified('signatures')}, with its hashes, its invariants and when it was written`,

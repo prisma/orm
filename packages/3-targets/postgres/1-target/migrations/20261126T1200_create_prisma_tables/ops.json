@@ -210,7 +210,7 @@
         }
       },
       {
-        "description": "Row-level security must not hide any row of table \"prisma_contract\".\"marker\" from the role that runs this command, because this migration copies its rows into \"_prisma\".\"signatures\" and \"_prisma\".\"config\" and then drops it, so a row it cannot read would be lost. Turn off forced row-level security on the table with ALTER TABLE \"prisma_contract\".\"marker\" NO FORCE ROW LEVEL SECURITY, or run the command once as a role that bypasses row-level security.",
+        "description": "Row-level security must not hide any row of table \"prisma_contract\".\"marker\" from the role that runs this command, because this migration copies its rows into \"_prisma\".\"signatures\" and \"_prisma\".\"config\" and then drops it, so a row it cannot read would be lost. The role owns the table, as the checks before this one require, so it can turn off forced row-level security on it with ALTER TABLE \"prisma_contract\".\"marker\" NO FORCE ROW LEVEL SECURITY. Or run the command once as a role that bypasses row-level security and also owns the schema and its tables.",
         "sql": "SELECT (SELECT rolsuper FROM pg_roles WHERE rolname = current_user)\n  OR (SELECT rolbypassrls FROM pg_roles WHERE rolname = current_user)\n  OR NOT EXISTS (\n    SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n    WHERE n.nspname = $1 AND c.relname = $2 AND c.relrowsecurity\n      AND (c.relforcerowsecurity OR NOT pg_has_role(current_user, c.relowner, 'USAGE'))\n  ) AS \"result\"",
         "params": ["prisma_contract", "marker"]
       },
@@ -612,7 +612,7 @@
     },
     "precheck": [
       {
-        "description": "Row-level security must not hide any row of table \"_prisma\".\"marker\" from the role that runs this command, because this migration copies its rows into \"_prisma\".\"signatures\" and \"_prisma\".\"config\" and then drops it, so a row it cannot read would be lost. Turn off forced row-level security on the table with ALTER TABLE \"_prisma\".\"marker\" NO FORCE ROW LEVEL SECURITY, or run the command once as a role that bypasses row-level security.",
+        "description": "Row-level security must not hide any row of table \"_prisma\".\"marker\" from the role that runs this command, because this migration copies its rows into \"_prisma\".\"signatures\" and \"_prisma\".\"config\" and then drops it, so a row it cannot read would be lost. A role that owns the table can turn off forced row-level security on it with ALTER TABLE \"_prisma\".\"marker\" NO FORCE ROW LEVEL SECURITY, then run the command. A role that does not own the table can do neither that nor the drop, so run the command as the table's owner, or as a role that bypasses row-level security and also owns the table.",
         "sql": "SELECT (SELECT rolsuper FROM pg_roles WHERE rolname = current_user)\n  OR (SELECT rolbypassrls FROM pg_roles WHERE rolname = current_user)\n  OR NOT EXISTS (\n    SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n    WHERE n.nspname = $1 AND c.relname = $2 AND c.relrowsecurity\n      AND (c.relforcerowsecurity OR NOT pg_has_role(current_user, c.relowner, 'USAGE'))\n  ) AS \"result\"",
         "params": ["_prisma", "marker"]
       }

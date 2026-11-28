@@ -494,6 +494,26 @@ describe("applying the Postgres target's _prisma contract space", { concurrent: 
     expect(await schemas()).toEqual(['prisma_contract']);
   });
 
+  /** Applies as `prisma_migrator`, with what a role that is not a superuser needs to change the schema here. */
+  async function applyAsMigrator(): Promise<Awaited<ReturnType<typeof apply>>> {
+    const { rows } = await driver.query<{ name: string }>('select current_database() as name');
+    const database = `"${rows[0]?.name}"`;
+    await driver.query(`grant create on database ${database} to prisma_migrator`);
+    await allowDevelopmentServerLog('grant', 'to');
+    await driver.query('set role prisma_migrator');
+    try {
+      return await apply();
+    } finally {
+      await driver.query('reset role');
+      await driver.query(`revoke create on database ${database} from prisma_migrator`);
+      await allowDevelopmentServerLog('revoke', 'from');
+    }
+  }
+
+  async function appSignatures() {
+    return (await signatures()).filter((row) => row.space !== '_prisma');
+  }
+
   it("stops before anything changes when row-level security is forced on the release candidate's marker table", {
     timeout: testTimeout,
   }, async () => {
@@ -501,20 +521,8 @@ describe("applying the Postgres target's _prisma contract space", { concurrent: 
     await giveReleaseCandidateTablesTo('prisma_migrator');
     await driver.query('alter table prisma_contract.marker enable row level security');
     await driver.query('alter table prisma_contract.marker force row level security');
-    const { rows } = await driver.query<{ name: string }>('select current_database() as name');
-    const database = `"${rows[0]?.name}"`;
-    await driver.query(`grant create on database ${database} to prisma_migrator`);
-    await allowDevelopmentServerLog('grant', 'to');
 
-    await driver.query('set role prisma_migrator');
-    let result: Awaited<ReturnType<typeof apply>>;
-    try {
-      result = await apply();
-    } finally {
-      await driver.query('reset role');
-      await driver.query(`revoke create on database ${database} from prisma_migrator`);
-      await allowDevelopmentServerLog('revoke', 'from');
-    }
+    const result = await applyAsMigrator();
 
     const keptRows = (await schemas()).includes('prisma_contract')
       ? 'select space from prisma_contract.marker'
@@ -527,9 +535,80 @@ describe("applying the Postgres target's _prisma contract space", { concurrent: 
     }).toEqual({
       code: 'MIGRATION.PRECHECK_FAILED',
       message: expect.stringContaining(
-        'Row-level security must not hide any row of table "prisma_contract"."marker" from the role that runs this command',
+        'Row-level security must not hide any row of table "prisma_contract"."marker" from the role that runs this command, because this migration copies its rows into "_prisma"."signatures" and "_prisma"."config" and then drops it, so a row it cannot read would be lost. The role owns the table, as the checks before this one require, so it can turn off forced row-level security on it with ALTER TABLE "prisma_contract"."marker" NO FORCE ROW LEVEL SECURITY. Or run the command once as a role that bypasses row-level security and also owns the schema and its tables.',
       ),
       schemas: ['prisma_contract'],
+      markers: [{ space: 'app' }],
+    });
+  });
+
+  it("moves the release candidate's rows when its owner runs the command and row-level security is enabled on the marker table but not forced", {
+    timeout: testTimeout,
+  }, async () => {
+    await createReleaseCandidateTables();
+    await giveReleaseCandidateTablesTo('prisma_migrator');
+    await driver.query('alter table prisma_contract.marker enable row level security');
+
+    const result = await applyAsMigrator();
+
+    expect({
+      outcome: result.ok ? result.value.outcome : result.failure,
+      schemas: await schemas(),
+      signatures: await appSignatures(),
+    }).toEqual({
+      outcome: 'applied',
+      schemas: ['_prisma'],
+      signatures: [{ space: 'app', core_hash: 'app-hash', invariants: '{app:invariant}' }],
+    });
+  });
+
+  it("moves the release candidate's rows when row-level security is forced and a role that bypasses it and owns the tables runs the command", {
+    timeout: testTimeout,
+  }, async () => {
+    await createReleaseCandidateTables();
+    await giveReleaseCandidateTablesTo('prisma_migrator');
+    await driver.query('alter table prisma_contract.marker enable row level security');
+    await driver.query('alter table prisma_contract.marker force row level security');
+
+    await driver.query('alter role prisma_migrator bypassrls');
+    let result: Awaited<ReturnType<typeof apply>>;
+    try {
+      result = await applyAsMigrator();
+    } finally {
+      await driver.query('alter role prisma_migrator nobypassrls');
+    }
+
+    expect({
+      outcome: result.ok ? result.value.outcome : result.failure,
+      schemas: await schemas(),
+      signatures: await appSignatures(),
+    }).toEqual({
+      outcome: 'applied',
+      schemas: ['_prisma'],
+      signatures: [{ space: 'app', core_hash: 'app-hash', invariants: '{app:invariant}' }],
+    });
+  });
+
+  it('stops before moving, saying what a non-owner can do, when row-level security hides rows of a marker table already in _prisma', {
+    timeout: testTimeout,
+  }, async () => {
+    await createReleaseCandidateTables();
+    await driver.query('alter schema prisma_contract rename to _prisma');
+    await driver.query('alter schema _prisma owner to prisma_migrator');
+    await driver.query('alter table _prisma.marker enable row level security');
+    await driver.query('grant select on _prisma.marker to prisma_migrator');
+
+    const result = await applyAsMigrator();
+
+    expect({
+      code: result.ok ? result.value.outcome : result.failure.code,
+      message: result.ok ? undefined : result.failure.message,
+      markers: (await driver.query('select space from _prisma.marker')).rows,
+    }).toEqual({
+      code: 'MIGRATION.PRECHECK_FAILED',
+      message: expect.stringContaining(
+        'Row-level security must not hide any row of table "_prisma"."marker" from the role that runs this command, because this migration copies its rows into "_prisma"."signatures" and "_prisma"."config" and then drops it, so a row it cannot read would be lost. A role that owns the table can turn off forced row-level security on it with ALTER TABLE "_prisma"."marker" NO FORCE ROW LEVEL SECURITY, then run the command. A role that does not own the table can do neither that nor the drop, so run the command as the table\'s owner, or as a role that bypasses row-level security and also owns the table.',
+      ),
       markers: [{ space: 'app' }],
     });
   });

@@ -25,7 +25,7 @@ Search the project for `_prisma.marker` and `prisma_contract.marker`, outside `n
 
 ```sql
 -- Before
-select space, core_hash, invariants from _prisma.marker order by space;
+select space, core_hash, invariants from prisma_contract.marker order by space;
 
 -- After
 select space, core_hash, invariants from _prisma.signatures where space <> '_prisma' order by space;
