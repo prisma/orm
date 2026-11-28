@@ -39,6 +39,8 @@ export interface ContractSerializer<TContract> {
    * (the symmetric pair to `deserializeContract`); targets that need to
    * canonicalize on the way out (key ordering, dropping computed-only
    * fields, normalizing numeric encodings) do that work here.
+   *
+   * The `storage` it returns is not yet in its normal form: the framework applies `normalizeStorage` to it after this method, when it writes the contract, so a caller must write `storage` through the framework's canonicalizer, never from this result.
    */
   serializeContract(contract: TContract): JsonObject;
 
