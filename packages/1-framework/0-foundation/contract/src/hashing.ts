@@ -81,6 +81,20 @@ export function computeExecutionHash(args: {
   );
 }
 
+/** The capabilities that are on: a flag that is `false` means the same as an absent one. */
+function capabilitiesThatAreOn(
+  capabilities: Record<string, Record<string, boolean>>,
+): Record<string, Record<string, true>> {
+  return Object.fromEntries(
+    Object.entries(capabilities).flatMap(([namespace, flags]) => {
+      const on = Object.keys(flags).filter((flag) => flags[flag] === true);
+      return on.length === 0
+        ? []
+        : [[namespace, Object.fromEntries(on.map((flag) => [flag, true]))]];
+    }),
+  );
+}
+
 export function computeProfileHash(args: {
   target: string;
   targetFamily: string;
@@ -91,7 +105,7 @@ export function computeProfileHash(args: {
       {
         targetFamily: args.targetFamily,
         target: args.target,
-        capabilities: args.capabilities,
+        capabilities: capabilitiesThatAreOn(args.capabilities),
       },
       storageAsGiven,
     ),

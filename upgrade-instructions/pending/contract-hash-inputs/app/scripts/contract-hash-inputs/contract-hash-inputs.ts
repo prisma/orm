@@ -275,6 +275,17 @@ function withoutNamespaceKinds(storage: JsonRecord): JsonRecord {
   return { ...storage, namespaces: stripped };
 }
 
+/** The capabilities the new rule's profile hash covers: a flag that is `false` means the same as an absent one. */
+function capabilitiesThatAreOn(capabilities: JsonRecord): JsonRecord {
+  const on: JsonRecord = {};
+  for (const [namespace, flags] of Object.entries(capabilities)) {
+    if (!isRecord(flags)) continue;
+    const kept = without(flags, (_flag, value) => value !== true);
+    if (Object.keys(kept).length > 0) defineOwn(on, namespace, kept);
+  }
+  return on;
+}
+
 /** The capabilities the old rule's profile hash covered: none for SQL, the contract's own for MongoDB. */
 function oldProfileCapabilities(contract: ContractSections): JsonRecord {
   return contract.family === 'sql' ? {} : contract.capabilities;
@@ -989,7 +1000,7 @@ function planContract(
   }
   const stored = storedHashes(file.value);
   const oldHashes = storedOldHashes(sections, stored);
-  const newHashes = contractHashes(sections, newHash, sections.capabilities);
+  const newHashes = contractHashes(sections, newHash, capabilitiesThatAreOn(sections.capabilities));
   const snapshotHash = snapshotDirectoryHash(file.path);
   const kept = keptStorageHash(
     sections.family,

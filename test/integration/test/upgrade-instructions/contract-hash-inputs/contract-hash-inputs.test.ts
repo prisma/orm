@@ -1,5 +1,5 @@
 import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { computeStorageHash } from '@internal/contract/hashing';
+import { computeProfileHash, computeStorageHash } from '@internal/contract/hashing';
 import { normalizeMongoStorage } from '@internal/mongo-contract/normal-form';
 import { normalizeSqlStorage } from '@internal/sql-contract/normal-form';
 import { dirname, join } from 'pathe';
@@ -513,6 +513,30 @@ describe('a snapshot directory with the new name whose contract gives another st
     expect(run.stderr).toContain(
       `  ${earlier}: becomes snapshots/${newHash}/, which already exists with other content.`,
     );
+  });
+});
+
+describe('a contract listing a capability that is off', () => {
+  it('gets the profile hash this release computes, which leaves the capability out', () => {
+    const root = copyFixture('before', 'postgres-app');
+    const contract = 'src/prisma/contract.json';
+    editFile(root, contract, (text) =>
+      text.replace(
+        '"capabilities": {\n    "postgres": {\n',
+        '"capabilities": {\n    "postgres": {\n      "aaOff": false,\n',
+      ),
+    );
+    const run = runScript(root);
+    const upgraded = JSON.parse(readFileSync(join(root, contract), 'utf8'));
+    expect({ status: run.status, profileHash: upgraded.profileHash }).toEqual({
+      status: 0,
+      profileHash: computeProfileHash({
+        target: upgraded.target,
+        targetFamily: upgraded.targetFamily,
+        capabilities: upgraded.capabilities,
+      }),
+    });
+    expect(upgraded.capabilities.postgres.aaOff).toBe(false);
   });
 });
 

@@ -171,6 +171,26 @@ describe('computeProfileHash', () => {
     });
     expect(hash1).not.toBe(hash2);
   });
+
+  it('gives a capability that is off the hash of one that is absent', () => {
+    const base = { target: 'postgres', targetFamily: 'sql' };
+    expect({
+      offFlag: computeProfileHash({
+        ...base,
+        capabilities: { postgres: { jsonAgg: true, lateral: false } },
+      }),
+      emptyNamespace: computeProfileHash({
+        ...base,
+        capabilities: { postgres: { jsonAgg: true }, sql: { returning: false }, pgvector: {} },
+      }),
+    }).toEqual({
+      offFlag: computeProfileHash({ ...base, capabilities: { postgres: { jsonAgg: true } } }),
+      emptyNamespace: computeProfileHash({
+        ...base,
+        capabilities: { postgres: { jsonAgg: true } },
+      }),
+    });
+  });
 });
 
 describe('computeExecutionHash', () => {
@@ -277,7 +297,7 @@ describe('the hash input', () => {
     );
   });
 
-  it('is the family, the target and the capabilities for the profile hash', () => {
+  it('is the family, the target and the capabilities that are on for the profile hash', () => {
     expect(
       computeProfileHash({
         target: 'postgres',
@@ -286,7 +306,7 @@ describe('the hash input', () => {
       }),
     ).toBe(
       sha256OfJsonText({
-        capabilities: { postgres: { jsonAgg: true, lateral: false }, sql: {} },
+        capabilities: { postgres: { jsonAgg: true } },
         target: 'postgres',
         targetFamily: 'sql',
       }),
