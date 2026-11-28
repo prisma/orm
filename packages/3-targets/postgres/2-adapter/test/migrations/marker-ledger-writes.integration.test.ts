@@ -158,7 +158,7 @@ describe('PostgresControlAdapter signature, policies and ledger writes (end-to-e
     return result.rows.map((row) => row.policies);
   }
 
-  it('initMarker records databasePolicies as the one row of _prisma.config, not on the signature', {
+  it('initMarker records databasePolicies as the one row of _prisma.config, which the application space reads back as meta.policies', {
     timeout: testTimeout,
   }, async () => {
     await adapter.initMarker(driver!, 'app', {
@@ -169,8 +169,8 @@ describe('PostgresControlAdapter signature, policies and ledger writes (end-to-e
 
     expect({
       config: await recordedPolicies(),
-      signatureMeta: (await adapter.readMarker(driver!, 'app'))!.meta,
-    }).toEqual({ config: [MIGRATE_ONLY], signatureMeta: {} });
+      appMeta: (await adapter.readMarker(driver!, 'app'))!.meta,
+    }).toEqual({ config: [MIGRATE_ONLY], appMeta: { policies: MIGRATE_ONLY } });
   });
 
   it('re-stamping and advancing without databasePolicies leave the recorded policies as they were', {
