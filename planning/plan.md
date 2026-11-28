@@ -157,6 +157,8 @@ Work found after the plan was made goes here, so the first five streams keep the
 
 Each project brings its code changes, its checks and its documentation together, so what is on `main` is what is in force. Project 4 comes before project 3, which needs it.
 
+**Rollout checklist:** everything that has to happen at or before the cut of release 8.0 is listed, with an owner and a check, in [rollout-8.0.md](rollout-8.0.md). A project that creates such work adds its item there.
+
 | # | Progress | Project | GA | Owner | Status | Next |
 | --- | --- | --- | --- | --- | --- | --- |
 | 1 | — | Document the compatibility policy in the repository | Moved into the other projects | Will | Dropped 2026-11-24. Each project documents its own part of the policy when it implements it. prisma/orm#31194 holds the drafts and is not merged | |
