@@ -122,11 +122,6 @@ export const infoSchemaTables = pgTable(
   { table_schema: text(), table_name: text() },
 );
 
-export const infoSchemaColumns = pgTable(
-  { name: 'columns', schema: 'information_schema' },
-  { table_schema: text(), table_name: text(), column_name: text() },
-);
-
 export const NOW = new RawExpr({
   parts: ['now()'],
   returns: { codecId: PG_TIMESTAMPTZ_STRING_CODEC_ID, nullable: false },
@@ -177,18 +172,24 @@ export async function prismaTableExists(
   return (await execute(lower, driver, probe)).length > 0;
 }
 
-/** Whether one of Prisma's own tables in `schema` has every column in `columns`, by name. */
+/** The columns of a table, from the catalogues, which list them whatever privileges the role holds on the table; `information_schema.columns` lists only columns the role may use. */
+const CATALOG_COLUMNS_SQL = `SELECT a.attname AS "column_name"
+FROM pg_catalog.pg_attribute a
+JOIN pg_catalog.pg_class c ON c.oid = a.attrelid
+JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+WHERE n.nspname = $1 AND c.relname = $2 AND a.attnum > 0 AND NOT a.attisdropped`;
+
+/** Whether one of Prisma's own tables in `schema` has every column in `columns`, by name, whatever privileges the role holds on it. A role that may not read the table then gets PostgreSQL's permission error from the read that follows, never a table that seems to lack the column. */
 export async function prismaTableHasColumns(
-  lower: Lower,
   driver: MarkerDriver,
   table: PrismaTableName,
   columns: readonly string[],
   schema: string = PRISMA_TABLES_SCHEMA,
 ): Promise<boolean> {
-  const probe = infoSchemaColumns
-    .select(infoSchemaColumns.column_name)
-    .where(infoSchemaColumns.table_schema.eq(schema).and(infoSchemaColumns.table_name.eq(table)))
-    .build();
-  const present = new Set((await execute(lower, driver, probe)).map((row) => row['column_name']));
+  const { rows } = await driver.query<{ readonly column_name: string }>(CATALOG_COLUMNS_SQL, [
+    schema,
+    table,
+  ]);
+  const present = new Set(rows.map((row) => row.column_name));
   return columns.every((column) => present.has(column));
 }

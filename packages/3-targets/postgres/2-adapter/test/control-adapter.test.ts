@@ -2215,7 +2215,7 @@ describe('PostgresControlAdapter', () => {
         familyId: 'sql',
         targetId: 'postgres',
         query: async <Row = Record<string, unknown>>(sql: string, params?: readonly unknown[]) => {
-          if (sql.includes('"information_schema"."columns"')) {
+          if (sql.includes('pg_catalog.pg_attribute')) {
             const configColumns = options.configTable ? [{ column_name: 'policies' }] : [];
             return {
               rows: (params?.[1] === 'config' ? configColumns : []) as unknown as Row[],
@@ -2331,7 +2331,7 @@ describe('PostgresControlAdapter', () => {
         targetId: 'postgres',
         query: async <Row = Record<string, unknown>>(sql: string, params?: readonly unknown[]) => {
           statements.push({ sql, params });
-          if (sql.includes('"information_schema"."columns"')) {
+          if (sql.includes('pg_catalog.pg_attribute')) {
             return {
               rows: ['space', 'core_hash', 'profile_hash', 'invariants'].map((column_name) => ({
                 column_name,
@@ -2369,12 +2369,12 @@ describe('PostgresControlAdapter', () => {
         all: 'abc',
         ownStatements: [
           expect.stringContaining('"information_schema"."tables"'),
-          expect.stringContaining('"information_schema"."columns"'),
+          expect.stringContaining('pg_catalog.pg_attribute'),
           'SELECT "signatures"."core_hash" AS "core_hash", "signatures"."profile_hash" AS "profile_hash", "signatures"."invariants" AS "invariants" FROM "_prisma"."signatures" WHERE "signatures"."space" = $1',
         ],
         allStatements: [
           expect.stringContaining('"information_schema"."tables"'),
-          expect.stringContaining('"information_schema"."columns"'),
+          expect.stringContaining('pg_catalog.pg_attribute'),
           'SELECT "signatures"."space" AS "space", "signatures"."core_hash" AS "core_hash", "signatures"."profile_hash" AS "profile_hash", "signatures"."invariants" AS "invariants" FROM "_prisma"."signatures"',
         ],
       });

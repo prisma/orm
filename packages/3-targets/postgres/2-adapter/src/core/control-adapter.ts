@@ -144,7 +144,6 @@ import {
   ledgerReadShape,
   mergeInvariants,
   NOW,
-  type PostgresMarkerLower,
   PRISMA_SPACE_SIGNATURE_COLUMNS,
   prismaTableExists,
   prismaTableHasColumns,
@@ -181,13 +180,12 @@ function policiesMeta(
   return space === APP_SPACE_ID && configRow === true ? { meta: { policies } } : {};
 }
 
-/** `query` with the policies of `_prisma.config`, when that table holds them. A database without the table, such as one a later release changed, reads as recording no policies. */
+/** `query` with the policies of `_prisma.config`, when that table holds them. A database without the table, such as one a later release changed, reads as recording no policies; a role that may not read the table gets PostgreSQL's permission error, so it never reads the defaults in place of the policies. */
 async function withPoliciesWhenRecorded(
-  lower: PostgresMarkerLower,
   driver: SqlControlDriverInstance<'postgres'>,
   query: SelectAst,
 ): Promise<SelectAst> {
-  return (await prismaTableHasColumns(lower, driver, PRISMA_TABLE_NAMES.config, [
+  return (await prismaTableHasColumns(driver, PRISMA_TABLE_NAMES.config, [
     config.policies.columnName,
   ]))
     ? withPolicies(query)
@@ -403,7 +401,6 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
     }
 
     const fetch = await withPoliciesWhenRecorded(
-      lower,
       driver,
       signatures.select(...PRISMA_SPACE_SIGNATURE_COLUMNS).build(),
     );
@@ -676,7 +673,6 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
     if (
       isPrismaSpace(space) &&
       !(await prismaTableHasColumns(
-        lower,
         driver,
         PRISMA_TABLE_NAMES.signatures,
         PRISMA_SPACE_SIGNATURE_COLUMNS.map((column) => column.columnName),
@@ -699,7 +695,7 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
       .build();
     const fetch =
       space === APP_SPACE_ID && read === 'with-policies'
-        ? await withPoliciesWhenRecorded(lower, driver, signature)
+        ? await withPoliciesWhenRecorded(driver, signature)
         : signature;
     const result = await execute(lower, driver, fetch);
     const row = result[0];
