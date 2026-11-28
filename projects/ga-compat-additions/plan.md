@@ -21,6 +21,7 @@ Spec: [spec.md](spec.md). Stream plan: `projects/ga-compatibility/plan.md` on br
 - List closed sets, with reasons, in a file the check reads. Expected closed sets: maturity levels, `CodecTrait` (ADR 214 relies on it staying closed), the SQL aggregate alphabet `AggregateFn` (ADR 020).
 - Add a check, run in CI beside the API check, that fails on an exported set that is neither open nor listed closed. Its test plants an unmarked set and sees it fail.
 - Record the type changes in each package's `api-breaks.json`.
+- Before the cut of 8.0, `packages/9-public/value-sets.json` has no entry with status `pending`. This is item 22 of `planning/rollout-8.0.md` on branch `planning/prisma-8-ga`, owned by this project.
 
 ### 2. Error codes do not disappear
 
