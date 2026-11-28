@@ -2,14 +2,14 @@
 changes:
   - id: prisma-tables-move-to-prisma-schema
     summary: |
-      On PostgreSQL, Prisma's own tables move from the schema `prisma_contract` to the schema `_prisma`, and the `marker` table is replaced by two tables: `_prisma.signatures`, which records which contract each contract space was signed with, and `_prisma.config`, which holds the database's change policy and data protection policy. The first command that changes the database (`prisma db init`, `db update`, `db migrate` or `db sign`) renames the schema, moves the rows of `marker` into the two new tables, drops `marker`, and keeps everything Prisma recorded. Run one of them against each database once, with the new release, before the application on the new release reads it. After that, only the new release may change the database: a release candidate's command applies every migration again. The command stops without changing anything when the role that runs it does not own the schema and its tables or may not create in the database, when `_prisma` already exists beside `prisma_contract` and is not empty or is owned by another role, or when one of Prisma's tables is in a form this release does not bring up to date.
+      On PostgreSQL, Prisma's own tables move from the schema `prisma_contract` to the schema `_prisma`, and the `marker` table is replaced by two tables: `_prisma.signatures`, which records which contract each contract space was signed with, and `_prisma.config`, which holds the database's change policy and data protection policy. The first command that changes the database (`prisma db init`, `db update`, `db migrate` or `db sign`) renames the schema, moves the rows of `marker` into the two new tables, drops `marker`, and keeps everything Prisma recorded. Run one of them against each database once, with the new release, before the application on the new release reads it. After that, only the new release may change the database: a release candidate's command applies every migration again. The command stops without changing anything when the role that runs it does not own the schema and its tables or may not create in the database, when `_prisma` already exists beside `prisma_contract` and is not empty or is owned by another role, when one of Prisma's tables is in a form this release does not bring up to date, or when another object, such as a view, depends on `marker`.
     detection:
       glob: "**/package.json"
       matches:
         - '"@prisma/orm-postgres"\s*:'
   - id: name-the-prisma-schema
     summary: |
-      Anything in the project that names the schema `prisma_contract` in its own SQL or scripts must name `_prisma` instead: grants in infrastructure code, scripts that drop or reset the database, monitoring queries, row-level-security setup, and tests that reset the database. Anything that names the `marker` table must name `_prisma.signatures`, or `_prisma.config` for the policies. A grant on `marker` is dropped with the table, so a role that read it, such as the application's, needs `SELECT` on `_prisma.signatures` and `_prisma.config` once the database is brought up to date. Migrations that have been planned are not edited.
+      Anything in the project that names the schema `prisma_contract` in its own SQL or scripts must name `_prisma` instead: grants in infrastructure code, scripts that drop or reset the database, monitoring queries, row-level-security setup, and tests that reset the database. Anything that names the `marker` table must name `_prisma.signatures`, or `_prisma.config` for the policies. A grant on `marker` is dropped with the table, so a role that read it, such as the application's, needs `SELECT` on `_prisma.signatures` once the database is brought up to date, and on `_prisma.config` only if it reads the policies. Migrations that have been planned are not edited.
     detection:
       glob: "**/*"
       contains:
@@ -80,6 +80,8 @@ Running the command once as the role that owns them also works, but the schema a
 ```sql
 GRANT CREATE ON DATABASE <database> TO <migrating role>;
 ```
+
+**Another object depends on `prisma_contract.marker`.** The command drops `marker` once its rows are moved, and PostgreSQL does not drop a table that a view, a function, a foreign key or another object depends on. The command stops with `MIGRATION.PRECHECK_FAILED`, names those objects, and changes nothing. Show them to the user and ask whether to drop them; once the command has run, create each again over `_prisma.signatures`, or `_prisma.config` for the policies.
 
 **`prisma_contract` exists and `_prisma` exists too.** When `_prisma` is empty, for example because someone created the schema by hand or provisioning code created it ahead of the upgrade, the command drops it before the rename, with a plain `DROP SCHEMA "_prisma"`. Any grants and default privileges set on that empty `_prisma` go with it; the renamed schema keeps the grants of `prisma_contract`. So apply changes to provisioning code that name `_prisma` after the first command has run against the database, or apply them again then.
 
@@ -173,7 +175,7 @@ Replace `prisma_contract` with `_prisma` in each of these, except planned migrat
 - The contract a space was signed with, its hashes and its invariants: `_prisma.signatures`, which has the columns `space`, `core_hash`, `profile_hash`, `invariants` and `signed_at`. Use `signed_at` where it used `updated_at`. The columns `contract_json`, `canonical_version`, `app_tag` and `meta` are gone, and nothing replaces the first three.
 - The change policy and the data protection policy, which it read from `meta` on the application's row (`meta -> 'policies'`): the `policies` column of `_prisma.config`, which has at most one row. No row means the default policies.
 
-The application's role reads both tables when the client is first used, to check which contract the database was signed with. Without `SELECT` on them, that check cannot read which contract the database was signed with, and queries still run. When the application gives its client a `log`, it logs a warning: `CONTRACT.MARKER_MISSING` ("Contract marker not found in database") when the role has no privilege on `_prisma.signatures`, because Prisma looks for the table in `information_schema.tables`, which lists only tables the role has a privilege on, or `CONTRACT.MARKER_READ_FAILED` when it may read `signatures` but not `config`. A client created with `verifyMarker: false` makes no such check. For example:
+The application's role reads `_prisma.signatures` when the client is first used, to check which contract the database was signed with. It does not read `_prisma.config`. Without `SELECT` on `_prisma.signatures`, that check cannot read which contract the database was signed with, and queries still run. When the application gives its client a `log`, it logs a warning: `CONTRACT.MARKER_MISSING` ("Contract marker not found in database"), because Prisma looks for the table in `information_schema.tables`, which lists only tables the role has a privilege on. A client created with `verifyMarker: false` makes no such check. For example:
 
 ```sql
 -- Before
@@ -182,10 +184,10 @@ GRANT SELECT ON prisma_contract.marker TO app;
 
 -- After
 GRANT USAGE ON SCHEMA _prisma TO app;
-GRANT SELECT ON _prisma.signatures, _prisma.config TO app;
+GRANT SELECT ON _prisma.signatures TO app;
 ```
 
-Apply a change like this to each database after the first command of the new release has run against it: before that, `_prisma` and its new tables do not exist, and the grants on the schema `prisma_contract` carry over in the rename anyway. The grants on `signatures` and `config` are needed from the moment that command has run, so apply them right after it, before the application on the new release is deployed. Do not make provisioning code create `_prisma` ahead of the upgrade to make such a grant succeed; the command drops an empty `_prisma` before the rename, with its grants.
+Apply a change like this to each database after the first command of the new release has run against it: before that, `_prisma` and its new tables do not exist, and the grants on the schema `prisma_contract` carry over in the rename anyway. The grant on `signatures` is needed from the moment that command has run, so apply it right after it, before the application on the new release is deployed. Do not make provisioning code create `_prisma` ahead of the upgrade to make such a grant succeed; the command drops an empty `_prisma` before the rename, with its grants.
 
 A script that drops Prisma's tables to reset a database should drop `_prisma`. If it also runs against databases that have not been brought up to date yet, keep a second statement that drops `prisma_contract`:
 
