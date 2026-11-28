@@ -16,6 +16,7 @@ import { collectionSelectAst, collectionSelectWithIncludesAst } from '../query-p
 import type { AliasedTable } from '../table-scope';
 import { type CollectionState, emptyState } from '../types';
 import type { WrittenRowOwner } from '../written-keys';
+import { requireBindParametersWithinLimit } from './bind-parameter-limit';
 import { Delete } from './delete';
 import type { ColumnMapping, NodeId } from './edge';
 import { FilterData } from './filter-data';
@@ -87,11 +88,9 @@ export function addInsert(
 ): NodeId {
   const { contract } = context;
   const groups = supportsDefaultInInsert(contract) ? [rows] : groupRowsByColumnSignature(rows);
-  const inserted = new Insert(
-    groups.map((group) => insertAst(contract, table, group, conflict)),
-    owner,
-    junction,
-  );
+  const asts = groups.map((group) => insertAst(contract, table, group, conflict));
+  requireBindParametersWithinLimit(contract, asts, owner);
+  const inserted = new Insert(asts, owner, junction);
   return graph.add(inserted, {
     payload: keys.map(({ from, columns }) => new PayloadData(from, columns)),
     state: graph.stateEdgesFor(inserted),

@@ -17,7 +17,12 @@ import {
   UpdateAst,
 } from '@internal/sql-relational-core/ast';
 import { createFunctions } from '@internal/sql-relational-core/functions';
-import type { SqlQueryPlan } from '@internal/sql-relational-core/plan';
+import {
+  bindParameterCountOf,
+  bindParameterLimitOfTarget,
+  type SqlQueryPlan,
+  targetDisplayNameOf,
+} from '@internal/sql-relational-core/plan';
 import { ifDefined } from '@internal/utils/defined';
 import { structuredError } from '@internal/utils/structured-error';
 import type { Expression, ExpressionBuilder } from '../expression';
@@ -61,6 +66,35 @@ function mergeWriteAnnotations(
     next.set(annotation.namespace, annotation);
   }
   return next;
+}
+
+function requireBindParametersWithinLimit(
+  ctx: BuilderContext,
+  ast: InsertAst,
+  namespaceId: string,
+  tableName: string,
+): void {
+  const limit = bindParameterLimitOfTarget(ctx.target);
+  if (limit === undefined) return;
+  const parameters = bindParameterCountOf(ast, ctx.target);
+  if (parameters <= limit) return;
+  throw structuredError(
+    'ORM.ARGUMENT_INVALID',
+    `insert() on table "${tableName}" would bind ${parameters} parameters in one INSERT statement; ${targetDisplayNameOf(ctx.target)} allows ${limit} per statement.`,
+    {
+      why: 'The database rejects a statement past its bind-parameter limit with a driver error that reads as a broken connection, so the builder refuses the statement before sending it; nothing was sent.',
+      fix: `Split the rows into smaller insert() calls so no single INSERT statement binds more than ${limit} parameters.`,
+      meta: {
+        problem: 'too-many-bind-parameters',
+        method: 'insert()',
+        namespaceId,
+        table: tableName,
+        parameters,
+        limit,
+        target: ctx.target,
+      },
+    },
+  );
 }
 
 type WhereCallback = ExpressionBuilder<Scope, QueryContext>;
@@ -293,6 +327,7 @@ export class InsertQueryImpl<
     );
 
     const ast = InsertAst.into(this.#tableSource).withRows(paramRows);
+    requireBindParametersWithinLimit(this.ctx, ast, this.#namespaceId, this.#tableName);
 
     if (this.#returningColumns.length === 0) {
       return ast;

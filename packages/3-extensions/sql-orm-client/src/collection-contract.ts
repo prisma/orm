@@ -9,6 +9,7 @@ import { capabilityUnavailableMessage } from '@internal/sql-contract/capability-
 import type { SqlStorage, StorageTable } from '@internal/sql-contract/types';
 import { type CapabilityRequirement, missingCapability } from '@internal/sql-relational-core/ast';
 import { isExpression } from '@internal/sql-relational-core/expression';
+import { bindParameterLimitOfTarget } from '@internal/sql-relational-core/plan';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
@@ -1029,6 +1030,11 @@ export function assertLockCapability(
 
 export function supportsDefaultInInsert(contract: Contract<SqlStorage>): boolean {
   return contract.capabilities['sql']?.['defaultInInsert'] === true;
+}
+
+/** The bind parameters one statement may carry on the contract's target, from `bindParameterLimitOfTarget` on the SQL relational core. */
+export function bindParameterLimitOf(contract: Contract<SqlStorage>): number | undefined {
+  return bindParameterLimitOfTarget(contract.target);
 }
 
 export function hasContractCapability(contract: Contract<SqlStorage>, capability: string): boolean {

@@ -7,6 +7,7 @@ import type {
 } from '@internal/sql-relational-core/ast';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import type { WrittenRowOwner } from '../written-keys';
+import { requireBindParametersWithinLimit } from './bind-parameter-limit';
 import type { NodeId, StorageRow } from './edge';
 import { withColumns } from './filtered-statement';
 import type { Graph } from './graph';
@@ -55,6 +56,11 @@ export class Insert extends StatementNode<Payloads> {
     const payload = inputs.payload === null ? undefined : payloadOf(inputs.payload, this.junction);
     const asts =
       payload === undefined ? this.asts : this.asts.map((ast) => withPayload(ast, payload));
+    if (payload !== undefined) {
+      // Payload parameters (parent keys, junction keys) join every row only here, so a batch whose
+      // construction-time count was within the limit can exceed it once they are added.
+      requireBindParametersWithinLimit(run.context.contract, asts, this.owner, 'execution');
+    }
     const [only, ...others] = asts;
     if (givesOwnValues(run.context, this.returns)) {
       return insertGivingOwnValues(asts, this.returns, this.owner, run);
