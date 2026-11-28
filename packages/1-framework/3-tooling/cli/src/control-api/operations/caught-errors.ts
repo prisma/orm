@@ -39,15 +39,24 @@ export function isReportedAsItself(error: unknown): error is StructuredError {
   );
 }
 
-/** The error a reader of a stored file reports as itself, a format version error naming the file at `path` when its reader did not; undefined for any other error. */
+/** A stored file's format version error, reported as itself and naming the file at `path` when its reader did not; undefined for any other error. A reader that goes on without a file it cannot interpret still stops on this one. */
+export function formatVersionFailure(
+  error: unknown,
+  path?: string,
+): CliStructuredError | undefined {
+  if (!isFormatVersionError(error)) return undefined;
+  return cliErrorFromStructured(path === undefined ? error : formatVersionErrorAt(error, path));
+}
+
+/** The error a strict reader of a stored file reports as itself: a format version error naming the file at `path` when its reader did not, or a data type refusing the contract's type parameters; undefined for any other error. */
 export function readFailureReportedAsItself(
   error: unknown,
   path?: string,
 ): CliStructuredError | undefined {
-  if (isFormatVersionError(error)) {
-    return cliErrorFromStructured(path === undefined ? error : formatVersionErrorAt(error, path));
-  }
-  return isReportedAsItself(error) ? cliErrorFromStructured(error) : undefined;
+  return (
+    formatVersionFailure(error, path) ??
+    (isReportedAsItself(error) ? cliErrorFromStructured(error) : undefined)
+  );
 }
 
 /** A structured error a library raised, reported under its own code, message and fields. */

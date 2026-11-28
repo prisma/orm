@@ -28,7 +28,7 @@ import { readContractEnvelope, resolveContractPath } from '../../utils/command-h
 import { toDeclaredExtensionsFromRaw } from '../../utils/extension-pack-inputs';
 import { migrationTsKeepsItsHash } from '../../utils/next-actions';
 import { snapshotVerifierFor } from '../../utils/snapshot-content-verification';
-import { errorFromCaught, readFailureReportedAsItself } from './caught-errors';
+import { errorFromCaught, formatVersionFailure } from './caught-errors';
 
 const CONTRACT_SPACES_DOCS_URL = 'https://pris.ly/contract-spaces';
 
@@ -479,8 +479,8 @@ export async function buildReadAggregate(
     const envelope = await readContractEnvelope(config);
     contractHash = envelope.storageHash;
   } catch (error) {
-    const asItself = readFailureReportedAsItself(error);
-    if (asItself !== undefined) return notOk(asItself);
+    const formatFailure = formatVersionFailure(error);
+    if (formatFailure !== undefined) return notOk(formatFailure);
     if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) {
       envelopeRefusal =
         error instanceof SyntaxError
@@ -507,8 +507,8 @@ export async function buildReadAggregate(
       try {
         appContractForLoad = deserializeContract(contractRawForAggregate);
       } catch (error) {
-        const asItself = readFailureReportedAsItself(error, resolveContractPath(config));
-        if (asItself !== undefined) return notOk(asItself);
+        const formatFailure = formatVersionFailure(error, resolveContractPath(config));
+        if (formatFailure !== undefined) return notOk(formatFailure);
         if (isInternalError(error)) throw error;
         contractRefusal = `${resolveContractPath(config)}: ${error instanceof Error ? error.message : String(error)}`;
       }
