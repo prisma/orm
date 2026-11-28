@@ -1,3 +1,6 @@
+import { realpathSync } from 'node:fs';
+import { basename, dirname, join, resolve as resolvePath } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import sqliteAdapter from '@internal/adapter-sqlite/runtime';
 import type { Contract } from '@internal/contract/types';
 import type { SqliteBinding } from '@internal/driver-sqlite/runtime';
@@ -52,6 +55,70 @@ import { SqliteRuntimeImpl } from './sqlite-runtime';
 import { type SqliteTransactionOptions, validateTransactionOptions } from './transaction-options';
 
 export type SqliteTargetId = 'sqlite';
+
+const sharedTransactionQueues = new Map<string, Promise<unknown>>();
+
+function decodeFileUriComponent(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
+function resolveDatabaseQueueKey(binding: { readonly path: string } | undefined): string | null {
+  if (!binding) return null;
+  const rawPath = binding.path.trim();
+  if (!rawPath || rawPath === ':memory:' || rawPath.startsWith('file::memory:')) {
+    return null;
+  }
+
+  let filePath = rawPath;
+  if (filePath.startsWith('file:')) {
+    const queryOrFragmentIndex = filePath.search(/[?#]/);
+    const uriWithoutQuery =
+      queryOrFragmentIndex >= 0 ? filePath.slice(0, queryOrFragmentIndex) : filePath;
+    const queryIndex = filePath.indexOf('?');
+    const fragmentIndex = filePath.indexOf('#');
+    const hasQuery = queryIndex >= 0 && (fragmentIndex < 0 || queryIndex < fragmentIndex);
+    const queryString = hasQuery
+      ? filePath.slice(queryIndex + 1, fragmentIndex >= 0 ? fragmentIndex : undefined)
+      : '';
+    const isMemoryMode = hasQuery && new URLSearchParams(queryString).get('mode') === 'memory';
+    if (isMemoryMode || uriWithoutQuery === 'file:' || uriWithoutQuery === 'file::memory:') {
+      return null;
+    }
+
+    if (uriWithoutQuery.startsWith('file:/')) {
+      try {
+        filePath = fileURLToPath(uriWithoutQuery);
+      } catch {
+        filePath = decodeFileUriComponent(
+          uriWithoutQuery.startsWith('file://')
+            ? uriWithoutQuery.slice('file://'.length)
+            : uriWithoutQuery.slice('file:'.length),
+        );
+      }
+    } else {
+      filePath = decodeFileUriComponent(uriWithoutQuery.slice('file:'.length));
+    }
+
+    if (!filePath || filePath === ':memory:') {
+      return null;
+    }
+  }
+
+  const resolved = resolvePath(filePath);
+  try {
+    return realpathSync(resolved);
+  } catch {
+    try {
+      return join(realpathSync(dirname(resolved)), basename(resolved));
+    } catch {
+      return resolved;
+    }
+  }
+}
 type OrmClient<
   TContract extends Contract<SqlStorage>,
   TCollections extends CollectionClasses,
@@ -248,6 +315,7 @@ export default function sqlite<
   let backgroundConnectError: unknown;
   let closed = false;
   let ownedDispose: (() => Promise<void>) | undefined;
+  let localTransactionQueueTail: Promise<unknown> = Promise.resolve();
 
   const closedError = () =>
     sqliteError('DRIVER.NOT_CONNECTED', 'SQLite client is closed', {
@@ -413,16 +481,49 @@ export default function sqlite<
       fn: (tx: SqliteTransactionContext<TContract, TCollections>) => PromiseLike<R>,
       localOptions?: SqliteTransactionOptions,
     ): Promise<R> {
+      if (closed) {
+        throw closedError();
+      }
       const local = validateTransactionOptions(localOptions);
       const isolationLevel =
         local?.isolationLevel !== undefined
           ? local.isolationLevel
           : transactionOptions?.isolationLevel;
       const timeout = local?.timeout !== undefined ? local.timeout : transactionOptions?.timeout;
-      return withTransaction(workRuntime, (txCtx) => fn(buildTransactionContext(txCtx)), {
-        isolationLevel,
-        timeout,
-      });
+
+      // Serialize interactive transactions per database (process-local by canonical path,
+      // or per-client for in-memory/unbound clients) so concurrent writers queue in async/await
+      // instead of occupying libuv worker threads in SQLite's synchronous busy-handler (#29870).
+      const queueKey = resolveDatabaseQueueKey(binding);
+      const previousTail =
+        queueKey !== null
+          ? (sharedTransactionQueues.get(queueKey) ?? Promise.resolve())
+          : localTransactionQueueTail;
+
+      const runTx = (): Promise<R> =>
+        withTransaction(workRuntime, (txCtx) => fn(buildTransactionContext(txCtx)), {
+          isolationLevel,
+          timeout,
+        });
+
+      const txPromise = previousTail.then(runTx, runTx);
+      const nextTail = txPromise.then(
+        () => undefined,
+        () => undefined,
+      );
+
+      if (queueKey !== null) {
+        sharedTransactionQueues.set(queueKey, nextTail);
+        void nextTail.then(() => {
+          if (sharedTransactionQueues.get(queueKey) === nextTail) {
+            sharedTransactionQueues.delete(queueKey);
+          }
+        });
+      } else {
+        localTransactionQueueTail = nextTail;
+      }
+
+      return txPromise;
     },
 
     close(): Promise<void> {
