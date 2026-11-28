@@ -115,7 +115,7 @@ Outside this stream, and blocking projects 2 and 3: capabilities by database ver
 
 - The approaches other projects use are in [research/public-api-compatibility.md](research/public-api-compatibility.md). The check needs its own design document (task 5).
 - A comparison of exported declarations does not see a change to a query's result type, which is computed from the user's input. Type tests written against the published packages cover that.
-- The check treats a new required member on an interface that users implement as a break. Project 5 records which interfaces those are.
+- The check treats a new required member on an interface that users implement as a break, through the test of each exported function that accepts the interface. No list of which interfaces users implement is kept: the decision record on the API checks rejected one, because it goes out of date without anyone noticing.
 
 **Decided when it started.** The checks compare each package's types and the example apps with the last published release, and fail on any break not recorded in the package's `api-breaks.json`. They fail now, during the release candidates. A name starting `ea_`, `preview_` or `rc_` may break, unless a promotion left it as another name for a GA API.
 
@@ -137,7 +137,7 @@ Outside this stream, and blocking projects 2 and 3: capabilities by database ver
 - Give each built-in name on the ORM client a way to be reached when a user's name hides it. Today a user namespace named `fragment` hides `db.orm.fragment`.
 - Stop refusing an extension's aggregate operation whose name matches a collection builder method (`ORM.AGGREGATE_OPERATION_RESERVED`). Today, adding a builder method would make a working extension throw.
 - Add a check that fails when an error code disappears.
-- Record which exported interfaces users implement, for project 4.
+- Show that the API check catches a new required member on an interface users implement, by planting one on a real interface. (Changed on 2026-11-28 from recording a list of those interfaces, which the decision record on the API checks rejected.)
 
 **Agreed so far.** A set that may grow gets a catch-all member such as `(string & {})`, so a user's exhaustiveness check cannot compile and a new case falls to their default branch. A set marked closed changes only in a major version.
 
