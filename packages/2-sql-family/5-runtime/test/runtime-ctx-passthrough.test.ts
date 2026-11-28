@@ -24,7 +24,7 @@ import { defineTestCodec } from './test-codec';
 import { createTestRuntime as createRuntime, descriptorsFromCodecs } from './utils';
 
 /**
- * Pins that the SQL runtime's middleware ctx exposes a working `now()` clock and `contentHash()` plan hasher even when no `log` was supplied (default noop log path).
+ * Pins that the SQL runtime's middleware ctx exposes a working `now()` clock and `contentHash()` plan hasher even when no `log` was supplied (the default console log).
  */
 
 const testContract: Contract<SqlStorage> = {
@@ -87,7 +87,7 @@ function createDriver(): SqlDriver {
 }
 
 describe('SQL middleware context surface', () => {
-  it('exposes now() and contentHash() to middleware on a runtime with the default noop log', async () => {
+  it('exposes now() and contentHash() to middleware on a runtime with the default console log', async () => {
     const adapter = createStubAdapter();
     const target: SqlRuntimeTargetDescriptor<'postgres'> = {
       kind: 'target',

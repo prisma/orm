@@ -78,6 +78,7 @@ import {
 } from './codecs/decoding';
 import { deriveParamMetadata, encodeParams, encodeParamsWithMetadata } from './codecs/encoding';
 import { validateCodecRegistryCompleteness } from './codecs/validation';
+import { consoleLog } from './console-log';
 import { computeSqlContentHash } from './content-hash';
 import { computeSqlFingerprint } from './fingerprint';
 import { InFlightOperations } from './in-flight-operations';
@@ -278,9 +279,6 @@ function isPreparedStatementInternals(
   return statement instanceof PreparedStatementImpl || statement instanceof PreparedExecutionImpl;
 }
 
-// v8 ignore next 2
-const noopLogSink = (): void => {};
-const noopLog: Log = { info: noopLogSink, warn: noopLogSink, error: noopLogSink };
 // Taken when the module loads, so close() still settles when a test installs fake timers later.
 const scheduleTimer = globalThis.setTimeout;
 
@@ -379,7 +377,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
       contract: context.contract,
       mode: mode ?? 'strict',
       now: () => Date.now(),
-      log: log ?? noopLog,
+      log: log ?? consoleLog,
       // ctx is only invoked by operation-specific middleware runner with execs this runtime lowered; the framework parameter type is the cross-family base.
       contentHash: (exec) =>
         computeSqlContentHash(

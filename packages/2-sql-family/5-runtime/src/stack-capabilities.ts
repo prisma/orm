@@ -5,6 +5,7 @@ import {
 } from '@internal/sql-contract/capability-messages';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { structuredError } from '@internal/utils/structured-error';
+import { consoleLog } from './console-log';
 import type { SqlExecutionStackWithDriver } from './sql-context';
 import type { RuntimeExecutionOptions } from './sql-runtime';
 
@@ -49,7 +50,7 @@ function notProvidedByTheConnectionMessage(missing: readonly string[]): string {
 }
 
 /**
- * Warns through `options.log`, once, when the stack does not provide a capability `contract` requires. `verifyMarker: false`, which turns off the signature warning, turns this one off too.
+ * Warns through `options.log`, or the console when it is absent, once, when the stack does not provide a capability `contract` requires. `verifyMarker: false`, which turns off the signature warning, turns this one off too.
  */
 export function warnOfCapabilitiesNotProvided(
   contract: Contract<SqlStorage>,
@@ -59,7 +60,7 @@ export function warnOfCapabilitiesNotProvided(
   if (options.verifyMarker === false) return;
   const missing = capabilitiesNotProvided(contract, stack);
   if (missing.length === 0) return;
-  options.log?.warn({
+  (options.log ?? consoleLog).warn({
     code: 'CONTRACT.CAPABILITIES_NOT_PROVIDED',
     scope: 'stack-verification',
     missing,
