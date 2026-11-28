@@ -103,3 +103,13 @@ The design says the space's row records the hash of its contract and that within
 - **The first migration's labels** use the same mood as the planner's ("Rename schema …"), since they are recorded in the ledger for good.
 - **A brand-new database's line** says the records were brought up to date, though they were created. Accepted: one line for every case.
 - **The upgrade instructions name the Studio pull request, not a release,** until Studio publishes one; whoever prepares the ORM release names the Studio version then.
+
+## 12. Found while splitting the marker
+
+- **The policies reach the framework as `meta.policies` for now.** Decided with the operator on 2026-11-28: the PostgreSQL adapter reads `_prisma.config` and returns its value on the application space's record, so the framework is unchanged in this slice. Slice 3 gives the policies a channel of their own, before `8.0.0`.
+- **What an 8.x release reads the Prisma space's row through** is `space`, `core_hash`, `profile_hash` and `invariants` of `_prisma.signatures`, and nothing else; no read that classifies that row touches `_prisma.config`. So a later major may change `signed_at` and `config` without blinding 8.x. One consequence: the records `readAllMarkers` returns carry the read's time as `updatedAt`, since `signed_at` is not selected there. Nothing reads `updatedAt`.
+- **The SQL client's check on first use reads `_prisma.signatures` alone,** so an application role needs SELECT on that table only.
+- **A policy read fails closed.** A role that cannot read `_prisma.config` gets an error, never the default policies.
+- **Policies stored as JSON `null`** by a release candidate are moved as stored and reported as unreadable, as the release candidate reported them; reading them as the defaults would have loosened a database that was refused before.
+- **An object depending on the release candidate's `marker`** (a view, a function) stops the first migration with a message naming it, before anything changes, since the table is dropped.
+- **The first migration moves the marker in one step,** because a check that names `_prisma.marker` fails when the table is missing; the copy of the signatures, the copy of the policies and the drop are skipped together once the table is gone.
