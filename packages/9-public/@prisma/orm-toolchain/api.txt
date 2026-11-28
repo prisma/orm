@@ -54,7 +54,7 @@
 (not exported) interface LoadedContractSource
 (not exported) interface LoadedContractSource, readonly required property contract: Contract
 (not exported) interface LoadedContractSource, readonly required property warnings: readonly ContractSourceDiagnostic[]
-(not exported) interface MigrateOptions
+(not exported) interface MigrateOptions extends UnrecordedSnapshotListener
 (not exported) interface MigrateOptions, readonly optional property connection?: unknown
 (not exported) interface MigrateOptions, readonly optional property onProgress?: OnControlProgress
 (not exported) interface MigrateOptions, readonly optional property permitPolicyChange?: boolean
@@ -188,6 +188,13 @@
 (not exported) interface UnreadableStoredFile
 (not exported) interface UnreadableStoredFile, readonly required property path: string
 (not exported) interface UnreadableStoredFile, readonly required property reason: string
+(not exported) interface UnrecordedSnapshot
+(not exported) interface UnrecordedSnapshot, readonly required property dirName: string
+(not exported) interface UnrecordedSnapshot, readonly required property path: string
+(not exported) interface UnrecordedSnapshot, readonly required property reason: string
+(not exported) interface UnrecordedSnapshot, readonly required property spaceId: string
+(not exported) interface UnrecordedSnapshotListener
+(not exported) interface UnrecordedSnapshotListener, readonly optional property onUnrecordedSnapshot?: (unrecorded: UnrecordedSnapshot) => void
 (not exported) type ChangedStorageEntity = Omit<EntityCoordinate, 'namespaceId'> & { readonly namespaceId?: string; }
 (not exported) type ConsentVerb = 'allow' | 'delete'
 (not exported) type ContractEmitDependencies = { readonly emit: typeof emit; }
@@ -352,7 +359,7 @@
 ./cli/control-api: function loadContractRawSafely(config: { contract?: { output?: string; }; }): Promise<null | unknown>
 ./cli/control-api: function loadContractSource(config: PrismaConfig, options?: { readonly signal?: AbortSignal; }): Promise<Result<LoadedContractSource, ContractSourceFailure>>
 ./cli/control-api: function loadContractSpaceAggregateForCli<TFamilyId extends string, TTargetId extends string>(inputs: BuildAggregateInputs<TFamilyId, TTargetId>): Promise<Result<ContractSpaceAggregate, CliStructuredError>>
-./cli/control-api: function mapContractAtError(error: unknown, options?: { readonly artifactRole?: 'from' | 'to'; readonly atHeadOf?: SnapshotHead; }): Result<never, CliStructuredError>
+./cli/control-api: function mapContractAtError(error: unknown, options?: { readonly artifactRole?: 'from' | 'to'; readonly atHeadOf?: SnapshotHead; readonly invocation?: CliInvocation; }): Result<never, CliStructuredError>
 ./cli/control-api: function mapIntegrityViolations(violations: readonly IntegrityViolation[], migrationsDir: string): CliStructuredError | null
 ./cli/control-api: function migrationSpaceListEntriesFromAggregate(aggregate: ContractSpaceAggregate, projectMigrationsDir: string): Promise<readonly MigrationSpaceListEntry[]>
 ./cli/control-api: function preflightRefAdvancement(args: { readonly name: string; readonly contractJson: Record<string, unknown>; readonly contractJsonPath: string; readonly config: { readonly contract?: { readonly typesModule?: string; }; }; readonly client: Pick<ControlClient, 'renderContractDts'>; readonly snapshot?: StoredSnapshotSource; }): Promise<Result<ContractIR, CliStructuredError>>
@@ -468,7 +475,7 @@
 ./cli/control-api: interface ControlClientOptions, readonly required property adapter: ControlAdapterDescriptor<any, any, any>
 ./cli/control-api: interface ControlClientOptions, readonly required property family: ControlFamilyDescriptor<any, any>
 ./cli/control-api: interface ControlClientOptions, readonly required property target: ControlTargetDescriptor<any, any, any>
-./cli/control-api: interface DbInitOptions extends PlannerWarningsListener
+./cli/control-api: interface DbInitOptions extends PlannerWarningsListener, UnrecordedSnapshotListener
 ./cli/control-api: interface DbInitOptions, readonly optional property connection?: unknown
 ./cli/control-api: interface DbInitOptions, readonly optional property onProgress?: OnControlProgress
 ./cli/control-api: interface DbInitOptions, readonly required property contract: unknown
@@ -495,7 +502,7 @@
 ./cli/control-api: interface DbSignSpaceFailure, readonly required property schema: VerifyDatabaseSchemaResult
 ./cli/control-api: interface DbSignSpaceFailure, readonly required property space: string
 ./cli/control-api: interface DbSignSpaceFailure, readonly required property status: 'failed'
-./cli/control-api: interface DbUpdateOptions extends PlannerWarningsListener
+./cli/control-api: interface DbUpdateOptions extends PlannerWarningsListener, UnrecordedSnapshotListener
 ./cli/control-api: interface DbUpdateOptions, readonly optional property acceptAccessChanges?: boolean
 ./cli/control-api: interface DbUpdateOptions, readonly optional property acceptDataLoss?: boolean
 ./cli/control-api: interface DbUpdateOptions, readonly optional property connection?: unknown
@@ -565,7 +572,7 @@
 ./cli/control-api: interface ExecuteDbInitOptions, readonly required property migrationsDir: string
 ./cli/control-api: interface ExecuteDbInitOptions, readonly required property mode: 'apply' | 'plan'
 ./cli/control-api: interface ExecuteDbInitOptions, readonly required property targetId: TTargetId
-./cli/control-api: interface ExecuteDbInitOptions<TFamilyId extends string, TTargetId extends string> extends PlannerWarningsListener
+./cli/control-api: interface ExecuteDbInitOptions<TFamilyId extends string, TTargetId extends string> extends PlannerWarningsListener, UnrecordedSnapshotListener
 ./cli/control-api: interface ExecuteDbSignOptions, readonly optional property force?: boolean
 ./cli/control-api: interface ExecuteDbSignOptions, readonly optional property onProgress?: OnControlProgress
 ./cli/control-api: interface ExecuteDbSignOptions, readonly optional property verifySnapshotContent?: SnapshotContentVerifier
@@ -599,7 +606,7 @@
 ./cli/control-api: interface ExecuteDbUpdateOptions, readonly required property migrationsDir: string
 ./cli/control-api: interface ExecuteDbUpdateOptions, readonly required property mode: 'apply' | 'plan'
 ./cli/control-api: interface ExecuteDbUpdateOptions, readonly required property targetId: TTargetId
-./cli/control-api: interface ExecuteDbUpdateOptions<TFamilyId extends string, TTargetId extends string> extends PlannerWarningsListener
+./cli/control-api: interface ExecuteDbUpdateOptions<TFamilyId extends string, TTargetId extends string> extends PlannerWarningsListener, UnrecordedSnapshotListener
 ./cli/control-api: interface ExecuteDbVerifyOptions, readonly optional property onProgress?: OnControlProgress
 ./cli/control-api: interface ExecuteDbVerifyOptions, readonly optional property verifySnapshotContent?: SnapshotContentVerifier
 ./cli/control-api: interface ExecuteDbVerifyOptions, readonly required property contract: Contract
