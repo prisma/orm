@@ -9,13 +9,15 @@ changes:
         - "prisma_contract"
   - id: prisma-tables-api-breaks
     summary: |
-      `@prisma/orm-target-postgres` no longer exports `buildControlTableBootstrapQueries` or `buildSignMarkerBootstrapQueries`, and `PostgresControlAdapter.markerLocation` is typed `string`. A marker read (`MarkerReadResult`) can return the new kind `earlier-release`, the runner's error codes include `MIGRATION.PRISMA_TABLES_MISSING`, and `ControlClient` has a new required method, `bringPrismaSpaceUpToDate`.
+      `@prisma/orm-target-postgres` no longer exports `buildControlTableBootstrapQueries` or `buildSignMarkerBootstrapQueries`, `PostgresControlAdapter.markerLocation` is typed `string`, and `PostgresControlAdapter` has a new method, `readSignatureDiscriminated`. A marker read (`MarkerReadResult`) can return the new kind `earlier-release`, the runner's error codes include `MIGRATION.PRISMA_TABLES_MISSING`, and `ControlClient` has a new required method, `bringPrismaSpaceUpToDate`.
     detection:
       glob: "**/*.{ts,tsx,mts,cts}"
       contains:
         - "buildControlTableBootstrapQueries"
         - "buildSignMarkerBootstrapQueries"
         - "markerLocation"
+        - "readSignatureDiscriminated"
+        - "PostgresControlAdapter"
         - "MarkerReadResult"
         - "SqlMigrationRunnerErrorCode"
         - "ControlClient"
@@ -59,6 +61,7 @@ These changes reach code that uses the platform packages, or a facade's paths th
 
 - **`buildControlTableBootstrapQueries` and `buildSignMarkerBootstrapQueries` are removed.** Prisma's own tables are now created by the Prisma space's migration. Code that ran these statements to prepare a database calls `bringPrismaSpaceUpToDate()` on the control client instead, or `applyInstalledContractSpace` from `@prisma/orm-toolchain/migration-tools/spaces` without a client.
 - **`PostgresControlAdapter.markerLocation` is typed `string`.** It was the literal type `"prisma_contract.marker"`. Code that compared it with that literal compares with `"_prisma.signatures"`, or uses the value it holds.
+- **`PostgresControlAdapter` has a new method, `readSignatureDiscriminated`.** It reads one space's row of `_prisma.signatures`, without the policies in `_prisma.config`, so a role needs `SELECT` on `_prisma.signatures` only; the runtime adapter's check on first use calls it. It returns a `MarkerReadResult`, like `readMarkerDiscriminated`, which still reads the policies too. Code that only calls the adapter's existing methods is not affected.
 - **`MarkerReadResult` has a new kind, `earlier-release`.** A marker read returns it when Prisma's own tables are still in a release candidate's schema. Code that switches over the kinds exhaustively handles it, for example by reporting that the database needs `prisma db migrate`.
 - **`SqlMigrationRunnerErrorCode` includes `MIGRATION.PRISMA_TABLES_MISSING`.** The runner returns it when asked to apply a space before Prisma's own tables exist. Code that switches over the codes exhaustively handles it.
 - **`ControlClient` has a new required method, `bringPrismaSpaceUpToDate`.** Code that only calls a control client is not affected. Code that implements `ControlClient` itself, such as a test double or a `createClient` factory passed to `executeMigrateShowPlan`, adds the method; it may return `undefined` when the target carries no Prisma space.
