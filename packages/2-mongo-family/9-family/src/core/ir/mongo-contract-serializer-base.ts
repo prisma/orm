@@ -24,7 +24,7 @@ import {
   resolveMongoToOneRelationFields,
   validateMongoStorage,
 } from '@internal/mongo-contract';
-import { mongoContractCanonicalizationHooks } from '@internal/mongo-contract/canonicalization-hooks';
+import { mongoContractSerializationPreserveEmpty } from '@internal/mongo-contract/canonicalization-hooks';
 import { composeMongoEntityKinds } from '@internal/mongo-contract/entity-kinds';
 import { blindCast } from '@internal/utils/casts';
 import type { JsonObject } from '@internal/utils/json';
@@ -138,9 +138,10 @@ export abstract class MongoContractSerializerBase<TContract>
    * Preserve empty `collections` maps and per-collection payloads. Mongo
    * collections legitimately serialize empty (a declared collection with no
    * schema is valid); SQL tables never do — that asymmetry lives here rather
-   * than in the family-agnostic canonicalizer.
+   * than in the family-agnostic canonicalizer. Everything inside a codec's
+   * type parameters is kept too.
    */
-  shouldPreserveEmpty = mongoContractCanonicalizationHooks.shouldPreserveEmpty;
+  shouldPreserveEmpty = mongoContractSerializationPreserveEmpty;
 
   // No hashCanonicalizationHooks: the Mongo emit pipeline hashes a projection
   // of storage (`{ id, collections }` per namespace), not the persisted

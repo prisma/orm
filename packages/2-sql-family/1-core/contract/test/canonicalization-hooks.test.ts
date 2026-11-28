@@ -3,7 +3,10 @@ import type { Contract } from '@internal/contract/types';
 import { blindCast } from '@internal/utils/casts';
 import type { JsonObject } from '@internal/utils/json';
 import { describe, expect, it } from 'vitest';
-import { sqlContractCanonicalizationHooks } from '../src/canonicalization-hooks';
+import {
+  sqlContractCanonicalizationHooks,
+  sqlContractSerializationPreserveEmpty,
+} from '../src/canonicalization-hooks';
 
 describe('sqlContractCanonicalizationHooks.shouldPreserveEmpty', () => {
   it('preserves a column default literal payload (false / empty-array defaults)', () => {
@@ -215,6 +218,133 @@ describe('canonicalization of model storage', () => {
           },
         },
       },
+    });
+  });
+});
+
+describe('canonicalization of codec type parameters', () => {
+  const typeParams = { jsonIr: [{ unit: false }, { unit: true }], options: {}, list: [] };
+  const scalar = { kind: 'scalar', codecId: 'arktype/json@1', typeParams };
+
+  const contract: Contract = blindCast({
+    targetFamily: 'sql',
+    target: 'postgres',
+    profileHash: 'test-profile',
+    roots: {},
+    domain: {
+      namespaces: {
+        public: {
+          models: {
+            Setting: {
+              fields: {
+                flag: { nullable: false, type: scalar },
+                either: {
+                  nullable: false,
+                  type: { kind: 'union', members: [scalar] },
+                },
+              },
+              relations: {},
+              storage: { table: 'setting', namespaceId: 'public', fields: {} },
+            },
+          },
+        },
+      },
+    },
+    storage: {
+      types: { Flag: { codecId: 'arktype/json@1', nativeType: 'jsonb', typeParams } },
+      namespaces: {
+        public: {
+          id: 'public',
+          entries: {
+            table: {
+              setting: {
+                columns: {
+                  flag: {
+                    codecId: 'arktype/json@1',
+                    dataType: 'pg/jsonb',
+                    nullable: false,
+                    typeParams,
+                  },
+                  plain: {
+                    codecId: 'pg/int4@1',
+                    dataType: 'pg/int4',
+                    nullable: false,
+                    typeParams: {},
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    extensions: {},
+    capabilities: {},
+    meta: {},
+  });
+
+  const canonicalize = (shouldPreserveEmpty: (path: readonly string[]) => boolean) =>
+    blindCast<
+      {
+        domain: {
+          namespaces: {
+            public: {
+              models: {
+                Setting: {
+                  fields: Record<string, { type: { typeParams?: unknown; members?: unknown } }>;
+                };
+              };
+            };
+          };
+        };
+        storage: {
+          types: Record<string, { typeParams?: unknown }>;
+          namespaces: {
+            public: {
+              entries: {
+                table: { setting: { columns: Record<string, { typeParams?: unknown }> } };
+              };
+            };
+          };
+        };
+      },
+      'canonicalization keeps the shape of the test contract'
+    >(
+      canonicalizeContractToObject(contract, {
+        serializeContract: (c) =>
+          blindCast<JsonObject, 'test contract literal is already plain JSON data'>(c),
+        shouldPreserveEmpty,
+      }),
+    );
+
+  it('keeps false, [] and {} inside typeParams when a contract is written', () => {
+    const { domain, storage } = canonicalize(sqlContractSerializationPreserveEmpty);
+    const fields = domain.namespaces.public.models.Setting.fields;
+    const columns = storage.namespaces.public.entries.table.setting.columns;
+    expect({
+      column: columns['flag']?.typeParams,
+      storageType: storage.types['Flag']?.typeParams,
+      field: fields['flag']?.type.typeParams,
+      unionMembers: fields['either']?.type.members,
+    }).toEqual({
+      column: typeParams,
+      storageType: typeParams,
+      field: typeParams,
+      unionMembers: [scalar],
+    });
+  });
+
+  it('still omits an empty typeParams', () => {
+    const { storage } = canonicalize(sqlContractSerializationPreserveEmpty);
+    expect(storage.namespaces.public.entries.table.setting.columns['plain']).not.toHaveProperty(
+      'typeParams',
+    );
+  });
+
+  it('leaves the hashing predicate unchanged, so no storage hash changes', () => {
+    const { storage } = canonicalize(sqlContractCanonicalizationHooks.shouldPreserveEmpty);
+    expect(storage.namespaces.public.entries.table.setting.columns['flag']?.typeParams).toEqual({
+      jsonIr: [{}, { unit: true }],
     });
   });
 });

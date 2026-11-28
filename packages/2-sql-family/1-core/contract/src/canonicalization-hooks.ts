@@ -60,6 +60,31 @@ const shouldPreserveEmpty: PreserveEmptyPredicate = (path) =>
 
 const sortStorage: StorageSort = createStorageSort(sortTargets);
 
+// A codec's type parameters are the codec's own data: `false`, `[]` and `{}`
+// inside them (an arktype-json schema's `{ unit: false }`) are what the codec
+// is rebuilt from at runtime. They sit on a column, `columns.<name>.typeParams`,
+// a storage type alias, `storage.types.<name>.typeParams`, a field type,
+// `type.typeParams`, and a union member, `members.typeParams`.
+const isInsideCodecTypeParams = (path: readonly string[]): boolean =>
+  path.some(
+    (segment, index) =>
+      segment === 'typeParams' &&
+      index < path.length - 1 &&
+      (path[index - 1] === 'type' ||
+        path[index - 1] === 'members' ||
+        path[index - 2] === 'columns' ||
+        (index === 3 && path[0] === 'storage' && path[1] === 'types')),
+  );
+
+/**
+ * Preserve-empty predicate for writing a SQL contract to disk: the hashing
+ * predicate, plus everything inside a codec's type parameters. The storage
+ * hash goes on omitting those (it uses `sqlContractCanonicalizationHooks`),
+ * so writing them changes no hash.
+ */
+export const sqlContractSerializationPreserveEmpty: PreserveEmptyPredicate = (path) =>
+  isInsideCodecTypeParams(path) || shouldPreserveEmpty(path);
+
 export const sqlContractCanonicalizationHooks: {
   readonly shouldPreserveEmpty: PreserveEmptyPredicate;
   readonly sortStorage: StorageSort;
