@@ -183,6 +183,9 @@ jobs:
         # Runs when the step above found breaks too, so both reports are in the summary.
         if: ${{ !cancelled() && steps.api-compat-build.outcome == 'success' }}
         run: pnpm api:compat:examples
+      - name: Find error codes the last release raised that this build does not
+        if: ${{ !cancelled() && steps.api-compat-build.outcome == 'success' }}
+        run: pnpm api:compat:error-codes
 
   fixtures:
     name: Fixtures

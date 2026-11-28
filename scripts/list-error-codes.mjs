@@ -43,7 +43,13 @@ const NAMESPACES = [
   'TESTKIT',
 ];
 
-const CODE_RE = new RegExp(`'((?:${NAMESPACES.join('|')})\\.[A-Z][A-Z0-9_]*)'`, 'g');
+const CODE = `(?:${NAMESPACES.join('|')})\\.[A-Z][A-Z0-9_]*`;
+const CODE_RE = new RegExp(`'(${CODE})'`, 'g');
+const BUILT_CODE_RE = new RegExp(`(["'\`])(${CODE})\\1`, 'g');
+
+export function codesInBuiltText(text) {
+  return [...text.matchAll(BUILT_CODE_RE)].map((match) => match[2]);
+}
 
 export function extractCodes(root) {
   const files = execFileSync('git', ['ls-files', 'packages/**/*.ts'], {

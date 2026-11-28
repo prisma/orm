@@ -10,6 +10,7 @@ CI checks every pull request for changes that would break code written against t
 | [The description does not name a change](#the-description-does-not-name-a-change) | `API changes named` | A pull request that changes an `api.txt` names each changed export in its description, with a reason |
 | [A break against the last release](#a-break-against-the-last-release) | `API compatibility` (`pnpm api:compat`) | Code written against the last release still compiles against the build |
 | [The last release's example apps fail](#the-last-releases-example-apps-fail) | `API compatibility` (`pnpm api:compat:examples`) | The example apps, as they were at the last release, compile against the build |
+| [An error code is no longer raised](#an-error-code-is-no-longer-raised) | `API compatibility` (`pnpm api:compat:error-codes`) | Every error code the last release could raise is still raised by the build |
 
 Each of them fails the job. The last release is the newest release tag at or below the version in the root `package.json` of the branch your pull request merges into, not whatever the registry tags as `latest`. Every package is compared with that release's version of it. A break is allowed only when you [record it](#recording-a-break-you-mean) as deliberate. A check that could not compare at all, for example because the registry was unreachable, also fails.
 
@@ -201,6 +202,20 @@ The apps' type tests assert exact types, so they also fail on a change that is s
 
 A record matches one error by app, file, line, code and message. Unlike a break record it has no fingerprint, so it keeps matching while the error's place and text stay the same. If the message changes, the record matches nothing, which fails the job, and the job prints a new record to replace it.
 
+## An error code is no longer raised
+
+Users match on error codes such as `ORM.ARGUMENT_INVALID`, so a code that disappears breaks their handling of it without any compile error. `pnpm api:compat:error-codes` reads the codes written in the published JavaScript of each package of the last release, downloaded from the registry, and in your build's `dist` folders. A code the release has and your build does not fails the job:
+
+```text
+api:compat:error-codes: last release 8.1.0 raises 421 codes; this build raises 420; a code no longer raised fails unless recorded in packages/9-public/removed-error-codes.json
+  no longer raised  DRIVER.PREPARE_FAILED (@prisma/orm-family-sql)
+    to record it: {"code":"DRIVER.PREPARE_FAILED","lastRelease":"8.1.0","replacedBy":null,"reason":"…"}
+```
+
+If you did not mean to remove the code, raise it again. If you did, copy the printed record into `packages/9-public/removed-error-codes.json`, a JSON array, write the reason, and set `replacedBy` to the code raised in its place, or leave it `null` when nothing replaces it. From release 8.0 a removal breaks the promise that an application upgrades without changing its code, so the release notes must name it. A record also fails the job when the build still raises its code, when the last release did not raise it, or when its `replacedBy` is a code the build does not raise. Once a newer release becomes the last release, the job lists the record as removable; delete it.
+
+To run it yourself, run `pnpm build`, then `pnpm api:compat:error-codes`. It downloads one tarball per package, and needs no install.
+
 ## What the checks do not see
 
-The checks compare declarations, so a reviewer is the only check for behaviour: runtime results, error codes, command output and file formats. They also miss a break inside an undecided comparison, a result type no example app uses, and a few kinds of type change. The full list is in the decision record, under "What the checks do not see".
+The checks compare declarations and error codes, so a reviewer is the only check for other behaviour: runtime results, which failure raises which code, command output and file formats. They also miss a break inside an undecided comparison, a result type no example app uses, and a few kinds of type change. The full list is in the decision record, under "What the checks do not see".

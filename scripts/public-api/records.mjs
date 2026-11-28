@@ -10,6 +10,9 @@
 // - examples/last-release-errors.json: an error in a last release's example app, as { "app",
 //   "file", "line", "code", "message", "kind", "lastRelease", "reason" }. The tag's files never
 //   change, so its line and message identify the error.
+// - packages/9-public/removed-error-codes.json: an error code the last release raised that the
+//   build no longer does, as { "code", "lastRelease", "replacedBy", "reason" }. `replacedBy` is the
+//   code raised in its place, or null.
 //
 // `kind` is `allowed` for a change the compatibility policy allows that a check reports anyway,
 // and `break` for a deliberate break, which the release notes must name. `lastRelease` is the
@@ -24,6 +27,7 @@ import { compareVersions, isVersion } from './release.mjs';
 export const BREAKS_FILE = 'api-breaks.json';
 export const REMOVED_FILE = 'packages/9-public/removed-packages.json';
 export const EXAMPLES_FILE = 'examples/last-release-errors.json';
+export const REMOVED_CODES_FILE = 'packages/9-public/removed-error-codes.json';
 export const KINDS = ['allowed', 'break'];
 export const TESTS = ['type', 'value', 'constructor', 'abstract', 'augments', 'exists', 'path'];
 
@@ -59,6 +63,15 @@ const errorCode = {
   test: (value) => typeof value === 'string' && /^TS\d+$/.test(value),
   says: 'a code such as TS2322',
 };
+const DOTTED_CODE = /^[A-Z][A-Z0-9]*\.[A-Z][A-Z0-9_]*$/;
+const dottedCode = {
+  test: (value) => typeof value === 'string' && DOTTED_CODE.test(value),
+  says: 'an error code such as ORM.ARGUMENT_INVALID',
+};
+const replacement = {
+  test: (value) => value === null || dottedCode.test(value),
+  says: 'the error code raised in its place, or null',
+};
 
 const FIELDS = {
   breaks: {
@@ -81,6 +94,7 @@ const FIELDS = {
     lastRelease: version,
     reason,
   },
+  removedCodes: { code: dottedCode, lastRelease: version, replacedBy: replacement, reason },
 };
 
 // The fields of the records of each record file (`breaks`, `removed` or `examples`), in the order
