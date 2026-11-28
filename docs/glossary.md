@@ -273,7 +273,7 @@ The [contract space](architecture%20docs/adrs/ADR%20212%20-%20Contract%20spaces.
 
 ### Marker
 
-A small record stored in the database that tracks which contract the database is currently migrated to. Before running queries or migrations, Prisma 8 checks that the marker matches the contract the application is carrying. This catches situations where the database and application have drifted out of sync — for example, if a migration was run but the application wasn't redeployed. There is one marker row per contract space. On PostgreSQL the marker is the table `_prisma.signatures`, and the database's [change policy](#change-policy) and [data protection policy](#data-protection-policy) are in a table of their own, `_prisma.config`; on the other targets the marker also records them, under `meta.policies`.
+A small record stored in the database that tracks which contract the database is currently migrated to. Before running queries or migrations, Prisma 8 checks that the marker matches the contract the application is carrying. This catches situations where the database and application have drifted out of sync — for example, if a migration was run but the application wasn't redeployed. There is one marker per contract space. On PostgreSQL each is a row of `_prisma.signatures`, and the database's [change policy](#change-policy) and [data protection policy](#data-protection-policy) are in a table of their own, `_prisma.config`; on the other targets the marker also records them, under `meta.policies`.
 
 ### Change Policy
 

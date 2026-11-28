@@ -1,6 +1,6 @@
 # ADR 021 — Contract marker storage & verification modes
 
-**Status:** Accepted. [ADR 339](ADR%20339%20-%20Each%20target%20has%20a%20contract%20space%20for%20Prisma%27s%20own%20tables.md) makes these tables a contract space the target package carries. On PostgreSQL they are created and changed by that space's migrations, which every command that changes a database applies first, instead of by statements each runner issued on first use, and they are in the schema `_prisma` ([ADR 338](ADR%20338%20-%20Names%20Prisma%20puts%20in%20a%20database%20or%20a%20query%20begin%20with%20_prisma.md)). SQLite, MySQL, MariaDB and MongoDB still create their tables on first use. On PostgreSQL the marker is the table `_prisma.signatures`, one row per contract space, and the database's policies ([ADR 320](ADR%20320%20-%20Databases%20record%20a%20change%20policy%20and%20a%20data%20protection%20policy.md)) are in a table of their own, `_prisma.config`; on the other targets they are still under the marker's `meta.policies`. [ADR 333](ADR%20333%20-%20The%20runtime's%20marker%20check%20only%20warns.md) supersedes what this record says the runtime does when the marker cannot be read or decoded, and its strict-mode refusals: the runtime's check only warns.
+**Status:** Accepted. [ADR 339](ADR%20339%20-%20Each%20target%20has%20a%20contract%20space%20for%20Prisma%27s%20own%20tables.md) makes these tables a contract space the target package carries. On PostgreSQL they are created and changed by that space's migrations, which every command that changes a database applies first, instead of by statements each runner issued on first use, and they are in the schema `_prisma` ([ADR 338](ADR%20338%20-%20Names%20Prisma%20puts%20in%20a%20database%20or%20a%20query%20begin%20with%20_prisma.md)). SQLite, MySQL, MariaDB and MongoDB still create their tables on first use. On PostgreSQL each contract space's marker is a row of `_prisma.signatures`, and the database's policies ([ADR 320](ADR%20320%20-%20Databases%20record%20a%20change%20policy%20and%20a%20data%20protection%20policy.md)) are in a table of their own, `_prisma.config`; on the other targets they are still under the marker's `meta.policies`. [ADR 333](ADR%20333%20-%20The%20runtime's%20marker%20check%20only%20warns.md) supersedes what this record says the runtime does when the marker cannot be read or decoded, and its strict-mode refusals: the runtime's check only warns.
 
 ## Context
 
@@ -162,7 +162,7 @@ createRunner({
 
 ## Security
 - The marker table should be owned by a role with DDL privileges
-- Application roles require SELECT on `_prisma.signatures` only
+- Application roles require SELECT on `_prisma.signatures` only: the SQL client's check on first use reads the application space's row and never the policies
 - The runner role requires UPDATE on `_prisma.signatures` and `_prisma.config` and INSERT on the ledger, and owns the `_prisma` schema, since a later release may change these tables
 - No secrets are stored in the marker or ledger
 

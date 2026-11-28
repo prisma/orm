@@ -2,8 +2,6 @@
 
 > **Superseded by [ADR 339](ADR%20339%20-%20Each%20target%20has%20a%20contract%20space%20for%20Prisma%27s%20own%20tables.md).** Prisma's own tables are a contract space the target package carries, and they change by that space's migrations, not by the version check in `meta` this record describes. The columns it added, `canonical_version` and `contract_json`, were never written: on PostgreSQL they are gone, with `app_tag` and `meta`, and the marker is the table `_prisma.signatures` ([ADR 021](ADR%20021%20-%20Contract%20Marker%20Storage.md)). Contracts are kept, where they are kept, in PostgreSQL's `_prisma.contract`. This record is kept for its history only.
 
-> **Note.** [ADR 208 — Invariant-aware migration routing](ADR%20208%20-%20Invariant-aware%20migration%20routing.md) adds the `invariants` column to `prisma_contract.marker` directly in the `CREATE TABLE IF NOT EXISTS` DDL rather than using the alter-based migration pattern described here. The pattern in this ADR remains the design of record for schema changes that need to migrate live deployments through `ALTER` statements.
-
 ## Context
 
 - The contract marker schema needs to evolve to support contract snapshots and canonicalization versioning

@@ -46,7 +46,11 @@ Seven slices, one pull request each, in this order. PostgreSQL comes first becau
 
 **Starts with design, with the operator.** It changes framework interfaces: how commands, the runner's check under its lock and the sign path read the policies, and how the corrupt-policies error names its table. One option was sketched in slice 2's discussion: a family method that returns the recorded policies, which `databasePoliciesOf` and its callers read instead of the marker. Read ADR 320 and ADR 021 before proposing anything.
 
-**Order.** After slice 2. Before slice 4 if their files overlap.
+**Also in this slice.**
+- A database with no application row reads as having the default policies on PostgreSQL, even when `_prisma.config` records others, because the policies reach the framework on that row. With their own channel, the `config` row is read whatever the signatures hold.
+- The `config` row gets one writer. Today the adapter and the runner each write it, the runner by raw SQL, and two names that serve only that (`RECORD_DATABASE_POLICIES_SQL`, `RELEASE_CANDIDATE_MARKER_TABLE`) are exports of the published `@prisma/orm-target-postgres`. Remove them, recorded as an API break.
+
+**Order.** After slice 2, and before `8.0.0`: it changes interfaces a target author implements, and the corrupt-policies message would otherwise ship naming a field PostgreSQL does not have. Before slice 4 if their files overlap.
 
 ## Slice 4. Rename the concept from "marker" to "signature"
 

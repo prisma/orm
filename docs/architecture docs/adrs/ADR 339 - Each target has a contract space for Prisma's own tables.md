@@ -3,7 +3,7 @@
 **Status:** Proposed
 **Date:** 2026-11-27
 **Domain:** Migration System, Adapters & Targets
-**Changes:** [ADR 212](ADR%20212%20-%20Contract%20spaces.md) (one space is read from the installed package), [ADR 021](ADR%20021%20-%20Contract%20Marker%20Storage.md) (the tables are created by a migration), [ADR 320](ADR%20320%20-%20Databases%20record%20a%20change%20policy%20and%20a%20data%20protection%20policy.md) (a refused command has still brought Prisma's own tables up to date). Each is updated in place.
+**Changes:** [ADR 212](ADR%20212%20-%20Contract%20spaces.md) (one space is read from the installed package), [ADR 021](ADR%20021%20-%20Contract%20Marker%20Storage.md) (the tables are created by a migration), [ADR 320](ADR%20320%20-%20Databases%20record%20a%20change%20policy%20and%20a%20data%20protection%20policy.md) (a refused command has still brought Prisma's own tables up to date; on PostgreSQL the policies are in `_prisma.config`). Each is updated in place. On PostgreSQL the marker is split into `_prisma.signatures` and `_prisma.config` ([ADR 021](ADR%20021%20-%20Contract%20Marker%20Storage.md)). Supersedes [ADR 042](ADR%20042%20-%20Contract%20Marker%20Evolution.md).
 
 ## At a glance
 
