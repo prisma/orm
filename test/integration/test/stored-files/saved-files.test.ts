@@ -1,5 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
+import { canonicalizeContractToObject } from '@internal/contract/hashing';
+import type { Contract } from '@internal/contract/types';
 import { MongoContractSerializer } from '@internal/family-mongo/ir';
 import { deserializeMongoOps } from '@internal/target-mongo/control';
 import { MysqlContractSerializer } from '@internal/target-mysql/runtime';
@@ -10,13 +12,45 @@ import { describe, expect, it } from 'vitest';
 
 const repoRoot = join(import.meta.dirname, '../../../..');
 
-const contractReaders: Readonly<Record<string, (json: unknown) => unknown>> = {
-  postgres: (json) => new PostgresContractSerializer().deserializeContract(json),
-  sqlite: (json) => new SqliteContractSerializer().deserializeContract(json),
-  mysql: (json) => new MysqlContractSerializer().deserializeContract(json),
-  mariadb: (json) => new MysqlContractSerializer().deserializeContract(json),
-  mongo: (json) => new MongoContractSerializer().deserializeContract(json),
+interface TargetSerializer {
+  deserializeContract(json: unknown): Contract;
+  serializeContract(contract: Contract): Record<string, unknown>;
+  readonly normalizeStorage: (storage: Record<string, unknown>) => Record<string, unknown>;
+}
+
+const serializers: Readonly<Record<string, TargetSerializer>> = {
+  postgres: new PostgresContractSerializer(),
+  sqlite: new SqliteContractSerializer(),
+  mysql: new MysqlContractSerializer(),
+  mariadb: new MysqlContractSerializer(),
+  mongo: new MongoContractSerializer(),
 };
+
+const contractReaders: Readonly<Record<string, (json: unknown) => unknown>> = Object.fromEntries(
+  Object.entries(serializers).map(([target, serializer]) => [
+    target,
+    (json: unknown) => serializer.deserializeContract(json),
+  ]),
+);
+
+/** The text `prisma contract emit` writes for the contract read from `text`. */
+function writtenAgain(text: string): string | undefined {
+  const json = JSON.parse(text);
+  const serializer = serializers[String(Reflect.get(Object(json), 'target'))];
+  if (serializer === undefined) return undefined;
+  const generated = Reflect.get(Object(json), '_generated');
+  return JSON.stringify(
+    {
+      ...canonicalizeContractToObject(serializer.deserializeContract(json), {
+        serializeContract: (contract) => serializer.serializeContract(contract),
+        normalizeStorage: serializer.normalizeStorage,
+      }),
+      ...(generated === undefined ? {} : { _generated: generated }),
+    },
+    null,
+    2,
+  );
+}
 
 const upgrade = 'test/integration/test/upgrade-instructions';
 const snapshotFiles = (hashes: readonly string[]) =>
@@ -135,6 +169,38 @@ const mongoOpsFiles = savedFiles('ops.json').filter((file) => {
     : family === 'mongo';
 });
 
+/** Emitted contracts kept as an earlier release wrote them, each with the reason. */
+const writtenByAnEarlierRelease: readonly { readonly path: string; readonly why: string }[] = [
+  {
+    path: 'packages/3-targets/postgres/9-facade/test/fixtures/emitted-before-capabilities-by-version/',
+    why: 'a contract as a release before the capability lists by database version emitted it',
+  },
+  {
+    path: 'packages/9-public/@prisma/orm-better-auth/test/fixtures/release-candidate/',
+    why: 'a contract a release candidate emitted',
+  },
+  {
+    path: 'test/e2e/framework/test/fixtures/release-candidate/',
+    why: 'contracts a release candidate emitted',
+  },
+  {
+    path: 'test/integration/test/date-time-defaults/_fixture-before-canonical-form/',
+    why: 'a contract as a release before the family normal form emitted it',
+  },
+  {
+    path: 'test/integration/test/release-candidate-projects/fixtures/',
+    why: 'projects as release candidates wrote them',
+  },
+];
+
+/** The saved contracts `prisma contract emit` wrote with this release. Snapshots are written by the snapshot store, in another layout. */
+const emittedFiles = contractFiles.filter(
+  (file) =>
+    !file.includes('/snapshots/') &&
+    !writtenByAnEarlierRelease.some(({ path }) => file.startsWith(path)) &&
+    readFileSync(join(repoRoot, file), 'utf8').includes('"_generated"'),
+);
+
 describe('the stored files saved in the repository', () => {
   it(`include ${contractFiles.length} contract.json files, each of which its target reads`, () => {
     const refused = contractFiles.flatMap((file) => {
@@ -147,6 +213,16 @@ describe('the stored files saved in the repository', () => {
     });
     expect(refused).toEqual([]);
     expect(contractFiles.length).toBeGreaterThan(300);
+  });
+
+  it(`include ${emittedFiles.length} contract.json files that prisma contract emit wrote with this release, each of which reads and is written again byte for byte`, () => {
+    const emitted = emittedFiles;
+    const changed = emitted.filter((file) => {
+      const text = readFileSync(join(repoRoot, file), 'utf8');
+      return writtenAgain(text) !== text.replace(/\n$/, '');
+    });
+    expect(changed).toEqual([]);
+    expect(emitted.length).toBeGreaterThan(100);
   });
 
   it(`include ${mongoOpsFiles.length} MongoDB ops.json files, each of which the MongoDB reader reads`, () => {
