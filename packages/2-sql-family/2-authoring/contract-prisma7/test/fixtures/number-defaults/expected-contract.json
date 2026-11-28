@@ -52,8 +52,7 @@
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "long": {
                 "type": {
@@ -64,8 +63,7 @@
                     "scale": 30
                   }
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "tiny": {
                 "type": {
@@ -76,8 +74,7 @@
                     "scale": 30
                   }
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "negative": {
                 "type": {
@@ -88,8 +85,7 @@
                     "scale": 30
                   }
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "whole": {
                 "type": {
@@ -100,16 +96,14 @@
                     "scale": 30
                   }
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "zerosBare": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/numeric@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "zerosScaled": {
                 "type": {
@@ -120,8 +114,7 @@
                     "scale": 2
                   }
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "zerosDefault": {
                 "type": {
@@ -132,8 +125,7 @@
                     "scale": 30
                   }
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "list": {
                 "type": {
@@ -154,8 +146,7 @@
                   "kind": "scalar",
                   "codecId": "pg/int8@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "bigList": {
                 "type": {
@@ -182,10 +173,10 @@
   },
   "extensions": {},
   "capabilities": {},
-  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "profileHash": "ae77f23935a24b8a63c81ef26bb0f186581670a56e603cef8314a629414e2632",
   "meta": {},
   "storage": {
-    "storageHash": "e579f4ce0a66a4403a2627f02c792836dffa73a134ab5bba10dc73ad3f8609ef",
+    "storageHash": "a321fae1dfd730db33a5a5b7eba9bdae9942432936a5edab1a3299eb38370bcc",
     "namespaces": {
       "public": {
         "id": "public",

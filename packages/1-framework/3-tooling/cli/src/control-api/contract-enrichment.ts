@@ -1,3 +1,4 @@
+import { computeProfileHash } from '@internal/contract/hashing';
 import { compareCodeUnits } from '@internal/contract/hashing-utils';
 import type { Contract } from '@internal/contract/types';
 import {
@@ -26,6 +27,17 @@ function sortDeep(value: unknown): unknown {
 
 function sortDeepTyped<T>(value: T): T {
   return sortDeep(value) as T;
+}
+
+function enabledCapabilities(
+  matrix: Record<string, Record<string, boolean>>,
+): Record<string, Record<string, boolean>> {
+  return Object.fromEntries(
+    Object.entries(matrix).flatMap(([namespace, flags]) => {
+      const enabled = Object.entries(flags).filter(([, flag]) => flag);
+      return enabled.length > 0 ? [[namespace, Object.fromEntries(enabled)]] : [];
+    }),
+  );
 }
 
 const TYPE_IMPORT_MEMBERS_THE_EMITTER_READS_FROM_THE_DESCRIPTOR = [
@@ -67,7 +79,7 @@ function extractExtensionPackMeta(
     targetId: component.targetId,
     version,
   };
-  if (capabilities) {
+  if (capabilities && Object.keys(capabilities).length > 0) {
     base['capabilities'] = capabilities;
   }
   const carried = Object.entries(types ?? {}).flatMap(([key, value]) => {
@@ -81,13 +93,15 @@ function extractExtensionPackMeta(
 }
 
 /**
- * Enriches a raw contract with framework-derived metadata: capabilities from all component descriptors and extension pack metadata from extension descriptors. Produces deterministically sorted output.
+ * Enriches a raw contract with framework-derived metadata: the enabled capabilities of all component descriptors, the profile hash of those capabilities, and extension pack metadata from extension descriptors. Produces deterministically sorted output.
  */
 export function enrichContract(
   ir: Contract,
   components: ReadonlyArray<TargetBoundComponentDescriptor<string, string>>,
 ): Contract {
-  const mergedCapabilities = mergeCapabilityMatrices(ir.capabilities, components);
+  const capabilities = sortDeepTyped(
+    enabledCapabilities(mergeCapabilityMatrices(ir.capabilities, components)),
+  );
 
   const extensionsMeta: Record<string, unknown> = {};
   for (const component of components) {
@@ -103,7 +117,12 @@ export function enrichContract(
 
   return {
     ...ir,
-    capabilities: sortDeepTyped(mergedCapabilities),
+    capabilities,
+    profileHash: computeProfileHash({
+      target: ir.target,
+      targetFamily: ir.targetFamily,
+      capabilities,
+    }),
     extensions: sortDeepTyped(extensions),
   };
 }

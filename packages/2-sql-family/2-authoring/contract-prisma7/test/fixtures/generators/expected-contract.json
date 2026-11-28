@@ -46,72 +46,63 @@
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "uuid4": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/text@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "uuid4Again": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/text@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "uuid7": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/text@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "cuid1": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/text@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "cuid2": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/text@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "ulid": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/text@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "nanoid": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/text@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "nanoidSized": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/text@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               }
             },
             "relations": {}
@@ -127,7 +118,7 @@
     }
   },
   "execution": {
-    "executionHash": "3ffb3a7f78cf83a59f574f0ed6019a052f3863f26923834d83bbd88214b7062b",
+    "executionHash": "4f495f68f5e1deb93b0c2af335e5688b24441ca05889d3661e77b24edd401619",
     "mutations": {
       "defaults": [
         {
@@ -226,10 +217,10 @@
   },
   "extensions": {},
   "capabilities": {},
-  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "profileHash": "ae77f23935a24b8a63c81ef26bb0f186581670a56e603cef8314a629414e2632",
   "meta": {},
   "storage": {
-    "storageHash": "c0b34cb80b2ad58e1f545442aba7aa0159da0c0fba4b9b63fb05940413ca3d6b",
+    "storageHash": "fb546544f945288bf5607d0d33a437b95f24de505aab938ff355c923f7f23bca",
     "namespaces": {
       "public": {
         "id": "public",

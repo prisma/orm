@@ -1,5 +1,7 @@
 # ADR 031 — Adapter capability discovery
 
+**Profile hash inputs superseded by** [ADR 332](ADR%20332%20-%20A%20hash%20covers%20what%20a%20contract%20means%2C%20by%20rules%20that%20do%20not%20change%20within%20a%20major.md): the profile hash covers only `targetFamily`, `target` and the contract's `capabilities` section, with no adapter pins or pack choices, and the rules do not change within a major.
+
 ## Context
 
 Prisma Next supports multiple SQL dialects via adapters. Lanes (DSL, ORM, TypedSQL, Raw) lower abstract Plans to dialect SQL. Some SQL features are optional or versioned (e.g., LATERAL, json_agg, transactional DDL, concurrent index creation). We need a consistent way for adapters to surface capabilities and for lanes to react when features are missing or discouraged.

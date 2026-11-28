@@ -19,7 +19,7 @@ import {
   postgresDriver,
 } from '@internal/postgres/config';
 import postgresFacade from '@internal/postgres/runtime';
-import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonicalization-hooks';
+import { normalizeSqlStorage } from '@internal/sql-contract/normal-form';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { sqlEmission } from '@internal/sql-contract-emitter';
 import { prismaContract } from '@internal/sql-contract-psl/provider';
@@ -107,7 +107,9 @@ describe('a citext column applied with db init', () => {
     });
     if (!loaded.ok) throw new Error(JSON.stringify(loaded.failure, null, 2));
     const enriched = enrichContract(loaded.value, [postgres, postgresAdapter, citext]);
-    const emitted = await emit(enriched, stack, sqlEmission, sqlContractCanonicalizationHooks);
+    const emitted = await emit(enriched, stack, sqlEmission, {
+      normalizeStorage: normalizeSqlStorage,
+    });
     return JSON.parse(emitted.contractJson) as Record<string, unknown>;
   }
 

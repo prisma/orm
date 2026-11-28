@@ -28,8 +28,7 @@
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "updatedAt": {
                 "type": {
@@ -39,8 +38,7 @@
                     "precision": 3
                   }
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "updatedAtTz": {
                 "type": {
@@ -50,8 +48,7 @@
                     "precision": 6
                   }
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               }
             },
             "relations": {}
@@ -67,7 +64,7 @@
     }
   },
   "execution": {
-    "executionHash": "b2ae3a1c323b84ac42b2e3cbf2b9815dda604f2ab28dde7f041581168eeae217",
+    "executionHash": "74736ac012fb23343b2734522ea31fab72d9f496b3a6af0c22db09c1f638a1bd",
     "mutations": {
       "defaults": [
         {
@@ -117,10 +114,10 @@
   },
   "extensions": {},
   "capabilities": {},
-  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "profileHash": "ae77f23935a24b8a63c81ef26bb0f186581670a56e603cef8314a629414e2632",
   "meta": {},
   "storage": {
-    "storageHash": "ca3e29fc4e90265e1b10a48ef33decf69b48a26c5df9b257afc326b457127339",
+    "storageHash": "eb6bbb9a114b270c4f4cb044163c64ad501b1ed5bfc8c235e966e284688e36ef",
     "namespaces": {
       "public": {
         "id": "public",

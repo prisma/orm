@@ -14,7 +14,7 @@ import {
   postgres18,
   postgresDriver,
 } from '@internal/postgres/contract-builder';
-import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonicalization-hooks';
+import { normalizeSqlStorage } from '@internal/sql-contract/normal-form';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { sqlEmission } from '@internal/sql-contract-emitter';
 import postgres from '@internal/target-postgres/control';
@@ -67,7 +67,7 @@ async function emitContract(
       postgres.contractSerializer.serializeContract(
         c as Parameters<typeof postgres.contractSerializer.serializeContract>[0],
       ),
-    ...sqlContractCanonicalizationHooks,
+    normalizeStorage: normalizeSqlStorage,
   });
 
   // Write contract files

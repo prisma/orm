@@ -6,7 +6,6 @@ export {
   hasContractSnapshot,
   readContractSnapshotJson,
   readContractSnapshotJsonTolerant,
-  type SnapshotCanonicalizationHooks,
   type SnapshotContentVerifier,
   singleLineDeclarations,
   snapshotsImportPathFrom,

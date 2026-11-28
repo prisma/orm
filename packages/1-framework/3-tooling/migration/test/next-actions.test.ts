@@ -92,7 +92,8 @@ describe('errors.ts — converted factories carry typed nextActions', () => {
       },
       {
         kind: 'user-choice',
-        label: "For an extension space, re-run that extension's contract-space build instead",
+        label:
+          "For an extension's snapshot in an application, run prisma contract emit without --output-path, which writes the head snapshot of each installed extension again. In an extension package, re-run its contract-space build instead",
       },
       {
         kind: 'user-choice',

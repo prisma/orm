@@ -16,10 +16,10 @@ import type {
 } from '@internal/mysql/contract-types';
 
 export type StorageHash =
-  StorageHashBase<'429ca5218dc113a8f28a4e8890ff6764e9810dff5c9a4c3924969488fb9dbb33'>;
+  StorageHashBase<'73a74ebec7b2307f44dddf78f7d8932c27656351f9769f15254ecbfd91112607'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
-  ProfileHashBase<'5212eb1a1220f2d24de13f4efadd4c703f3a1098a5f57e09da0dc26ebb7201d0'>;
+  ProfileHashBase<'ee8405be69c28f45e79c40c3c7d60135a2860ef72b192ab25d0cbac6cc2d3ca6'>;
 
 export type CodecTypes = MysqlTypes;
 export type LaneCodecTypes = CodecTypes;

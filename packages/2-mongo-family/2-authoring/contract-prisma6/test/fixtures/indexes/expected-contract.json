@@ -19,48 +19,42 @@
                   "kind": "scalar",
                   "codecId": "mongo/objectId@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "slug": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "mongo/string@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "rank": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "mongo/int64Number@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "title": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "mongo/string@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "authorId": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "mongo/objectId@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "createdAt": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "mongo/date@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               }
             },
             "relations": {},
@@ -94,10 +88,10 @@
   },
   "capabilities": {},
   "extensions": {},
-  "profileHash": "251b3ce23f6c9f561892e7c1af9d2cc941a13d64ba1aa7226b90036b09568cc3",
+  "profileHash": "8fe2b3350db5a83e2473520e59e52262982215115e17bb22a76239170eee6e69",
   "meta": {},
   "storage": {
-    "storageHash": "c2121b18447a7f303d360e3f34a3295dcce495934ec2070656e0b6578bb27441",
+    "storageHash": "5758a85de5c2104637d1d4a6db1fdbd4a4006e39e557e90efd0ed93c44f5fcd5",
     "namespaces": {
       "__unbound__": {
         "id": "__unbound__",

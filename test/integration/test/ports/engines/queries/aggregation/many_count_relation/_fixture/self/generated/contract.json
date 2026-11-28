@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "targetFamily": "sql",
   "target": "postgres",
-  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "profileHash": "18654d8be351e94d940c57892ee3d3b92824fc145d7dd67c5f57168eea52c619",
   "roots": {
     "user": {
       "model": "User",
@@ -216,11 +216,11 @@
               "foreignKeys": [
                 {
                   "index": {
-                    "name": "userFollow_followerId_idx_2aa6c62d"
+                    "name": "userFollow_followeeId_idx_698b9f79"
                   },
                   "source": {
                     "columns": [
-                      "followerId"
+                      "followeeId"
                     ],
                     "namespaceId": "public",
                     "tableName": "userFollow"
@@ -235,11 +235,11 @@
                 },
                 {
                   "index": {
-                    "name": "userFollow_followeeId_idx_698b9f79"
+                    "name": "userFollow_followerId_idx_2aa6c62d"
                   },
                   "source": {
                     "columns": [
-                      "followeeId"
+                      "followerId"
                     ],
                     "namespaceId": "public",
                     "tableName": "userFollow"
@@ -285,7 +285,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "44eb208d9eafa0fd38325bc6aa292e11ee59b22d5c3565a4b6507819259d8a2b"
+    "storageHash": "b9842719ad052a75282844460fca988af17c232366289c78858a5336e8e1e72e"
   },
   "capabilities": {
     "postgres": {

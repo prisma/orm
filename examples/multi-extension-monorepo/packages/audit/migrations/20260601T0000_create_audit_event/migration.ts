@@ -16,8 +16,8 @@ import type { SqlMigrationPlanOperation } from '@prisma/orm-postgres/family/cont
 import { Migration, MigrationCLI, rawSql } from '@prisma/orm-postgres/target/migration';
 import type { PostgresPlanTargetDetails } from '@prisma/orm-postgres/target/planner-target-details';
 import { AUDIT_BASELINE_INVARIANT_ID, AUDIT_EVENT_TABLE } from '../../src/constants';
-import type { Contract as End } from '../snapshots/d60ebdd877de6283fafbbe0dc9a4fa13c1197009a53ba95ed37ba04fa3640cb1/contract';
-import endContract from '../snapshots/d60ebdd877de6283fafbbe0dc9a4fa13c1197009a53ba95ed37ba04fa3640cb1/contract.json' with {
+import type { Contract as End } from '../snapshots/a78f4666e0ce078c5ecc67b7b04350c33058008caced8bd6808b2cdc08c43e45/contract';
+import endContract from '../snapshots/a78f4666e0ce078c5ecc67b7b04350c33058008caced8bd6808b2cdc08c43e45/contract.json' with {
   type: 'json',
 };
 

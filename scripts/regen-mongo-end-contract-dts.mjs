@@ -88,10 +88,7 @@ for (const jsonPath of args) {
       serializeContract: (contract) => serializer.serializeContract(contract),
       deserializeContract: (contractJson) => family.deserializeContract(contractJson),
       typesModule,
-      ...(serializer.shouldPreserveEmpty
-        ? { shouldPreserveEmpty: serializer.shouldPreserveEmpty }
-        : {}),
-      ...(serializer.sortStorage ? { sortStorage: serializer.sortStorage } : {}),
+      ...(serializer.normalizeStorage ? { normalizeStorage: serializer.normalizeStorage } : {}),
     },
   );
 

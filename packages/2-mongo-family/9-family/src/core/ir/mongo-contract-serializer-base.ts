@@ -24,10 +24,10 @@ import {
   resolveMongoToOneRelationFields,
   validateMongoStorage,
 } from '@internal/mongo-contract';
-import { mongoContractCanonicalizationHooks } from '@internal/mongo-contract/canonicalization-hooks';
 import { composeMongoEntityKinds } from '@internal/mongo-contract/entity-kinds';
+import { normalizeMongoDomain, normalizeMongoStorage } from '@internal/mongo-contract/normal-form';
 import { blindCast } from '@internal/utils/casts';
-import type { JsonObject } from '@internal/utils/json';
+import type { JsonObject, JsonValue } from '@internal/utils/json';
 import { structuredError } from '@internal/utils/structured-error';
 import { type as arktypeType, type Type } from 'arktype';
 
@@ -104,7 +104,17 @@ export abstract class MongoContractSerializerBase<TContract>
   > = {
     1: {
       parse: (document) => this.parseContractV1(document),
-      print: (contract) => ({ formatVersion: 1, ...this.printContractV1(contract) }),
+      print: (contract) => {
+        const printed = this.printContractV1(contract);
+        return {
+          formatVersion: 1,
+          ...printed,
+          domain: blindCast<
+            JsonValue,
+            'the domain normal form only leaves fields out of the printed JSON domain'
+          >(normalizeMongoDomain(printed['domain'])),
+        };
+      },
     },
   };
 
@@ -134,22 +144,7 @@ export abstract class MongoContractSerializerBase<TContract>
     );
   }
 
-  /**
-   * Preserve empty `collections` maps and per-collection payloads. Mongo
-   * collections legitimately serialize empty (a declared collection with no
-   * schema is valid); SQL tables never do — that asymmetry lives here rather
-   * than in the family-agnostic canonicalizer.
-   */
-  shouldPreserveEmpty = mongoContractCanonicalizationHooks.shouldPreserveEmpty;
-
-  // No hashCanonicalizationHooks: the Mongo emit pipeline hashes a projection
-  // of storage (`{ id, collections }` per namespace), not the persisted
-  // `{ id, entries: { collection } }` shape, so the published hash cannot be
-  // recomputed from a snapshot's content. Mongo snapshots therefore read
-  // without content verification until the hash covers the persisted shape.
-  // Snapshots written before ADR 317 were rewritten in place with index names
-  // and keep their old hash, which markers, the ledger and migration from/to
-  // name, so a future content check must accept them.
+  readonly normalizeStorage = normalizeMongoStorage;
 
   /**
    * Family-shared structural validation: parse against the Mongo

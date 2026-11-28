@@ -1,5 +1,6 @@
 import { canonicalizeContractToObject } from '@internal/contract/hashing';
 import type { Contract } from '@internal/contract/types';
+import { normalizeMongoStorage } from '@internal/mongo-contract/normal-form';
 import type { JsonObject } from '@internal/utils/json';
 import { describe, expect, it } from 'vitest';
 import { MongoContractSerializer } from '../src/core/ir/mongo-contract-serializer';
@@ -42,6 +43,7 @@ describe('Mongo contract execution section', () => {
     );
     const canonical = canonicalizeContractToObject(contract as unknown as Contract, {
       serializeContract: (c) => JSON.parse(JSON.stringify(c)) as JsonObject,
+      normalizeStorage: normalizeMongoStorage,
     });
     const keys = Object.keys(canonical);
     expect(keys.indexOf('execution')).toBe(keys.indexOf('storage') + 1);

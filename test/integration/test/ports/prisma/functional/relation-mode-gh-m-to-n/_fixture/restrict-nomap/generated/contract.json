@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "targetFamily": "sql",
   "target": "postgres",
-  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "profileHash": "18654d8be351e94d940c57892ee3d3b92824fc145d7dd67c5f57168eea52c619",
   "roots": {
     "categoriesOnPostsManyToMany": {
       "model": "CategoriesOnPostsManyToMany",
@@ -204,27 +204,6 @@
               "foreignKeys": [
                 {
                   "index": {
-                    "name": "categoriesOnPostsManyToMany_postId_idx_a7a72715"
-                  },
-                  "onDelete": "restrict",
-                  "onUpdate": "restrict",
-                  "source": {
-                    "columns": [
-                      "postId"
-                    ],
-                    "namespaceId": "public",
-                    "tableName": "categoriesOnPostsManyToMany"
-                  },
-                  "target": {
-                    "columns": [
-                      "id"
-                    ],
-                    "namespaceId": "public",
-                    "tableName": "postManyToMany"
-                  }
-                },
-                {
-                  "index": {
                     "name": "categoriesOnPostsManyToMany_categoryId_idx_15c304f2"
                   },
                   "onDelete": "restrict",
@@ -242,6 +221,27 @@
                     ],
                     "namespaceId": "public",
                     "tableName": "categoryManyToMany"
+                  }
+                },
+                {
+                  "index": {
+                    "name": "categoriesOnPostsManyToMany_postId_idx_a7a72715"
+                  },
+                  "onDelete": "restrict",
+                  "onUpdate": "restrict",
+                  "source": {
+                    "columns": [
+                      "postId"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "categoriesOnPostsManyToMany"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "postManyToMany"
                   }
                 }
               ],
@@ -321,7 +321,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "c3da53b9b65eacbe31c923952c04c60264421fd2a367098a165f3d121ad0c890"
+    "storageHash": "11bd035900aa94415e14acba818b0328ceec6bb81e89dd6a89a12bd3d5301897"
   },
   "capabilities": {
     "postgres": {

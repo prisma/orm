@@ -285,6 +285,86 @@ describe('signContractSpaces', () => {
       meta: { spaceId: 'app', command: 'db sign', change: ['migrate'] },
     });
     expect(family.calls).toEqual(['readAllMarkers']);
+    expect(JSON.stringify(result.ok ? undefined : result.failure.toEnvelope())).not.toContain(
+      '--force',
+    );
+  });
+
+  describe('when forced', () => {
+    const migrateOnly = { ...DEFAULT_DATABASE_POLICIES, change: ['migrate'] };
+    const markers = new Map([
+      ['app', marker('old-app', [], { policies: { change: ['migrate'] } })],
+      ['pgvector', marker('old-ext')],
+    ]);
+
+    it('signs every space of a database whose change policy permits only migrations, and keeps the policies it read', async () => {
+      const family = familySigning(signedEverySpace, () => true, markers);
+
+      const result = await signContractSpaces({
+        driver,
+        familyInstance: family.familyInstance,
+        aggregate,
+        frameworkComponents: [],
+        invocation: INVOCATION,
+        force: true,
+      });
+
+      expect({
+        spaces: result.assertOk().spaces.map(({ space, status }) => ({ space, status })),
+        calls: family.calls,
+        checkedPolicies: family.checkedPolicies,
+      }).toEqual({
+        spaces: [
+          { space: 'app', status: 'created' },
+          { space: 'pgvector', status: 'created' },
+        ],
+        calls: ['readAllMarkers', 'introspect', 'signSpaces'],
+        checkedPolicies: [migrateOnly],
+      });
+    });
+
+    it('returns the change policy in force, so advice names only what it permits', async () => {
+      const family = familySigning(signedEverySpace, () => false, markers);
+
+      const result = await signContractSpaces({
+        driver,
+        familyInstance: family.familyInstance,
+        aggregate,
+        frameworkComponents: [],
+        invocation: INVOCATION,
+        force: true,
+      });
+
+      expect(result.assertOk().changePolicy).toEqual(['migrate']);
+    });
+
+    it('still signs no space whose schema does not satisfy its contract', async () => {
+      const family = familySigning(
+        signedEverySpace,
+        (contract) => contract !== extContract,
+        markers,
+      );
+
+      const result = await signContractSpaces({
+        driver,
+        familyInstance: family.familyInstance,
+        aggregate,
+        frameworkComponents: [],
+        invocation: INVOCATION,
+        force: true,
+      });
+
+      expect({
+        spaces: result.assertOk().spaces.map(({ space, status }) => ({ space, status })),
+        signed: family.signed.map((spaces) => spaces.map(({ space }) => space)),
+      }).toEqual({
+        spaces: [
+          { space: 'app', status: 'created' },
+          { space: 'pgvector', status: 'failed' },
+        ],
+        signed: [['app']],
+      });
+    });
   });
 
   it('signs a database with no marker, whatever policies a later run declares', async () => {
@@ -298,7 +378,7 @@ describe('signContractSpaces', () => {
       invocation: INVOCATION,
     });
 
-    expect(result.ok).toBe(true);
+    expect(result.assertOk().changePolicy).toBeUndefined();
     expect(family.calls).toEqual(['readAllMarkers', 'introspect', 'signSpaces']);
   });
 });

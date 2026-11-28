@@ -2,6 +2,7 @@ import type { Contract, ContractMarkerRecord } from '@internal/contract/types';
 import { errorMarkerPoliciesCorrupt } from '@internal/errors/execution';
 import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
 import type {
+  ChangeStrategy,
   ControlDriverInstance,
   ControlExtensionDescriptor,
   ControlFamilyInstance,
@@ -44,6 +45,8 @@ export interface ExecuteDbSignOptions<TFamilyId extends string, TTargetId extend
   readonly verifySnapshotContent?: SnapshotContentVerifier;
   /** The command line the advice of a refusal repeats. */
   readonly invocation: CliInvocation;
+  /** Sign even when the database's change policy permits only migrations. Every other check still applies, and the recorded policies are kept. */
+  readonly force?: boolean;
   readonly onProgress?: OnControlProgress;
 }
 
@@ -75,6 +78,8 @@ export type DbSignSpaceOutcome =
 export interface ExecuteDbSignSuccess {
   /** The app space first, then each extension space in declaration order. */
   readonly spaces: readonly DbSignSpaceOutcome[];
+  /** The database's change policy in force, or `undefined` when it has no marker and so no policy. */
+  readonly changePolicy: readonly ChangeStrategy[] | undefined;
 }
 
 export type ExecuteDbSignResult = Result<ExecuteDbSignSuccess, CliStructuredError>;
@@ -101,6 +106,7 @@ export async function executeDbSign<TFamilyId extends string, TTargetId extends 
     aggregate: loaded.value,
     frameworkComponents: options.frameworkComponents,
     invocation: options.invocation,
+    ...ifDefined('force', options.force),
     ...ifDefined('onProgress', options.onProgress),
   });
 }
@@ -112,6 +118,8 @@ export interface SignContractSpacesOptions<TFamilyId extends string, TTargetId e
   readonly frameworkComponents: ReadonlyArray<TargetBoundComponentDescriptor<TFamilyId, TTargetId>>;
   /** The command line the advice of a refusal repeats. */
   readonly invocation: CliInvocation;
+  /** Sign even when the database's change policy permits only migrations. Every other check still applies, and the recorded policies are kept. */
+  readonly force?: boolean;
   readonly onProgress?: OnControlProgress;
 }
 
@@ -158,6 +166,7 @@ export async function signContractSpaces<TFamilyId extends string, TTargetId ext
       inForce,
       ref: undefined,
       permitPolicyChange: false,
+      overrideChangePolicy: options.force === true,
       targetHash: aggregate.app.contract().storage.storageHash,
       invocation: options.invocation,
     });
@@ -277,5 +286,6 @@ export async function signContractSpaces<TFamilyId extends string, TTargetId ext
             ...(schema.ok ? {} : { schema }),
           };
     }),
+    changePolicy: inForce?.change,
   });
 }

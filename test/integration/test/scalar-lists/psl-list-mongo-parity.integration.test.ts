@@ -11,8 +11,8 @@ import type { SerializeContract } from '@internal/contract/hashing';
 import { emit } from '@internal/emitter';
 import { mongoFamilyDescriptor } from '@internal/family-mongo/control';
 import sql from '@internal/family-sql/control';
-import { mongoContractCanonicalizationHooks } from '@internal/mongo-contract/canonicalization-hooks';
-import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonicalization-hooks';
+import { normalizeMongoStorage } from '@internal/mongo-contract/normal-form';
+import { normalizeSqlStorage } from '@internal/sql-contract/normal-form';
 import { type MongoTargetContract, mongoTargetDescriptor } from '@internal/target-mongo/control';
 import postgres from '@internal/target-postgres/control';
 import type { JsonObject } from '@internal/utils/json';
@@ -76,7 +76,7 @@ describe('PSL scalar-list Mongo parity', () => {
         serializeContract: (c) => sqlSerializeContract(c) as unknown as JsonObject,
         deserializeContract: (json) => sqlFamily.deserializeContract(json),
         typesModule: workspaceTypesModule.postgres,
-        ...sqlContractCanonicalizationHooks,
+        normalizeStorage: normalizeSqlStorage,
       });
       const mongoFamily = mongoFamilyDescriptor.create(mongoStack);
       const mongoEmitted = await emit(
@@ -87,7 +87,7 @@ describe('PSL scalar-list Mongo parity', () => {
           serializeContract: (c) => mongoSerializeContract(c) as unknown as JsonObject,
           deserializeContract: (json) => mongoFamily.deserializeContract(json),
           typesModule: workspaceTypesModule.mongo,
-          ...mongoContractCanonicalizationHooks,
+          normalizeStorage: normalizeMongoStorage,
         },
       );
 

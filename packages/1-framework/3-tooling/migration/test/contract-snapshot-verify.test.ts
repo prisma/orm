@@ -1,6 +1,7 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { computeStorageHash } from '@internal/contract/hashing';
+import { APP_UPGRADE_GUIDES_URL } from '@internal/utils/upgrade-guides';
 import { join } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
@@ -14,9 +15,15 @@ import { MigrationToolsError } from '../src/errors';
 
 const TARGET = 'postgres';
 const TARGET_FAMILY = 'sql';
+const storageAsGiven = (storage: unknown) => storage;
 
 function genuineContract(storage: Record<string, unknown>) {
-  const storageHash = computeStorageHash({ target: TARGET, targetFamily: TARGET_FAMILY, storage });
+  const storageHash = computeStorageHash({
+    target: TARGET,
+    targetFamily: TARGET_FAMILY,
+    storage,
+    normalizeStorage: storageAsGiven,
+  });
   return {
     contractJson: {
       formatVersion: 1,
@@ -32,7 +39,7 @@ describe('createSnapshotContentVerifier', () => {
   it('accepts a contract whose content reproduces its storage hash', () => {
     const { contractJson, storageHash } = genuineContract({ namespaces: {} });
 
-    const verifier = createSnapshotContentVerifier();
+    const verifier = createSnapshotContentVerifier(storageAsGiven);
 
     expect(() =>
       verifier.assertSnapshotContentMatches(contractJson, storageHash, '/store/contract.json'),
@@ -46,7 +53,7 @@ describe('createSnapshotContentVerifier', () => {
       storage: { ...contractJson.storage, namespaces: { sneaky: { entries: {} } } },
     };
 
-    const verifier = createSnapshotContentVerifier();
+    const verifier = createSnapshotContentVerifier(storageAsGiven);
     let thrown: unknown;
     try {
       verifier.assertSnapshotContentMatches(tampered, storageHash, '/store/contract.json');
@@ -67,6 +74,36 @@ describe('createSnapshotContentVerifier', () => {
     expect(error.meta?.['computedHash']).not.toBe(storageHash);
   });
 
+  it('names a skipped hash upgrade as a cause, then advises restoring or rewriting the snapshot where a command does', () => {
+    const { contractJson, storageHash } = genuineContract({ namespaces: {} });
+    const tamperedStorage = { namespaces: { sneaky: { entries: {} } } };
+    const tampered = { ...contractJson, storage: { ...tamperedStorage, storageHash } };
+    const { storageHash: computedHash } = genuineContract(tamperedStorage);
+    const rewriteRecipe =
+      'If it is the snapshot of the emitted contract or the head snapshot of an extension, you can instead delete its folder and write it again, since a command writes a snapshot only where none exists. For the emitted contract, run `{bin} db migrate --advance-ref db` when a migration ends at it, which first applies any pending migrations to the configured database, or `{bin} db sign` when none does, which first checks that the configured database matches contract.json and records that in the database; each then moves the db ref to contract.json and writes the snapshot from it. For an extension, run `{bin} contract emit`, which also emits contract.json from the contract source.';
+
+    const verifier = createSnapshotContentVerifier(storageAsGiven);
+
+    expect(() =>
+      verifier.assertSnapshotContentMatches(tampered, storageHash, '/store/abc/contract.json'),
+    ).toThrow(
+      expect.objectContaining({
+        why: `The contract snapshot at "/store/abc/contract.json" is addressed by storage hash ${storageHash}, but its content recomputes to ${computedHash}. Either the project was upgraded from an earlier release of Prisma 8 without the upgrade step that rewrites every contract hash, or the file has been edited (or corrupted) since it was written.`,
+        fix: `If the project was upgraded from an earlier release of Prisma 8, follow the app upgrade instructions of each release since, which rewrite every contract hash: ${APP_UPGRADE_GUIDES_URL}. Otherwise restore the snapshot from version control. ${rewriteRecipe}`,
+        nextActions: [
+          {
+            kind: 'open-url',
+            label:
+              'If the project was upgraded from an earlier release of Prisma 8, follow the app upgrade instructions, which rewrite every contract hash',
+            url: APP_UPGRADE_GUIDES_URL,
+          },
+          { kind: 'user-choice', label: 'Otherwise restore the snapshot from version control' },
+          { kind: 'user-choice', label: rewriteRecipe },
+        ],
+      }),
+    );
+  });
+
   it('re-verifies on every assertion, so content mutated after a clean pass is caught', () => {
     const { contractJson, storageHash } = genuineContract({ namespaces: {} });
     const mutable = {
@@ -74,7 +111,7 @@ describe('createSnapshotContentVerifier', () => {
       storage: { ...contractJson.storage } as Record<string, unknown>,
     };
 
-    const verifier = createSnapshotContentVerifier();
+    const verifier = createSnapshotContentVerifier(storageAsGiven);
     verifier.assertSnapshotContentMatches(mutable, storageHash, 'p');
     mutable.storage['namespaces'] = { sneaky: { entries: {} } };
 
@@ -105,7 +142,7 @@ describe('readContractSnapshotJson content verification', () => {
     const read = await readContractSnapshotJson(
       migrationsDir,
       storageHash,
-      createSnapshotContentVerifier(),
+      createSnapshotContentVerifier(storageAsGiven),
     );
 
     expect(read).toEqual(contractJson);
@@ -125,7 +162,11 @@ describe('readContractSnapshotJson content verification', () => {
     await writeFile(jsonPath, JSON.stringify(tampered), 'utf-8');
 
     await expect(
-      readContractSnapshotJson(migrationsDir, storageHash, createSnapshotContentVerifier()),
+      readContractSnapshotJson(
+        migrationsDir,
+        storageHash,
+        createSnapshotContentVerifier(storageAsGiven),
+      ),
     ).rejects.toMatchObject({ code: 'MIGRATION.CONTRACT_SNAPSHOT_CONTENT_MISMATCH' });
   });
 
@@ -143,7 +184,11 @@ describe('readContractSnapshotJson content verification', () => {
     await writeFile(jsonPath, JSON.stringify(tampered), 'utf-8');
 
     await expect(
-      readContractSnapshotJsonTolerant(migrationsDir, storageHash, createSnapshotContentVerifier()),
+      readContractSnapshotJsonTolerant(
+        migrationsDir,
+        storageHash,
+        createSnapshotContentVerifier(storageAsGiven),
+      ),
     ).resolves.toBeUndefined();
     await expect(readContractSnapshotJsonTolerant(migrationsDir, storageHash)).resolves.toEqual(
       tampered,

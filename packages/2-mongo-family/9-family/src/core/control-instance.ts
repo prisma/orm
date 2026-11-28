@@ -28,7 +28,7 @@ import {
 } from '@internal/framework-components/control';
 import { assertDescriptorSelfConsistency } from '@internal/migration-tools/spaces';
 import type { MongoContract } from '@internal/mongo-contract';
-import { mongoContractCanonicalizationHooks } from '@internal/mongo-contract/canonicalization-hooks';
+import { normalizeMongoStorage } from '@internal/mongo-contract/normal-form';
 import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
@@ -164,7 +164,7 @@ export function createMongoFamilyInstance(controlStack: ControlStack): MongoCont
         extensionId: extension.id,
         contractJson,
         headRefHash: headRef.hash,
-        ...mongoContractCanonicalizationHooks,
+        normalizeStorage: normalizeMongoStorage,
       });
     }
   }

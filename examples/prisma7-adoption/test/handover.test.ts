@@ -179,8 +179,8 @@ describe('Prisma 8 taking over migrations from the Prisma 7 schema', () => {
             ['index.User.User_email_key', 'additive'],
             ['index._PostToTag._PostToTag_B_index', 'additive'],
             ['foreignKey.Post.Post_authorId_fkey', 'additive'],
-            ['foreignKey._PostToTag._PostToTag_A_fkey', 'additive'],
             ['foreignKey._PostToTag._PostToTag_B_fkey', 'additive'],
+            ['foreignKey._PostToTag._PostToTag_A_fkey', 'additive'],
           ]);
           expect(renderedSql(baseline)).toContain('CONSTRAINT "_PostToTag_AB_pkey" PRIMARY KEY');
           const bundleNames = [additivePlan['baselineDir'], additivePlan['dir']].map((bundleDir) =>

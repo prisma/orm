@@ -20,7 +20,7 @@ import {
 } from '@internal/postgres/contract-builder';
 import postgresClient from '@internal/postgres/runtime';
 import { contractFromJson } from '@internal/postgres/static';
-import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonicalization-hooks';
+import { normalizeSqlStorage } from '@internal/sql-contract/normal-form';
 import { sqlEmission } from '@internal/sql-contract-emitter';
 import { prismaContract } from '@internal/sql-contract-psl/provider';
 import postgres from '@internal/target-postgres/control';
@@ -178,7 +178,7 @@ async function emitTypeScriptContract(contract: Contract): Promise<Record<string
         postgres.contractSerializer.serializeContract(
           c as Parameters<typeof postgres.contractSerializer.serializeContract>[0],
         ),
-      ...sqlContractCanonicalizationHooks,
+      normalizeStorage: normalizeSqlStorage,
     },
   );
   return JSON.parse(emitted.contractJson) as Record<string, unknown>;

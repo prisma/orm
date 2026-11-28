@@ -19,8 +19,7 @@
                   "kind": "scalar",
                   "codecId": "mongo/objectId@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "address": {
                 "type": {
@@ -30,8 +29,7 @@
                   "entityKind": "valueObject",
                   "entityName": "Address"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "history": {
                 "type": {
@@ -54,8 +52,7 @@
                   "entityKind": "valueObject",
                   "entityName": "Address"
                 },
-                "nullable": true,
-                "many": false
+                "nullable": true
               }
             },
             "relations": {},
@@ -83,10 +80,10 @@
   },
   "capabilities": {},
   "extensions": {},
-  "profileHash": "251b3ce23f6c9f561892e7c1af9d2cc941a13d64ba1aa7226b90036b09568cc3",
+  "profileHash": "8fe2b3350db5a83e2473520e59e52262982215115e17bb22a76239170eee6e69",
   "meta": {},
   "storage": {
-    "storageHash": "ae4ed29eb19b7d02a12b90b87853eb23103557cd076483c0110cd1b4d95e11da",
+    "storageHash": "0d957ef7635b367084f4daf842dac646b7266456d151b148f91f497a018053ca",
     "namespaces": {
       "__unbound__": {
         "id": "__unbound__",

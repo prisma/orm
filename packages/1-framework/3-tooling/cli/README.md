@@ -797,7 +797,7 @@ Verify that the database satisfies the contract of every contract space (the app
 
 **Command:**
 ```bash
-prisma db sign [<contract> | --contract <contract>] [--db <url>] [--advance-ref <name> | --no-advance-ref] [--config <path>] [--json] [-v] [-q] [--color/--no-color]
+prisma db sign [<contract> | --contract <contract>] [--db <url>] [--advance-ref <name> | --no-advance-ref] [--force] [--config <path>] [--json] [-v] [-q] [--color/--no-color]
 ```
 
 Options:
@@ -805,6 +805,7 @@ Options:
 - `--db <url>`: Database connection string (optional; defaults to `config.db.connection` if set)
 - `--advance-ref <name>`: Advance the named ref of every signed space instead of `db`
 - `--no-advance-ref`: Sign without writing any ref or snapshot
+- `--force`: Sign even if the database's change policy permits only migrations. It overrides only that refusal (`MIGRATION.CHANGE_POLICY_FORBIDS`), for every space: each space's schema is still verified before its marker is written, and the policies the marker records stay as they are
 - `--config <path>`: Optional. Path to `prisma.config.ts` (defaults to `./prisma.config.ts` if present)
 - `--json`: Output as JSON object
 - `-q, --quiet`: Quiet mode (errors only)

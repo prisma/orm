@@ -1,0 +1,374 @@
+{
+  "formatVersion": 1,
+  "target": "postgres",
+  "targetFamily": "sql",
+  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "storage": {
+    "storageHash": "18e7ced3e80848c86ba0070baa3fb0906c99d1429da5bcd046274bcf3d990dd0",
+    "namespaces": {
+      "public": {
+        "id": "public",
+        "kind": "postgres-schema",
+        "entries": {
+          "table": {
+            "orders": {
+              "columns": {
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false,
+                  "many": false
+                },
+                "code": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "nullable": false,
+                  "typeParams": {}
+                },
+                "label": {
+                  "codecId": "pg/varchar@1",
+                  "dataType": "pg/varchar",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 40,
+                    "strict": false
+                  }
+                },
+                "tags": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "nullable": false,
+                  "many": {
+                    "elementNullable": false
+                  }
+                },
+                "flag": {
+                  "codecId": "pg/bool@1",
+                  "dataType": "pg/bool",
+                  "nullable": false,
+                  "default": {
+                    "kind": "literal",
+                    "value": false
+                  }
+                },
+                "customer_id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                },
+                "warehouse_id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                },
+                "status": {
+                  "codecId": "pg/text@1",
+                  "dataType": "pg/text",
+                  "nullable": false,
+                  "valueSet": {
+                    "plane": "storage",
+                    "namespaceId": "public",
+                    "entityKind": "valueSet",
+                    "entityName": "Status"
+                  }
+                }
+              },
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": [
+                {
+                  "columns": [
+                    "warehouse_id",
+                    "code"
+                  ]
+                },
+                {
+                  "columns": [
+                    "code"
+                  ]
+                },
+                {
+                  "name": "orders_label_key",
+                  "columns": [
+                    "label"
+                  ]
+                }
+              ],
+              "indexes": [
+                {
+                  "name": "orders_label_gin",
+                  "columns": [
+                    "label"
+                  ],
+                  "unique": false,
+                  "type": "gin",
+                  "options": {
+                    "fastupdate": false
+                  }
+                },
+                {
+                  "name": "orders_lower_code",
+                  "expression": "lower(code)",
+                  "unique": false,
+                  "columns": [],
+                  "options": {}
+                },
+                {
+                  "name": "orders_customer_id_idx",
+                  "columns": [
+                    "customer_id"
+                  ],
+                  "unique": false
+                }
+              ],
+              "foreignKeys": [
+                {
+                  "source": {
+                    "namespaceId": "public",
+                    "tableName": "orders",
+                    "columns": [
+                      "customer_id"
+                    ]
+                  },
+                  "target": {
+                    "namespaceId": "public",
+                    "tableName": "customers",
+                    "columns": [
+                      "id"
+                    ]
+                  },
+                  "name": "orders_customer_id_fkey",
+                  "onDelete": "cascade",
+                  "onUpdate": "noAction"
+                },
+                {
+                  "source": {
+                    "namespaceId": "public",
+                    "tableName": "orders",
+                    "columns": [
+                      "warehouse_id"
+                    ]
+                  },
+                  "target": {
+                    "namespaceId": "public",
+                    "tableName": "warehouses",
+                    "columns": [
+                      "id"
+                    ]
+                  },
+                  "onDelete": "noAction",
+                  "index": false
+                },
+                {
+                  "source": {
+                    "namespaceId": "public",
+                    "tableName": "orders",
+                    "columns": [
+                      "customer_id"
+                    ]
+                  },
+                  "target": {
+                    "namespaceId": "public",
+                    "tableName": "customers",
+                    "columns": [
+                      "id"
+                    ]
+                  },
+                  "name": "orders_customer_audit_fkey",
+                  "onDelete": "setNull",
+                  "index": {
+                    "name": "orders_customer_id_idx"
+                  }
+                },
+                {
+                  "source": {
+                    "namespaceId": "public",
+                    "tableName": "orders",
+                    "columns": [
+                      "id"
+                    ]
+                  },
+                  "target": {
+                    "namespaceId": "public",
+                    "tableName": "orders_archive",
+                    "columns": [
+                      "id"
+                    ]
+                  },
+                  "index": true
+                }
+              ],
+              "checks": [
+                {
+                  "name": "orders_code_check",
+                  "expression": "code <> ''"
+                },
+                {
+                  "name": "orders_a_check",
+                  "expression": "id > 0"
+                }
+              ]
+            },
+            "customers": {
+              "columns": {
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                }
+              },
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": [],
+              "indexes": [],
+              "foreignKeys": [],
+              "checks": []
+            },
+            "warehouses": {
+              "columns": {
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                }
+              },
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": [],
+              "indexes": [],
+              "foreignKeys": []
+            },
+            "orders_archive": {
+              "columns": {
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
+                  "nullable": false
+                }
+              },
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": [],
+              "indexes": [],
+              "foreignKeys": []
+            }
+          },
+          "valueSet": {
+            "Status": {
+              "kind": "valueSet",
+              "values": [
+                "open",
+                "closed"
+              ]
+            },
+            "Shape": {
+              "kind": "valueSet",
+              "values": [
+                {
+                  "round": false
+                },
+                {}
+              ]
+            }
+          },
+          "valueObject": {
+            "Address": {
+              "fields": {
+                "city": {
+                  "nullable": false,
+                  "type": {
+                    "kind": "scalar",
+                    "codecId": "pg/text@1",
+                    "typeParams": {}
+                  },
+                  "many": false
+                },
+                "contact": {
+                  "nullable": true,
+                  "type": {
+                    "kind": "union",
+                    "members": [
+                      {
+                        "kind": "scalar",
+                        "codecId": "pg/text@1",
+                        "typeParams": {}
+                      },
+                      {
+                        "kind": "scalar",
+                        "codecId": "pg/int4@1"
+                      }
+                    ]
+                  }
+                },
+                "lines": {
+                  "nullable": false,
+                  "type": {
+                    "kind": "scalar",
+                    "codecId": "pg/varchar@1",
+                    "typeParams": {
+                      "length": 80
+                    }
+                  },
+                  "many": {
+                    "elementNullable": false
+                  }
+                }
+              }
+            }
+          },
+          "policy": {
+            "orders_tenant": {
+              "kind": "policy",
+              "name": "orders_tenant",
+              "tableName": "orders",
+              "namespaceId": "public",
+              "operation": "select",
+              "roles": [],
+              "using": "true",
+              "permissive": false
+            }
+          },
+          "custom-block": {
+            "e": {
+              "values": {},
+              "attributes": {
+                "a": false
+              }
+            }
+          },
+          "sequence": {}
+        }
+      }
+    },
+    "types": {
+      "Money": {
+        "kind": "codec-instance",
+        "codecId": "pg/numeric@1",
+        "dataType": "pg/numeric",
+        "typeParams": {
+          "precision": 12,
+          "scale": 2
+        }
+      },
+      "Plain": {
+        "kind": "codec-instance",
+        "codecId": "pg/text@1",
+        "dataType": "pg/text",
+        "typeParams": {}
+      }
+    }
+  },
+  "capabilities": {}
+}

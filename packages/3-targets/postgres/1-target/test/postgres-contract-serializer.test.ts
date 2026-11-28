@@ -379,15 +379,14 @@ describe('role + policy round-trip', () => {
     };
   }
 
-  it('permissive: false survives canonicalization (default-omission must not drop it)', () => {
+  it('keeps permissive: false through canonicalization', () => {
     const serializer = new PostgresContractSerializer();
     const contract = blindCast<Contract, 'test contract shape is structurally a Contract'>(
       makeContractWithRolesAndPolicies(),
     );
     const canonical = canonicalizeContractToObject(contract, {
       serializeContract: (c) => serializer.serializeContract(blindCast<never, 'test'>(c)),
-      shouldPreserveEmpty: serializer.shouldPreserveEmpty,
-      sortStorage: serializer.sortStorage,
+      normalizeStorage: serializer.normalizeStorage,
     });
     const storage = blindCast<
       {

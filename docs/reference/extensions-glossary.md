@@ -14,7 +14,7 @@ A SHA-256 hash of the meaningful storage components (storage layout and related 
 A SHA-256 hash of execution defaults (for example, execution-time defaults or policies encoded under the `execution` section). Used to detect drift in execution semantics without altering the storage hash.
 
 ### ProfileHash
-A SHA-256 hash of the contract's target and profile; [ADR 004](../architecture%20docs/adrs/ADR%20004%20-%20Storage%20Hash%20vs%20Profile%20Hash.md) says what it covers. It does not change the logical meaning of the data contract. `db sign` and the migration runner write it to the marker, and at runtime equality with the marker is enforced. Nothing is negotiated with the adapter: the contract's capabilities are fixed when it is emitted.
+A SHA-256 hash of the contract's `targetFamily`, `target` and `capabilities` section, the capabilities the contract requires ([ADR 332](../architecture%20docs/adrs/ADR%20332%20-%20A%20hash%20covers%20what%20a%20contract%20means%2C%20by%20rules%20that%20do%20not%20change%20within%20a%20major.md)). It does not change the logical meaning of the data contract. `db sign` and the migration runner write it to the marker, and at runtime equality with the marker is enforced. Nothing is negotiated with the adapter: the contract's capabilities are fixed when it is emitted.
 
 ### Capability Key
 A canonical identifier for a database or extension feature (e.g., `sql.lateral`, `sql.returning`, `postgres.distinctOn`). Capability keys are namespaced and follow a stability contract where core capabilities are reserved and extension capabilities are prefixed by pack namespace. Used for feature gating. See the [capabilities reference](./capabilities.md).

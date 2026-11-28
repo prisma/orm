@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "targetFamily": "sql",
   "target": "sqlite",
-  "profileHash": "260b8608d1aacaf1f690779a6cff39a12947c599597c5ba464ca75b9e775df53",
+  "profileHash": "e1a41dfc64a304f5b58ec3d267de00969dbb0440228c8b54a2bacda212dff73a",
   "roots": {
     "User": {
       "model": "User",
@@ -65,7 +65,7 @@
         "id": "__unbound__"
       }
     },
-    "storageHash": "2f4d48d1ac5c69a25921282c44a1fe401cd20f7a2024f6753527321bdc2e6ab1"
+    "storageHash": "820a5b821febe8f31949187fe9e405cdf4943993feea78ae66f410c3377e49f7"
   },
   "capabilities": {
     "sql": {

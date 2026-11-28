@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "targetFamily": "sql",
   "target": "postgres",
-  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "profileHash": "18654d8be351e94d940c57892ee3d3b92824fc145d7dd67c5f57168eea52c619",
   "roots": {
     "event": {
       "model": "Event",
@@ -97,7 +97,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "716cc4e05ded747a1bcd559160bcbe8bae1b20719ac753171cffa802c21d4017"
+    "storageHash": "77ef2df370c15cbac34ccf96c661ed1945e711db1035b1c0018f365ac7397b8e"
   },
   "capabilities": {
     "postgres": {

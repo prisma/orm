@@ -1,11 +1,11 @@
 #!/usr/bin/env -S node
 import { Migration, MigrationCLI } from '@internal/target-postgres/migration';
-import type { Contract as Start } from '../snapshots/62dbb8d4183a5d944c332f5122eb9cea170bb06fa21f7c01fc9093cd074ffbfa/contract';
-import startContract from '../snapshots/62dbb8d4183a5d944c332f5122eb9cea170bb06fa21f7c01fc9093cd074ffbfa/contract.json' with {
+import type { Contract as End } from '../snapshots/708c4cab1879cdc2e8ce64956107bb9ea241e51cdc7393946fc809bfde788ff7/contract';
+import endContract from '../snapshots/708c4cab1879cdc2e8ce64956107bb9ea241e51cdc7393946fc809bfde788ff7/contract.json' with {
   type: 'json',
 };
-import type { Contract as End } from '../snapshots/d4b1506484b9bdc7faf420bf5d126e61a22f193c94cdb9bb0f41eff0402e9d25/contract';
-import endContract from '../snapshots/d4b1506484b9bdc7faf420bf5d126e61a22f193c94cdb9bb0f41eff0402e9d25/contract.json' with {
+import type { Contract as Start } from '../snapshots/bb22c199e73810537004c0d40913c37746e913633f99ff5d3ceba4a064995a95/contract';
+import startContract from '../snapshots/bb22c199e73810537004c0d40913c37746e913633f99ff5d3ceba4a064995a95/contract.json' with {
   type: 'json',
 };
 

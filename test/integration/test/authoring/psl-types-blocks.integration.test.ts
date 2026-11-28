@@ -9,7 +9,7 @@ import {
   postgresContractCapabilities,
   postgresDriver,
 } from '@internal/postgres/config';
-import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonicalization-hooks';
+import { normalizeSqlStorage } from '@internal/sql-contract/normal-form';
 import { sqlEmission } from '@internal/sql-contract-emitter';
 import { prismaContract } from '@internal/sql-contract-psl/provider';
 import postgres from '@internal/target-postgres/control';
@@ -63,12 +63,9 @@ types {
     if (!result.ok) throw new Error(JSON.stringify(result.failure.diagnostics));
 
     await expect(
-      emit(
-        enrichContract(result.value, [postgres, postgresAdapter]),
-        stack,
-        sqlEmission,
-        sqlContractCanonicalizationHooks,
-      ),
+      emit(enrichContract(result.value, [postgres, postgresAdapter]), stack, sqlEmission, {
+        normalizeStorage: normalizeSqlStorage,
+      }),
     ).resolves.not.toThrow();
   });
 

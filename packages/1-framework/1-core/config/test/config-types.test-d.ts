@@ -51,6 +51,7 @@ const postgresTargetDescriptor: ControlTargetDescriptor<'sql', 'postgres'> = {
   contractSerializer: {
     deserializeContract: (json) => json as never,
     serializeContract: (contract) => contract as never,
+    normalizeStorage: (storage) => storage,
   },
   create: () => ({
     familyId: 'sql',
@@ -184,6 +185,7 @@ test('rejects mismatched target in target descriptor', () => {
     contractSerializer: {
       deserializeContract: (json) => json as never,
       serializeContract: (contract) => contract as never,
+      normalizeStorage: (storage) => storage,
     },
     create: () => ({
       familyId: 'sql',

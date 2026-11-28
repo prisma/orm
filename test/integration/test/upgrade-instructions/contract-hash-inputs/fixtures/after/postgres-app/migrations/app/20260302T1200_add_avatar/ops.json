@@ -1,0 +1,34 @@
+[
+  {
+    "id": "column.user.avatar",
+    "label": "Add column \"avatar\" to \"user\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "__unbound__",
+        "objectType": "column",
+        "name": "avatar",
+        "table": "user"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure column \"avatar\" is missing",
+        "sql": "SELECT NOT EXISTS (\n  SELECT 1\n  FROM information_schema.columns\n  WHERE table_schema = current_schema()\n    AND table_name = 'user'\n    AND column_name = 'avatar'\n)"
+      }
+    ],
+    "execute": [
+      {
+        "description": "add column \"avatar\"",
+        "sql": "ALTER TABLE \"user\" ADD COLUMN \"avatar\" text"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify column \"avatar\" exists",
+        "sql": "SELECT EXISTS (\n  SELECT 1\n  FROM information_schema.columns\n  WHERE table_schema = current_schema()\n    AND table_name = 'user'\n    AND column_name = 'avatar'\n)"
+      }
+    ]
+  }
+]

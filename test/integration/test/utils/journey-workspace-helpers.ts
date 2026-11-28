@@ -68,7 +68,7 @@ export function postgresStorageHash(storage: {
 }): string {
   return computeStorageHash({
     ...storage,
-    ...new PostgresContractSerializer().hashCanonicalizationHooks,
+    normalizeStorage: new PostgresContractSerializer().normalizeStorage,
   });
 }
 

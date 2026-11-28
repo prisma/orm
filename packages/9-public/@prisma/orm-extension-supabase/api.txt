@@ -13,11 +13,11 @@
 (not exported) type JwtSecretOption = { readonly jwtSecret: string; readonly jwksUrl?: never; }
 (not exported) type OrmClient<TContract extends Contract<SqlStorage>, TCollections extends CollectionClasses = NoCollectionClasses> = ReturnType<typeof orm<TContract, TCollections>>
 (not exported) type ParameterizedOutputTypeFunctions = ParameterizedOutputTypesForTypeParams
-(not exported) type ProfileHash = ProfileHashBase<'3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2'>
+(not exported) type ProfileHash = ProfileHashBase<'18654d8be351e94d940c57892ee3d3b92824fc145d7dd67c5f57168eea52c619'>
 (not exported) type QueryOperationTypes_2 = QueryOperationTypes<CodecTypes_2>
 (not exported) type StorageColumnInputTypes = ColumnTypesFromStorage<ContractBase['storage'], CodecTypes_2, ParameterizedOutputTypeFunctions, ColumnTypeOverrides, 'input'>
 (not exported) type StorageColumnTypes = ColumnTypesFromStorage<ContractBase['storage'], CodecTypes_2, ParameterizedOutputTypeFunctions, ColumnTypeOverrides, 'output'>
-(not exported) type StorageHash = StorageHashBase<'110ad99e1e466691bdb0a4349a17365561e76ad017f58beb272f4496b05b8e9e'>
+(not exported) type StorageHash = StorageHashBase<'8278c3368c71bbeafa93f945c79d42f738b19480ba8a51472b02dd429a9f09f2'>
 (not exported) type SupabaseBinding = Exclude<PostgresBinding, { readonly kind: 'pgClient'; }>
 (not exported) type SupabaseBindingOptions = Omit<PostgresBindingOptions, 'binding' | 'pg'> & { readonly binding?: SupabaseBinding; readonly pg?: Pool; }
 (not exported) type SupabaseRole = (typeof SupabaseRole)['values'][number]

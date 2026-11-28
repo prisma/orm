@@ -82,6 +82,7 @@ function createSuccessfulConfig(output: string) {
       contractSerializer: {
         serializeContract: (contract: unknown) => contract,
         deserializeContract: (json: unknown) => json,
+        normalizeStorage: (storage: unknown) => storage,
       },
     },
     adapter: {

@@ -170,6 +170,7 @@ export function defaultControlClientFixtures(): ControlClientFixtures {
           contract: { storageHash: contract.storageHash, profileHash: contract.profileHash },
         },
       ],
+      changePolicy: undefined,
     }),
     readMarker: fixtureMarker(),
     readAllMarkers: new Map([[APP_SPACE_ID, fixtureMarker()]]),

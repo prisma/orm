@@ -1,6 +1,7 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import type { ContractSourceProvider } from '@internal/config/config-types';
+import type { NormalizeStorage } from '@internal/contract/hashing';
 import type { Contract, LedgerEntryRecord } from '@internal/contract/types';
 import type {
   ControlFamilyDescriptor,
@@ -1113,7 +1114,7 @@ describe('ControlClient progress emission', () => {
 
   describe('renderContractDts()', () => {
     it(
-      'renders the same declarations emit() produces for the contract',
+      'renders from the contract.json emit() wrote the same declarations emit() wrote',
       async () => {
         const { mockFamily, mockTarget, mockAdapter } = createMockComponents();
         const client = createControlClient({
@@ -1129,15 +1130,17 @@ describe('ControlClient progress emission', () => {
             typesModule: TYPES_MODULE,
           },
         });
-        const rendered = await client.renderContractDts({
-          contract: emittableContract(),
-          typesModule: TYPES_MODULE,
-        });
+        const rendered = emitted.ok
+          ? await client.renderContractDts({
+              contract: JSON.parse(emitted.value.contractJson),
+              typesModule: TYPES_MODULE,
+            })
+          : undefined;
         await client.close();
 
         expect(emitted.ok).toBe(true);
-        expect(rendered.ok).toBe(true);
-        if (emitted.ok && rendered.ok) {
+        expect(rendered?.ok).toBe(true);
+        if (emitted.ok && rendered?.ok) {
           expect(rendered.value.contractDts).toContain('export type Contract');
           expect(rendered.value.contractDts).toBe(emitted.value.contractDts);
         }
@@ -1170,32 +1173,33 @@ describe('ControlClient progress emission', () => {
       timeouts.databaseOperation,
     );
 
-    it("canonicalises with the target's preserve-empty hook before the family re-reads the contract", async () => {
+    it("canonicalises with the target's normalizeStorage hook before the family re-reads the contract", async () => {
       const { mockFamily, mockTarget, mockAdapter, mockFamilyInstance } = createMockComponents();
+      const markNormalized: NormalizeStorage = (storage) => ({
+        ...(storage as Record<string, unknown>),
+        normalized: true,
+      });
       const target = {
         ...mockTarget,
-        contractSerializer: {
-          ...mockTarget.contractSerializer,
-          shouldPreserveEmpty: (path: readonly string[]) => path.at(-1) === 'tables',
-        },
+        contractSerializer: { ...mockTarget.contractSerializer, normalizeStorage: markNormalized },
       } as unknown as typeof mockTarget;
+      const readStorages: unknown[] = [];
       mockFamilyInstance.deserializeContract = (json: unknown) => {
-        const tables = (json as { storage: { namespaces: { app: { tables?: unknown } } } }).storage
-          .namespaces.app.tables;
-        if (tables === undefined) {
-          throw new Error('storage.namespaces.app.tables must be an object (was missing)');
-        }
+        readStorages.push((json as { storage: unknown }).storage);
         return json as Contract;
       };
       const client = createControlClient({ family: mockFamily, target, adapter: mockAdapter });
 
       const rendered = await client.renderContractDts({
-        contract: emittableContract(),
+        contract: emittableContract(markNormalized),
         typesModule: TYPES_MODULE,
       });
       await client.close();
 
-      expect(rendered.ok).toBe(true);
+      expect({ ok: rendered.ok, lastRead: readStorages.at(-1) }).toMatchObject({
+        ok: true,
+        lastRead: { normalized: true },
+      });
     });
 
     it('reports a contract the family rejects as CONTRACT_VALIDATION_FAILED', async () => {

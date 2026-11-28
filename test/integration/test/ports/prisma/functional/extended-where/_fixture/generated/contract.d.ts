@@ -18,11 +18,11 @@ import type {
 } from '@internal/postgres/contract-types';
 
 export type StorageHash =
-  StorageHashBase<'02b3789aabc44dc54d707142152ca0b016ca88b6001c08ee4d17b1e664a33ce0'>;
+  StorageHashBase<'af1fe52f8c8abe77a967e2d62391f424845855872bca0d53393c783e8d8dd1ad'>;
 export type ExecutionHash =
-  ExecutionHashBase<'1cdd7157568725abaf358df639c94171253c7e553b9ba32133162c689fa9d599'>;
+  ExecutionHashBase<'4cc5af8338517c2ab9aa0e32ddc6af03a31af3f45e8274ad9c78a4f5734017e6'>;
 export type ProfileHash =
-  ProfileHashBase<'3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2'>;
+  ProfileHashBase<'18654d8be351e94d940c57892ee3d3b92824fc145d7dd67c5f57168eea52c619'>;
 
 export type CodecTypes = PgTypes;
 export type LaneCodecTypes = CodecTypes;
@@ -466,9 +466,9 @@ type ContractBase = Omit<
               };
               primaryKey: { readonly columns: readonly ['id'] };
               uniques: readonly [
-                { readonly columns: readonly ['userId'] },
-                { readonly columns: readonly ['email'] },
                 { readonly columns: readonly ['alias'] },
+                { readonly columns: readonly ['email'] },
+                { readonly columns: readonly ['userId'] },
               ];
               indexes: readonly [];
               foreignKeys: readonly [
@@ -509,8 +509,8 @@ type ContractBase = Omit<
               };
               primaryKey: { readonly columns: readonly ['id'] };
               uniques: readonly [
-                { readonly columns: readonly ['referralId'] },
                 { readonly columns: readonly ['paymentId'] },
+                { readonly columns: readonly ['referralId'] },
               ];
               indexes: readonly [];
               foreignKeys: readonly [

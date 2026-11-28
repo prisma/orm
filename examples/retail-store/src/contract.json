@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "targetFamily": "mongo",
   "target": "mongo",
-  "profileHash": "251b3ce23f6c9f561892e7c1af9d2cc941a13d64ba1aa7226b90036b09568cc3",
+  "profileHash": "8fe2b3350db5a83e2473520e59e52262982215115e17bb22a76239170eee6e69",
   "roots": {
     "carts": {
       "model": "Cart",
@@ -950,6 +950,17 @@
             "events": {
               "indexes": [
                 {
+                  "expireAfterSeconds": 7776000,
+                  "keys": [
+                    {
+                      "direction": 1,
+                      "field": "timestamp"
+                    }
+                  ],
+                  "kind": "mongo-index",
+                  "name": "timestamp_1"
+                },
+                {
                   "keys": [
                     {
                       "direction": 1,
@@ -962,17 +973,6 @@
                   ],
                   "kind": "mongo-index",
                   "name": "userId_1_timestamp_-1"
-                },
-                {
-                  "expireAfterSeconds": 7776000,
-                  "keys": [
-                    {
-                      "direction": 1,
-                      "field": "timestamp"
-                    }
-                  ],
-                  "kind": "mongo-index",
-                  "name": "timestamp_1"
                 }
               ],
               "kind": "mongo-collection",
@@ -1121,16 +1121,6 @@
                 {
                   "keys": [
                     {
-                      "direction": 1,
-                      "field": "orderId"
-                    }
-                  ],
-                  "kind": "mongo-index",
-                  "name": "orderId_1"
-                },
-                {
-                  "keys": [
-                    {
                       "direction": -1,
                       "field": "issuedAt"
                     }
@@ -1138,6 +1128,16 @@
                   "kind": "mongo-index",
                   "name": "issuedAt_-1",
                   "sparse": true
+                },
+                {
+                  "keys": [
+                    {
+                      "direction": 1,
+                      "field": "orderId"
+                    }
+                  ],
+                  "kind": "mongo-index",
+                  "name": "orderId_1"
                 }
               ],
               "kind": "mongo-collection",
@@ -1398,6 +1398,30 @@
                 {
                   "keys": [
                     {
+                      "direction": 1,
+                      "field": "brand"
+                    },
+                    {
+                      "direction": 1,
+                      "field": "subCategory"
+                    }
+                  ],
+                  "kind": "mongo-index",
+                  "name": "brand_1_subCategory_1"
+                },
+                {
+                  "keys": [
+                    {
+                      "direction": "hashed",
+                      "field": "code"
+                    }
+                  ],
+                  "kind": "mongo-index",
+                  "name": "code_hashed"
+                },
+                {
+                  "keys": [
+                    {
                       "direction": "text",
                       "field": "name"
                     },
@@ -1417,20 +1441,6 @@
                   "keys": [
                     {
                       "direction": 1,
-                      "field": "brand"
-                    },
-                    {
-                      "direction": 1,
-                      "field": "subCategory"
-                    }
-                  ],
-                  "kind": "mongo-index",
-                  "name": "brand_1_subCategory_1"
-                },
-                {
-                  "keys": [
-                    {
-                      "direction": 1,
                       "field": "primaryCategory"
                     },
                     {
@@ -1440,16 +1450,6 @@
                   ],
                   "kind": "mongo-index",
                   "name": "primaryCategory_1_articleType_1"
-                },
-                {
-                  "keys": [
-                    {
-                      "direction": "hashed",
-                      "field": "code"
-                    }
-                  ],
-                  "kind": "mongo-index",
-                  "name": "code_hashed"
                 }
               ],
               "kind": "mongo-collection",
@@ -1859,7 +1859,7 @@
         "kind": "mongo-database"
       }
     },
-    "storageHash": "1c73a5a88943362a9b01f6476e85fddc574031accb9ada12be61e9da24fe0fd8"
+    "storageHash": "ff958ad30f036a7d4c5c3efd677924abd8169aa1516278419a5621204af31c35"
   },
   "capabilities": {},
   "extensions": {},

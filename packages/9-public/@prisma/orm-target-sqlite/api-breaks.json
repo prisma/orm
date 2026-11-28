@@ -37,6 +37,24 @@
   },
   {
     "path": "./target",
+    "export": "SqliteContractSerializer",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "74a949cffeef3544",
+    "reason": "Each family now supplies its normal form of storage as a required `normalizeStorage`, which the framework applies when it writes and when it hashes; the framework's canonicalizer no longer leaves out defaults or empty values by path, so the earlier hooks are gone (ADR 010, ADR 332)."
+  },
+  {
+    "path": "./target",
+    "export": "SqliteContractSerializer",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "74a949cffeef3544",
+    "reason": "Each family now supplies its normal form of storage as a required `normalizeStorage`, which the framework applies when it writes and when it hashes; the framework's canonicalizer no longer leaves out defaults or empty values by path, so the earlier hooks are gone (ADR 010, ADR 332)."
+  },
+  {
+    "path": "./target",
     "export": "SqliteMigrationPlanner",
     "test": "type",
     "kind": "break",
@@ -178,5 +196,23 @@
     "lastRelease": "8.0.0-rc.25",
     "fingerprint": "315e8b6fbd206bf2",
     "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./target/runtime",
+    "export": "SqliteContractSerializer",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "74a949cffeef3544",
+    "reason": "Each family now supplies its normal form of storage as a required `normalizeStorage`, which the framework applies when it writes and when it hashes; the framework's canonicalizer no longer leaves out defaults or empty values by path, so the earlier hooks are gone (ADR 010, ADR 332)."
+  },
+  {
+    "path": "./target/runtime",
+    "export": "SqliteContractSerializer",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "74a949cffeef3544",
+    "reason": "Each family now supplies its normal form of storage as a required `normalizeStorage`, which the framework applies when it writes and when it hashes; the framework's canonicalizer no longer leaves out defaults or empty values by path, so the earlier hooks are gone (ADR 010, ADR 332)."
   }
 ]

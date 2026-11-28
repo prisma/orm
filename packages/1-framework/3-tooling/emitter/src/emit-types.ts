@@ -1,8 +1,4 @@
-import type {
-  PreserveEmptyPredicate,
-  SerializeContract,
-  StorageSort,
-} from '@internal/contract/hashing';
+import type { NormalizeStorage, SerializeContract } from '@internal/contract/hashing';
 import type { Contract } from '@internal/contract/types';
 import type { AnyCodecDescriptor, CodecLookup } from '@internal/framework-components/codec';
 import type { AggregateDescriptor } from '@internal/framework-components/components';
@@ -26,25 +22,11 @@ export interface EmitStackInput {
 export interface EmitOptions {
   readonly outputJsonPath?: string;
   /**
-   * Per-target serializer that converts the in-memory contract into its
-   * canonical on-disk JsonObject shape before the framework's
-   * key-ordering / default-omission walk runs. Threaded from the
-   * descriptor (`descriptor.contractSerializer.serializeContract`) at
-   * the CLI / control-API call site so target classes decide what
-   * appears in the JSON envelope rather than the framework guessing
-   * via property enumerability.
+   * Per-target serializer that converts the in-memory contract into its canonical on-disk JsonObject shape before the framework's key-ordering runs. Threaded from the descriptor (`descriptor.contractSerializer.serializeContract`) at the CLI / control-API call site so target classes decide what appears in the JSON envelope rather than the framework guessing via property enumerability.
    */
   readonly serializeContract: SerializeContract;
-  /**
-   * Optional family-contributed preserve-empty predicate. Threaded from
-   * `descriptor.contractSerializer.shouldPreserveEmpty` when present.
-   */
-  readonly shouldPreserveEmpty?: PreserveEmptyPredicate;
-  /**
-   * Optional family-contributed storage sort hook. Threaded from
-   * `descriptor.contractSerializer.sortStorage` when present.
-   */
-  readonly sortStorage?: StorageSort;
+  /** The family's normal form of `storage`: `descriptor.contractSerializer.normalizeStorage`. */
+  readonly normalizeStorage: NormalizeStorage;
   /** The module the generated `contract.d.ts` imports the framework's and family's contract types from: the config's `contract.typesModule`. */
   readonly typesModule: string;
   /**

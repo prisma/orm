@@ -12,7 +12,7 @@ import {
   postgresContractCapabilities,
   postgresDriver,
 } from '@internal/postgres/config';
-import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonicalization-hooks';
+import { normalizeSqlStorage } from '@internal/sql-contract/normal-form';
 import { sqlEmission } from '@internal/sql-contract-emitter';
 import { prismaContract } from '@internal/sql-contract-psl/provider';
 import postgres from '@internal/target-postgres/control';
@@ -120,7 +120,7 @@ model Document {
           enrichContract(pslResult.value, frameworkComponents),
           stack,
           sqlEmission,
-          sqlContractCanonicalizationHooks,
+          { normalizeStorage: normalizeSqlStorage },
         );
         const emittedContract = JSON.parse(emitted.contractJson) as Record<string, unknown>;
         const columns = (

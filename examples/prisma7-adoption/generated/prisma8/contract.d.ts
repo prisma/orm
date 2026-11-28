@@ -19,11 +19,11 @@ import type {
 } from '@prisma/orm-postgres/contract-types';
 
 export type StorageHash =
-  StorageHashBase<'504f70472e4d50e1f0c634058f6e4ef9966d34c019e7778b58c0f35d2091b1cb'>;
+  StorageHashBase<'535869f81a046c5c9c57919367d118b73711713bc9c9467a8dd434556b1643d8'>;
 export type ExecutionHash =
-  ExecutionHashBase<'9a5883a46a0f8f232598bc988951650620bebba27bb6d25c01513cb5e3fd94b9'>;
+  ExecutionHashBase<'3206424282cb1f018bb335db1e66910dc4044f412360239c64edd0ca06c209c4'>;
 export type ProfileHash =
-  ProfileHashBase<'3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2'>;
+  ProfileHashBase<'18654d8be351e94d940c57892ee3d3b92824fc145d7dd67c5f57168eea52c619'>;
 
 export type CodecTypes = PgTypes & CitextTypes;
 export type LaneCodecTypes = CodecTypes;
@@ -577,11 +577,11 @@ type ContractBase = Omit<
                   readonly source: {
                     readonly namespaceId: 'public' & NamespaceId;
                     readonly tableName: '_PostToTag';
-                    readonly columns: readonly ['A'];
+                    readonly columns: readonly ['B'];
                   };
                   readonly target: {
                     readonly namespaceId: 'public' & NamespaceId;
-                    readonly tableName: 'Post';
+                    readonly tableName: 'Tag';
                     readonly columns: readonly ['id'];
                   };
                 },
@@ -589,11 +589,11 @@ type ContractBase = Omit<
                   readonly source: {
                     readonly namespaceId: 'public' & NamespaceId;
                     readonly tableName: '_PostToTag';
-                    readonly columns: readonly ['B'];
+                    readonly columns: readonly ['A'];
                   };
                   readonly target: {
                     readonly namespaceId: 'public' & NamespaceId;
-                    readonly tableName: 'Tag';
+                    readonly tableName: 'Post';
                     readonly columns: readonly ['id'];
                   };
                 },

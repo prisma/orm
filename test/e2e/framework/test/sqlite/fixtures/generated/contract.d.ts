@@ -16,10 +16,10 @@ import type {
 } from '@prisma/orm-sqlite/contract-types';
 
 export type StorageHash =
-  StorageHashBase<'348cfda3e550656d13ba752be2b612bafe9c9ec57529992a4fcdc49e543ff2f2'>;
+  StorageHashBase<'67d8af75b82b2582b9d1482c875640a8e41af3c6aae1b3733bd49a2dea8b2cb3'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
-  ProfileHashBase<'260b8608d1aacaf1f690779a6cff39a12947c599597c5ba464ca75b9e775df53'>;
+  ProfileHashBase<'e1a41dfc64a304f5b58ec3d267de00969dbb0440228c8b54a2bacda212dff73a'>;
 
 export type CodecTypes = SqliteTypes;
 export type LaneCodecTypes = CodecTypes;

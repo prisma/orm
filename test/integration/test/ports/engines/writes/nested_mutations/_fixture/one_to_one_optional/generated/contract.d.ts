@@ -18,11 +18,11 @@ import type {
 } from '@internal/postgres/contract-types';
 
 export type StorageHash =
-  StorageHashBase<'a1a2e120e3fd84734a76520796f2779a87840c553cbaf2769c38ba420b9907f7'>;
+  StorageHashBase<'0fe6a1a7b75803180a81a6eaac831e0edd5424fb125ac432fa0c56a27bbcf171'>;
 export type ExecutionHash =
-  ExecutionHashBase<'39b21f30379f14fdf8e87e1eed26a63922a468a0216a0dd7c8c621edf450923b'>;
+  ExecutionHashBase<'32eafaae54246f21417d6a9c0e56e2fb5ffb175b6e8e80416401c0998ff86f66'>;
 export type ProfileHash =
-  ProfileHashBase<'3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2'>;
+  ProfileHashBase<'18654d8be351e94d940c57892ee3d3b92824fc145d7dd67c5f57168eea52c619'>;
 
 export type CodecTypes = PgTypes;
 export type LaneCodecTypes = CodecTypes;
@@ -392,8 +392,8 @@ type ContractBase = Omit<
               primaryKey: { readonly columns: readonly ['id'] };
               uniques: readonly [
                 { readonly columns: readonly ['c'] },
-                { readonly columns: readonly ['parentId'] },
                 { readonly columns: readonly ['c_1', 'c_2'] },
+                { readonly columns: readonly ['parentId'] },
               ];
               indexes: readonly [];
               foreignKeys: readonly [

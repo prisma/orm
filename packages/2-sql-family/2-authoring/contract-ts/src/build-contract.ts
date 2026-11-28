@@ -28,7 +28,6 @@ import type {
 } from '@internal/framework-components/codec';
 import { mergeCapabilityMatrices } from '@internal/framework-components/components';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
-import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonicalization-hooks';
 import {
   type CheckExpressionRenderer,
   discriminatorValueSet,
@@ -36,6 +35,7 @@ import {
 import { sqlDataTypeOfCodec } from '@internal/sql-contract/data-type';
 import { validateIndexTypes } from '@internal/sql-contract/index-type-validation';
 import { type IndexTypeRegistry, indexTypeRegistryOf } from '@internal/sql-contract/index-types';
+import { normalizeSqlStorage } from '@internal/sql-contract/normal-form';
 import {
   CheckConstraint,
   type SqlNamespaceInput,
@@ -515,7 +515,7 @@ export function buildSqlContractFromDefinition(
           Record<string, unknown>,
           'the storage envelope is a plain object of namespaces; hashing reads it as a record'
         >(storageWithoutHash),
-        ...sqlContractCanonicalizationHooks,
+        normalizeStorage: normalizeSqlStorage,
       });
   const storage = new SqlStorage({ ...storageWithoutHash, storageHash });
 
@@ -542,14 +542,10 @@ export function buildSqlContractFromDefinition(
       ...Object.values(definition.extensions ?? {}),
     ]),
   );
-  // Internal `profileHash` computation is unchanged from `origin/main`: it
-  // continues to fingerprint the author-declared capability subset. With
-  // `capabilities` removed from the `defineContract` input that subset is
-  // now always empty, so the hash naturally stabilises at `hash({})`.
   const profileHash = computeProfileHash({
     target,
     targetFamily,
-    capabilities: {},
+    capabilities,
   });
 
   const executionWithHash = buildExecutionSection({

@@ -1,0 +1,64 @@
+---
+changes:
+  - id: contract-hash-inputs
+    summary: |
+      Every storage, profile and execution hash takes a new value, once: each now covers only the target, the family and its own section of the contract, and the rules that compute them do not change again within Prisma 8. An extension bundles its contract, migrations, head ref and snapshots with the old hashes, and this release refuses to load it. Run the colocated script on the extension package, rebuild, and publish a new version, with no new migration in it.
+    script: ./scripts/contract-hash-inputs/contract-hash-inputs.ts
+---
+
+# A contract's hashes cover only what the contract means
+
+## `contract-hash-inputs`
+
+A contract has three hashes: the storage hash (`storage.storageHash`), the profile hash (`profileHash`) and the execution hash (`execution.executionHash`). Until this release each covered its own section inside a stand-in contract with a fixed `schemaVersion` and blank fields. Now each covers only the target, the family and its own section. So every hash changes once, and from `8.0.0` the rules that compute them do not change within the major version.
+
+An extension's package carries these hashes: its emitted `src/contract.json` and `contract.d.ts`, `migrations/refs/head.json`, the `from`, `to` and `migrationHash` of each `migration.json` and any storage hash in its `ops.json`, the snapshots under `migrations/snapshots/<hash>/` and the `migration.ts` that import them. When an application loads the extension, this release recomputes the hash of the bundled contract and compares it with the head ref. An extension published for an earlier release therefore fails to load with `MIGRATION.DESCRIPTOR_HEAD_HASH_MISMATCH`, which names the extension.
+
+The script works on files with or without `formatVersion`, and leaves their format as it is, so it does not matter whether you have run the upgrade step for the stored-file format version (`stored-files-format-version`). Commit your work, then run the script from the extension package's root:
+
+```sh
+node <path-to-this-guide>/scripts/contract-hash-inputs/contract-hash-inputs.ts
+```
+
+Node 24 or later runs the TypeScript script directly. It reads and writes files only. It first checks that each stored storage hash, and each snapshot directory's name, is the hash the old rules or the new rules give the contract's content, and that each `migrationHash` matches its migration. If one does not, the file was edited by hand or comes from another release: the script changes no file, names each such file, and exits 1. Otherwise it rewrites every hash listed above, renames each snapshot directory to its new hash, and recomputes each `migrationHash`, keeping every other byte of each file. It prints what it changed; a second run changes nothing. If you ran `prisma contract emit` with this release before the script, and the contract source holds a value the earlier release left out, the emitted contract's storage hash differs from the new hash of the contract the earlier release wrote, which is the one your databases are at. The script gives every snapshot, migration and ref that named the old hash that new hash, whether or not a snapshot of the contract is left. It leaves the emitted contract as it is and lists it with both hashes, on every run; "When the emitted contract gets a different storage hash" below says what to do. Two kinds of snapshot are accepted although a stored hash does not match. An earlier release may have written a snapshot's profile or execution hash by other rules, and no version of the file has the right one; `prisma db sign <contract reference>` copies a snapshot's profile hash into the database marker, so the script gives such a snapshot the hashes its content gives, before any database is signed, and lists it. And the upgrade steps that renamed MongoDB indexes and field storage names rewrote snapshots in place and kept their storage hashes, because markers, the ledger and migrations name a snapshot by its hash; such a MongoDB snapshot, whose directory name and stored hash agree, takes the new hash of its content, every file that names it follows, and the script lists it.
+
+Then build the package and run its tests, and publish a new version. An application must upgrade the extension together with Prisma: an older version of the extension does not load in this release, and this version does not load in an earlier one.
+
+Add no migration in this version: publish any new migration in a version for the release before, and leave this one with the migrations it already had. An application deploys every pending migration, its own and its extensions', before it upgrades, then upgrades Prisma and the extension in a release of its own, whose deploy runs `prisma db sign --no-advance-ref` (with `--force` where the database's change policy permits only migrations) and then `prisma db migrate` against each database that existed before it. The release assumes every database is at the newest contract of the application and of every extension: `db sign` signs the extension's space at the extension's head, whatever contract the application names, so a database must already be there. A migration first shipped in this version would not be in the database yet: signing would then fail, because the schema does not match, or, for a migration that only drops something or moves data, mark the space as up to date so the migration never runs. The application's guide gives these steps.
+
+#### When the emitted contract gets a different storage hash
+
+The earlier release left out almost every `false`, `[]` and `{}` in the storage section when it wrote `contract.json`. This release keeps every such value except the defaults each family names as the same as leaving the value out, such as an index's `unique: false`. The values the earlier release left out and this release keeps include a PostgreSQL index's options, a type's parameters, a value set member that is an object (such as `{ "round": false }`), the entries an extension pack adds to storage, a MongoDB index's partial filter expression, a MongoDB collation's `backwards: false` and `normalization: false`, a MongoDB collection's storage engine and clustered index options, and a MongoDB validator's `additionalItems: false`. For example, an index with the options `{ fastupdate: false }` was written with the options `{}`, and its migration created the index without `fastupdate = false`. This release keeps those values. If the extension's contract source holds one, the script gives the stored contract, without the value, its new hash, and `prisma contract emit` then writes the value back and a different storage hash. To tell, compare the emitted contract's `storageHash` with the new hash the script printed for it under "Storage hashes (old -> new)", or, if you ran `prisma contract emit` before the script, read the list of such contracts that the script prints; `git diff` on `src/contract.json` also shows the value restored. The same happens to a default generator's parameters, but they are in the execution section, not in storage: `prisma contract emit` writes such a value back and gives the contract a new execution hash, which no database or migration checks, so it needs no migration. After `prisma contract emit`, the file may also list a table's foreign keys and a collection's MongoDB indexes in a new order, which changes no hash; only the `storageHash` comparison tells whether the hash changed.
+
+The databases were built without the value, so the extension now needs a migration, and this version cannot carry one, for the reason above. In this version, change the source so that `prisma contract emit` writes the storage hash the script printed again, and publish that. Restore the value in a later version, with a migration that applies it to the database for the first time. `prisma migration plan` cannot plan every such change: for a change to an index's options, such as `fastupdate`, it stops with `MIGRATION.PLANNING_FAILED` and advises `migration new`. Then write the migration by hand. Run `prisma migration new --name <name>`, which writes a migration from the contract the `db` ref names to the emitted contract (where there is no `db` ref, add `--from <hash>` with the hash in `migrations/refs/head.json`, which the script rewrote). In its `migration.ts`, import `rawSql` from `@prisma/orm-postgres/migration`, beside `Migration` and `MigrationCLI`, and return one operation that runs the statement, naming the index as the emitted `contract.json` does:
+
+```ts
+import { Migration, MigrationCLI, rawSql } from '@prisma/orm-postgres/migration';
+
+// in the class that `prisma migration new` wrote:
+  override get operations() {
+    return [
+      rawSql({
+        id: 'index.post_meta_gin_3aa57499.fastupdate',
+        label: 'Set fastupdate = off on index "post_meta_gin_3aa57499"',
+        operationClass: 'widening',
+        target: {
+          id: 'postgres',
+          details: { schema: 'public', objectType: 'index', name: 'post_meta_gin_3aa57499' },
+        },
+        precheck: [],
+        execute: [
+          {
+            description: 'Set fastupdate = off',
+            sql: 'ALTER INDEX "public"."post_meta_gin_3aa57499" SET (fastupdate = off)',
+          },
+        ],
+        postcheck: [],
+      }),
+    ];
+  }
+```
+
+Then run `node <migration directory>/migration.ts`, which writes the migration's `ops.json` and its hash into `migration.json`.
+
+A family or target built outside Prisma can check that its own contracts keep their hashes within the major with `assertContractHashes`, from `@prisma/orm-framework/contract/hashing`; its README shows how.

@@ -47,35 +47,10 @@ export function postgresSourceContext(
   };
 }
 
-/** The extension pack ids a fixture's `composed-extensions.json` lists; none when the fixture has no such file. */
+/** The extension pack ids a fixture's `composed-extensions.json` lists; none when the fixture has no such file. The integration package reads those fixtures with the packs composed. */
 export function composedExtensionsOf(caseDirectory: string): readonly string[] {
   const path = join(caseDirectory, 'composed-extensions.json');
   return existsSync(path) ? (JSON.parse(readFileSync(path, 'utf8')) as string[]) : [];
-}
-
-const extensionPacksDir = join(fixturesDir, '../../../../../3-extensions');
-
-/** The contract the extension pack `packId` publishes, read from the pack's `src/contract.json`. */
-export function packContract(packId: string): Contract {
-  const path = join(extensionPacksDir, packId, 'src/contract.json');
-  return new PostgresContractSerializer().deserializeContract(
-    JSON.parse(readFileSync(path, 'utf8')),
-  );
-}
-
-/** `context` with the extension packs whose ids are `packIds` composed as well, each with the contract it publishes. */
-export function withComposedExtensions(
-  context: ContractSourceContext,
-  packIds: readonly string[],
-): ContractSourceContext {
-  return {
-    ...context,
-    composedExtensions: [...context.composedExtensions, ...packIds],
-    composedExtensionContracts: new Map([
-      ...context.composedExtensionContracts,
-      ...packIds.map((packId): [string, Contract] => [packId, packContract(packId)]),
-    ]),
-  };
 }
 
 /** The Postgres composition with one default function unregistered. */
@@ -182,9 +157,9 @@ export function interpretSchemaTextResult(
     authoringContributions: context.authoringContributions,
     codecLookup: context.codecLookup,
     dataTypes: context.dataTypes,
-    capabilities: context.capabilities,
     composedExtensions: [...context.composedExtensions, ...composedPacks.keys()],
     composedExtensionContracts: new Map([...context.composedExtensionContracts, ...composedPacks]),
+    capabilities: context.capabilities,
   });
 }
 

@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "targetFamily": "sql",
   "target": "postgres",
-  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "profileHash": "18654d8be351e94d940c57892ee3d3b92824fc145d7dd67c5f57168eea52c619",
   "roots": {
     "objective": {
       "model": "Objective",
@@ -369,25 +369,6 @@
               "foreignKeys": [
                 {
                   "index": {
-                    "name": "userToObjective_userId_idx_a489d58a"
-                  },
-                  "source": {
-                    "columns": [
-                      "userId"
-                    ],
-                    "namespaceId": "public",
-                    "tableName": "userToObjective"
-                  },
-                  "target": {
-                    "columns": [
-                      "id"
-                    ],
-                    "namespaceId": "public",
-                    "tableName": "user"
-                  }
-                },
-                {
-                  "index": {
                     "name": "userToObjective_objectiveId_idx_c2dde538"
                   },
                   "source": {
@@ -403,6 +384,25 @@
                     ],
                     "namespaceId": "public",
                     "tableName": "objective"
+                  }
+                },
+                {
+                  "index": {
+                    "name": "userToObjective_userId_idx_a489d58a"
+                  },
+                  "source": {
+                    "columns": [
+                      "userId"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "userToObjective"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "user"
                   }
                 }
               ],
@@ -462,25 +462,6 @@
               "foreignKeys": [
                 {
                   "index": {
-                    "name": "vote_userId_idx_a489d58a"
-                  },
-                  "source": {
-                    "columns": [
-                      "userId"
-                    ],
-                    "namespaceId": "public",
-                    "tableName": "vote"
-                  },
-                  "target": {
-                    "columns": [
-                      "id"
-                    ],
-                    "namespaceId": "public",
-                    "tableName": "user"
-                  }
-                },
-                {
-                  "index": {
                     "name": "vote_objectiveId_followerId_idx_84a17adf"
                   },
                   "source": {
@@ -498,6 +479,25 @@
                     ],
                     "namespaceId": "public",
                     "tableName": "userToObjective"
+                  }
+                },
+                {
+                  "index": {
+                    "name": "vote_userId_idx_a489d58a"
+                  },
+                  "source": {
+                    "columns": [
+                      "userId"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "vote"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "user"
                   }
                 }
               ],
@@ -534,7 +534,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "7db0db759160915cf0fe4caf2ebc33dcbfcfee1bd6e00b25dbca3e7850fcbde8"
+    "storageHash": "0e83aecc0354b6e958f5cdb166890534b070f4f5b2f2f82c123b0a569b825bb3"
   },
   "capabilities": {
     "postgres": {

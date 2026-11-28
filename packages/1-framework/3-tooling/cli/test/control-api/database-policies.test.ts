@@ -24,6 +24,7 @@ function check(args: {
   readonly declared?: { readonly change: readonly ('migrate' | 'reconcile')[] };
   readonly ref?: NamedRef;
   readonly permitPolicyChange: boolean;
+  readonly overrideChangePolicy?: boolean;
   readonly graph?: MigrationGraph;
   readonly markerHash?: string;
 }) {
@@ -44,6 +45,7 @@ function check(args: {
     inForce: args.inForce,
     ref,
     permitPolicyChange: args.permitPolicyChange,
+    overrideChangePolicy: args.overrideChangePolicy ?? false,
     targetHash: TARGET,
     invocation: undefined,
   });
@@ -204,6 +206,34 @@ describe('checkRunPolicies', () => {
       why: 'production declares change: migrate, so db update may not move it.',
       meta: { spaceId: 'app', command: 'db update', change: ['migrate'] },
     });
+  });
+
+  it('permits a run the change policy forbids when told to override it, and writes nothing', () => {
+    const result = check({
+      command: 'db sign',
+      inForce: MIGRATE_ONLY,
+      permitPolicyChange: false,
+      overrideChangePolicy: true,
+    });
+
+    expect(result.ok ? result.value : result.failure).toEqual({
+      inForce: MIGRATE_ONLY,
+      toWrite: undefined,
+    });
+  });
+
+  it('still refuses a ref whose policies differ from those in force when told to override the change policy', () => {
+    const result = check({
+      command: 'db migrate',
+      inForce: MIGRATE_ONLY,
+      declared: { change: ['reconcile', 'migrate'] },
+      permitPolicyChange: false,
+      overrideChangePolicy: true,
+    });
+
+    expect(result.ok ? undefined : result.failure.toEnvelope().code).toBe(
+      'MIGRATION.POLICY_MISMATCH',
+    );
   });
 
   it('writes nothing when the ref declares only settings already in force', () => {

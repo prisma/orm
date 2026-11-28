@@ -10,8 +10,11 @@ import {
 import { ifDefined } from '@internal/utils/defined';
 import type { NextAction } from '@internal/utils/structured-error';
 import { isStructuredError } from '@internal/utils/structured-error';
+import { APP_UPGRADE_GUIDES_URL, UPGRADE_GUIDES_URL } from '@internal/utils/upgrade-guides';
 import { basename, dirname, relative } from 'pathe';
 import type { MigrationGraph } from './graph';
+
+const EXTENSION_UPGRADE_GUIDES_URL = `${UPGRADE_GUIDES_URL}/extension`;
 
 /**
  * Build the canonical "re-emit this package" remediation hint.
@@ -149,7 +152,7 @@ export function errorSpaceHeadRefMissing(spaceId: string): MigrationToolsError {
     `Contract space "${spaceId}" has no head ref; its contract cannot be resolved from the snapshot store without one.`,
     {
       why: `Contract space "${spaceId}" declares no refs/head.json, so there is no hash to resolve its contract against the snapshot store.`,
-      fix: "Re-emit the contract-space migrations and head-ref artifacts (the extension's contract-space build), or restore refs/head.json from version control.",
+      fix: "In an application, run `prisma contract emit` without `--output-path`, which writes each installed extension's refs/head.json again. In an extension package, re-run its contract-space build. Or restore refs/head.json from version control.",
       meta: { spaceId },
     },
   );
@@ -205,8 +208,22 @@ export function errorDescriptorHeadHashMismatch(args: {
     'MIGRATION.DESCRIPTOR_HEAD_HASH_MISMATCH',
     "Extension descriptor's headRef.hash does not match its contractJson",
     {
-      why: `Extension "${extensionId}" publishes a \`contractSpace\` whose \`headRef.hash\` (${headRefHash}) does not match the canonical hash recomputed from \`contractSpace.contractJson\` (${recomputedHash}). This means the extension descriptor was published with stale \`headRef.hash\` — typically because the contract was bumped without rerunning the extension's emit pipeline.`,
-      fix: 'Re-run the extension authoring pipeline so `contractJson.storage.storageHash` and `headRef.hash` agree, then republish the extension. If you are the extension author and you intentionally bumped `contractJson`, recompute and update `headRef.hash` (and refresh any on-disk migration metadata that derives from it).',
+      why: `The extension "${extensionId}" names its contract by the hash ${headRefHash}, but this release of Prisma computes ${recomputedHash} for it. The extension was most likely built for an earlier release of Prisma 8, whose hash rules differ; otherwise its contract changed without its build running again.`,
+      fix: `In an application, upgrade "${extensionId}" to its version for this release of Prisma, as the app upgrade instructions say (${APP_UPGRADE_GUIDES_URL}); if there is none, ask its author to publish one. Its author follows the extension upgrade instructions of each release since the one it was built for, which rewrite every contract hash (${EXTENSION_UPGRADE_GUIDES_URL}), or, if it was built for this release, runs its build again, and publishes a new version.`,
+      nextActions: [
+        {
+          kind: 'open-url',
+          label:
+            'In an application, upgrade the extension to its version for this release, as the app upgrade instructions say',
+          url: APP_UPGRADE_GUIDES_URL,
+        },
+        {
+          kind: 'open-url',
+          label:
+            "If you are the extension's author, follow the extension upgrade instructions, which rewrite every contract hash, and publish a new version",
+          url: EXTENSION_UPGRADE_GUIDES_URL,
+        },
+      ],
       meta: { extensionId, recomputedHash, headRefHash },
     },
   );
@@ -607,7 +624,7 @@ export function errorContractSnapshotMissing(
     'Contract snapshot is missing',
     {
       why: `Expected a contract snapshot for ${storageHash} at "${expectedPath}" but the file does not exist.`,
-      fix: `Re-emit the contract snapshot, or restore migrations/snapshots/ from version control. For an app-space migration planned to the emitted contract, emit that contract again and re-run the \`migration plan\` that wrote the migration ending at ${storageHash}, with its \`--from\` and no \`--to\`, then delete the new migration directory it writes, which repeats the existing migration; the snapshot stays. A plan with \`--to\` reads the snapshot, so it cannot re-emit it. For an extension space, re-run the extension's contract-space build.`,
+      fix: `Re-emit the contract snapshot, or restore migrations/snapshots/ from version control. For an app-space migration planned to the emitted contract, emit that contract again and re-run the \`migration plan\` that wrote the migration ending at ${storageHash}, with its \`--from\` and no \`--to\`, then delete the new migration directory it writes, which repeats the existing migration; the snapshot stays. A plan with \`--to\` reads the snapshot, so it cannot re-emit it. For an extension's snapshot in an application, run \`prisma contract emit\` without \`--output-path\`, which writes the head snapshot of each installed extension again; a snapshot of an earlier version of the extension can only be restored from version control. In an extension package, re-run its contract-space build.`,
       nextActions: [
         {
           kind: 'user-choice',
@@ -616,7 +633,8 @@ export function errorContractSnapshotMissing(
         },
         {
           kind: 'user-choice',
-          label: "For an extension space, re-run that extension's contract-space build instead",
+          label:
+            "For an extension's snapshot in an application, run prisma contract emit without --output-path, which writes the head snapshot of each installed extension again. In an extension package, re-run its contract-space build instead",
         },
         {
           kind: 'user-choice',
@@ -644,6 +662,9 @@ export function errorContractSnapshotHashMismatch(
   );
 }
 
+const SNAPSHOT_REWRITE_RECIPE =
+  'If it is the snapshot of the emitted contract or the head snapshot of an extension, you can instead delete its folder and write it again, since a command writes a snapshot only where none exists. For the emitted contract, run `{bin} db migrate --advance-ref db` when a migration ends at it, which first applies any pending migrations to the configured database, or `{bin} db sign` when none does, which first checks that the configured database matches contract.json and records that in the database; each then moves the db ref to contract.json and writes the snapshot from it. For an extension, run `{bin} contract emit`, which also emits contract.json from the contract source.';
+
 export function errorContractSnapshotContentMismatch(args: {
   readonly storageHash: string;
   readonly computedHash: string;
@@ -654,8 +675,18 @@ export function errorContractSnapshotContentMismatch(args: {
     'MIGRATION.CONTRACT_SNAPSHOT_CONTENT_MISMATCH',
     'Contract snapshot content does not match its hash',
     {
-      why: `The contract snapshot at "${jsonPath}" is addressed by storage hash ${storageHash}, but its content recomputes to ${computedHash}. The file has been edited (or corrupted) since it was written.`,
-      fix: 'Restore the snapshot from version control. If it is the snapshot of the emitted contract or the head snapshot of an extension, you can instead delete its folder and write it again, since a command writes a snapshot only where none exists. For the emitted contract, run `{bin} db migrate --advance-ref db` when a migration ends at it, which first applies any pending migrations to the configured database, or `{bin} db sign` when none does, which first checks that the configured database matches contract.json and records that in the database; each then moves the db ref to contract.json and writes the snapshot from it. For an extension, run `{bin} contract emit`, which also emits contract.json from the contract source.',
+      why: `The contract snapshot at "${jsonPath}" is addressed by storage hash ${storageHash}, but its content recomputes to ${computedHash}. Either the project was upgraded from an earlier release of Prisma 8 without the upgrade step that rewrites every contract hash, or the file has been edited (or corrupted) since it was written.`,
+      fix: `If the project was upgraded from an earlier release of Prisma 8, follow the app upgrade instructions of each release since, which rewrite every contract hash: ${APP_UPGRADE_GUIDES_URL}. Otherwise restore the snapshot from version control. ${SNAPSHOT_REWRITE_RECIPE}`,
+      nextActions: [
+        {
+          kind: 'open-url',
+          label:
+            'If the project was upgraded from an earlier release of Prisma 8, follow the app upgrade instructions, which rewrite every contract hash',
+          url: APP_UPGRADE_GUIDES_URL,
+        },
+        { kind: 'user-choice', label: 'Otherwise restore the snapshot from version control' },
+        { kind: 'user-choice', label: SNAPSHOT_REWRITE_RECIPE },
+      ],
       meta: { storageHash, computedHash, jsonPath },
     },
   );

@@ -1,5 +1,5 @@
 /**
- * The upgrade of a project with migrations, applied by the previous release, past the removal of `noCheck`. The project is the remove-nocheck fixture's "before" tree. The database holds what the previous release left after `db migrate`: the tables, a marker with the old storage hash, and one ledger row and one stored contract per migration, under the old migration and storage hashes. The ledger rows have the shape a run of the previous release's CLI wrote. The test then follows the app upgrade fragment: the script, the script of the pending `stored-files-format-version` guide, `prisma db sign --db "$DATABASE_URL"`, the source rewrite to `T?[]`, and `prisma contract emit`.
+ * The upgrade of a project with migrations, applied by the previous release, past the removal of `noCheck`. The project is the remove-nocheck fixture's "before" tree. The database holds what the previous release left after `db migrate`: the tables, a marker with the old storage hash, and one ledger row and one stored contract per migration, under the old migration and storage hashes. The ledger rows have the shape a run of the previous release's CLI wrote. The test then follows the app upgrade fragment: the script, the scripts of the pending `stored-files-format-version` and `contract-hash-inputs` guides, `prisma db sign --db "$DATABASE_URL"`, the source rewrite to `T?[]`, `prisma contract emit`, and the `db sign` the hash guide runs after that emit, since the emitted capability list, and so the profile hash, can differ from the one the script wrote.
  *
  * It records what the upgrade leaves: `db migrate` applies nothing and `db verify` passes, but `migration status` no longer marks the two migrations applied before the upgrade as applied, because the script gave them new migration hashes and the ledger keeps the old ones.
  */
@@ -9,6 +9,7 @@ import { withClient } from '@repo/test-utils';
 import { join } from 'pathe';
 import stripAnsi from 'strip-ansi';
 import { describe, expect, it } from 'vitest';
+import { runScript as runContractHashInputsScript } from '../upgrade-instructions/contract-hash-inputs/test-helpers';
 import {
   appScript,
   fixtureTree,
@@ -130,6 +131,12 @@ withTempDir(({ createTempDir }) => {
           stderr: '',
         });
 
+        const hashInputs = runContractHashInputsScript(ctx.testDir);
+        expect({ status: hashInputs.status, stderr: hashInputs.stderr }).toEqual({
+          status: 0,
+          stderr: '',
+        });
+
         const sign = await runDbSign(ctx, ['--db', db.connectionString]);
         expect(sign.exitCode, `db sign\n${output(sign)}`).toBe(0);
 
@@ -140,6 +147,9 @@ withTempDir(({ createTempDir }) => {
         writeFileSync(join(ctx.testDir, 'contract.prisma'), rewritten);
         const emit = await runContractEmit(ctx);
         expect(emit.exitCode, `contract emit\n${output(emit)}`).toBe(0);
+
+        const signEmitted = await runDbSign(ctx, ['--db', db.connectionString]);
+        expect(signEmitted.exitCode, `db sign after contract emit\n${output(signEmitted)}`).toBe(0);
 
         const migrate = await runMigrate(ctx, ['--json']);
         expect(migrate.exitCode, `db migrate\n${output(migrate)}`).toBe(0);

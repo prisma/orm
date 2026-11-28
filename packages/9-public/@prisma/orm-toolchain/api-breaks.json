@@ -23,8 +23,8 @@
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "d6754f1030f73806",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). A type it uses also changes in prisma/orm#31200: an unreadable-contract integrity violation (`contractUnreadable`) carries `hash`, the head whose snapshot could not be read, and the options of `db update` gain the optional `onUnreadableOrigin`."
+    "fingerprint": "4ac299bdaa18cc65",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). A type it uses also changes in prisma/orm#31200: an unreadable-contract integrity violation (`contractUnreadable`) carries `hash`, the head whose snapshot could not be read, and the options of `db update` gain the optional `onUnreadableOrigin`. `db sign` also takes `force`, which signs even when the database's change policy permits only migrations, and its success result gains `changePolicy`, the change policy the database records."
   },
   {
     "path": "./cli/control-api",
@@ -68,8 +68,8 @@
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "c041cbf04efe5073",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+    "fingerprint": "8515e857c8975b0c",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). `db sign` also takes `force`, which signs even when the database's change policy permits only migrations."
   },
   {
     "path": "./cli/control-api",
@@ -77,8 +77,8 @@
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "36539fafdaa1e117",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+    "fingerprint": "ab3f837736275032",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). `db sign`'s success result also gains `changePolicy`, the change policy the database records."
   },
   {
     "path": "./cli/control-api",
@@ -113,8 +113,8 @@
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "79411bd0c14d8953",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). A type it uses also changes in prisma/orm#31200: an unreadable-contract integrity violation (`contractUnreadable`) carries `hash`, the head whose snapshot could not be read, and the options of `db update` gain the optional `onUnreadableOrigin`."
+    "fingerprint": "e31a19abd22d79d2",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). A type it uses also changes in prisma/orm#31200: an unreadable-contract integrity violation (`contractUnreadable`) carries `hash`, the head whose snapshot could not be read, and the options of `db update` gain the optional `onUnreadableOrigin`. Each family now supplies its normal form of storage as a required `normalizeStorage`, which the framework applies when it writes and when it hashes; the framework's canonicalizer no longer leaves out defaults or empty values by path, so the earlier hooks are gone (ADR 010, ADR 332)."
   },
   {
     "path": "./cli/control-api",
@@ -149,8 +149,8 @@
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "a247e95f01962d70",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). A type it uses also changes in prisma/orm#31200: an unreadable-contract integrity violation (`contractUnreadable`) carries `hash`, the head whose snapshot could not be read, and the options of `db update` gain the optional `onUnreadableOrigin`."
+    "fingerprint": "68f9277e0c83d206",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). A type it uses also changes in prisma/orm#31200: an unreadable-contract integrity violation (`contractUnreadable`) carries `hash`, the head whose snapshot could not be read, and the options of `db update` gain the optional `onUnreadableOrigin`. Each family now supplies its normal form of storage as a required `normalizeStorage`, which the framework applies when it writes and when it hashes; the framework's canonicalizer no longer leaves out defaults or empty values by path, so the earlier hooks are gone (ADR 010, ADR 332)."
   },
   {
     "path": "./cli/control-api",
@@ -167,8 +167,8 @@
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "403d69e9237374b0",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+    "fingerprint": "c63fceeee2b9e4a7",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). Each family now supplies its normal form of storage as a required `normalizeStorage`, which the framework applies when it writes and when it hashes; the framework's canonicalizer no longer leaves out defaults or empty values by path, so the earlier hooks are gone (ADR 010, ADR 332)."
   },
   {
     "path": "./cli/control-api",
@@ -185,8 +185,8 @@
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "cc0001b910376223",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+    "fingerprint": "36776d35a5b3c8b5",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). `db sign` also takes `force`, which signs even when the database's change policy permits only migrations, and its success result gains `changePolicy`, the change policy the database records."
   },
   {
     "path": "./cli/control-api",
@@ -212,8 +212,8 @@
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "4cfcbc79836014c3",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). A type it uses also changes in prisma/orm#31200: an unreadable-contract integrity violation (`contractUnreadable`) carries `hash`, the head whose snapshot could not be read, and the options of `db update` gain the optional `onUnreadableOrigin`."
+    "fingerprint": "9245b7912b398545",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). A type it uses also changes in prisma/orm#31200: an unreadable-contract integrity violation (`contractUnreadable`) carries `hash`, the head whose snapshot could not be read, and the options of `db update` gain the optional `onUnreadableOrigin`. Each family now supplies its normal form of storage as a required `normalizeStorage`, which the framework applies when it writes and when it hashes; the framework's canonicalizer no longer leaves out defaults or empty values by path, so the earlier hooks are gone (ADR 010, ADR 332)."
   },
   {
     "path": "./cli/control-api",
@@ -221,8 +221,8 @@
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "b27047c99b6a8f93",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). A type it uses also changes in prisma/orm#31200: an unreadable-contract integrity violation (`contractUnreadable`) carries `hash`, the head whose snapshot could not be read, and the options of `db update` gain the optional `onUnreadableOrigin`."
+    "fingerprint": "ac683812c6e70a52",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). A type it uses also changes in prisma/orm#31200: an unreadable-contract integrity violation (`contractUnreadable`) carries `hash`, the head whose snapshot could not be read, and the options of `db update` gain the optional `onUnreadableOrigin`. Each family now supplies its normal form of storage as a required `normalizeStorage`, which the framework applies when it writes and when it hashes; the framework's canonicalizer no longer leaves out defaults or empty values by path, so the earlier hooks are gone (ADR 010, ADR 332)."
   },
   {
     "path": "./cli/control-api",
@@ -230,8 +230,8 @@
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "b9e774802623329c",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). A type it uses also changes in prisma/orm#31200: an unreadable-contract integrity violation (`contractUnreadable`) carries `hash`, the head whose snapshot could not be read, and the options of `db update` gain the optional `onUnreadableOrigin`."
+    "fingerprint": "2584aa72530ed8cc",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). A type it uses also changes in prisma/orm#31200: an unreadable-contract integrity violation (`contractUnreadable`) carries `hash`, the head whose snapshot could not be read, and the options of `db update` gain the optional `onUnreadableOrigin`. Each family now supplies its normal form of storage as a required `normalizeStorage`, which the framework applies when it writes and when it hashes; the framework's canonicalizer no longer leaves out defaults or empty values by path, so the earlier hooks are gone (ADR 010, ADR 332)."
   },
   {
     "path": "./cli/control-api",
@@ -302,8 +302,8 @@
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "2b655c5bcf3d5ca9",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+    "fingerprint": "484168b13f272d34",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). `db sign`'s success result also gains `changePolicy`, the change policy the database records."
   },
   {
     "path": "./cli/control-api/testing",
@@ -311,8 +311,8 @@
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "29e56cdf70b6818f",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). A type it uses also changes in prisma/orm#31200: an unreadable-contract integrity violation (`contractUnreadable`) carries `hash`, the head whose snapshot could not be read, and the options of `db update` gain the optional `onUnreadableOrigin`."
+    "fingerprint": "11ada8d07e8f8663",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). A type it uses also changes in prisma/orm#31200: an unreadable-contract integrity violation (`contractUnreadable`) carries `hash`, the head whose snapshot could not be read, and the options of `db update` gain the optional `onUnreadableOrigin`. `db sign` also takes `force`, which signs even when the database's change policy permits only migrations, and its success result gains `changePolicy`, the change policy the database records."
   },
   {
     "path": "./cli/control-api/testing",
@@ -320,8 +320,8 @@
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "6f69a4534c72011d",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). A type it uses also changes in prisma/orm#31200: an unreadable-contract integrity violation (`contractUnreadable`) carries `hash`, the head whose snapshot could not be read, and the options of `db update` gain the optional `onUnreadableOrigin`."
+    "fingerprint": "268ad9c78f2402e9",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). A type it uses also changes in prisma/orm#31200: an unreadable-contract integrity violation (`contractUnreadable`) carries `hash`, the head whose snapshot could not be read, and the options of `db update` gain the optional `onUnreadableOrigin`. `db sign`'s success result also gains `changePolicy`, the change policy the database records, so the fixture's result must give it."
   },
   {
     "path": "./cli/control-api/testing",
@@ -329,8 +329,8 @@
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "5d6406e3aec65245",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+    "fingerprint": "a973e1c100b48c35",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). `db sign`'s success result also gains `changePolicy`, the change policy the database records."
   },
   {
     "path": "./cli/migration-cli",
@@ -423,13 +423,22 @@
     "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
   },
   {
+    "path": "./emitter",
+    "export": "emit",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "2d6d41c69d6e66c7",
+    "reason": "Each family now supplies its normal form of storage as a required `normalizeStorage`, which the framework applies when it writes and when it hashes; the framework's canonicalizer no longer leaves out defaults or empty values by path, so the earlier hooks are gone (ADR 010, ADR 332)."
+  },
+  {
     "path": "./migration-tools",
     "export": "DescriptorSelfConsistencyInputs",
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "cdf641fa74af1df7",
-    "reason": "assertDescriptorSelfConsistency takes the whole contract.json, so it can read the file’s format version before anything else in it (prisma/orm#31200)."
+    "fingerprint": "83ae0db0f4dc3b95",
+    "reason": "assertDescriptorSelfConsistency takes the whole contract.json, so it can read the file’s format version before anything else in it (prisma/orm#31200). It also takes the family's normal form of storage as a required `normalizeStorage` in place of the optional hash hooks (ADR 010, ADR 332)."
   },
   {
     "path": "./migration-tools",
@@ -496,6 +505,15 @@
   },
   {
     "path": "./migration-tools",
+    "export": "SnapshotCanonicalizationHooks",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "e3b0c44298fc1c14",
+    "reason": "Removed with the path patterns the framework used to leave out empty values: each family's `normalizeStorage` now names the defaults it leaves out, and `StorageSort` is renamed `NormalizeStorage` (ADR 010)."
+  },
+  {
+    "path": "./migration-tools",
     "export": "VerifierInput",
     "test": "type",
     "kind": "break",
@@ -527,8 +545,8 @@
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "7e6931d67e1a255b",
-    "reason": "assertDescriptorSelfConsistency takes the whole contract.json, so it can read the file’s format version before anything else in it (prisma/orm#31200)."
+    "fingerprint": "637f7323f95c93a3",
+    "reason": "assertDescriptorSelfConsistency takes the whole contract.json, so it can read the file’s format version before anything else in it (prisma/orm#31200). Each family now supplies its normal form of storage as a required `normalizeStorage`, which the framework applies when it writes and when it hashes; the framework's canonicalizer no longer leaves out defaults or empty values by path, so the earlier hooks are gone (ADR 010, ADR 332)."
   },
   {
     "path": "./migration-tools",
@@ -550,6 +568,15 @@
   },
   {
     "path": "./migration-tools",
+    "export": "createSnapshotContentVerifier",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "a17a4695e7849e4b",
+    "reason": "Each family now supplies its normal form of storage as a required `normalizeStorage`, which the framework applies when it writes and when it hashes; the framework's canonicalizer no longer leaves out defaults or empty values by path, so the earlier hooks are gone (ADR 010, ADR 332)."
+  },
+  {
+    "path": "./migration-tools",
     "export": "planMigration",
     "test": "value",
     "kind": "break",
@@ -630,6 +657,24 @@
     "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). A type it uses also changes in prisma/orm#31200: an unreadable-contract integrity violation (`contractUnreadable`) carries `hash`, the head whose snapshot could not be read, and the options of `db update` gain the optional `onUnreadableOrigin`."
   },
   {
+    "path": "./migration-tools/contract-snapshot-store",
+    "export": "SnapshotCanonicalizationHooks",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "e3b0c44298fc1c14",
+    "reason": "Removed with the path patterns the framework used to leave out empty values: each family's `normalizeStorage` now names the defaults it leaves out, and `StorageSort` is renamed `NormalizeStorage` (ADR 010)."
+  },
+  {
+    "path": "./migration-tools/contract-snapshot-store",
+    "export": "createSnapshotContentVerifier",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "a17a4695e7849e4b",
+    "reason": "Each family now supplies its normal form of storage as a required `normalizeStorage`, which the framework applies when it writes and when it hashes; the framework's canonicalizer no longer leaves out defaults or empty values by path, so the earlier hooks are gone (ADR 010, ADR 332)."
+  },
+  {
     "path": "./migration-tools/migration",
     "export": "Migration",
     "test": "constructor",
@@ -689,8 +734,8 @@
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "cdf641fa74af1df7",
-    "reason": "assertDescriptorSelfConsistency takes the whole contract.json, so it can read the file’s format version before anything else in it (prisma/orm#31200)."
+    "fingerprint": "83ae0db0f4dc3b95",
+    "reason": "assertDescriptorSelfConsistency takes the whole contract.json, so it can read the file’s format version before anything else in it (prisma/orm#31200). It also takes the family's normal form of storage as a required `normalizeStorage` in place of the optional hash hooks (ADR 010, ADR 332)."
   },
   {
     "path": "./migration-tools/spaces",
@@ -698,8 +743,8 @@
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "7e6931d67e1a255b",
-    "reason": "assertDescriptorSelfConsistency takes the whole contract.json, so it can read the file’s format version before anything else in it (prisma/orm#31200)."
+    "fingerprint": "637f7323f95c93a3",
+    "reason": "assertDescriptorSelfConsistency takes the whole contract.json, so it can read the file’s format version before anything else in it (prisma/orm#31200). Each family now supplies its normal form of storage as a required `normalizeStorage`, which the framework applies when it writes and when it hashes; the framework's canonicalizer no longer leaves out defaults or empty values by path, so the earlier hooks are gone (ADR 010, ADR 332)."
   },
   {
     "path": "./migration-tools/spaces",

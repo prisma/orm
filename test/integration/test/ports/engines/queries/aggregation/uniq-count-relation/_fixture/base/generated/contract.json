@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "targetFamily": "sql",
   "target": "postgres",
-  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "profileHash": "18654d8be351e94d940c57892ee3d3b92824fc145d7dd67c5f57168eea52c619",
   "roots": {
     "category": {
       "model": "Category",
@@ -377,26 +377,6 @@
               "foreignKeys": [
                 {
                   "index": {
-                    "name": "postCategory_postId_idx_a7a72715"
-                  },
-                  "onDelete": "cascade",
-                  "source": {
-                    "columns": [
-                      "postId"
-                    ],
-                    "namespaceId": "public",
-                    "tableName": "postCategory"
-                  },
-                  "target": {
-                    "columns": [
-                      "id"
-                    ],
-                    "namespaceId": "public",
-                    "tableName": "post"
-                  }
-                },
-                {
-                  "index": {
                     "name": "postCategory_categoryId_idx_15c304f2"
                   },
                   "onDelete": "cascade",
@@ -413,6 +393,26 @@
                     ],
                     "namespaceId": "public",
                     "tableName": "category"
+                  }
+                },
+                {
+                  "index": {
+                    "name": "postCategory_postId_idx_a7a72715"
+                  },
+                  "onDelete": "cascade",
+                  "source": {
+                    "columns": [
+                      "postId"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "postCategory"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "post"
                   }
                 }
               ],
@@ -448,7 +448,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "71a5e0c028d667ca33af317bb1556e495d2283015a1670800588d30c025d89e4"
+    "storageHash": "738ad27b9e45076b9ecb19dea30d23f7ce4fe078e7519eb6a15633ac5bcf46ef"
   },
   "capabilities": {
     "postgres": {

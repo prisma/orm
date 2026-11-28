@@ -44,7 +44,6 @@
   ],
   "exports": {
     "./authored-check-naming": "./dist/authored-check-naming.mjs",
-    "./canonicalization-hooks": "./dist/canonicalization-hooks.mjs",
     "./capability-messages": "./dist/capability-messages.mjs",
     "./check-expressions": "./dist/check-expressions.mjs",
     "./codec-json-type": "./dist/codec-json-type.mjs",
@@ -59,6 +58,7 @@
     "./index-naming": "./dist/index-naming.mjs",
     "./index-type-validation": "./dist/index-type-validation.mjs",
     "./index-types": "./dist/index-types.mjs",
+    "./normal-form": "./dist/normal-form.mjs",
     "./referential-action-sql": "./dist/referential-action-sql.mjs",
     "./resolve-storage-table": "./dist/resolve-storage-table.mjs",
     "./sql-expression": "./dist/sql-expression.mjs",

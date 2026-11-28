@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "targetFamily": "mongo",
   "target": "mongo",
-  "profileHash": "251b3ce23f6c9f561892e7c1af9d2cc941a13d64ba1aa7226b90036b09568cc3",
+  "profileHash": "8fe2b3350db5a83e2473520e59e52262982215115e17bb22a76239170eee6e69",
   "roots": {
     "tasks": {
       "model": "Task",
@@ -167,11 +167,14 @@
                   "keys": [
                     {
                       "direction": 1,
-                      "field": "title"
+                      "field": "priority"
                     }
                   ],
                   "kind": "mongo-index",
-                  "name": "title_1"
+                  "name": "priority_1",
+                  "partialFilterExpression": {
+                    "type": "feature"
+                  }
                 },
                 {
                   "keys": [
@@ -190,14 +193,11 @@
                   "keys": [
                     {
                       "direction": 1,
-                      "field": "priority"
+                      "field": "title"
                     }
                   ],
                   "kind": "mongo-index",
-                  "name": "priority_1",
-                  "partialFilterExpression": {
-                    "type": "feature"
-                  }
+                  "name": "title_1"
                 }
               ],
               "kind": "mongo-collection",
@@ -296,7 +296,7 @@
         "kind": "mongo-database"
       }
     },
-    "storageHash": "1ca867843c1e7f1fda10fbab2c6fbfe8340ba6534fa4a58ed013c9057958c4a8"
+    "storageHash": "28cb38277eabba63608d813d11c6da8060ff18cacfde91cbb500d3db9991911b"
   },
   "capabilities": {},
   "extensions": {},

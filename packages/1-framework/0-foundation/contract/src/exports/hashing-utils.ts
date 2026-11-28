@@ -1,10 +1,4 @@
 export {
-  createPreserveEmptyPredicate,
-  matchesPathPattern,
-  type PathPattern,
-  type PathSegment as PreserveEmptyPathSegment,
-} from '../canonicalization-path-match';
-export {
   compareByNameProperty,
   compareCodeUnits,
   createStorageSort,

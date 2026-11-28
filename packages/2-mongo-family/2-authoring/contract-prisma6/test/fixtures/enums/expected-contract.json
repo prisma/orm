@@ -19,8 +19,7 @@
                   "kind": "scalar",
                   "codecId": "mongo/objectId@1"
                 },
-                "nullable": false,
-                "many": false
+                "nullable": false
               },
               "status": {
                 "type": {
@@ -28,7 +27,6 @@
                   "codecId": "mongo/string@1"
                 },
                 "nullable": false,
-                "many": false,
                 "valueSet": {
                   "plane": "domain",
                   "entityKind": "enum",
@@ -42,7 +40,6 @@
                   "codecId": "mongo/string@1"
                 },
                 "nullable": true,
-                "many": false,
                 "valueSet": {
                   "plane": "domain",
                   "entityKind": "enum",
@@ -101,10 +98,10 @@
   },
   "capabilities": {},
   "extensions": {},
-  "profileHash": "251b3ce23f6c9f561892e7c1af9d2cc941a13d64ba1aa7226b90036b09568cc3",
+  "profileHash": "8fe2b3350db5a83e2473520e59e52262982215115e17bb22a76239170eee6e69",
   "meta": {},
   "storage": {
-    "storageHash": "fbde9cfe315fd62f43a328d271d6c6648efab4c3a0020aceb44bb7267cb6614f",
+    "storageHash": "356c348ed14fe72b1792add8751feadfe45196436ee8f11006ee746e1703ebbc",
     "namespaces": {
       "__unbound__": {
         "id": "__unbound__",

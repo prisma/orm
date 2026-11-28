@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "targetFamily": "sql",
   "target": "postgres",
-  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "profileHash": "18654d8be351e94d940c57892ee3d3b92824fc145d7dd67c5f57168eea52c619",
   "roots": {
     "Container": {
       "model": "Container",
@@ -380,44 +380,6 @@
               "foreignKeys": [
                 {
                   "index": {
-                    "name": "Record_locationId_idx_7aae3038"
-                  },
-                  "source": {
-                    "columns": [
-                      "locationId"
-                    ],
-                    "namespaceId": "public",
-                    "tableName": "Record"
-                  },
-                  "target": {
-                    "columns": [
-                      "id"
-                    ],
-                    "namespaceId": "public",
-                    "tableName": "RecordLocation"
-                  }
-                },
-                {
-                  "index": {
-                    "name": "Record_recordTypeId_idx_d626c676"
-                  },
-                  "source": {
-                    "columns": [
-                      "recordTypeId"
-                    ],
-                    "namespaceId": "public",
-                    "tableName": "Record"
-                  },
-                  "target": {
-                    "columns": [
-                      "id"
-                    ],
-                    "namespaceId": "public",
-                    "tableName": "RecordType"
-                  }
-                },
-                {
-                  "index": {
                     "name": "Record_configId_idx_4b01acb6"
                   },
                   "source": {
@@ -452,6 +414,44 @@
                     ],
                     "namespaceId": "public",
                     "tableName": "Container"
+                  }
+                },
+                {
+                  "index": {
+                    "name": "Record_locationId_idx_7aae3038"
+                  },
+                  "source": {
+                    "columns": [
+                      "locationId"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "Record"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "RecordLocation"
+                  }
+                },
+                {
+                  "index": {
+                    "name": "Record_recordTypeId_idx_d626c676"
+                  },
+                  "source": {
+                    "columns": [
+                      "recordTypeId"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "Record"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "RecordType"
                   }
                 }
               ],
@@ -575,7 +575,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "bf48cbef1ae21aa7cf42f8e790c1184708710c0f5ba192c4292efe315d7a4f06"
+    "storageHash": "97ec4a85b4971b84bb537cd7a1e59683b0b2dacaab8278f37d88ec7b4ff9b557"
   },
   "capabilities": {
     "postgres": {

@@ -1,0 +1,201 @@
+[
+  {
+    "id": "collection.products.setValidation",
+    "label": "Set validation on products",
+    "operationClass": "widening",
+    "precheck": [],
+    "execute": [
+      {
+        "description": "set validation on products",
+        "command": {
+          "kind": "collMod",
+          "collection": "products",
+          "validator": {
+            "$jsonSchema": {
+              "additionalProperties": false,
+              "bsonType": "object",
+              "properties": {
+                "_id": {
+                  "bsonType": "objectId"
+                },
+                "articleType": {
+                  "bsonType": "string"
+                },
+                "brand": {
+                  "bsonType": "string"
+                },
+                "code": {
+                  "bsonType": "string"
+                },
+                "description": {
+                  "bsonType": "string"
+                },
+                "embedding": {
+                  "bsonType": ["null", "array"],
+                  "items": {
+                    "bsonType": "double"
+                  }
+                },
+                "image": {
+                  "additionalProperties": false,
+                  "bsonType": "object",
+                  "properties": {
+                    "url": {
+                      "bsonType": "string"
+                    }
+                  },
+                  "required": ["url"]
+                },
+                "name": {
+                  "bsonType": "string"
+                },
+                "price": {
+                  "additionalProperties": false,
+                  "bsonType": "object",
+                  "properties": {
+                    "amount": {
+                      "bsonType": "double"
+                    },
+                    "currency": {
+                      "bsonType": "string"
+                    }
+                  },
+                  "required": ["amount", "currency"]
+                },
+                "primaryCategory": {
+                  "bsonType": "string"
+                },
+                "status": {
+                  "bsonType": "string"
+                },
+                "subCategory": {
+                  "bsonType": "string"
+                }
+              },
+              "required": [
+                "_id",
+                "articleType",
+                "brand",
+                "code",
+                "description",
+                "image",
+                "name",
+                "price",
+                "primaryCategory",
+                "status",
+                "subCategory"
+              ]
+            }
+          },
+          "validationLevel": "strict",
+          "validationAction": "error"
+        }
+      }
+    ],
+    "postcheck": []
+  },
+  {
+    "id": "data_transform.backfill-product-status",
+    "label": "Data transform: backfill-product-status",
+    "operationClass": "data",
+    "name": "backfill-product-status",
+    "precheck": [
+      {
+        "description": "Check for data transform: backfill-product-status",
+        "source": {
+          "collection": "products",
+          "command": {
+            "kind": "aggregate",
+            "collection": "products",
+            "pipeline": [
+              {
+                "kind": "match",
+                "filter": {
+                  "kind": "exists",
+                  "field": "status",
+                  "exists": false
+                }
+              },
+              {
+                "kind": "limit",
+                "limit": 1
+              }
+            ]
+          },
+          "meta": {
+            "target": "mongo",
+            "storageHash": "248955e3f438997c7f6b35efe2fa7e91462dc40845aa0f75451616f0af4b702b",
+            "lane": "mongo-pipeline"
+          }
+        },
+        "filter": {
+          "kind": "exists",
+          "field": "_id",
+          "exists": true
+        },
+        "expect": "exists"
+      }
+    ],
+    "run": [
+      {
+        "collection": "products",
+        "command": {
+          "kind": "rawUpdateMany",
+          "collection": "products",
+          "filter": {
+            "status": {
+              "$exists": false
+            }
+          },
+          "update": {
+            "$set": {
+              "status": "active"
+            }
+          }
+        },
+        "meta": {
+          "target": "mongo",
+          "storageHash": "248955e3f438997c7f6b35efe2fa7e91462dc40845aa0f75451616f0af4b702b",
+          "lane": "mongo-raw"
+        }
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "Check for data transform: backfill-product-status",
+        "source": {
+          "collection": "products",
+          "command": {
+            "kind": "aggregate",
+            "collection": "products",
+            "pipeline": [
+              {
+                "kind": "match",
+                "filter": {
+                  "kind": "exists",
+                  "field": "status",
+                  "exists": false
+                }
+              },
+              {
+                "kind": "limit",
+                "limit": 1
+              }
+            ]
+          },
+          "meta": {
+            "target": "mongo",
+            "storageHash": "248955e3f438997c7f6b35efe2fa7e91462dc40845aa0f75451616f0af4b702b",
+            "lane": "mongo-pipeline"
+          }
+        },
+        "filter": {
+          "kind": "exists",
+          "field": "_id",
+          "exists": true
+        },
+        "expect": "notExists"
+      }
+    ]
+  }
+]

@@ -140,10 +140,7 @@ describe('capability contribution at authoring time', () => {
     });
   });
 
-  it('produces a stable `hash({})` profile hash for every contract', () => {
-    // With the author input gone, `profileHash` (which still fingerprints
-    // `definition.capabilities`) collapses to the empty-input hash on every
-    // contract regardless of which packs are wired in.
+  it('hashes the capabilities the contract lists into its profile hash', () => {
     const bare = buildOneModelContract({
       ...testTypeLookups,
       family: sqlFamilyPack,
@@ -157,9 +154,9 @@ describe('capability contribution at authoring time', () => {
       extensions: { pgvector: extensionWithCapabilities },
       createNamespace: createTestSqlNamespace,
     });
-    expect(bare.profileHash).toEqual(decorated.profileHash);
-    expect(bare.profileHash).toEqual(
-      '3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2',
-    );
+    expect({ bare: bare.profileHash, decorated: decorated.profileHash }).toEqual({
+      bare: 'ae77f23935a24b8a63c81ef26bb0f186581670a56e603cef8314a629414e2632',
+      decorated: 'a870dfb9bc1ac84ac0743a232c8e74ab698b9f7906b49f446450667caecfc91e',
+    });
   });
 });

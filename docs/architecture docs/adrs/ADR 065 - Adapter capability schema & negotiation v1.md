@@ -1,5 +1,7 @@
 # ADR 065 — Adapter capability schema & discovery
 
+**Profile hash inputs superseded by** [ADR 332](ADR%20332%20-%20A%20hash%20covers%20what%20a%20contract%20means%2C%20by%20rules%20that%20do%20not%20change%20within%20a%20major.md): the profile hash covers only `targetFamily`, `target` and the contract's `capabilities` section, and is computed when the contract is emitted, not by an adapter at `connect()`. The rules do not change within a major.
+
 ## Decision
 
 Define a versioned capability schema and a discovery flow where:

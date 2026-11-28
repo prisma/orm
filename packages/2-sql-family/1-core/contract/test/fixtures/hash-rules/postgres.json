@@ -1,0 +1,139 @@
+{
+  "formatVersion": 1,
+  "target": "postgres",
+  "targetFamily": "sql",
+  "domain": {
+    "namespaces": {
+      "public": {
+        "models": {
+          "Generated": {
+            "storage": {
+              "table": "Generated",
+              "namespaceId": "public",
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "uuidOpt": {
+                  "column": "uuidOpt"
+                }
+              }
+            },
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false,
+                "many": false
+              },
+              "uuidOpt": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/text@1"
+                },
+                "nullable": true,
+                "many": false
+              }
+            },
+            "relations": {}
+          }
+        }
+      }
+    }
+  },
+  "roots": {
+    "Generated": {
+      "namespace": "public",
+      "model": "Generated"
+    }
+  },
+  "execution": {
+    "executionHash": "b0582e3d20e49c8f911cbc589a31579d66ced2b8afc9353b6f3b199c0a5a2a35",
+    "mutations": {
+      "defaults": [
+        {
+          "ref": {
+            "namespace": "public",
+            "entry": "Generated",
+            "field": "uuidOpt"
+          },
+          "onCreate": {
+            "kind": "generator",
+            "id": "uuidv4"
+          }
+        }
+      ]
+    }
+  },
+  "extensions": {},
+  "capabilities": {
+    "sql": {
+      "scalarList": true,
+      "returning": true,
+      "outerReferencesInDerivedTables": true,
+      "lockSkipLocked": true,
+      "lockOf": true,
+      "lockNowait": true,
+      "lateral": true,
+      "jsonAggWithoutTruncation": true,
+      "jsonAgg": true,
+      "insertOnConflictWithoutTarget": true,
+      "insertOnConflictTarget": true,
+      "insertOnConflictSkip": true,
+      "forUpdate": true,
+      "forShare": true,
+      "enums": true,
+      "defaultInInsert": true,
+      "checkConstraint": true
+    },
+    "postgres": {
+      "returning": true,
+      "orderBy": true,
+      "limit": true,
+      "lateral": true,
+      "jsonAgg": true,
+      "forNoKeyUpdate": true,
+      "forKeyShare": true,
+      "distinctOn": true
+    }
+  },
+  "profileHash": "833bc812933db0423c719a4f649ef81d804884470e61736e4e3bc8eb4acda174",
+  "meta": {},
+  "storage": {
+    "storageHash": "b04c6ddd6cd4e9fa7c5c263e514b75b0cdea82923b4c9ae5a3e2765af6155dce",
+    "namespaces": {
+      "public": {
+        "id": "public",
+        "kind": "postgres-schema",
+        "entries": {
+          "table": {
+            "Generated": {
+              "columns": {
+                "id": {
+                  "dataType": "pg/int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false,
+                  "many": false
+                },
+                "uuidOpt": {
+                  "dataType": "pg/text",
+                  "codecId": "pg/text@1",
+                  "nullable": true,
+                  "many": false
+                }
+              },
+              "uniques": [],
+              "indexes": [],
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["id"]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -125,22 +125,23 @@ function compositionFor(contract: Contract<SqlStorage>): Composition {
 const serializer = new PostgresContractSerializer();
 
 /**
- * The contract as `contract emit` writes it, without `capabilities` and
- * `extensions`: both are written from the composed stack, not from the source,
+ * The contract as `contract emit` writes it, without `capabilities`,
+ * `extensions` and `profileHash`: the first two are written from the composed
+ * stack, not from the source, and `profileHash` is the hash of `capabilities`,
  * so the printed file has no say over them.
  */
 function comparable(contract: Contract<SqlStorage>): unknown {
   const {
     capabilities: _capabilities,
     extensions: _extensions,
+    profileHash: _profileHash,
     ...rest
   } = canonicalizeContractToObject(contract, {
     serializeContract: (value) =>
       serializer.serializeContract(
         blindCast<Contract<SqlStorage>, 'this test canonicalizes Postgres contracts only'>(value),
       ),
-    shouldPreserveEmpty: serializer.shouldPreserveEmpty,
-    sortStorage: serializer.sortStorage,
+    normalizeStorage: serializer.normalizeStorage,
   });
   return rest;
 }
@@ -265,11 +266,6 @@ const expectedRefusals: ReadonlyMap<string, ExpectedRefusal> = new Map<string, E
     'packages/3-targets/postgres/9-facade/test/fixtures/generated/contract.json',
     { reason: 'has no foreign key in storage', meta: { model: 'Post', field: 'author' } },
   ],
-  // Release candidate 25 emitted it with the same domain and storage as the entry above.
-  [
-    'packages/3-targets/postgres/9-facade/test/fixtures/emitted-before-capabilities-by-version/contract.json',
-    { reason: 'has no foreign key in storage', meta: { model: 'Post', field: 'author' } },
-  ],
   [
     'packages/3-extensions/sql-orm-client/test/fixtures/generated/contract.json',
     { reason: 'has no foreign key in storage', meta: { model: 'Article', field: 'reviewer' } },
@@ -315,11 +311,6 @@ const expectedRefusals: ReadonlyMap<string, ExpectedRefusal> = new Map<string, E
   ],
   [
     'test/e2e/framework/test/fixtures/generated/contract.json',
-    { reason: 'has no foreign key in storage', meta: { model: 'Comment', field: 'post' } },
-  ],
-  // Release candidate 25 emitted it with the same domain and storage as the entry above.
-  [
-    'test/e2e/framework/test/fixtures/release-candidate/typescript/generated/contract.json',
     { reason: 'has no foreign key in storage', meta: { model: 'Comment', field: 'post' } },
   ],
   [

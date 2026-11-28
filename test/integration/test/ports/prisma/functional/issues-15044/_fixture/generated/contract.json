@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "targetFamily": "sql",
   "target": "postgres",
-  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "profileHash": "18654d8be351e94d940c57892ee3d3b92824fc145d7dd67c5f57168eea52c619",
   "roots": {
     "user": {
       "model": "User",
@@ -278,25 +278,6 @@
               "foreignKeys": [
                 {
                   "index": {
-                    "name": "walletLink_walletId_idx_2e003173"
-                  },
-                  "source": {
-                    "columns": [
-                      "walletId"
-                    ],
-                    "namespaceId": "public",
-                    "tableName": "walletLink"
-                  },
-                  "target": {
-                    "columns": [
-                      "id"
-                    ],
-                    "namespaceId": "public",
-                    "tableName": "wallet"
-                  }
-                },
-                {
-                  "index": {
                     "name": "walletLink_userId_idx_a489d58a"
                   },
                   "source": {
@@ -312,6 +293,25 @@
                     ],
                     "namespaceId": "public",
                     "tableName": "user"
+                  }
+                },
+                {
+                  "index": {
+                    "name": "walletLink_walletId_idx_2e003173"
+                  },
+                  "source": {
+                    "columns": [
+                      "walletId"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "walletLink"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "wallet"
                   }
                 }
               ],
@@ -346,10 +346,10 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "ddf92fd04b54f5e44e51bafaef58fb6f8734c997401ce204bbcacb905328686b"
+    "storageHash": "24f529f572320f20cee1f1507a757783c0e97cc9d93da26723e2f249320497f6"
   },
   "execution": {
-    "executionHash": "e0abca3d0e4fa16ac9a94ea3031853b52f2b808f700fdf97d18bb253bcbc1ae8",
+    "executionHash": "d9a7516498735dfabd083bd369c45a833eaedb49b76d7815ac6c0e0ac4d0cc6d",
     "mutations": {
       "defaults": [
         {

@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "targetFamily": "mongo",
   "target": "mongo",
-  "profileHash": "251b3ce23f6c9f561892e7c1af9d2cc941a13d64ba1aa7226b90036b09568cc3",
+  "profileHash": "8fe2b3350db5a83e2473520e59e52262982215115e17bb22a76239170eee6e69",
   "roots": {
     "people": {
       "model": "Admin",
@@ -108,22 +108,22 @@
                   "keys": [
                     {
                       "direction": 1,
-                      "field": "name"
-                    }
-                  ],
-                  "kind": "mongo-index",
-                  "name": "name_1"
-                },
-                {
-                  "keys": [
-                    {
-                      "direction": 1,
                       "field": "email"
                     }
                   ],
                   "kind": "mongo-index",
                   "name": "email_1",
                   "unique": true
+                },
+                {
+                  "keys": [
+                    {
+                      "direction": 1,
+                      "field": "name"
+                    }
+                  ],
+                  "kind": "mongo-index",
+                  "name": "name_1"
                 }
               ],
               "kind": "mongo-collection",
@@ -176,7 +176,7 @@
         "kind": "mongo-database"
       }
     },
-    "storageHash": "18a7778e944647e6a3ee41170376d7d55034b791da3ded3b8199ff22a0dedd75"
+    "storageHash": "32a70a21708b9fe0e57dba7ea56ee263faafa766452b4ffc8c135c3380d16e85"
   },
   "capabilities": {},
   "extensions": {},

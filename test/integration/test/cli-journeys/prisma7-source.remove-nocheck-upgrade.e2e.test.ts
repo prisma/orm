@@ -1,5 +1,5 @@
 /**
- * The upgrade of a Prisma 7 project whose database was signed under the previous release, when the Prisma 7 reader stored every list with non-null elements and a waived element check. The test writes that stored contract and signs the database with its hash, then follows the app upgrade guide `skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.18-to-8.0.0-rc.19/instructions.md` step by step: run the script, `prisma db sign --db "$DATABASE_URL"`, `prisma contract emit`. `db verify` then passes with no migration.
+ * The upgrade of a Prisma 7 project whose database was signed under `8.0.0-rc.18`, when the Prisma 7 reader stored every list with non-null elements and a waived element check. The project starts from the `contract.json` and `contract.d.ts` that release stored, with their hashes, and a database marker at those hashes. It then follows the path such a project takes to this release: the script of the app upgrade guide `skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.18-to-8.0.0-rc.19/instructions.md`, the scripts of the pending `stored-files-format-version` and `contract-hash-inputs` guides, `prisma db sign --db "$DATABASE_URL"`, `prisma contract emit`, and the `db sign` the hash guide runs after that emit, since the emitted capability list, and so the profile hash, can differ from the one the script wrote. `db verify` then passes with no migration.
  */
 import { spawnSync } from 'node:child_process';
 import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -7,7 +7,9 @@ import { withClient } from '@repo/test-utils';
 import { join } from 'pathe';
 import stripAnsi from 'strip-ansi';
 import { describe, expect, it } from 'vitest';
+import { runScript as runContractHashInputsScript } from '../upgrade-instructions/contract-hash-inputs/test-helpers';
 import { appScript } from '../upgrade-instructions/remove-nocheck/test-helpers';
+import { runScript as runFormatVersionScript } from '../upgrade-instructions/stored-files-format-version/test-helpers';
 import { withTempDir, writeProjectManifest } from '../utils/cli-test-helpers';
 import {
   type JourneyContext,
@@ -17,47 +19,20 @@ import {
   timeouts,
   useDevDatabase,
 } from '../utils/journey-test-helpers';
-import { postgresStorageHash } from '../utils/journey-workspace-helpers';
 
 const PRISMA7_FIXTURES = join(__dirname, '../fixtures/prisma7-source');
 const JOURNEY_FIXTURES = join(__dirname, '../fixtures/cli/cli-e2e-test-app/fixtures/cli-journeys');
+const RC18_STORED = join(JOURNEY_FIXTURES, 'prisma7-rc18-stored');
 const MIGRATION_SQL = readFileSync(join(PRISMA7_FIXTURES, 'supported/migration.sql'), 'utf-8');
 
-type JsonRecord = Record<string, unknown>;
-
-function records(value: unknown): readonly [string, JsonRecord][] {
-  return typeof value === 'object' && value !== null
-    ? (Object.entries(value) as [string, JsonRecord][])
-    : [];
+interface StoredHashes {
+  readonly storageHash: string;
+  readonly profileHash: string;
 }
 
-/** The contract as the previous release's Prisma 7 reader stored it: every list with non-null elements and a waived element check. */
-function previousReleaseContract(json: JsonRecord): {
-  readonly json: JsonRecord;
-  readonly hash: string;
-} {
-  const contract = JSON.parse(JSON.stringify(json)) as JsonRecord;
-  const storage = contract['storage'] as JsonRecord;
-  for (const [, namespace] of records(storage['namespaces']))
-    for (const [, table] of records((namespace['entries'] as JsonRecord)['table']))
-      for (const [, column] of records(table['columns']))
-        if (typeof column['many'] === 'object' && column['many'] !== null) {
-          column['many'] = { elementNullable: false };
-          column['noCheck'] = ['elementNotNull'];
-        }
-  for (const [, namespace] of records((contract['domain'] as JsonRecord)['namespaces']))
-    for (const [, model] of records(namespace['models']))
-      for (const [, field] of records(model['fields']))
-        if (typeof field['many'] === 'object' && field['many'] !== null)
-          field['many'] = { elementNullable: false };
-  const { storageHash: _new, ...withoutHash } = storage;
-  const hash = postgresStorageHash({
-    target: String(contract['target']),
-    targetFamily: String(contract['targetFamily']),
-    storage: withoutHash,
-  });
-  storage['storageHash'] = hash;
-  return { json: contract, hash };
+function hashesOf(contractPath: string): StoredHashes {
+  const contract = JSON.parse(readFileSync(contractPath, 'utf-8'));
+  return { storageHash: contract.storage.storageHash, profileHash: contract.profileHash };
 }
 
 function setupProject(createTempDir: () => string, connectionString: string): JourneyContext {
@@ -87,59 +62,79 @@ function markerHash(connectionString: string): Promise<unknown> {
   });
 }
 
+function hashChange(stdout: string, from: string): string | undefined {
+  return new RegExp(`^ {2}${from} -> ([0-9a-f]{64})$`, 'm').exec(stdout)?.[1];
+}
+
 withTempDir(({ createTempDir }) => {
-  describe('Journey: upgrading a signed Prisma 7 project past the removal of noCheck', () => {
+  describe('Journey: upgrading a Prisma 7 project signed under rc.18 past the removal of noCheck', () => {
     const db = useDevDatabase({
       onReady: (cs) => withClient(cs, (client) => client.query(MIGRATION_SQL)),
     });
 
     it(
-      'the script, db sign and contract emit leave a database that verifies with no migration',
+      'the upgrade scripts, db sign, contract emit and a second db sign leave a database that verifies with no migration',
       async () => {
         const ctx = setupProject(createTempDir, db.connectionString);
+        const contractPath = join(ctx.testDir, 'contract.json');
         const emit = await runContractEmit(ctx);
         expect(emit.exitCode, `contract emit\n${output(emit)}`).toBe(0);
-        const contractPath = join(ctx.testDir, 'contract.json');
-        const current = JSON.parse(readFileSync(contractPath, 'utf-8')) as JsonRecord;
-        const currentHash = (current['storage'] as JsonRecord)['storageHash'];
-        const previous = previousReleaseContract(current);
-        expect(previous.hash).not.toBe(currentHash);
-
+        const currentHash = hashesOf(contractPath).storageHash;
         const sign = await runDbSign(ctx);
         expect(sign.exitCode, `db sign\n${output(sign)}`).toBe(0);
-        writeFileSync(contractPath, JSON.stringify(previous.json, null, 2));
-        const dtsPath = join(ctx.testDir, 'contract.d.ts');
-        writeFileSync(
-          dtsPath,
-          readFileSync(dtsPath, 'utf-8')
-            .split(String(currentHash))
-            .join(previous.hash)
-            .replaceAll('readonly elementNullable: true', 'readonly elementNullable: false'),
-        );
+
+        copyFileSync(join(RC18_STORED, 'contract.json'), contractPath);
+        copyFileSync(join(RC18_STORED, 'contract.d.ts'), join(ctx.testDir, 'contract.d.ts'));
+        const rc18 = hashesOf(contractPath);
+        expect(rc18.storageHash).not.toBe(currentHash);
         await withClient(db.connectionString, (client) =>
-          client.query(`UPDATE "prisma_contract"."marker" SET core_hash = $1 WHERE space = 'app'`, [
-            previous.hash,
-          ]),
+          client.query(
+            `UPDATE "prisma_contract"."marker" SET core_hash = $1, profile_hash = $2 WHERE space = 'app'`,
+            [rc18.storageHash, rc18.profileHash],
+          ),
         );
         const refused = await runDbVerify(ctx);
         expect(refused.exitCode, `db verify before the upgrade\n${output(refused)}`).not.toBe(0);
+        expect(output(refused)).toContain('[CONTRACT.VALIDATION_FAILED]');
+        expect(output(refused)).toContain('contracts no longer store check waivers in "noCheck"');
 
-        const script = spawnSync(process.execPath, [appScript], {
+        const removeNoCheck = spawnSync(process.execPath, [appScript], {
           cwd: ctx.testDir,
           encoding: 'utf8',
         });
-        expect({ status: script.status, stderr: script.stderr }).toEqual({ status: 0, stderr: '' });
-        expect(script.stdout).toContain(`  ${previous.hash} -> ${currentHash}\n`);
+        expect({ status: removeNoCheck.status, stderr: removeNoCheck.stderr }).toEqual({
+          status: 0,
+          stderr: '',
+        });
+        const rc19Hash = hashChange(removeNoCheck.stdout, rc18.storageHash);
+        expect(rc19Hash, removeNoCheck.stdout).toMatch(/^[0-9a-f]{64}$/);
 
-        const signAfterScript = await runDbSign(ctx, ['--db', db.connectionString]);
-        expect(signAfterScript.exitCode, `db sign\n${output(signAfterScript)}`).toBe(0);
+        const formatVersion = runFormatVersionScript(ctx.testDir);
+        expect({ status: formatVersion.status, stderr: formatVersion.stderr }).toEqual({
+          status: 0,
+          stderr: '',
+        });
+
+        const hashInputs = runContractHashInputsScript(ctx.testDir);
+        expect({ status: hashInputs.status, stderr: hashInputs.stderr }).toEqual({
+          status: 0,
+          stderr: '',
+        });
+        expect(hashChange(hashInputs.stdout, String(rc19Hash)), hashInputs.stdout).toBe(
+          currentHash,
+        );
+
+        const signAfterScripts = await runDbSign(ctx, ['--db', db.connectionString]);
+        expect(signAfterScripts.exitCode, `db sign\n${output(signAfterScripts)}`).toBe(0);
         expect(await markerHash(db.connectionString)).toBe(currentHash);
 
         const reemit = await runContractEmit(ctx);
         expect(reemit.exitCode, `contract emit\n${output(reemit)}`).toBe(0);
-        expect(JSON.parse(readFileSync(contractPath, 'utf-8')).storage.storageHash).toBe(
-          currentHash,
-        );
+        expect(hashesOf(contractPath).storageHash).toBe(currentHash);
+
+        const signEmitted = await runDbSign(ctx, ['--db', db.connectionString]);
+        expect(signEmitted.exitCode, `db sign after contract emit\n${output(signEmitted)}`).toBe(0);
+        expect(await markerHash(db.connectionString)).toBe(currentHash);
 
         const verify = await runDbVerify(ctx);
         expect(verify.exitCode, `db verify\n${output(verify)}`).toBe(0);
