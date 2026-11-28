@@ -1,9 +1,13 @@
 import type { SqlControlDriverInstance } from '@internal/sql-contract/types';
 import {
   type AnyQueryAst,
+  JoinAst,
+  LiteralExpr,
   type LoweredStatement,
   RawExpr,
+  type SelectAst,
 } from '@internal/sql-relational-core/ast';
+import type { ColumnProxy } from '@internal/sql-relational-core/contract-free';
 import { PG_TIMESTAMPTZ_STRING_CODEC_ID } from '@internal/target-postgres/codec-ids';
 import {
   int8,
@@ -30,6 +34,20 @@ export const signatures = pgTable(
     signed_at: timestamptz(),
   },
 );
+
+/** The database's one row of settings: the policies, as the framework stores them. */
+export const config = pgTable(
+  { name: PRISMA_TABLE_NAMES.config, schema: PRISMA_TABLES_SCHEMA },
+  { policies: jsonb() },
+);
+
+/** Selects `columns` of `_prisma.signatures` with the policies of `_prisma.config` beside each row, in one statement, so a signature and the policies are read from the same state. `policies` is null when config has no row. */
+export function selectSignaturesWithPolicies(columns: ReadonlyArray<ColumnProxy>): SelectAst {
+  return signatures
+    .select(...columns, config.policies)
+    .build()
+    .withJoins([JoinAst.left(config.source, LiteralExpr.of(true))]);
+}
 
 /**
  * Writeable subset of the `_prisma.ledger` table. Omits the

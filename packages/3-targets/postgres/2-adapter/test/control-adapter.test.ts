@@ -2190,4 +2190,94 @@ describe('PostgresControlAdapter', () => {
       });
     });
   });
+
+  describe('the policies in _prisma.config', () => {
+    const policies = { change: ['migrate'], dataProtection: { dataLoss: 'data-loss-forbidden' } };
+
+    function signatureRow(space: string, rowPolicies: unknown) {
+      return {
+        space,
+        core_hash: 'abc',
+        profile_hash: 'def',
+        signed_at: new Date('2024-01-01T00:00:00Z'),
+        invariants: '{}',
+        policies: rowPolicies,
+      };
+    }
+
+    function driverReturning(rows: ReadonlyArray<Record<string, unknown>>) {
+      const signatureReads: string[] = [];
+      const driver: SqlControlDriverInstance<'postgres'> = {
+        familyId: 'sql',
+        targetId: 'postgres',
+        query: async <Row = Record<string, unknown>>(sql: string) => {
+          if (sql.includes('"information_schema"')) {
+            return { rows: [{ table_schema: '_prisma' }] as unknown as Row[] };
+          }
+          if (sql.includes('"_prisma"."signatures"')) {
+            signatureReads.push(sql);
+            return { rows: rows as unknown as Row[] };
+          }
+          return { rows: [] as unknown as Row[] };
+        },
+        close: async () => {},
+      };
+      return { driver, signatureReads };
+    }
+
+    const adapter = createTestPostgresControlAdapter(
+      createPostgresBuiltinCodecLookup(),
+      createPostgresBuiltinDataTypeLookup(),
+    );
+
+    it('come back as meta.policies on the application space, read in the same statement as its signature', async () => {
+      const { driver, signatureReads } = driverReturning([signatureRow('app', policies)]);
+
+      const record = await adapter.readMarker(driver, 'app');
+
+      expect({ meta: record?.meta, joinsConfig: signatureReads[0] }).toEqual({
+        meta: { policies },
+        joinsConfig: expect.stringContaining('LEFT JOIN "_prisma"."config"'),
+      });
+    });
+
+    it('come back as they are stored, for the framework to parse', async () => {
+      const { driver } = driverReturning([signatureRow('app', 'strict')]);
+
+      const result = await adapter.readMarkerDiscriminated(driver, 'app');
+
+      expect(result).toMatchObject({ kind: 'present', record: { meta: { policies: 'strict' } } });
+    });
+
+    it('leave the application space with no meta when config has no row', async () => {
+      const { driver } = driverReturning([signatureRow('app', null)]);
+
+      await expect(adapter.readMarker(driver, 'app')).resolves.toMatchObject({ meta: {} });
+    });
+
+    it('are not carried by another space', async () => {
+      const { driver } = driverReturning([signatureRow('extension', policies)]);
+
+      await expect(adapter.readMarker(driver, 'extension')).resolves.toMatchObject({ meta: {} });
+    });
+
+    it('come back on the application space alone when every signature is read', async () => {
+      const { driver, signatureReads } = driverReturning([
+        signatureRow('app', policies),
+        signatureRow('extension', policies),
+      ]);
+
+      const markers = await adapter.readAllMarkers(driver);
+
+      expect({
+        app: markers.get('app')?.meta,
+        extension: markers.get('extension')?.meta,
+        joinsConfig: signatureReads[0],
+      }).toEqual({
+        app: { policies },
+        extension: {},
+        joinsConfig: expect.stringContaining('LEFT JOIN "_prisma"."config"'),
+      });
+    });
+  });
 });

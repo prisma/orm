@@ -143,6 +143,7 @@ import {
   NOW,
   prismaTableExists,
   prismaTableHasColumns,
+  selectSignaturesWithPolicies,
   signatures,
 } from './marker-ledger';
 import {
@@ -166,7 +167,14 @@ function markerRowDecodeWhy(detail: string): string {
   return `Invalid contract marker row: ${detail}`;
 }
 
-/** A row of `_prisma.signatures` in the form the SQL family's marker parser reads, whose `updated_at` is the row's `signed_at`. */
+/** The policies the framework reads from the application space's record, which on PostgreSQL are the one row of `_prisma.config`, passed on as stored. */
+function policiesMeta(space: string, policies: unknown): { readonly meta?: { policies: unknown } } {
+  return space === APP_SPACE_ID && policies !== null && policies !== undefined
+    ? { meta: { policies } }
+    : {};
+}
+
+/** A row of `_prisma.signatures`, with `_prisma.config`'s policies beside it, in the form the SQL family's marker parser reads, whose `updated_at` is the row's `signed_at`. */
 function decodePostgresMarkerRow(row: unknown, space: string): Record<string, unknown> {
   if (typeof row !== 'object' || row === null) {
     const cause = new TypeError(`expected object marker row, got ${typeof row}`);
@@ -177,13 +185,18 @@ function decodePostgresMarkerRow(row: unknown, space: string): Record<string, un
       cause,
     });
   }
-  const { signed_at, invariants, ...record } = blindCast<
-    { readonly invariants: unknown; readonly signed_at: unknown } & Record<string, unknown>,
+  const { signed_at, invariants, policies, ...record } = blindCast<
+    {
+      readonly invariants: unknown;
+      readonly signed_at: unknown;
+      readonly policies?: unknown;
+    } & Record<string, unknown>,
     'Postgres signature rows are object-shaped at this boundary'
   >(row);
   try {
     return {
       ...record,
+      ...policiesMeta(space, policies),
       ...ifDefined('updated_at', signed_at),
       invariants: parsePostgresListText(invariants),
     };
@@ -348,15 +361,13 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
       return new Map();
     }
 
-    const fetch = signatures
-      .select(
-        signatures.space,
-        signatures.core_hash,
-        signatures.profile_hash,
-        signatures.signed_at,
-        signatures.invariants,
-      )
-      .build();
+    const fetch = selectSignaturesWithPolicies([
+      signatures.space,
+      signatures.core_hash,
+      signatures.profile_hash,
+      signatures.signed_at,
+      signatures.invariants,
+    ]);
     const rawRows = await execute(lower, driver, fetch);
     const rows = blindCast<
       ReadonlyArray<{ space: string } & Record<string, unknown>>,
@@ -637,10 +648,14 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
       return { kind: 'absent' as const };
     }
 
-    const fetch = signatures
-      .select(...selected)
-      .where(signatures.space.eq(space))
-      .build();
+    const bySpace = signatures.space.eq(space);
+    const fetch =
+      space === APP_SPACE_ID
+        ? selectSignaturesWithPolicies(selected).withWhere(bySpace.ast)
+        : signatures
+            .select(...selected)
+            .where(bySpace)
+            .build();
     const result = await execute(lower, driver, fetch);
     const row = result[0];
     if (!row) return { kind: 'absent' as const };
