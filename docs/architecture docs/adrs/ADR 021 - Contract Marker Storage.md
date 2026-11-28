@@ -163,7 +163,7 @@ createRunner({
 ## Security
 - The marker table should be owned by a role with DDL privileges
 - Application roles require SELECT on `_prisma.signatures` only: the SQL client's check on first use reads the application space's row and never the policies
-- The runner role requires UPDATE on `_prisma.signatures` and `_prisma.config` and INSERT on the ledger, and owns the `_prisma` schema, since a later release may change these tables
+- Any role that runs Prisma's commands reads `_prisma.config` as well as `_prisma.signatures`, since the commands read the policies; the runner role also writes both tables and the ledger, and owns the `_prisma` schema, since a later release may change these tables
 - No secrets are stored in the marker or ledger
 
 ## Alternatives considered

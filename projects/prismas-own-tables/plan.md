@@ -40,7 +40,7 @@ Seven slices, one pull request each, in this order. PostgreSQL comes first becau
 
 ## Slice 3. Commands read the policies from the database's configuration
 
-**Outcome.** The framework gets a database's policies through a channel of their own, not from a field on the application space's marker record. Each target says where it stores them: PostgreSQL in `_prisma.config`, the other targets in their marker's `meta.policies` until slice 5 moves them. Messages about the policies name where they are recorded: the corrupt-policies message, and the refusals (`MIGRATION.CHANGE_POLICY_FORBIDS` says "The marker records change: migrate" today).
+**Outcome.** The framework gets a database's policies through a channel of their own, not from a field on the application space's marker record. Each target says where it stores them: PostgreSQL in `_prisma.config`, the other targets in their marker's `meta.policies` until slice 5 moves them. Commands that do not use the policies, such as `db verify`, stop reading them, so they no longer need SELECT on `_prisma.config`. Messages about the policies name where they are recorded: the corrupt-policies message, and the refusals (`MIGRATION.CHANGE_POLICY_FORBIDS` says "The marker records change: migrate" today).
 
 **Why.** Slice 2 keeps the framework unchanged by having the PostgreSQL adapter present the `config` row as `meta.policies` on the application record. That field no longer exists in the database, the framework's messages name it, and slice 5 would have every target present the same made-up field.
 
