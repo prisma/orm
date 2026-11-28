@@ -16,7 +16,7 @@ The aggregator (`app/`) declares its own `User` table and lists both internal ex
 
 - pinned artefacts land at `migrations/audit/{contract.json,contract.d.ts,refs/head.json}` and `migrations/feature-flags/...`;
 - migration directories at `migrations/audit/<dirName>/` and `migrations/feature-flags/<dirName>/`;
-- the marker table has three rows (`app`, `audit`, `feature-flags`), each carrying the expected core hash and applied invariants.
+- `_prisma.signatures` has a row for each of `app`, `audit` and `feature-flags`, each carrying the expected core hash and applied invariants, beside the row of `_prisma`, the contract space of Prisma's own tables.
 
 ## Layout
 
