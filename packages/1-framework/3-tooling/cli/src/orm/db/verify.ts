@@ -13,6 +13,7 @@ import { CliStructuredError, notOk, ok } from '@prisma/cli-engine/protocol';
 import { createControlClient } from '../../control-api/client';
 import type { DbVerifyMode } from '../../control-api/types';
 import {
+  ActionableCliError,
   errorHashMismatch,
   errorMarkerMissing,
   errorRuntime,
@@ -150,10 +151,14 @@ function markerFindingError(result: VerifyDatabaseResult) {
     }
     const profileMatch =
       !result.contract.profileHash || result.marker?.profileHash === result.contract.profileHash;
+    if (!profileMatch) {
+      return errorProfileHashMismatch({
+        ...ifDefined('expected', result.contract.profileHash),
+        ...ifDefined('actual', result.marker?.profileHash),
+      });
+    }
     return errorHashMismatch({
-      why: profileMatch
-        ? 'Contract hash does not match database marker'
-        : 'Contract profileHash does not match database marker',
+      why: 'Contract hash does not match database marker',
       ...ifDefined('expected', result.contract.profileHash),
       ...ifDefined('actual', result.marker?.profileHash),
     });
@@ -164,6 +169,25 @@ function markerFindingError(result: VerifyDatabaseResult) {
   return errorRuntime('CONTRACT.VERIFY_FAILED', result.summary, {
     why: 'Verification failed',
     fix: 'Check contract and database state',
+  });
+}
+
+/** The marker holds the contract's storage hash and another profile hash: migrating changes nothing, signing records the contract's capabilities. */
+function errorProfileHashMismatch(hashes: {
+  readonly expected?: string;
+  readonly actual?: string;
+}): ActionableCliError {
+  return new ActionableCliError('CONTRACT.MARKER_MISMATCH', 'Hash mismatch', {
+    why: "Contract profileHash does not match database marker. The database matches the contract's storage, but it was signed for another list of capabilities.",
+    nextActions: [
+      {
+        kind: 'run-command',
+        label:
+          "Sign the database, which first checks that it provides the contract's capabilities and then records the contract's profile hash in its marker",
+        command: '{bin} db sign',
+      },
+    ],
+    ...(Object.keys(hashes).length > 0 ? { meta: hashes } : {}),
   });
 }
 
