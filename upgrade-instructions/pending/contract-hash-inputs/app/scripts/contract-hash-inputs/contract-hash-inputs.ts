@@ -316,6 +316,34 @@ function oldHash(contract: ContractSections, section: JsonRecord, hooks: Hooks):
   return sha256(JSON.stringify(ordered, null, 2));
 }
 
+/**
+ * The old rule as the earlier release applied it when it wrote a file. It left out each `false`, `[]` and `{}` once, so a value that held only such values, such as an index's `options: { fastupdate: false }`, was hashed and written as `{}`. Read back, the old rule leaves that `{}` out too, which gives another hash; the hash the release stored is the one of the section exactly as written.
+ */
+function oldHashAsWritten(contract: ContractSections, section: JsonRecord, hooks: Hooks): string {
+  const sectionKeys = Object.keys(section);
+  return oldHash(contract, section, {
+    ...hooks,
+    preserveEmpty: (path) =>
+      sectionKeys.includes(path[0] ?? '') || (hooks.preserveEmpty?.(path) ?? false),
+  });
+}
+
+/** The old hash of each kind the contract stores: by the old rule, or by the old rule as the earlier release applied it when it wrote the file. */
+function storedOldHashes(sections: ContractSections, stored: StoredHashes): HashSet {
+  const capabilities = oldProfileCapabilities(sections);
+  const byRule = contractHashes(sections, oldHash, capabilities);
+  const asWritten = contractHashes(sections, oldHashAsWritten, capabilities);
+  const hashes: { [kind in HashKind]?: string } = {};
+  for (const kind of ['storage', 'profile', 'execution'] as const) {
+    const hash =
+      stored[kind] !== byRule[kind] && stored[kind] === asWritten[kind]
+        ? asWritten[kind]
+        : byRule[kind];
+    if (hash !== undefined) hashes[kind] = hash;
+  }
+  return hashes;
+}
+
 // ---------------------------------------------------------------------------
 // The families' normal form of storage under the new rule. The canonicalizer leaves out no value; each family leaves out only the fields it names, and orders the lists whose order has no meaning.
 
@@ -959,9 +987,9 @@ function planContract(
     checks.stops.push(`${shown}: ${sections}`);
     return undefined;
   }
-  const oldHashes = contractHashes(sections, oldHash, oldProfileCapabilities(sections));
-  const newHashes = contractHashes(sections, newHash, sections.capabilities);
   const stored = storedHashes(file.value);
+  const oldHashes = storedOldHashes(sections, stored);
+  const newHashes = contractHashes(sections, newHash, sections.capabilities);
   const snapshotHash = snapshotDirectoryHash(file.path);
   const kept = keptStorageHash(
     sections.family,
@@ -1008,6 +1036,18 @@ function planContract(
   }
   if (stale.length > 0) checks.notes.push(`${shown} (${stale.join(' and ')})`);
   return { file, oldHashes, newHashes, snapshotHash, keptStorageHash: kept };
+}
+
+/**
+ * Whether `prisma contract emit` wrote the contract with this release: it is not a snapshot, and it stores the new hash its content gives, not the old one. Its old hash is the one the earlier release computed for the same source, so a snapshot of that contract has the same old hash. When the source holds a value the earlier release left out, the two new hashes differ, and the snapshot's is the one migrations and databases are at.
+ */
+function isEmittedByThisRelease(plan: ContractPlan, kind: HashKind): boolean {
+  const to = plan.newHashes[kind];
+  return (
+    plan.snapshotHash === undefined &&
+    to !== plan.oldHashes[kind] &&
+    storedHashes(plan.file.value)[kind] === to
+  );
 }
 
 /** Every storage hash a migration's `from` or `to`, a ref, or a snapshot's directory name or stored hash names. */
@@ -1154,6 +1194,8 @@ interface Plan {
   readonly removals: string[];
   readonly notes: string[];
   readonly kept: string[];
+  /** Contracts `prisma contract emit` wrote with this release before the script ran, whose old hash a snapshot maps to another new hash. */
+  readonly emitted: string[];
   readonly merged: string[];
   /** Old snapshot directories removed because `prisma contract emit` already wrote their contract under its new storage hash. */
   readonly superseded: string[];
@@ -1189,16 +1231,26 @@ function main(args: readonly string[]): number {
   }
   const hashes = new HashMap();
   const kept: string[] = [];
+  const emittedFirst: { plan: ContractPlan; kind: HashKind; from: string; to: string }[] = [];
   for (const plan of contracts) {
     for (const kind of ['storage', 'profile', 'execution'] as const) {
       const from = plan.oldHashes[kind];
       const to = plan.newHashes[kind];
-      if (from !== undefined && to !== undefined) hashes.add(kind, from, to, stops);
+      if (from === undefined || to === undefined) continue;
+      if (isEmittedByThisRelease(plan, kind)) emittedFirst.push({ plan, kind, from, to });
+      else hashes.add(kind, from, to, stops);
     }
     const to = plan.newHashes.storage;
     if (plan.keptStorageHash === undefined || to === undefined) continue;
     hashes.add('storage', plan.keptStorageHash, to, stops);
     kept.push(`${shown(plan.file.path)} (${plan.keptStorageHash} -> ${to})`);
+  }
+  const emitted: string[] = [];
+  for (const { plan, kind, from, to } of emittedFirst) {
+    const known = hashes.all.get(from);
+    if (known === undefined || known === to) hashes.add(kind, from, to, stops);
+    else if (kind === 'storage')
+      emitted.push(`${shown(plan.file.path)} (${to}; the snapshot's is ${known})`);
   }
   if (stops.length > 0) return refuse(stops);
 
@@ -1208,6 +1260,7 @@ function main(args: readonly string[]): number {
     removals: [],
     notes: checks.notes,
     kept,
+    emitted,
     merged: [],
     superseded: [],
     problems: checks.left,
@@ -1495,6 +1548,11 @@ function report(
     lines.push(
       'MongoDB snapshots whose content an earlier upgrade step rewrote without changing their storage hash. They now have the storage hash their content gives, and so does every file that names them:',
       ...plan.kept.map((note) => `  ${note}`),
+    );
+  if (plan.emitted.length > 0)
+    lines.push(
+      'Contracts `prisma contract emit` already wrote with this release, left as they are. Their storage hash differs from the new hash of the snapshot with the same old hash, because the contract source holds a value the earlier release left out of `contract.json`; the upgrade instructions say what to do, under "When the emitted contract gets a different storage hash":',
+      ...plan.emitted.map((note) => `  ${note}`),
     );
   if (plan.notes.length > 0)
     lines.push(
