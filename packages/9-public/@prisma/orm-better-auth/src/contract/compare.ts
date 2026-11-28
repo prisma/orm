@@ -2,7 +2,6 @@ import type { BetterAuthOptions } from '@better-auth/core';
 import type { BetterAuthDBSchema, DBFieldAttribute } from '@better-auth/core/db';
 import { resolveStorageTable } from '@prisma/orm-family-sql/contract/resolve-storage-table';
 import type { SqlModelStorage } from '@prisma/orm-family-sql/contract/types';
-import { UNBOUND_DOMAIN_NAMESPACE_ID } from '@prisma/orm-framework/contract/default-namespace';
 import type { ContractField, ContractModelBase } from '@prisma/orm-framework/contract/types';
 import {
   type BetterAuthModel,
@@ -15,10 +14,10 @@ import {
   managedModels,
   mayBeNull,
 } from '../models/better-auth-models';
-import { type CodecKind, codecKind } from '../models/codec-kinds';
 import { describeFieldType } from '../models/field-type';
 import { isPslIdentifier } from '../models/identifiers';
 import { type FoundModel, findModel, type SqlContract } from '../models/model-lookup';
+import type { TargetSupport, ValueKind } from '../target-support';
 
 export type ComparedModel =
   | { readonly status: 'missing'; readonly expected: BetterAuthModel }
@@ -73,13 +72,11 @@ export interface ContractComparison {
   readonly problems: readonly ContractProblem[];
   readonly idStrategy: IdStrategy;
   readonly namespace: string | undefined;
-  /** The namespace a model printed outside a `namespace` block belongs to. */
-  readonly defaultNamespace: string;
-  /** Whether the database treats table and column names that differ only in the case of the letters A to Z as the same name. */
-  readonly storageNamesIgnoreCase: boolean;
+  /** The target's support, whose `defaultNamespace` is the namespace of a model printed outside a `namespace` block. */
+  readonly support: TargetSupport;
   /** Contract models that Better Auth's foreign keys reference but that are not among the models it expects, by physical model name. */
   readonly referencedModels: ReadonlyMap<string, FoundModel>;
-  /** Physical names of the models whose contract `id` uses the PostgreSQL `uuid` codec, when the id strategy accepts one. */
+  /** Physical names of the models whose contract `id` holds UUIDs, when the id strategy accepts one. */
   readonly uuidKeyedModels: ReadonlySet<string>;
 }
 
@@ -89,24 +86,17 @@ export interface ComparisonInput {
   readonly betterAuthOptions: BetterAuthOptions;
   readonly namespace: string | undefined;
   readonly usePlural: boolean;
+  readonly support: TargetSupport;
 }
 
-const acceptedKindsByIdStrategy: Readonly<Record<IdStrategy, readonly CodecKind[]>> = {
+const acceptedKindsByIdStrategy: Readonly<Record<IdStrategy, readonly ValueKind[]>> = {
   serial: ['number'],
   uuid: ['string', 'uuid'],
   string: ['string'],
   contract: ['string'],
 };
 
-const storageNamesIgnoreCaseByTarget: Readonly<Record<string, boolean>> = {
-  sqlite: true,
-};
-
-const defaultNamespaceByTarget: Readonly<Record<string, string>> = {
-  postgres: 'public',
-};
-
-function acceptedKinds(attribute: DBFieldAttribute, idStrategy: IdStrategy): readonly CodecKind[] {
+function acceptedKinds(attribute: DBFieldAttribute, idStrategy: IdStrategy): readonly ValueKind[] {
   if (isIdReference(attribute)) return acceptedKindsByIdStrategy[idStrategy];
   switch (attribute.type) {
     case 'number':
@@ -123,9 +113,13 @@ function acceptedKinds(attribute: DBFieldAttribute, idStrategy: IdStrategy): rea
 }
 
 /** The description of a contract field whose type Better Auth cannot use, or `undefined` when it can. */
-function wrongTypeFound(field: ContractField, accepted: readonly CodecKind[]): string | undefined {
+function wrongTypeFound(
+  support: TargetSupport,
+  field: ContractField,
+  accepted: readonly ValueKind[],
+): string | undefined {
   if (field.type.kind !== 'scalar' || field.many) return describeFieldType(field);
-  const kind = codecKind(field.type.codecId);
+  const kind = support.valueKind(field.type.codecId);
   return kind === undefined || accepted.includes(kind) ? undefined : describeFieldType(field);
 }
 
@@ -159,6 +153,7 @@ function columnFacts(contract: SqlContract, found: FoundModel, field: string): C
 
 function compareFoundModel(
   contract: SqlContract,
+  support: TargetSupport,
   expected: BetterAuthModel,
   found: FoundModel,
   idStrategy: IdStrategy,
@@ -172,7 +167,7 @@ function compareFoundModel(
   if (id === undefined) {
     missingFields.push('id');
   } else {
-    const wrong = wrongTypeFound(id, acceptedKindsByIdStrategy[idStrategy]);
+    const wrong = wrongTypeFound(support, id, acceptedKindsByIdStrategy[idStrategy]);
     if (wrong !== undefined) {
       problems.push({
         kind: 'wrong-type',
@@ -196,7 +191,11 @@ function compareFoundModel(
       missingFields.push(field.name);
       continue;
     }
-    const wrong = wrongTypeFound(contractField, acceptedKinds(field.attribute, idStrategy));
+    const wrong = wrongTypeFound(
+      support,
+      contractField,
+      acceptedKinds(field.attribute, idStrategy),
+    );
     if (wrong !== undefined) {
       problems.push({
         kind: 'wrong-type',
@@ -231,12 +230,13 @@ function compareFoundModel(
   return missingFields;
 }
 
-function hasUuidId(found: FoundModel): boolean {
+function hasUuidId(support: TargetSupport, found: FoundModel): boolean {
   const id = found.model.fields['id'];
-  return id?.type.kind === 'scalar' && codecKind(id.type.codecId) === 'uuid';
+  return id?.type.kind === 'scalar' && support.valueKind(id.type.codecId) === 'uuid';
 }
 
 function uuidKeyedModelsOf(
+  support: TargetSupport,
   models: readonly ComparedModel[],
   referencedModels: ReadonlyMap<string, FoundModel>,
 ): Set<string> {
@@ -246,7 +246,7 @@ function uuidKeyedModelsOf(
     ),
     ...referencedModels,
   ];
-  return new Set(found.filter(([, model]) => hasUuidId(model)).map(([name]) => name));
+  return new Set(found.filter(([, model]) => hasUuidId(support, model)).map(([name]) => name));
 }
 
 /** A model or field name that is not a Prisma identifier can be neither matched nor printed, so it is the only problem reported. */
@@ -269,10 +269,8 @@ function invalidNameProblems(models: readonly BetterAuthModel[]): ContractProble
  * Compares the contract with the models and fields Better Auth's table description asks for. The contract check and `auth generate` both use it.
  */
 export function compareContract(input: ComparisonInput): ContractComparison {
-  const { contract, betterAuthOptions, namespace } = input;
+  const { contract, betterAuthOptions, namespace, support } = input;
   const idStrategy = idStrategyOf(betterAuthOptions);
-  const defaultNamespace = defaultNamespaceByTarget[contract.target] ?? UNBOUND_DOMAIN_NAMESPACE_ID;
-  const storageNamesIgnoreCase = storageNamesIgnoreCaseByTarget[contract.target] ?? false;
   const expectedModelList = managedModels(input.tables, input);
   const nameProblems: ContractProblem[] = [
     ...invalidNameProblems(expectedModelList),
@@ -289,8 +287,7 @@ export function compareContract(input: ComparisonInput): ContractComparison {
       uuidKeyedModels: new Set(),
       idStrategy,
       namespace,
-      defaultNamespace,
-      storageNamesIgnoreCase,
+      support,
     };
   }
   const problems: ContractProblem[] = [];
@@ -311,7 +308,14 @@ export function compareContract(input: ComparisonInput): ContractComparison {
         models.push({ status: 'ambiguous', expected });
         break;
       case 'found': {
-        const missingFields = compareFoundModel(contract, expected, lookup, idStrategy, problems);
+        const missingFields = compareFoundModel(
+          contract,
+          support,
+          expected,
+          lookup,
+          idStrategy,
+          problems,
+        );
         models.push({ status: 'found', expected, found: lookup, missingFields });
         break;
       }
@@ -331,11 +335,10 @@ export function compareContract(input: ComparisonInput): ContractComparison {
     problems,
     referencedModels,
     uuidKeyedModels: acceptedKindsByIdStrategy[idStrategy].includes('uuid')
-      ? uuidKeyedModelsOf(models, referencedModels)
+      ? uuidKeyedModelsOf(support, models, referencedModels)
       : new Set(),
     idStrategy,
     namespace,
-    defaultNamespace,
-    storageNamesIgnoreCase,
+    support,
   };
 }

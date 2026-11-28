@@ -1,21 +1,11 @@
-import type { and } from '@prisma/orm-family-sql/orm-client';
+import type { Condition, OrmFunctionsOf } from '@prisma/orm-family-sql/orm-client';
+import type { CodecTypesBase } from '@prisma/orm-family-sql/relational-core/expression';
 import { blindCast } from '@prisma/orm-framework/utils/casts';
-
-/** A filter the ORM client's `and`, `or` and `where` accept. */
-export type Condition = Parameters<typeof and>[number];
 
 export type Row = Record<string, unknown>;
 
-/** A raw SQL expression built with `fns.raw`, before its codec is named. */
-export interface RawExpression {
-  returns(codecId: string): unknown;
-}
-
-export interface WhereFunctions {
-  raw(strings: TemplateStringsArray, ...values: unknown[]): RawExpression;
-  eq(left: unknown, right: unknown): unknown;
-  ne(left: unknown, right: unknown): unknown;
-}
+/** The `fns` of a `where` callback, for a contract whose codec and query-operation types are not known here. */
+export type WhereFunctions = OrmFunctionsOf<CodecTypesBase, Record<never, never>>;
 
 export interface WhereTools {
   readonly fns: WhereFunctions;

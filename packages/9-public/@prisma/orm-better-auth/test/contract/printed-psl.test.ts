@@ -184,7 +184,7 @@ describe.each(targets)('printed PSL on %s', (target) => {
 
     expect(printed.blocks.find((block) => block.modelName === 'User')).toEqual({
       modelName: 'User',
-      namespaceId: comparison.defaultNamespace,
+      namespaceId: comparison.support.defaultNamespace,
       existing: true,
       physicalName: undefined,
       table: undefined,
@@ -222,7 +222,7 @@ model Project {
     const printed = printPsl(comparison);
     expect(printed.blocks.find((block) => block.modelName === 'Project')).toEqual({
       modelName: 'Project',
-      namespaceId: comparison.defaultNamespace,
+      namespaceId: comparison.support.defaultNamespace,
       existing: true,
       physicalName: undefined,
       table: undefined,

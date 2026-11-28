@@ -3,7 +3,7 @@ import { twoFactor } from 'better-auth/plugins';
 import { describe, expect, it } from 'vitest';
 import { editContractSource } from '../../src/generate/edit-contract-source';
 import { useContractFixture } from '../helpers/contract-fixture';
-import type { TargetName } from '../helpers/databases';
+import { type TargetName, targets } from '../helpers/databases';
 import {
   type AdapterOptionsForComparison,
   compare,
@@ -252,51 +252,22 @@ describe('auth generate when the source stores what Better Auth needs under a na
     );
   });
 
-  it('compares table names ignoring case on SQLite', async () => {
-    const comparison = await comparisonOver(appPsl);
+  it.each(targets)('compares table names exactly on %s', async (target) => {
     const text = `${appPsl}\nmodel Mfa {\n  id String @id\n\n  @@map("TWOFACTOR")\n}\n`;
-    expect(() => editContractSource([{ path: contractPath, text }], comparison)).toThrow(
-      refusal(
-        comparison,
-        storedUnderAnotherName(
-          'Mfa in the table "TWOFACTOR"',
-          'a model named TwoFactor',
-          'Mfa to TwoFactor',
-        ),
-      ),
+    const comparison = await comparisonOver(text, target);
+    expect(editContractSource([{ path: contractPath, text }], comparison).code).toBe(
+      `${insertAfter(text, userLastField, twoFactorAdded)}\n${twoFactorModel}\n`,
     );
   });
 
-  it('folds only the letters A to Z when it compares SQLite names, as SQLite does', async () => {
+  it.each(targets)('compares column names exactly on %s', async (target) => {
     const withKind = {
       user: { additionalFields: { kind: { type: 'string' as const, required: false } } },
     };
-    const kelvin = insertAfter(appPsl, userLastField, '\n  legacyKind String? @map("\u212Aind")');
-    const ascii = insertAfter(appPsl, userLastField, '\n  legacyKind String? @map("KIND")');
-    const kelvinComparison = await comparisonOver(kelvin, 'sqlite', withKind);
-    const asciiComparison = await comparisonOver(ascii, 'sqlite', withKind);
-    expect(editContractSource([{ path: contractPath, text: kelvin }], kelvinComparison).code).toBe(
-      insertAfter(kelvin, '  legacyKind String? @map("\u212Aind")', '\n  kind String?'),
-    );
-    expect(() =>
-      editContractSource([{ path: contractPath, text: ascii }], asciiComparison),
-    ).toThrow(
-      refusal(
-        asciiComparison,
-        storedUnderAnotherName(
-          'User.legacyKind in the column "KIND"',
-          'a field named kind in User',
-          'User.legacyKind to kind',
-        ),
-      ),
-    );
-  });
-
-  it('compares table names exactly on Postgres', async () => {
-    const text = `${appPsl}\nmodel Mfa {\n  id String @id\n\n  @@map("TWOFACTOR")\n}\n`;
-    const comparison = await comparisonOver(text, 'postgres');
+    const text = insertAfter(appPsl, userLastField, '\n  legacyKind String? @map("KIND")');
+    const comparison = await comparisonOver(text, target, withKind);
     expect(editContractSource([{ path: contractPath, text }], comparison).code).toBe(
-      `${insertAfter(text, userLastField, twoFactorAdded)}\n${twoFactorModel}\n`,
+      insertAfter(text, '  legacyKind String? @map("KIND")', '\n  kind String?'),
     );
   });
 

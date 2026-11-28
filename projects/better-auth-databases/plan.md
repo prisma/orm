@@ -4,7 +4,7 @@ The spec is [spec.md](spec.md). Each slice is one pull request. Slices run in th
 
 | # | Slice | Depends on | Status |
 | --- | --- | --- | --- |
-| 1 | Target supports for Postgres and SQLite, inside the package | none | Not started |
+| 1 | Target supports for Postgres and SQLite, inside the package | none | Merged (TML-3982) |
 | 2 | MySQL and MariaDB, and the published interface | 1 | Not started |
 | 3 | JSON and list fields stored natively | 2 | Not started |
 | 4 | One-time tokens read and deleted in one statement | 2 | Not started |
@@ -31,8 +31,15 @@ Ship supports for MySQL and MariaDB, the MariaDB one built from the MySQL one, a
 - **One-time tokens.** Neither database reports the `returning` capability, so Better Auth keeps its own `consumeOne` there.
 - **Counters.** A test runs Better Auth's `incrementOne` fallback under contention inside a transaction. If it fails, the README states the limit.
 - **Publish the interface.** Export `TargetSupport` and the four shipped supports, add the `targetSupport` option and the lookup the spec describes, regenerate the published-interface file, and add the tests from requirement 3.
-- **Docs.** README, `DEVELOPING.md`, the decision record on library integrations (requirements 9 and 10), and the release-note entry the repository's release-notes check requires.
+- **Docs.** README, `DEVELOPING.md`, and the decision record on library integrations (requirements 9 and 10). Release notes are written when a release is prepared, not in feature pull requests.
 - **Example app.** It gains a MySQL configuration with its own emitted contract, run in CI.
+- **Left over from slice 1's review.**
+  - `pslType` returns only a PSL type. It does not know whether a field is part of a table index. The `id` line is printed outside the support (`idFieldOf`). MySQL writes long text as a type (`String(storage: text)`), so a type may be enough; widen it only if MySQL needs attributes.
+  - MySQL `ENUM` columns compare without regard to case and do not go through `compareText`. Decide whether that matters for Better Auth's fields.
+  - Publishing the interface also publishes the types it mentions (`IdStrategy`, Better Auth's `DBFieldAttribute`). Decide whether "target support" goes in the glossary.
+  - The codec-coverage test checks only that each published codec has a kind. Add the reverse check, that each codec a support lists exists, before building the MariaDB support from the MySQL one.
+  - A support's value-kind table refuses a codec listed twice. So the MariaDB support answers `valueKind` from its own table first and then asks the MySQL support, rather than merging the two tables and overriding entries.
+  - The refusal for a SQL target with no support must say to pass a `targetSupport` once the option exists.
 
 ## 3. JSON and list fields stored natively
 

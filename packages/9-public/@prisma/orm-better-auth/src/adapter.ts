@@ -31,9 +31,11 @@ import { assertFieldName, caseOnlyNameCollisionMessage } from './models/identifi
 import type { FoundModel, SqlContract } from './models/model-lookup';
 import type { PrismaAdapterOptions } from './options';
 import { callMethod, hasMethod, type OrmCollection, type Row } from './orm';
+import { type TargetSupport, targetSupportFor } from './target-support';
+import { shippedTargetSupports } from './targets/shipped';
 
 /**
- * A Prisma 8 Postgres or SQLite client, as `postgres(...)` and `sqlite(...)` return it.
+ * A Prisma 8 client for a SQL database, as the database package's runtime returns it.
  */
 export interface PrismaClientLike {
   readonly contract: SqlContract;
@@ -61,23 +63,21 @@ function hasTransaction(db: PrismaClientLike): db is TransactionalPrismaClientLi
   return 'transaction' in db && typeof db.transaction === 'function';
 }
 
-const supportedTargets = ['postgres', 'sqlite'];
-
-function assertClient(db: PrismaClientLike, adapterOptions: PrismaAdapterOptions): void {
+/** The support for the client's target; raises a `BetterAuthError` when the adapter cannot use the client. */
+function supportForClient(
+  db: PrismaClientLike,
+  adapterOptions: PrismaAdapterOptions,
+): TargetSupport {
   const contract: SqlContract | undefined = db.contract;
   if (contract === undefined) {
     throw new BetterAuthError('prismaAdapter needs the Prisma client, not a transaction.');
   }
-  if (!supportedTargets.includes(contract.target)) {
-    throw new BetterAuthError(
-      `@prisma/orm-better-auth supports Postgres and SQLite. This client's database is "${contract.target}".`,
-    );
-  }
+  const support = targetSupportFor(contract, shippedTargetSupports);
   const namespace = adapterOptions.namespace;
   if (namespace !== undefined && !Object.hasOwn(contract.domain.namespaces, namespace)) {
     throw new BetterAuthError(`Namespace "${namespace}" is not in your Prisma contract.`);
   }
-  if (adapterOptions.transaction !== true) return;
+  if (adapterOptions.transaction !== true) return support;
   if (!hasTransaction(db)) {
     throw new BetterAuthError(
       "The transaction option runs Better Auth transactions through the client's transaction(), which this object does not have. Pass the Prisma client, or turn the option off.",
@@ -92,6 +92,7 @@ function assertClient(db: PrismaClientLike, adapterOptions: PrismaAdapterOptions
       ),
     );
   }
+  return support;
 }
 
 /** For each physical model name, the fields a read without `select` returns: `id` and every field of Better Auth's table description. */
@@ -165,6 +166,7 @@ interface InstanceState {
 interface AdapterContext {
   readonly orm: object;
   readonly contract: SqlContract;
+  readonly support: TargetSupport;
   readonly instance: InstanceState;
   readonly adapterOptions: PrismaAdapterOptions;
 }
@@ -180,6 +182,7 @@ function asCustomAdapter(adapter: RowAdapter): CustomAdapter {
 function customAdapter({
   orm,
   contract,
+  support,
   instance,
   adapterOptions,
 }: AdapterContext): AdapterFactoryCustomizeAdapterCreator {
@@ -214,7 +217,7 @@ function customAdapter({
         model,
         (where ?? []).map((clause) => clause.field),
       );
-      return whereFilter(found, where);
+      return whereFilter(found, support, where);
     };
 
     const selectionOf = (model: string): readonly string[] => {
@@ -310,6 +313,7 @@ function customAdapter({
           betterAuthOptions,
           namespace: adapterOptions.namespace,
           usePlural,
+          support,
         });
         if (comparison.problems.length === 0) {
           return { code: '', path: file ?? 'prisma/contract.prisma' };
@@ -342,7 +346,7 @@ function factoryConfig(
 }
 
 /**
- * A Better Auth database adapter over a Prisma 8 Postgres or SQLite client.
+ * A Better Auth database adapter over a Prisma 8 client for a SQL database the adapter supports.
  *
  * @example
  * ```ts
@@ -357,11 +361,12 @@ export function prismaAdapter(
   db: PrismaClientLike,
   adapterOptions: PrismaAdapterOptions = {},
 ): (betterAuthOptions: BetterAuthOptions) => DBAdapter<BetterAuthOptions> {
-  assertClient(db, adapterOptions);
+  const support = supportForClient(db, adapterOptions);
   return (betterAuthOptions) => {
     const context: AdapterContext = {
       orm: db.orm,
       contract: db.contract,
+      support,
       instance: {
         collections: createModelCollections(db.contract, adapterOptions.namespace),
         defaultSelections: undefined,
@@ -393,6 +398,7 @@ export function prismaAdapter(
         betterAuthOptions,
         namespace: adapterOptions.namespace,
         usePlural: adapterOptions.usePlural ?? false,
+        support,
       })),
       betterAuthOptions,
     );

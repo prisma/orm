@@ -8,6 +8,8 @@ import {
 import { type PrintedPsl, printPsl } from '../../src/contract/print-psl';
 import { idLineOf, pslTypeOf } from '../../src/contract/psl-types';
 import type { SqlContract } from '../../src/models/model-lookup';
+import { targetSupportFor } from '../../src/target-support';
+import { shippedTargetSupports } from '../../src/targets/shipped';
 
 export interface AdapterOptionsForComparison {
   readonly namespace?: string;
@@ -27,6 +29,7 @@ export function compare(
     betterAuthOptions,
     namespace: adapterOptions.namespace,
     usePlural: adapterOptions.usePlural ?? false,
+    support: targetSupportFor(contract, shippedTargetSupports),
   });
 }
 

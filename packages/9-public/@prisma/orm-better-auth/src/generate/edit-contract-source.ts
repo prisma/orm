@@ -213,7 +213,7 @@ function parsedDeclarations<F extends ContractSourceFile>(
         `${file.path} does not parse: ${first.message} (line ${first.range.start.line + 1}).`,
       );
     }
-    collectDeclarations(file, document, comparison.defaultNamespace, declarations);
+    collectDeclarations(file, document, comparison.support.defaultNamespace, declarations);
   }
   return declarations;
 }
@@ -258,21 +258,11 @@ interface Conflicts {
   readonly storedUnderAnotherName: StoredUnderAnotherName[];
 }
 
-/** The name with only the ASCII letters A to Z lower-cased, the case SQLite ignores in table and column names. */
-function foldAsciiCase(name: string): string {
-  return name.replace(/[A-Z]/g, (letter) => letter.toLowerCase());
-}
-
-function sameStorageName(a: string, b: string, comparison: ContractComparison): boolean {
-  return comparison.storageNamesIgnoreCase ? foldAsciiCase(a) === foldAsciiCase(b) : a === b;
-}
-
 /** What the model already declares that conflicts with the fields the block would add. A Better Auth field is found by its exact name. */
 function fieldConflicts(
   block: PrintedBlock,
   model: DeclaredModel,
   mixins: readonly DeclaredMixin[],
-  comparison: ContractComparison,
   into: Conflicts,
 ): void {
   const additions = new Set(block.fieldNames);
@@ -282,9 +272,7 @@ function fieldConflicts(
       into.aheadOfEmit.push({ name: declared, namespaceId: undefined, path });
       continue;
     }
-    const needed = block.columns.find((candidate) =>
-      sameStorageName(candidate, column, comparison),
-    );
+    const needed = block.columns.find((candidate) => candidate === column);
     if (needed === undefined) continue;
     into.storedUnderAnotherName.push({
       path,
@@ -308,7 +296,7 @@ function modelConflicts(
   const { physicalName, table } = block;
   if (physicalName === undefined || table === undefined) return;
   const lookedUp = new Set(modelNameCandidates(physicalName));
-  const newNamespace = comparison.namespace ?? comparison.defaultNamespace;
+  const newNamespace = comparison.namespace ?? comparison.support.defaultNamespace;
   for (const { file, namespaceId, declaration } of models) {
     const name = declaration.name()?.name();
     if (name === undefined) continue;
@@ -318,7 +306,7 @@ function modelConflicts(
     }
     if (namespaceId !== newNamespace) continue;
     const stored = mappedName(declaration.attributes()) ?? name;
-    if (!sameStorageName(stored, table, comparison)) continue;
+    if (stored !== table) continue;
     into.storedUnderAnotherName.push({
       path: file.path,
       declared: name,
@@ -482,7 +470,7 @@ export function editContractSource<F extends ContractSourceFile>(
   const allDeclared = [...declared.values()].flat();
   const conflicts: Conflicts = { aheadOfEmit: [], storedUnderAnotherName: [] };
   for (const { block, ...model } of targets) {
-    fieldConflicts(block, model, mixins, comparison, conflicts);
+    fieldConflicts(block, model, mixins, conflicts);
   }
   for (const block of added) modelConflicts(block, allDeclared, comparison, conflicts);
   const { aheadOfEmit, storedUnderAnotherName } = conflicts;
@@ -498,7 +486,7 @@ export function editContractSource<F extends ContractSourceFile>(
       storedUnderAnotherName.map(storedUnderAnotherNameReason).join(' '),
     );
   }
-  const newNamespace = comparison.namespace ?? comparison.defaultNamespace;
+  const newNamespace = comparison.namespace ?? comparison.support.defaultNamespace;
   for (const block of added) {
     const other = others.find(
       ({ namespaceId, name }) => namespaceId === newNamespace && name === block.modelName,
@@ -552,7 +540,7 @@ export function editContractSource<F extends ContractSourceFile>(
   const rejected = firstNewDiagnostic(
     files,
     files.map((candidate) => (candidate === file ? { path: file.path, text: code } : candidate)),
-    comparison.defaultNamespace,
+    comparison.support.defaultNamespace,
     insertions.map(({ offset, text }) => ({ path: file.path, offset, length: text.length })),
   );
   if (rejected !== undefined) {
