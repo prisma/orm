@@ -1,4 +1,4 @@
-import { DatabaseSync, type SQLOutputValue } from 'node:sqlite';
+import { DatabaseSync, type SQLOutputValue, type StatementSync } from 'node:sqlite';
 import type { RuntimeDriverInstance } from '@internal/framework-components/execution';
 import type {
   SqlConnection,
@@ -15,9 +15,10 @@ import { validateSqliteIsolationLevel } from '@internal/target-sqlite/runtime';
 import { blindCast } from '@internal/utils/casts';
 import { InternalError } from '@internal/utils/internal-error';
 import { closeDatabase, wasClosedByDriver } from './database-state';
-import { prepareExact, safeIntegersAsNumbers } from './exact-integers';
+import { safeIntegersAsNumbers } from './exact-integers';
 import { normalizeSqliteError } from './normalize-error';
 import { sqliteParams } from './sqlite-params';
+import { SqliteStatementCache } from './statement-cache';
 
 export type SqliteBinding = { readonly kind: 'path'; readonly path: string };
 
@@ -65,17 +66,38 @@ function openConnection(path: string): DatabaseSync {
   }
 }
 
+/** Takes a released connection's database for reuse instead of closing it. */
+interface SqliteConnectionHome {
+  /**
+   * Takes the database into the idle slot when it belongs to the binding generation the
+   * connection was created for; false means the caller must close it.
+   */
+  reclaim(db: DatabaseSync, statements: SqliteStatementCache, generation: number): boolean;
+  /** Drops the database from the idle slot when its connection closes it some other way. */
+  discard(db: DatabaseSync): void;
+}
+
+interface IdleSqliteConnection {
+  readonly db: DatabaseSync;
+  readonly statements: SqliteStatementCache;
+}
+
 abstract class SqliteQueryable implements SqlQueryable {
   protected readonly db: DatabaseSync;
+  protected readonly statements: SqliteStatementCache;
 
-  constructor(db: DatabaseSync) {
+  constructor(db: DatabaseSync, statements: SqliteStatementCache) {
     this.db = db;
+    this.statements = statements;
   }
 
   async *query<Row = Record<string, unknown>>(request: SqlExecuteRequest): AsyncIterable<Row> {
     let rows: Iterator<Record<string, SQLOutputValue>> | undefined;
+    let statement: StatementSync | undefined;
     try {
-      rows = prepareExact(this.db, request.sql).iterate(...sqliteParams(request.params));
+      statement = this.statements.prepare(this.db, request.sql);
+      this.statements.beginRead(statement);
+      rows = statement.iterate(...sqliteParams(request.params));
       for (let next = rows.next(); next.done !== true; next = rows.next()) {
         yield blindCast<Row, 'SQLite rows follow the caller query shape'>(
           safeIntegersAsNumbers(next.value),
@@ -84,13 +106,16 @@ abstract class SqliteQueryable implements SqlQueryable {
     } catch (error) {
       throw normalizeSqliteError(error, wasClosedByDriver(this.db));
     } finally {
+      if (statement !== undefined) {
+        this.statements.endRead(statement);
+      }
       if (this.db.isOpen) rows?.return?.();
     }
   }
 
   async execute(request: SqlExecuteRequest): Promise<SqlStatementStats> {
     try {
-      const stmt = prepareExact(this.db, request.sql);
+      const stmt = this.statements.prepare(this.db, request.sql);
       if (stmt.columns().length !== 0) {
         throw new InternalError('SQLite cannot execute statements that return rows.');
       }
@@ -106,7 +131,7 @@ abstract class SqliteQueryable implements SqlQueryable {
 
   async explain(request: SqlExecuteRequest): Promise<SqlExplainResult> {
     try {
-      const stmt = prepareExact(this.db, `EXPLAIN QUERY PLAN ${request.sql}`);
+      const stmt = this.statements.prepare(this.db, `EXPLAIN QUERY PLAN ${request.sql}`);
       const rows = stmt.all(...sqliteParams(request.params)).map(safeIntegersAsNumbers);
       return { rows };
     } catch (error) {
@@ -116,24 +141,50 @@ abstract class SqliteQueryable implements SqlQueryable {
 }
 
 export class SqliteConnectionImpl extends SqliteQueryable implements SqlConnection {
+  readonly #home: SqliteConnectionHome | undefined;
+  /** The binding generation this connection was created under, so a stale release cannot pool it. */
+  readonly #generation: number;
+  /** Set when a terminal operation (COMMIT or ROLLBACK) failed; the connection never pools after that. */
+  #terminalOperationFailed = false;
+
+  constructor(
+    db: DatabaseSync,
+    home?: SqliteConnectionHome,
+    statements?: SqliteStatementCache,
+    generation = 0,
+  ) {
+    super(db, statements ?? new SqliteStatementCache());
+    this.#home = home;
+    this.#generation = generation;
+  }
+
   async beginTransaction(start?: SqlTransactionOptions): Promise<SqlTransaction> {
     if (start?.isolationLevel !== undefined) {
       validateSqliteIsolationLevel(start.isolationLevel);
     }
     try {
       this.db.exec('BEGIN');
-      return new SqliteTransactionImpl(this.db);
+      return new SqliteTransactionImpl(this.db, this.statements, () => {
+        this.#terminalOperationFailed = true;
+      });
     } catch (error) {
       throw normalizeSqliteError(error, wasClosedByDriver(this.db));
     }
   }
 
   async release(): Promise<void> {
+    if (
+      this.#terminalOperationFailed === false &&
+      this.#home?.reclaim(this.db, this.statements, this.#generation) === true
+    ) {
+      return;
+    }
     return this.destroy();
   }
 
   async destroy(_reason?: unknown): Promise<void> {
     try {
+      this.#home?.discard(this.db);
       closeDatabase(this.db);
     } catch (error) {
       throw normalizeSqliteError(error, wasClosedByDriver(this.db));
@@ -142,10 +193,18 @@ export class SqliteConnectionImpl extends SqliteQueryable implements SqlConnecti
 }
 
 class SqliteTransactionImpl extends SqliteQueryable implements SqlTransaction {
+  readonly #onTerminalFailure: () => void;
+
+  constructor(db: DatabaseSync, statements: SqliteStatementCache, onTerminalFailure: () => void) {
+    super(db, statements);
+    this.#onTerminalFailure = onTerminalFailure;
+  }
+
   async commit(): Promise<void> {
     try {
       this.db.exec('COMMIT');
     } catch (error) {
+      this.#onTerminalFailure();
       throw normalizeSqliteError(error, wasClosedByDriver(this.db));
     }
   }
@@ -154,21 +213,23 @@ class SqliteTransactionImpl extends SqliteQueryable implements SqlTransaction {
     try {
       this.db.exec('ROLLBACK');
     } catch (error) {
+      this.#onTerminalFailure();
       throw normalizeSqliteError(error, wasClosedByDriver(this.db));
     }
   }
 
   async savepoint(name: string): Promise<SqlTransaction> {
-    return openSqliteSavepoint(this.db, name);
+    return openSqliteSavepoint(this.db, this.statements, name);
   }
 }
 
 class SqliteSavepointImpl extends SqliteQueryable implements SqlTransaction {
   constructor(
     db: DatabaseSync,
+    statements: SqliteStatementCache,
     private readonly name: string,
   ) {
-    super(db);
+    super(db, statements);
   }
 
   async commit(): Promise<void> {
@@ -180,7 +241,7 @@ class SqliteSavepointImpl extends SqliteQueryable implements SqlTransaction {
   }
 
   async savepoint(name: string): Promise<SqlTransaction> {
-    return openSqliteSavepoint(this.db, name);
+    return openSqliteSavepoint(this.db, this.statements, name);
   }
 }
 
@@ -192,9 +253,13 @@ function execSavepointStatement(db: DatabaseSync, sql: string): void {
   }
 }
 
-function openSqliteSavepoint(db: DatabaseSync, name: string): SqliteSavepointImpl {
+function openSqliteSavepoint(
+  db: DatabaseSync,
+  statements: SqliteStatementCache,
+  name: string,
+): SqliteSavepointImpl {
   execSavepointStatement(db, `SAVEPOINT ${name}`);
-  return new SqliteSavepointImpl(db, name);
+  return new SqliteSavepointImpl(db, statements, name);
 }
 
 interface ConnectedState {
@@ -222,9 +287,17 @@ export class SqliteDriver implements SqliteRuntimeDriver {
   readonly targetId = 'sqlite' as const;
 
   #state: DriverState;
+  readonly #home: SqliteConnectionHome;
+  #idle: IdleSqliteConnection | undefined;
+  /** Counts connect() calls, so a connection's reclamation is judged against its own binding. */
+  #generation = 0;
 
   constructor(initialState?: ConnectedState) {
     this.#state = initialState ?? { kind: 'unbound' };
+    this.#home = {
+      reclaim: (db, statements, generation) => this.#reclaim(db, statements, generation),
+      discard: (db) => this.#discard(db),
+    };
   }
 
   #requireConnected(): ConnectedState {
@@ -244,6 +317,7 @@ export class SqliteDriver implements SqliteRuntimeDriver {
         bindingKind: binding.kind,
       });
     }
+    this.#generation += 1;
     this.#state = {
       kind: 'connected',
       path: binding.path,
@@ -253,13 +327,67 @@ export class SqliteDriver implements SqliteRuntimeDriver {
 
   async acquireConnection(): Promise<SqliteConnectionImpl> {
     const { path } = this.#requireConnected();
-    return new SqliteConnectionImpl(openConnection(path));
+    const idle = this.#idle;
+    if (idle === undefined) {
+      return new SqliteConnectionImpl(
+        openConnection(path),
+        this.#home,
+        undefined,
+        this.#generation,
+      );
+    }
+    this.#idle = undefined;
+    return new SqliteConnectionImpl(idle.db, this.#home, idle.statements, this.#generation);
+  }
+
+  #reclaim(db: DatabaseSync, statements: SqliteStatementCache, generation: number): boolean {
+    // A connection created for an earlier binding never joins this binding's idle slot: after a
+    // reconnect it would serve the new binding while still reading and writing the old database.
+    if (generation !== this.#generation) {
+      return false;
+    }
+    // A driver that closed pools nothing: no later acquisition can hand the database out again,
+    // and a further close() returns without draining the idle slot.
+    if (this.#state.kind !== 'connected') {
+      return false;
+    }
+    if (this.#idle !== undefined) {
+      return false;
+    }
+    // A database still inside a transaction, or still serving an unfinished read, is not in a
+    // reusable state; closing it is what release() did before reuse existed.
+    if (db.isTransaction !== false) {
+      return false;
+    }
+    if (statements.hasActiveRead()) {
+      return false;
+    }
+    this.#idle = { db, statements };
+    return true;
+  }
+
+  #discard(db: DatabaseSync): void {
+    if (this.#idle?.db === db) {
+      this.#idle = undefined;
+    }
+  }
+
+  #drainIdle(): void {
+    const idle = this.#idle;
+    if (idle === undefined) return;
+    this.#idle = undefined;
+    try {
+      closeDatabase(idle.db);
+    } catch (error) {
+      throw normalizeSqliteError(error, wasClosedByDriver(idle.db));
+    }
   }
 
   async close(): Promise<void> {
     if (this.#state.kind !== 'connected') return;
     const { conn } = this.#state;
     this.#state = { kind: 'closed' };
+    this.#drainIdle();
     await conn.release();
   }
 
