@@ -22,7 +22,7 @@ The runtime logs warnings and errors that do not stop a call: the marker-check w
 | `info` | `console.info` (standard output in Node) |
 | `debug` | nowhere |
 
-A client created with `log` receives exactly what it received before.
+A client created with `log` receives exactly what it received before. An error that one of its methods throws is now discarded everywhere: it no longer fails a query or the creation of a client.
 
 Most applications need no change: a warning that now prints points to something to fix, such as a database signed for another contract. In each file the detection matches, look at each client created without `log`. If the application must keep its console silent, for example a command-line tool whose output another program reads, pass a logger that does nothing:
 
