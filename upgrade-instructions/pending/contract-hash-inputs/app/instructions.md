@@ -2,7 +2,7 @@
 changes:
   - id: contract-hash-inputs
     summary: |
-      Every storage, profile and execution hash takes a new value, once: each now covers only the target, the family and its own section of the contract, and the rules that compute them do not change again within Prisma 8. Before upgrading, deploy every pending migration, the application's and every extension's, to every database with the release you are on: the upgrade assumes every database is at the newest contract. Then upgrade Prisma in a release of its own: run the colocated script on the project, which rewrites every hash in the emitted contract, `contract.d.ts`, the snapshot directories, each `migration.json` and `ops.json`, each ref file and each `migration.ts`, then `prisma contract emit`, and commit. If the emitted contract's storage hash then differs from the one the script wrote, because the contract source holds a `false`, `[]` or `{}` that the earlier release left out of `contract.json`, plan a migration for it in the same release. That release's deploy runs `prisma db sign --no-advance-ref` (signed at the directory of the migration before that new one, if there is one; with `--force` where the change policy permits only migrations) and then `prisma db migrate` against every database that existed before it; a database created later needs only `prisma db migrate`. A database with at least one of the application's migrations, and none of an extension's, still pending is signed at the directory of the migration it is at; a database with nothing pending is signed with plain `prisma db sign --no-advance-ref`, never at a directory.
+      Every storage, profile and execution hash takes a new value, once: each now covers only the target, the family and its own section of the contract, and the rules that compute them do not change again within Prisma 8. Before upgrading, deploy every pending migration, the application's and every extension's, to every database with the release you are on: the upgrade assumes every database is at the newest contract. Then upgrade Prisma in a release of its own: run the colocated script on the project, which rewrites every hash in the emitted contract, `contract.d.ts`, the snapshot directories, each `migration.json` and `ops.json`, each ref file and each `migration.ts`, then `prisma contract emit`, and commit. If the emitted contract's storage hash then differs from the one the script wrote, because the contract source holds a `false`, `[]` or `{}` that the earlier release left out of `contract.json`, plan a migration for it in the same release. That release's deploy runs `prisma db sign --no-advance-ref` (signed at the directory name of the migration before that new one, if there is one, such as `prisma db sign --no-advance-ref 20261128T0807_add_post_meta`; with `--force` where the change policy permits only migrations) and then `prisma db migrate` against every database that existed before it; a database created later needs only `prisma db migrate`. A database with at least one of the application's migrations, and none of an extension's, still pending is signed at the directory name of the migration it is at; a database with nothing pending is signed with plain `prisma db sign --no-advance-ref`, never at a directory.
     script: ./scripts/contract-hash-inputs/contract-hash-inputs.ts
 ---
 
@@ -97,7 +97,7 @@ import { Migration, MigrationCLI, rawSql } from '@prisma/orm-postgres/migration'
 
 3. Run `node <migration directory>/migration.ts`. It writes the migration's `ops.json` and its hash into `migration.json`.
 
-Each database is then at the contract the script's hashes name, which is the `to` of the migration before the new one, not at the emitted contract. So in step 5 sign each database at that migration's directory, `prisma db sign --no-advance-ref <migration directory>` (with `--force` where the change policy permits only migrations), and then `prisma db migrate` applies the new migration. This is the route under "A database that is still behind" in step 5, with the directory of your last migration before the new one.
+Each database is then at the contract the script's hashes name, which is the `to` of the migration before the new one, not at the emitted contract. So in step 5 sign each database at that migration's directory name, `prisma db sign --no-advance-ref <migration directory name>`, for example `prisma db sign --no-advance-ref 20261128T0807_add_post_meta` (with `--force` where the change policy permits only migrations), and then `prisma db migrate` applies the new migration. This is the route under "A database that is still behind" in step 5, with the directory name of your last migration before the new one.
 
 ### 5. Sign every database in that release's deploy
 
@@ -134,11 +134,11 @@ After the deploy, `prisma db verify --marker-only` passes against every database
 A database that did not get every migration before the upgrade is behind the newest contract. If at least one of the application's migrations, and none of an extension's, is pending on it, sign it at the contract it is at instead, then let `db migrate` apply the rest:
 
 ```sh
-prisma db sign --no-advance-ref <migration directory>
+prisma db sign --no-advance-ref <migration directory name>
 prisma db migrate
 ```
 
-Add `--force` to the first line where the change policy permits only migrations. `db sign` takes the directory name of a migration as its contract and signs the contract that migration leads to; `db migrate` then applies the migrations after it.
+Add `--force` to the first line where the change policy permits only migrations. `db sign` takes the directory name of a migration as its contract and signs the contract that migration leads to; `db migrate` then applies the migrations after it. Give the name alone, for example `prisma db sign --no-advance-ref 20261128T0807_add_post_meta`, not a path such as `migrations/app/20261128T0807_add_post_meta`: `db sign` looks the name up among the migrations, and a path matches none of them.
 
 The directory must be that of the migration that brought the database to the contract it is at, usually the last one it applied. To find it, run two commands against the database:
 
