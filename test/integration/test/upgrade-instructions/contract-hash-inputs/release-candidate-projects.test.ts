@@ -1,4 +1,4 @@
-import { cpSync, readdirSync, readFileSync } from 'node:fs';
+import { cpSync, existsSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { computeStorageHash } from '@internal/contract/hashing';
 import { normalizeSqlStorage } from '@internal/sql-contract/normal-form';
 import { join } from 'pathe';
@@ -32,8 +32,11 @@ function storageHashOf(root: string, path: string): string {
 }
 
 function snapshotsOf(root: string): string[] {
-  return readdirSync(join(root, 'migrations/snapshots')).sort();
+  const dir = join(root, 'migrations/snapshots');
+  return existsSync(dir) ? readdirSync(dir).sort() : [];
 }
+
+const noSnapshot = { snapshots: [], snapshotStorageHash: [] };
 
 function migrationOf(root: string): string {
   const [migration] = readdirSync(join(root, MIGRATIONS)).filter((name) => name !== 'refs');
@@ -108,31 +111,52 @@ describe.each([
     });
   });
 
-  describe('when `prisma contract emit` already wrote the contract with this release', () => {
-    const emitted = join(fixturesDir, 'emitted-by-this-release', project);
-    const emittedHash = storageHashOf(emitted, 'contract.json');
-    const root = copyDirectory(releaseCandidate);
-    cpSync(join(emitted, 'contract.json'), join(root, CONTRACT));
-    cpSync(join(emitted, 'contract.d.ts'), join(root, DTS));
-    const before = readTree(root);
-    const run = runScript(root);
+  describe.each([
+    { snapshot: 'a snapshot of it', keepSnapshot: true },
+    { snapshot: 'no snapshot of it', keepSnapshot: false },
+  ])(
+    'when `prisma contract emit` already wrote the contract with this release, and the project has $snapshot',
+    ({ keepSnapshot }) => {
+      const emitted = join(fixturesDir, 'emitted-by-this-release', project);
+      const emittedHash = storageHashOf(emitted, 'contract.json');
+      const root = copyDirectory(releaseCandidate);
+      cpSync(join(emitted, 'contract.json'), join(root, CONTRACT));
+      cpSync(join(emitted, 'contract.d.ts'), join(root, DTS));
+      if (!keepSnapshot) rmSync(join(root, 'migrations/snapshots'), { recursive: true });
+      const before = readTree(root);
+      const run = runScript(root);
+      const listing = `Contracts \`prisma contract emit\` already wrote with this release, left as they are. The contract source holds a value the earlier release left out of \`contract.json\`, so the databases were built without it. Each line gives the emitted storage hash, then the new storage hash of the contract without the value, which every migration, ref and snapshot that named the old hash now names. The upgrade instructions say what to do, under "When the emitted contract gets a different storage hash":\n  ${CONTRACT} (${emittedHash}; without the value, ${newHash})\n`;
 
-    it('keeps the emitted contract, and gives its snapshot, the migration and the ref the hash of the contract 8.0.0-rc.25 wrote', () => {
-      expect(emittedHash).not.toBe(newHash);
-      expect({
-        status: run.status,
-        stderr: run.stderr,
-        contract: readTree(root)[CONTRACT] === before[CONTRACT],
-        dts: readTree(root)[DTS] === before[DTS],
-        named: namedStorageHashes(root),
-      }).toEqual({ status: 0, stderr: '', contract: true, dts: true, named: everywhere(newHash) });
-      expect(run.stdout).toContain(`  ${writtenHash} -> ${newHash}\n`);
-    });
+      it('keeps the emitted contract, and gives the migration, the ref and any snapshot the hash of the contract 8.0.0-rc.25 wrote', () => {
+        expect(emittedHash).not.toBe(newHash);
+        const named = namedStorageHashes(root);
+        expect({
+          status: run.status,
+          stderr: run.stderr,
+          contract: readTree(root)[CONTRACT] === before[CONTRACT],
+          dts: readTree(root)[DTS] === before[DTS],
+          named,
+        }).toEqual({
+          status: 0,
+          stderr: '',
+          contract: true,
+          dts: true,
+          named: keepSnapshot ? everywhere(newHash) : { ...everywhere(newHash), ...noSnapshot },
+        });
+        expect(run.stdout).toContain(`  ${writtenHash} -> ${newHash}\n`);
+      });
 
-    it('lists the emitted contract with both hashes', () => {
-      expect(run.stdout).toContain(
-        `  ${CONTRACT} (${emittedHash}; the snapshot's is ${newHash})\n`,
-      );
-    });
-  });
+      it('lists the emitted contract with both hashes', () => {
+        expect(run.stdout).toContain(listing);
+      });
+
+      it('changes nothing on a second run, and lists the emitted contract again', () => {
+        expect(runScript(root)).toEqual({
+          status: 0,
+          stdout: `${NOTHING_CHANGED}${listing}`,
+          stderr: '',
+        });
+      });
+    },
+  );
 });

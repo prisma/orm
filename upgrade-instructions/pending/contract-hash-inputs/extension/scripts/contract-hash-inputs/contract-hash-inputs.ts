@@ -617,6 +617,20 @@ function newHash(contract: ContractSections, section: JsonRecord): string {
   return sha256(JSON.stringify(sortKeys(input), null, 2));
 }
 
+/**
+ * The new storage hash of the contract as the earlier release wrote it from the same source: each `false`, `[]` and `{}` it left out once, but the ones it kept. Databases that release migrated were built from that contract, so this is the hash they are at.
+ */
+function newStorageHashAsTheEarlierReleaseWrote(contract: ContractSections): string {
+  const preserveEmpty = PRESERVE_EMPTY[contract.family];
+  const written = omitDefaults(
+    { storage: contract.storage },
+    [],
+    (path) => isWrittenButNotHashed(path) || preserveEmpty(path),
+  );
+  const storage = isRecord(written) && isRecord(written['storage']) ? written['storage'] : {};
+  return newHash(contract, { storage: withoutNamespaceKinds(storage) });
+}
+
 function contractHashes(
   contract: ContractSections,
   rule: (contract: ContractSections, section: JsonRecord, hooks: Hooks) => string,
@@ -930,6 +944,8 @@ interface ContractPlan {
   readonly oldHashes: HashSet;
   readonly newHashes: HashSet;
   readonly snapshotHash: string | undefined;
+  /** The new storage hash of the contract the earlier release wrote from the same source. */
+  readonly earlierReleaseStorageHash: string;
   /** The hash a MongoDB snapshot is named by when an earlier upgrade step rewrote its content and kept the hash. */
   readonly keptStorageHash: string | undefined;
 }
@@ -1065,16 +1081,24 @@ function planContract(
     return undefined;
   }
   if (stale.length > 0) checks.notes.push(`${shown} (${stale.join(' and ')})`);
-  return { file, oldHashes, newHashes, snapshotHash, keptStorageHash: kept };
+  return {
+    file,
+    oldHashes,
+    newHashes,
+    snapshotHash,
+    earlierReleaseStorageHash: newStorageHashAsTheEarlierReleaseWrote(sections),
+    keptStorageHash: kept,
+  };
 }
 
 /**
- * Whether `prisma contract emit` wrote the contract with this release: it is not a snapshot, and it stores the new hash its content gives, not the old one. Its old hash is the one the earlier release computed for the same source, so a snapshot of that contract has the same old hash. When the source holds a value the earlier release left out, the two new hashes differ, and the snapshot's is the one migrations and databases are at.
+ * Whether `prisma contract emit` wrote the contract with this release: it is not a snapshot, it has the `_generated` block that `prisma contract emit` writes, and it stores the new hash its content gives, not the old one. Its old hash is the one the earlier release computed for the same source. When the source holds a value the earlier release left out, its new hash differs from the new hash of the contract that release wrote, which is the one migrations and databases are at, whether or not a snapshot of it is left.
  */
 function isEmittedByThisRelease(plan: ContractPlan, kind: HashKind): boolean {
   const to = plan.newHashes[kind];
   return (
     plan.snapshotHash === undefined &&
+    Object.hasOwn(plan.file.value, '_generated') &&
     to !== plan.oldHashes[kind] &&
     storedHashes(plan.file.value)[kind] === to
   );
@@ -1278,9 +1302,15 @@ function main(args: readonly string[]): number {
   const emitted: string[] = [];
   for (const { plan, kind, from, to } of emittedFirst) {
     const known = hashes.all.get(from);
-    if (known === undefined || known === to) hashes.add(kind, from, to, stops);
-    else if (kind === 'storage')
-      emitted.push(`${shown(plan.file.path)} (${to}; the snapshot's is ${known})`);
+    if (kind !== 'storage') {
+      if (known === undefined || known === to) hashes.add(kind, from, to, stops);
+      continue;
+    }
+    const databases = known ?? plan.earlierReleaseStorageHash;
+    if (known === undefined) hashes.add(kind, from, databases, stops);
+    hashes.newValues.add(to);
+    if (databases !== to)
+      emitted.push(`${shown(plan.file.path)} (${to}; without the value, ${databases})`);
   }
   if (stops.length > 0) return refuse(stops);
 
@@ -1581,7 +1611,7 @@ function report(
     );
   if (plan.emitted.length > 0)
     lines.push(
-      'Contracts `prisma contract emit` already wrote with this release, left as they are. Their storage hash differs from the new hash of the snapshot with the same old hash, because the contract source holds a value the earlier release left out of `contract.json`; the upgrade instructions say what to do, under "When the emitted contract gets a different storage hash":',
+      'Contracts `prisma contract emit` already wrote with this release, left as they are. The contract source holds a value the earlier release left out of `contract.json`, so the databases were built without it. Each line gives the emitted storage hash, then the new storage hash of the contract without the value, which every migration, ref and snapshot that named the old hash now names. The upgrade instructions say what to do, under "When the emitted contract gets a different storage hash":',
       ...plan.emitted.map((note) => `  ${note}`),
     );
   if (plan.notes.length > 0)
