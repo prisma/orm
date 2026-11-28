@@ -1,5 +1,9 @@
 import type { Contract } from '@internal/contract/types';
-import { PRISMA_SPACE_ID } from '@internal/framework-components/control';
+import {
+  APP_SPACE_ID,
+  databasePoliciesOf,
+  PRISMA_SPACE_ID,
+} from '@internal/framework-components/control';
 import { applyInstalledContractSpace } from '@internal/migration-tools/spaces';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -8,6 +12,7 @@ import {
   releaseCandidateRows,
 } from './fixtures/release-candidate-prisma-tables';
 import {
+  controlAdapter,
   createDriver,
   createTestDatabase,
   familyInstance,
@@ -198,6 +203,24 @@ describe("applying the Postgres target's _prisma contract space", { concurrent: 
       tables: ['config', 'contract', 'ledger', 'signatures'],
       policies: [],
     });
+  });
+
+  it('moves policies a release candidate stored as JSON null as they are, so they are still reported as unreadable', {
+    timeout: testTimeout,
+  }, async () => {
+    await createReleaseCandidateTables();
+    await driver.query(
+      `update prisma_contract.marker set meta = '{"policies": null}' where space = 'app'`,
+    );
+
+    await apply();
+
+    const marker = await controlAdapter.readMarker(driver, APP_SPACE_ID);
+    expect({
+      policies: await recordedPolicies(),
+      meta: marker?.meta,
+      readable: databasePoliciesOf(marker).ok,
+    }).toEqual({ policies: [null], meta: { policies: null }, readable: false });
   });
 
   it("changes nothing on a second call after moving a release candidate's rows", {

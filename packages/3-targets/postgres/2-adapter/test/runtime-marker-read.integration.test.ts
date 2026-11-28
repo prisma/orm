@@ -1,4 +1,5 @@
 import postgresRuntimeDriverDescriptor from '@internal/driver-postgres/runtime';
+import type { SqlQueryable } from '@internal/sql-relational-core/ast';
 import { createDevDatabase, timeouts } from '@repo/test-utils';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createPostgresAdapter } from '../src/core/adapter';
@@ -54,6 +55,41 @@ describe('runtime readMarker through the Postgres runtime driver', () => {
           meta: {},
           invariants: ['inv-1'],
         },
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    'reads the signature as a role that may read _prisma.signatures and nothing else of Prisma',
+    async () => {
+      const database = await createDevDatabase();
+      const driver = await createDriver(database.connectionString);
+      cleanups.push(async () => {
+        await driver.close();
+        await database.close();
+      });
+      await createPrismaTables(driver);
+      await driver.query(
+        `insert into _prisma.signatures (space, core_hash, profile_hash, invariants)
+         values ('app', 'core', 'profile', '{}'::text[])`,
+      );
+      await driver.query('create role signatures_reader nologin');
+      await driver.query('grant usage on schema _prisma to signatures_reader');
+      await driver.query('grant select on _prisma.signatures to signatures_reader');
+      await driver.query('set role signatures_reader');
+      const queryable: SqlQueryable = {
+        execute: async () => ({ affectedRows: 0 }),
+        async *query<Row>(request: { sql: string; params?: readonly unknown[] }) {
+          yield* (await driver.query<Row>(request.sql, request.params ?? [])).rows;
+        },
+      };
+
+      const result = await createPostgresAdapter().profile.readMarker(queryable);
+
+      expect(result).toMatchObject({
+        kind: 'present',
+        record: { storageHash: 'core', profileHash: 'profile', meta: {} },
       });
     },
     timeouts.spinUpPpgDev,

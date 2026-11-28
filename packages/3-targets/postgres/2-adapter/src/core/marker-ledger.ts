@@ -4,10 +4,10 @@ import {
   JoinAst,
   LiteralExpr,
   type LoweredStatement,
+  ProjectionItem,
   RawExpr,
   type SelectAst,
 } from '@internal/sql-relational-core/ast';
-import type { ColumnProxy } from '@internal/sql-relational-core/contract-free';
 import { PG_TIMESTAMPTZ_STRING_CODEC_ID } from '@internal/target-postgres/codec-ids';
 import {
   int8,
@@ -41,11 +41,27 @@ export const config = pgTable(
   { policies: jsonb() },
 );
 
-/** Selects `columns` of `_prisma.signatures` with the policies of `_prisma.config` beside each row, in one statement, so a signature and the policies are read from the same state. `policies` is null when config has no row. */
-export function selectSignaturesWithPolicies(columns: ReadonlyArray<ColumnProxy>): SelectAst {
-  return signatures
-    .select(...columns, config.policies)
-    .build()
+/**
+ * The columns every release of Prisma 8 reads the Prisma space's own row through. A later release may add columns to `_prisma.signatures` and change the rest of Prisma's own tables, but never these, so each release recognises the row whatever release brought the database further.
+ */
+export const PRISMA_SPACE_SIGNATURE_COLUMNS = [
+  signatures.space,
+  signatures.core_hash,
+  signatures.profile_hash,
+  signatures.invariants,
+] as const;
+
+/** The alias under which {@link withPolicies} says whether `_prisma.config` has a row, which tells a missing row apart from policies stored as JSON `null`. */
+export const CONFIG_ROW_ALIAS = 'config_row';
+
+/** `query`, a read of `_prisma.signatures`, with the policies of `_prisma.config` beside each row, in the same statement, so a signature and the policies are read from the same state. */
+export function withPolicies(query: SelectAst): SelectAst {
+  return query
+    .withProjection([
+      ...query.projection,
+      config.policies.toProjectionItem(),
+      ProjectionItem.of(CONFIG_ROW_ALIAS, config.policies.isNotNull().ast),
+    ])
     .withJoins([JoinAst.left(config.source, LiteralExpr.of(true))]);
 }
 

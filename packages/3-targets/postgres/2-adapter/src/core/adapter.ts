@@ -53,7 +53,7 @@ class PostgresAdapterImpl
       target: 'postgres',
       capabilities: postgresAdapterCapabilities,
       readMarker: (queryable: SqlQueryable) =>
-        controlAdapter.readMarkerDiscriminated(
+        controlAdapter.readSignatureDiscriminated(
           {
             familyId: 'sql',
             targetId: 'postgres',

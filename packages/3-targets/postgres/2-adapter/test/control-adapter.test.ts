@@ -2202,15 +2202,25 @@ describe('PostgresControlAdapter', () => {
         signed_at: new Date('2024-01-01T00:00:00Z'),
         invariants: '{}',
         policies: rowPolicies,
+        config_row: rowPolicies === undefined ? null : true,
       };
     }
 
-    function driverReturning(rows: ReadonlyArray<Record<string, unknown>>) {
+    function driverReturning(
+      rows: ReadonlyArray<Record<string, unknown>>,
+      options: { readonly configTable: boolean } = { configTable: true },
+    ) {
       const signatureReads: string[] = [];
       const driver: SqlControlDriverInstance<'postgres'> = {
         familyId: 'sql',
         targetId: 'postgres',
-        query: async <Row = Record<string, unknown>>(sql: string) => {
+        query: async <Row = Record<string, unknown>>(sql: string, params?: readonly unknown[]) => {
+          if (sql.includes('"information_schema"."columns"')) {
+            const configColumns = options.configTable ? [{ column_name: 'policies' }] : [];
+            return {
+              rows: (params?.[1] === 'config' ? configColumns : []) as unknown as Row[],
+            };
+          }
           if (sql.includes('"information_schema"')) {
             return { rows: [{ table_schema: '_prisma' }] as unknown as Row[] };
           }
@@ -2249,10 +2259,31 @@ describe('PostgresControlAdapter', () => {
       expect(result).toMatchObject({ kind: 'present', record: { meta: { policies: 'strict' } } });
     });
 
-    it('leave the application space with no meta when config has no row', async () => {
+    it('come back as null when they are stored as JSON null, for the framework to report as unreadable', async () => {
       const { driver } = driverReturning([signatureRow('app', null)]);
 
+      await expect(adapter.readMarker(driver, 'app')).resolves.toMatchObject({
+        meta: { policies: null },
+      });
+    });
+
+    it('leave the application space with no meta when config has no row', async () => {
+      const { driver } = driverReturning([signatureRow('app', undefined)]);
+
       await expect(adapter.readMarker(driver, 'app')).resolves.toMatchObject({ meta: {} });
+    });
+
+    it('leave the application space with no meta, and are not read, when there is no config table', async () => {
+      const { driver, signatureReads } = driverReturning([signatureRow('app', undefined)], {
+        configTable: false,
+      });
+
+      const record = await adapter.readMarker(driver, 'app');
+
+      expect({ meta: record?.meta, reads: signatureReads }).toEqual({
+        meta: {},
+        reads: [expect.not.stringContaining('config')],
+      });
     });
 
     it('are not carried by another space', async () => {
@@ -2277,6 +2308,75 @@ describe('PostgresControlAdapter', () => {
         app: { policies },
         extension: {},
         joinsConfig: expect.stringContaining('LEFT JOIN "_prisma"."config"'),
+      });
+    });
+
+    it('are not read by the check the SQL client makes on first use', async () => {
+      const { driver, signatureReads } = driverReturning([signatureRow('app', policies)]);
+
+      const result = await adapter.readSignatureDiscriminated(driver, 'app');
+
+      expect({ result, reads: signatureReads }).toMatchObject({
+        result: { kind: 'present', record: { meta: {} } },
+        reads: [expect.not.stringContaining('config')],
+      });
+    });
+  });
+
+  describe("the Prisma space's own row", () => {
+    it('is read through the columns every release of Prisma 8 reads it through, and no others', async () => {
+      const statements: Array<{ sql: string; params: readonly unknown[] | undefined }> = [];
+      const driver: SqlControlDriverInstance<'postgres'> = {
+        familyId: 'sql',
+        targetId: 'postgres',
+        query: async <Row = Record<string, unknown>>(sql: string, params?: readonly unknown[]) => {
+          statements.push({ sql, params });
+          if (sql.includes('"information_schema"."columns"')) {
+            return {
+              rows: ['space', 'core_hash', 'profile_hash', 'invariants'].map((column_name) => ({
+                column_name,
+              })) as unknown as Row[],
+            };
+          }
+          if (sql.includes('"information_schema"')) {
+            return { rows: [{ table_schema: '_prisma' }] as unknown as Row[] };
+          }
+          return {
+            rows: [
+              { space: '_prisma', core_hash: 'abc', profile_hash: 'def', invariants: '{}' },
+            ] as unknown as Row[],
+          };
+        },
+        close: async () => {},
+      };
+      const adapter = createTestPostgresControlAdapter(
+        createPostgresBuiltinCodecLookup(),
+        createPostgresBuiltinDataTypeLookup(),
+      );
+
+      const own = await adapter.readMarker(driver, '_prisma');
+      const ownStatements = statements.splice(0);
+      const all = await adapter.readAllMarkers(driver);
+      const allStatements = statements.splice(0);
+
+      expect({
+        own: own?.storageHash,
+        all: all.get('_prisma')?.storageHash,
+        ownStatements: ownStatements.map(({ sql }) => sql),
+        allStatements: allStatements.map(({ sql }) => sql),
+      }).toEqual({
+        own: 'abc',
+        all: 'abc',
+        ownStatements: [
+          expect.stringContaining('"information_schema"."tables"'),
+          expect.stringContaining('"information_schema"."columns"'),
+          'SELECT "signatures"."core_hash" AS "core_hash", "signatures"."profile_hash" AS "profile_hash", "signatures"."invariants" AS "invariants" FROM "_prisma"."signatures" WHERE "signatures"."space" = $1',
+        ],
+        allStatements: [
+          expect.stringContaining('"information_schema"."tables"'),
+          expect.stringContaining('"information_schema"."columns"'),
+          'SELECT "signatures"."space" AS "space", "signatures"."core_hash" AS "core_hash", "signatures"."profile_hash" AS "profile_hash", "signatures"."invariants" AS "invariants" FROM "_prisma"."signatures"',
+        ],
       });
     });
   });
