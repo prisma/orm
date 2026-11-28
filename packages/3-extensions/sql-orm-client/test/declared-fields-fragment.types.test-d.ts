@@ -7,7 +7,7 @@ import {
 import { field } from '@internal/sql-contract-ts/contract-builder';
 import { describe, expectTypeOf, test } from 'vitest';
 import { Collection } from '../src/collection';
-import type { Filtered, Ordered } from '../src/collection-types';
+import type { Filtered, Ordered, Paged } from '../src/collection-types';
 import type {
   DeclaredField,
   DeclaredFieldsFragmentFieldsCheck,
@@ -113,7 +113,7 @@ describe('client.fragment', () => {
   });
 
   test('records the filter and the order the body applied', () => {
-    expectTypeOf(plain.Post.with(deletedLast)).toEqualTypeOf<Ordered<typeof plain.Post>>();
+    expectTypeOf(plain.Post.with(deletedLast)).toEqualTypeOf<Paged<Ordered<typeof plain.Post>>>();
     expectTypeOf(plain.Post.with(liveNewestFirst)).toEqualTypeOf<
       Ordered<Filtered<typeof plain.Post>>
     >();
@@ -123,6 +123,17 @@ describe('client.fragment', () => {
     plain.Post.with(deletedLast).update({ title: 'x' });
     // @ts-expect-error the body applied no order, so cursor is refused
     plain.Post.with(notDeleted).cursor({ id: 1 });
+  });
+
+  test('records the paging the body applied, so a refined to-one include stays nullable', async () => {
+    const paged = await plain.Comment.include('post', (post) => post.with(deletedLast)).first();
+    expectTypeOf(paged!.post).toBeNullable();
+    const deletedFirst = client.fragment(
+      { deletedAt: field.column(timestamptzTemporalColumn).optional() },
+      (rows) => rows.orderBy((r) => r.deletedAt.asc()),
+    );
+    const ordered = await plain.Comment.include('post', (post) => post.with(deletedFirst)).first();
+    expectTypeOf(ordered!.post).not.toBeNullable();
   });
 
   test('a fragment with a parameter is a function that returns a fragment', () => {
@@ -317,7 +328,7 @@ describe('client.fragment', () => {
     const labels = client.fragment({ labels: field.column(textColumn).many() }, (rows) =>
       rows.limit(1),
     );
-    expectTypeOf(plain.Tag.with(labels)).toEqualTypeOf<typeof plain.Tag>();
+    expectTypeOf(plain.Tag.with(labels)).toEqualTypeOf<Paged<typeof plain.Tag>>();
     const notes = client.fragment({ notes: field.column(textColumn).many() }, (rows) =>
       rows.limit(1),
     );
@@ -330,7 +341,7 @@ describe('client.fragment', () => {
       { notes: field.column(textColumn).many({ elementsNullable: true }) },
       (rows) => rows.limit(1),
     );
-    expectTypeOf(plain.Tag.with(notes)).toEqualTypeOf<typeof plain.Tag>();
+    expectTypeOf(plain.Tag.with(notes)).toEqualTypeOf<Paged<typeof plain.Tag>>();
     const labels = client.fragment(
       { labels: field.column(textColumn).many({ elementsNullable: true }) },
       (rows) => rows.limit(1),
@@ -373,12 +384,12 @@ describe('client.fragment', () => {
     const asList = client.fragment({ addresses: field.column(jsonbColumn).many() }, (rows) =>
       rows.limit(1),
     );
-    expectTypeOf(plain.Tag.with(asList)).toEqualTypeOf<typeof plain.Tag>();
+    expectTypeOf(plain.Tag.with(asList)).toEqualTypeOf<Paged<typeof plain.Tag>>();
     const asDeclaredList = client.fragment(
       { addresses: { codecId: 'pg/jsonb@1', nullable: false, many: { elementNullable: false } } },
       (rows) => rows.limit(1),
     );
-    expectTypeOf(plain.Tag.with(asDeclaredList)).toEqualTypeOf<typeof plain.Tag>();
+    expectTypeOf(plain.Tag.with(asDeclaredList)).toEqualTypeOf<Paged<typeof plain.Tag>>();
     const asOneValue = client.fragment({ addresses: field.column(jsonbColumn) }, (rows) =>
       rows.limit(1),
     );
