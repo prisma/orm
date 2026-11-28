@@ -5,8 +5,8 @@
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "065e5a42fe659d93",
-    "reason": "The PostgreSQL schema tree holds the server's version as the number `serverVersionNumber`, read from `server_version_num`, in place of the text `pgVersion` (prisma/orm#31218). It names `_prisma.marker`, so its type is no longer the old literal (prisma/orm#31234)."
+    "fingerprint": "cd3f8914641eb200",
+    "reason": "The PostgreSQL schema tree holds the server's version as the number `serverVersionNumber`, read from `server_version_num`, in place of the text `pgVersion` (prisma/orm#31218). `markerLocation` is now typed `string`, no longer the literal `\"prisma_contract.marker\"`, and the class gains the method `readSignatureDiscriminated`, which reads a space's row of `_prisma.signatures` (prisma/orm#31234)."
   },
   {
     "path": "./adapter",
@@ -14,8 +14,8 @@
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "065e5a42fe659d93",
-    "reason": "The PostgreSQL schema tree holds the server's version as the number `serverVersionNumber`, read from `server_version_num`, in place of the text `pgVersion` (prisma/orm#31218). It names `_prisma.marker`, so its type is no longer the old literal (prisma/orm#31234)."
+    "fingerprint": "cd3f8914641eb200",
+    "reason": "The PostgreSQL schema tree holds the server's version as the number `serverVersionNumber`, read from `server_version_num`, in place of the text `pgVersion` (prisma/orm#31218). `markerLocation` is now typed `string`, no longer the literal `\"prisma_contract.marker\"`, and the class gains the method `readSignatureDiscriminated`, which reads a space's row of `_prisma.signatures` (prisma/orm#31234)."
   },
   {
     "path": "./adapter",
@@ -50,8 +50,8 @@
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "065e5a42fe659d93",
-    "reason": "The PostgreSQL schema tree holds the server's version as the number `serverVersionNumber`, read from `server_version_num`, in place of the text `pgVersion` (prisma/orm#31218). It names `_prisma.marker`, so its type is no longer the old literal (prisma/orm#31234)."
+    "fingerprint": "cd3f8914641eb200",
+    "reason": "The PostgreSQL schema tree holds the server's version as the number `serverVersionNumber`, read from `server_version_num`, in place of the text `pgVersion` (prisma/orm#31218). `markerLocation` is now typed `string`, no longer the literal `\"prisma_contract.marker\"`, and the class gains the method `readSignatureDiscriminated`, which reads a space's row of `_prisma.signatures` (prisma/orm#31234)."
   },
   {
     "path": "./adapter/control",
@@ -59,8 +59,8 @@
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "065e5a42fe659d93",
-    "reason": "The PostgreSQL schema tree holds the server's version as the number `serverVersionNumber`, read from `server_version_num`, in place of the text `pgVersion` (prisma/orm#31218). It names `_prisma.marker`, so its type is no longer the old literal (prisma/orm#31234)."
+    "fingerprint": "cd3f8914641eb200",
+    "reason": "The PostgreSQL schema tree holds the server's version as the number `serverVersionNumber`, read from `server_version_num`, in place of the text `pgVersion` (prisma/orm#31218). `markerLocation` is now typed `string`, no longer the literal `\"prisma_contract.marker\"`, and the class gains the method `readSignatureDiscriminated`, which reads a space's row of `_prisma.signatures` (prisma/orm#31234)."
   },
   {
     "path": "./adapter/runtime",
