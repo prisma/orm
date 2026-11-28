@@ -36,7 +36,9 @@ A release may add features at any time, and an addition must not affect an appli
 1. **Open and closed sets.** Every exported type that lists the possible values of something a user may handle case by case (a union of string literals, such as `EmitFailureCode`, or a union of objects told apart by a `kind`) is declared open or closed.
    - An open set's type has a catch-all member, `(string & {})` for a union of strings. A new value may arrive in any release.
    - A closed set changes only in a major version. Each closed set is listed with its reason, in a file the check reads.
-   - A check in CI fails when an exported set is neither.
+   - A set whose values users only pass to us, such as an option, is an input. Adding a value to it never breaks a user, and a catch-all member would only take away the compiler's check of their spelling. So an input set stays a plain union and is listed as an input.
+   - A set that is a type parameter of other types, such as the kinds that key a contract view's entries, is not a set users switch over. A catch-all member there would empty the types built from it. It is listed with that reason.
+   - A check in CI fails when an exported set is none of these.
    - Error codes are an open set. So is every set of `kind` values that an extension can add to.
 2. **Error codes do not disappear.** A check in CI fails when a code that appears in the last release's published code no longer appears in the build, unless the removal is recorded with its reason and the code that replaces it, if one does. A package recorded as removed covers its codes. Within a major, removing a code is a break the policy does not allow; a record is for a deliberate break, such as before `8.0.0`, as `api-breaks.json` is for an API. The check reads text, so a code that is no longer raised but is still compared somewhere passes; the docs say so.
 3. **Our names and names chosen by users or extensions do not share a space.** The rule is in "The name rule" below. It removes the two cases the stream plan names: `fragment` on `db.orm`, and `ORM.AGGREGATE_OPERATION_RESERVED`.
