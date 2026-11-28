@@ -58,6 +58,8 @@ Seven slices, one pull request each, in this order. PostgreSQL comes first becau
 
 **Order.** After slices 1 to 3, and after the two pull requests that touch signing ([prisma/orm#31203](https://github.com/prisma/orm/pull/31203), the one-time hash change, and [prisma/orm#31218](https://github.com/prisma/orm/pull/31218), capabilities by database version) have merged or their sessions have agreed an order, because this slice touches about 200 source files and 500 test files.
 
+**Records for renamed codes.** A CI check (GA compatibility project 5) fails when an error code the last release could raise is gone, unless a record names it, its reason and its replacement. Each renamed `CONTRACT.MARKER_*` code gets such a record.
+
 **Rides along.** The temporary names `prisma_swap…` become `_prisma_swap…`, and the query aliases `__prisma_…` move to one underscore. Nothing stored changes.
 
 ## Slice 5. SQLite, MySQL, MariaDB and MongoDB
