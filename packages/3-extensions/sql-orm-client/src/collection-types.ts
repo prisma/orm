@@ -51,7 +51,7 @@ export type UniquelyFiltered<C> = C & HasWhere & HasUniqueFilter;
 export type Ordered<C> = C & HasOrderBy;
 
 /** A collection whose rows also have the fields of `Added`, such as an included relation. */
-export type Including<C extends HasRow, Added> = C & HasRow<CollectionRowOf<C> & Added>;
+export type Including<C extends HasRow, Added> = C & HasRow<Added>;
 
 /** A query fragment: a function from one collection to another. `collection.with(fragment)` runs it. A fragment that only adds conditions is also called a scope. */
 export type QueryFragment<In, Out> = (collection: In) => Out;
