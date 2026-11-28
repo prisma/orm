@@ -217,7 +217,7 @@ function notAList(refused: RefusedDefault): Refusal {
   };
 }
 
-/** Each literal default the column's type does not hold, under the column's parameters, which its data type accepts, element by element on a list column. A `null` is SQL NULL, which every column takes. */
+/** Each literal default the column's type does not hold, under the parameters the column gives, element by element on a list column. A `null` is SQL NULL, which every column takes. */
 function refusedDefaults(storage: SqlStorage, dataTypes: DataTypeLookup): readonly Refusal[] {
   return tablesOf(storage).flatMap(({ namespaceId, tableName, table }) =>
     Object.entries(table.columns).flatMap(([columnName, column]) => {
