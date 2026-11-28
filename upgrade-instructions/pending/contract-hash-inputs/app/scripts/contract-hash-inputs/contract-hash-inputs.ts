@@ -352,17 +352,23 @@ function oldHashAsWritten(contract: ContractSections, section: JsonRecord, hooks
   });
 }
 
-/** The old hash of each kind the contract stores: by the old rule, or by the old rule as the earlier release applied it when it wrote the file. */
-function storedOldHashes(sections: ContractSections, stored: StoredHashes): HashSet {
+/**
+ * The old hash of each kind the contract stores: by the old rule, or by the old rule as the earlier release applied it when it wrote the file. A snapshot named by its storage hash as written keeps that name until the script renames its directory, after it has rewritten the stored hash, so a run that stopped in between is finished by the next.
+ */
+function storedOldHashes(
+  sections: ContractSections,
+  stored: StoredHashes,
+  snapshotHash: string | undefined,
+): HashSet {
   const capabilities = oldProfileCapabilities(sections);
   const byRule = contractHashes(sections, oldHash, capabilities);
   const asWritten = contractHashes(sections, oldHashAsWritten, capabilities);
   const hashes: { [kind in HashKind]?: string } = {};
   for (const kind of ['storage', 'profile', 'execution'] as const) {
-    const hash =
-      stored[kind] !== byRule[kind] && stored[kind] === asWritten[kind]
-        ? asWritten[kind]
-        : byRule[kind];
+    const isAsWritten =
+      (stored[kind] !== byRule[kind] && stored[kind] === asWritten[kind]) ||
+      (kind === 'storage' && snapshotHash !== undefined && snapshotHash === asWritten[kind]);
+    const hash = isAsWritten ? asWritten[kind] : byRule[kind];
     if (hash !== undefined) hashes[kind] = hash;
   }
   return hashes;
@@ -1012,9 +1018,9 @@ function planContract(
     return undefined;
   }
   const stored = storedHashes(file.value);
-  const oldHashes = storedOldHashes(sections, stored);
-  const newHashes = contractHashes(sections, newHash, capabilitiesThatAreOn(sections.capabilities));
   const snapshotHash = snapshotDirectoryHash(file.path);
+  const oldHashes = storedOldHashes(sections, stored, snapshotHash);
+  const newHashes = contractHashes(sections, newHash, capabilitiesThatAreOn(sections.capabilities));
   const kept = keptStorageHash(
     sections.family,
     snapshotHash,

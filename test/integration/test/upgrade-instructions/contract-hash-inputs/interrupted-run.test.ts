@@ -1,5 +1,7 @@
+import { join } from 'pathe';
 import { afterAll, describe, expect, it } from 'vitest';
 import {
+  copyDirectory,
   copyFixture,
   copyInto,
   editFile,
@@ -112,6 +114,28 @@ describe('a run stopped before it renames a MongoDB snapshot an earlier upgrade 
     const root = copyFixture('before', 'mongo-app');
     edit(root);
     expect(runScriptStoppedBefore(root, '^rename .*/snapshots/[0-9a-f]{64}$').status).toBe(STOPPED);
+    expect({ status: runScript(root).status, tree: readTree(root) }).toEqual({
+      status: 0,
+      tree: readTree(reference),
+    });
+  });
+});
+
+describe('a run stopped after it rewrote the snapshot of a contract 8.0.0-rc.25 wrote with a value as an empty object', () => {
+  const releaseCandidate = join(
+    import.meta.dirname,
+    '../../release-candidate-projects/fixtures/8.0.0-rc.25/postgres-emptied-value',
+  );
+  const reference = copyDirectory(releaseCandidate);
+  const referenceRun = runScript(reference);
+
+  it.each([
+    { before: 'a migration.ts', pattern: String.raw`^rename .*/migration\.ts$` },
+    { before: 'the snapshot directory rename', pattern: '^rename .*/snapshots/[0-9a-f]{64}$' },
+  ])('before $before is finished by the next run', ({ pattern }) => {
+    expect(referenceRun.status).toBe(0);
+    const root = copyDirectory(releaseCandidate);
+    expect(runScriptStoppedBefore(root, pattern).status).toBe(STOPPED);
     expect({ status: runScript(root).status, tree: readTree(root) }).toEqual({
       status: 0,
       tree: readTree(reference),
