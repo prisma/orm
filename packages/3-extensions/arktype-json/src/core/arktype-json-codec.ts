@@ -140,10 +140,34 @@ function rehydrateSchema(jsonIr: object): ArktypeSchemaLike {
 
 function renderArktypeJsonOutputType(params: ArktypeJsonTypeParams): string {
   const expression = params.expression.trim();
-  // ArkType omits the parameter name in index signatures. Match string literals whole.
-  return (expression || 'unknown').replace(
-    /"(?:\\.|[^"\\])*"|\[(string|symbol)\](?=:)/g,
-    (token, keyType: string | undefined) => (keyType ? `[key: ${keyType}]` : token),
+  if (!/\[[^\]\r\n]+\]\??:/.test(expression)) return expression || 'unknown';
+
+  const literalKeys = new Map<string, string>();
+  let nextKey = 0;
+  const schema = ark.schema(params.jsonIr);
+  const renderingSchema = schema.internal.transform((kind, inner) => {
+    if (
+      (kind !== 'required' && kind !== 'optional') ||
+      !('key' in inner) ||
+      typeof inner.key !== 'string' ||
+      !/^\\?\[.*\]$/.test(inner.key)
+    ) {
+      return inner;
+    }
+
+    // Give literal properties distinct names while ArkType renders the index signatures.
+    let placeholder: string;
+    do {
+      placeholder = `__prisma_arktype_key_${nextKey++}__`;
+    } while (expression.includes(placeholder));
+    literalKeys.set(placeholder, JSON.stringify(inner.key));
+    return { ...inner, key: placeholder };
+  });
+
+  return (literalKeys.size ? renderingSchema.expression : expression).replace(
+    /"(?:\\.|[^"\\])*"|\[((?:string|symbol)(?: \| (?:string|symbol))*)\](?=:)|\b__prisma_arktype_key_\d+__\b(?=\??:)/g,
+    (token, keyType: string | undefined) =>
+      keyType ? `[key: ${keyType}]` : (literalKeys.get(token) ?? token),
   );
 }
 

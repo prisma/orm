@@ -196,6 +196,24 @@ describe('arktypeJsonDescriptor.factory(params)', () => {
       expected: '{ [key: symbol]: number }',
     },
     {
+      name: 'union keys',
+      schema: type({ '[string | symbol]': 'number' }),
+      expected: '{ [key: string | symbol]: number }',
+    },
+    {
+      name: 'literal bracket keys alongside index signatures',
+      schema: type({
+        literal: [{ '\\[string]': 'number' }, '[]'],
+        record: { '[string]': 'number' },
+      }),
+      expected: '{ literal: { "[string]": number }[], record: { [key: string]: number } }',
+    },
+    {
+      name: 'identical literal and index keys on the same object',
+      schema: type({ '[string]': 'number', '\\[string]': 'number' }),
+      expected: '{ [key: string]: number, "[string]": number }',
+    },
+    {
       name: 'nested records next to escaped string literals',
       schema: type({
         marker: type.unit('He said "[string]: number"'),
