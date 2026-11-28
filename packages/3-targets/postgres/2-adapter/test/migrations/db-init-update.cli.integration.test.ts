@@ -13,6 +13,7 @@ import { computeMigrationHash } from '@internal/migration-tools/hash';
 import { materialiseMigrationPackage } from '@internal/migration-tools/io';
 import { emitContractSpaceArtifacts } from '@internal/migration-tools/spaces';
 import { SqlStorage } from '@internal/sql-contract/types';
+import { PostgresContractSerializer } from '@internal/target-postgres/runtime';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
 import { applicationDomainOf } from '@repo/test-utils';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
@@ -54,6 +55,7 @@ const EXT_BASELINE_DIR = '20260101T0000_create_helper';
 // Stable 64-hex-char storage hashes: the contract-snapshot store keys its
 // on-disk directory by `storageHashHex(storage.storageHash)`, which requires
 // a well-formed 64-hex value.
+const serializer = new PostgresContractSerializer();
 const EXT_STORAGE_HASH_V1 = '3'.repeat(64);
 const EXT_STORAGE_HASH_V2 = '4'.repeat(64);
 
@@ -184,7 +186,7 @@ async function writeExtensionContractSpaceArtifacts(args: {
   await mkdir(migrationsDir, { recursive: true });
 
   await emitContractSpaceArtifacts(migrationsDir, EXT_SPACE_ID, {
-    contract: args.contract,
+    contract: serializer.serializeContract(args.contract),
     contractDts: '// placeholder\nexport {};\n',
     headRef: { hash: args.headHash, invariants: [...args.invariants] },
   });
@@ -217,7 +219,7 @@ function buildExtensionPack(args: {
     targetId: 'postgres',
     version: '0.0.0-test',
     contractSpace: {
-      contractJson: args.contractJson,
+      contractJson: serializer.serializeContract(args.contractJson),
       migrations: [],
       headRef: { hash: args.headHash, invariants: [] },
     },
@@ -357,7 +359,7 @@ describe('db init / db update aggregate pipeline (CLI) - postgres', { concurrent
       // migration package. The graph now has two edges (null→v1, v1→v2);
       // the marker is at v1 so only the second edge walks.
       await emitContractSpaceArtifacts(baseline.migrationsDir, EXT_SPACE_ID, {
-        contract: extContractV2,
+        contract: serializer.serializeContract(extContractV2),
         contractDts: '// placeholder\nexport {};\n',
         headRef: { hash: extContractV2.storage.storageHash, invariants: [] },
       });
@@ -460,7 +462,7 @@ describe('db init / db update aggregate pipeline (CLI) - postgres', { concurrent
 
       // Bump extension to v2 with a failing op.
       await emitContractSpaceArtifacts(baseline.migrationsDir, EXT_SPACE_ID, {
-        contract: extContractV2,
+        contract: serializer.serializeContract(extContractV2),
         contractDts: '// placeholder\nexport {};\n',
         headRef: { hash: extContractV2.storage.storageHash, invariants: [] },
       });

@@ -18,7 +18,7 @@ const HASH_A = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 const HASH_B = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
 
 function makeContract(storageHash: string, extra: Record<string, unknown> = {}): unknown {
-  return { storage: { storageHash }, ...extra };
+  return { formatVersion: 1, storage: { storageHash }, ...extra };
 }
 
 function makeMetadata(args: {
@@ -172,6 +172,57 @@ describe('runContractSpaceSeedPhase', () => {
 
     const head = await readContractSpaceHeadRef(migrationsDir, 'cipherstash');
     expect(head?.hash).toBe(HASH_B);
+  });
+
+  describe('over a head ref it cannot read', () => {
+    const cipherstash = {
+      id: 'cipherstash',
+      contractSpace: {
+        contractJson: makeContract(HASH_A),
+        headRef: { hash: HASH_A, invariants: [] },
+        migrations: [],
+      },
+    };
+    const headRefPath = () =>
+      join(spaceMigrationDirectory(migrationsDir, 'cipherstash'), 'refs', 'head.json');
+
+    it.each([
+      ['not JSON', '{ nope'],
+      [
+        'a hash that is not a contract hash',
+        JSON.stringify({ formatVersion: 1, hash: `sha256:${HASH_A}`, invariants: [] }),
+      ],
+    ])(
+      'writes the head ref again over one that is %s, and reports action=updated',
+      async (_, content) => {
+        await mkdir(join(spaceMigrationDirectory(migrationsDir, 'cipherstash'), 'refs'), {
+          recursive: true,
+        });
+        await writeFile(headRefPath(), content);
+
+        const out = await runContractSpaceSeedPhase({ migrationsDir, extensions: [cipherstash] });
+
+        expect(out.seeded).toMatchObject([{ action: 'updated', priorHash: null, newHash: HASH_A }]);
+        expect(await readContractSpaceHeadRef(migrationsDir, 'cipherstash')).toEqual({
+          hash: HASH_A,
+          invariants: [],
+        });
+      },
+    );
+
+    it('refuses a head ref in a format version this release does not read', async () => {
+      await mkdir(join(spaceMigrationDirectory(migrationsDir, 'cipherstash'), 'refs'), {
+        recursive: true,
+      });
+      await writeFile(
+        headRefPath(),
+        JSON.stringify({ formatVersion: 2, hash: HASH_A, invariants: [] }),
+      );
+
+      await expect(
+        runContractSpaceSeedPhase({ migrationsDir, extensions: [cipherstash] }),
+      ).rejects.toMatchObject({ code: 'MIGRATION.FORMAT_VERSION_NEWER' });
+    });
   });
 
   it('materialises every descriptor-shipped migration package not yet on disk', async () => {

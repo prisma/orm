@@ -227,7 +227,7 @@ describe('validateSqlContractFully with a value object in storage', () => {
       Address: address,
       Shape: { fields: { either: member } },
     });
-    expect(() => validateSqlContractFully(contract)).toThrow(
+    expect(() => validateSqlContractFully(JSON.parse(JSON.stringify(contract)))).toThrow(
       expect.objectContaining({
         message: `Contract structural validation failed: value object "__unbound__:Shape" member "either" is a ${kind}; SQL value objects hold no unions or dictionaries, since their check cannot enforce them`,
       }),

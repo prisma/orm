@@ -1,4 +1,5 @@
 import type { ContractSourceDiagnostic } from '@internal/config/config-types';
+import { isContractBuiltInMemory } from '@internal/contract/internal/format-version';
 import type { Contract, ContractMarkerRecord, LedgerEntryRecord } from '@internal/contract/types';
 import { emit as emitContractArtifacts } from '@internal/emitter';
 import { CliStructuredError } from '@internal/errors/control';
@@ -43,6 +44,7 @@ import { assertFrameworkComponentsCompatible } from '../utils/framework-componen
 import { prismaSpaceRunnerFailureError } from '../utils/prisma-space-failure';
 import { snapshotVerifierFor } from '../utils/snapshot-content-verification';
 import { enrichContract } from './contract-enrichment';
+import { isReportedAsItself } from './operations/caught-errors';
 import { executeDbInit } from './operations/db-init';
 import { type ExecuteDbSignResult, executeDbSign } from './operations/db-sign';
 import { executeDbUpdate } from './operations/db-update';
@@ -187,6 +189,17 @@ class ControlClientImpl implements ControlClient {
     }
   }
 
+  /** A contract that Prisma built in memory, printed again by the target so the family validates it from its file format; anything else is a stored document, read through its format version. */
+  private contractDocument(contractOrDocument: unknown): unknown {
+    return isContractBuiltInMemory(contractOrDocument)
+      ? this.options.target.contractSerializer.serializeContract(
+          blindCast<Contract, 'isContractBuiltInMemory accepted it as a contract Prisma built'>(
+            contractOrDocument,
+          ),
+        )
+      : contractOrDocument;
+  }
+
   /**
    * Construct the control adapter once for a migration operation and return
    * it, mirroring how the runtime plane builds the execution adapter once in
@@ -260,8 +273,9 @@ class ControlClientImpl implements ControlClient {
     // Validate contract using family instance
     let contract: Contract;
     try {
-      contract = familyInstance.deserializeContract(options.contract);
+      contract = familyInstance.deserializeContract(this.contractDocument(options.contract));
     } catch (error) {
+      if (isReportedAsItself(error)) throw error;
       const message = error instanceof Error ? error.message : String(error);
       throw structuredError('CONTRACT.VALIDATION_FAILED', message, {
         cause: error,
@@ -316,8 +330,9 @@ class ControlClientImpl implements ControlClient {
     // Validate contract using family instance
     let contract: Contract;
     try {
-      contract = familyInstance.deserializeContract(options.contract);
+      contract = familyInstance.deserializeContract(this.contractDocument(options.contract));
     } catch (error) {
+      if (isReportedAsItself(error)) throw error;
       const message = error instanceof Error ? error.message : String(error);
       throw structuredError('CONTRACT.VALIDATION_FAILED', message, {
         cause: error,
@@ -381,8 +396,9 @@ class ControlClientImpl implements ControlClient {
 
     let contract: Contract;
     try {
-      contract = familyInstance.deserializeContract(options.contract);
+      contract = familyInstance.deserializeContract(this.contractDocument(options.contract));
     } catch (error) {
+      if (isReportedAsItself(error)) throw error;
       const message = error instanceof Error ? error.message : String(error);
       throw structuredError('CONTRACT.VALIDATION_FAILED', message, {
         cause: error,
@@ -398,6 +414,7 @@ class ControlClientImpl implements ControlClient {
       driver,
       invocation: options.invocation,
       ...ifDefined('onPlannerWarnings', options.onPlannerWarnings),
+      ...ifDefined('onUnrecordedSnapshot', options.onUnrecordedSnapshot),
       adapter,
       familyInstance,
       contract,
@@ -428,8 +445,9 @@ class ControlClientImpl implements ControlClient {
 
     let contract: Contract;
     try {
-      contract = familyInstance.deserializeContract(options.contract);
+      contract = familyInstance.deserializeContract(this.contractDocument(options.contract));
     } catch (error) {
+      if (isReportedAsItself(error)) throw error;
       const message = error instanceof Error ? error.message : String(error);
       throw structuredError('CONTRACT.VALIDATION_FAILED', message, {
         cause: error,
@@ -445,6 +463,8 @@ class ControlClientImpl implements ControlClient {
       driver,
       invocation: options.invocation,
       ...ifDefined('onPlannerWarnings', options.onPlannerWarnings),
+      ...ifDefined('onUnrecordedSnapshot', options.onUnrecordedSnapshot),
+      ...ifDefined('onUnreadableOrigin', options.onUnreadableOrigin),
       adapter,
       familyInstance,
       contract,
@@ -580,8 +600,9 @@ class ControlClientImpl implements ControlClient {
 
     let contract: Contract;
     try {
-      contract = familyInstance.deserializeContract(options.contract);
+      contract = familyInstance.deserializeContract(this.contractDocument(options.contract));
     } catch (error) {
+      if (isReportedAsItself(error)) throw error;
       const message = error instanceof Error ? error.message : String(error);
       throw structuredError('CONTRACT.VALIDATION_FAILED', message, {
         cause: error,
@@ -604,6 +625,7 @@ class ControlClientImpl implements ControlClient {
       ...ifDefined('target', options.target),
       ...ifDefined('permitPolicyChange', options.permitPolicyChange),
       ...ifDefined('verifySnapshotContent', this.snapshotVerifier),
+      ...ifDefined('onUnrecordedSnapshot', options.onUnrecordedSnapshot),
       ...ifDefined('onProgress', onProgress),
     });
   }
@@ -800,8 +822,9 @@ class ControlClientImpl implements ControlClient {
 
     let contract: Contract;
     try {
-      contract = this.familyInstance.deserializeContract(options.contract);
+      contract = this.familyInstance.deserializeContract(this.contractDocument(options.contract));
     } catch (error) {
+      if (isReportedAsItself(error)) throw error;
       return notOk({
         code: 'CONTRACT_VALIDATION_FAILED',
         summary: 'Contract validation failed',

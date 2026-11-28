@@ -1,6 +1,6 @@
 import type { Contract } from '@internal/contract/types';
 import { coreHash } from '@internal/contract/types';
-import type { SqlStorage } from '@internal/sql-contract/types';
+import { SqlStorage } from '@internal/sql-contract/types';
 import type { Runtime } from '@internal/sql-runtime';
 import { PostgresSchema } from '@internal/target-postgres/types';
 import { createContract } from '@repo/test-utils';
@@ -405,11 +405,14 @@ describe('postgres', () => {
       },
     });
 
+    const namespaces = { public: publicNs, audit: auditNs };
     const twoNamespaceStorage = {
       ...contract,
-      storage: {
-        ...contract.storage,
-        namespaces: { public: publicNs, audit: auditNs },
+      storage: new SqlStorage({
+        storageHash: contract.storage.storageHash,
+        namespaces,
+      }) as SqlStorage & {
+        readonly namespaces: typeof namespaces;
       },
     };
 

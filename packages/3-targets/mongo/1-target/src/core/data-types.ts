@@ -49,7 +49,7 @@ import {
 } from './bson-scalar-helpers';
 
 /** The vector's dimension: the TypeScript type `Vector<n>` and the type's reader read it. */
-export const mongoVectorParams = arktype({ 'length?': 'number.integer >= 1' });
+export const mongoVectorParams = arktype({ '+': 'reject', 'length?': 'number.integer >= 1' });
 
 /** Text as the ObjectId it names; {@link spellObjectIdJson} gives it the lower case the type stores. */
 const asObjectId: Cast = (value) => {

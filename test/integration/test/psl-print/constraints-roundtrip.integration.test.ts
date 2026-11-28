@@ -69,7 +69,7 @@ function contractOf(input: {
       ]),
     ),
   };
-  const json = createSqlContract({
+  const built = createSqlContract({
     roots: Object.fromEntries(
       Object.entries(input.models).map(([name, model]) => [
         model.table,
@@ -79,8 +79,12 @@ function contractOf(input: {
     namespaces: { public: domainNamespace },
     storage: { namespaces: { public: { id: 'public', entries: { table: input.tables } } } },
   });
+  const serializer = new PostgresContractSerializer();
+  const stored = serializer.serializeContract(
+    blindCast<Contract<SqlStorage>, 'createSqlContract builds a Postgres contract'>(built),
+  );
   return blindCast<Contract<SqlStorage>, 'the Postgres serializer yields a SQL contract'>(
-    new PostgresContractSerializer().deserializeContract(json),
+    serializer.deserializeContract(stored),
   );
 }
 

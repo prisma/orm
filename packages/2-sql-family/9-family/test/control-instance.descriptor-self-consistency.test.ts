@@ -79,7 +79,7 @@ function buildExtension(opts: {
   readonly headRefHash: string;
 }): SqlControlExtensionDescriptor<'postgres'> {
   const space: ContractSpace<Contract<SqlStorage>> = {
-    contractJson: buildContract(),
+    contractJson: Object.assign(buildContract(), { formatVersion: 1 }),
     migrations: [],
     headRef: {
       hash: opts.headRefHash,

@@ -106,6 +106,13 @@
       "formatter": { "enabled": false },
       "assist": { "enabled": false }
     },
+    // A project a release candidate wrote, kept byte for byte as test input.
+    {
+      "includes": ["**/release-candidate-projects/fixtures/**"],
+      "formatter": { "enabled": false },
+      "linter": { "enabled": false },
+      "assist": { "enabled": false }
+    },
     {
       "includes": ["**/*.config.ts"],
       "linter": {

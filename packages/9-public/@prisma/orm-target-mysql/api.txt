@@ -914,7 +914,7 @@
 (not exported) type ContributedMember = ContributedNamespaceSymbol | ContributedTypeSymbol
 (not exported) type ContributedTypeDescriptor = AuthoringTypeAliasDescriptor | AuthoringTypeChoiceDescriptor | AuthoringTypeConstructorDescriptor
 (not exported) type ContributedTypeSymbol = (ContributedTypeSymbolBase & { readonly descriptor: Exclude<ContributedTypeDescriptor, AuthoringTypeChoiceDescriptor>; }) | ContributedTypeChoiceSymbol
-(not exported) type ControlTargetKeysMysqlBuilds = 'accessChangesOf' | 'classifyEntityKind' | 'classifySubjectGranularity' | 'contractSerializer' | 'create' | 'createPlanner' | 'createRunner' | 'diffSchema' | 'migrations' | 'schemaVerifier'
+(not exported) type ControlTargetKeysMysqlBuilds = 'accessChangesOf' | 'classifyEntityKind' | 'classifySubjectGranularity' | 'contractSerializer' | 'create' | 'createPlanner' | 'createRunner' | 'diffSchema' | 'migrations' | 'readOperations' | 'schemaVerifier'
 (not exported) type CurrentValue = typeof MYSQL_DATE_NOW | typeof MYSQL_INSTANT_NOW | typeof MYSQL_TIME_NOW
 (not exported) type DatetimeParams = typeof mysqlDatetimeParams.infer
 (not exported) type DecimalParams = typeof mysqlDecimalParams.infer
@@ -1385,7 +1385,7 @@
 ./target/runtime: class MysqlContractSerializer extends SqlContractSerializerBase<Contract<SqlStorage>>
 ./target/runtime: class MysqlContractSerializer, constructor()
 ./target/runtime: class MysqlContractSerializer, protected required method hydrateSqlNamespaceEntry(nsId: string, raw: Record<string, unknown>): Namespace | SqlNamespaceInput
-./target/runtime: class MysqlContractSerializer, required method serializeContract(contract: Contract<SqlStorage>): JsonObject
+./target/runtime: class MysqlContractSerializer, protected required method printContractV1(contract: Contract<SqlStorage>): JsonObject
 ./target/runtime: const mysqlIsolationLevelSchema: StringType<"ReadCommitted" | "ReadUncommitted" | "RepeatableRead" | "Serializable", {}>
 ./target/runtime: const mysqlIsolationLevels: { readonly ReadUncommitted: "ReadUncommitted"; readonly ReadCommitted: "ReadCommitted"; readonly RepeatableRead: "RepeatableRead"; readonly Serializable: "Serializable"; }
 ./target/runtime: const mysqlNowGenerators: readonly [{ readonly id: "instantNow"; readonly generate: typeof instantNow; }, { readonly id: "plainDateNow"; readonly generate: typeof plainDateNow; }, { readonly id: "plainTimeNow"; readonly generate: typeof plainTimeNow; }, { readonly id: "instantStringNow"; readonly generate: typeof instantStringNow; }, { readonly id: "dateStringNow"; readonly generate: typeof nowValues.dateStringNow; }, { readonly id: "timeStringNow"; readonly generate: typeof timeStringNow; }]
@@ -1525,7 +1525,7 @@
 ./target: class MysqlContractSerializer extends SqlContractSerializerBase<Contract<SqlStorage>>
 ./target: class MysqlContractSerializer, constructor()
 ./target: class MysqlContractSerializer, protected required method hydrateSqlNamespaceEntry(nsId: string, raw: Record<string, unknown>): Namespace | SqlNamespaceInput
-./target: class MysqlContractSerializer, required method serializeContract(contract: Contract<SqlStorage>): JsonObject
+./target: class MysqlContractSerializer, protected required method printContractV1(contract: Contract<SqlStorage>): JsonObject
 ./target: class MysqlCreateTable extends MysqlDdlNode
 ./target: class MysqlCreateTable, constructor(options: { readonly table: string; readonly ifNotExists?: boolean; readonly columns: readonly DdlColumn[]; readonly constraints?: readonly DdlTableConstraint[]; })
 ./target: class MysqlCreateTable, readonly required property columns: ReadonlyArray<DdlColumn>

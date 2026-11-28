@@ -43,7 +43,7 @@ export class MongoTargetContractSerializer extends MongoContractSerializerBase<M
     return { ...rest, storage: targetStorage };
   }
 
-  override serializeContract(contract: MongoTargetContract): JsonObject {
+  protected override printContractV1(contract: MongoTargetContract): JsonObject {
     const { storage, ...rest } = contract;
     const namespacesJson: Record<string, JsonObject> = {};
     for (const [nsId, ns] of Object.entries(storage.namespaces)) {

@@ -69,6 +69,7 @@ import { MARKER_LOCK_KEY, MARKER_LOCK_SQL } from './marker-lock';
 import { holdingStoredValue } from './operations/stored-values';
 import { qualifyTableName } from './planner-sql-checks';
 import type { PostgresPlanTargetDetails } from './planner-target-details';
+import { readPostgresOperations } from './read-operations';
 import { CHECK_VIOLATION, rowsFailingCheckOf } from './rows-failing-check';
 import {
   SCHEMA_OBJECTS_SQL,
@@ -192,10 +193,10 @@ class PostgresMigrationRunner implements SqlMigrationRunner<PostgresPlanTargetDe
     const space = options.plan.spaceId;
 
     // Materialize any async ops before running checks or executing.
-    const planOps = blindCast<
-      readonly SqlMigrationPlanOperation<PostgresPlanTargetDetails>[],
-      'ops were produced by the PG planner and are SqlMigrationPlanOperation<PostgresPlanTargetDetails>; MigrationPlan.operations uses the wider framework type to accommodate Promise covariance'
-    >(await Promise.all(options.plan.operations));
+    const planOps = readPostgresOperations(await Promise.all(options.plan.operations), {
+      space,
+      migrations: options.migrationEdges,
+    });
 
     // Static checks (idempotent — safe to run again when the caller is
     // `execute(...)` because the cost is a single object comparison).

@@ -1,0 +1,4 @@
+{
+  // Not JSON: the script must not report it.
+  "compilerOptions": { "strict": true }
+}

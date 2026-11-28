@@ -7,6 +7,11 @@ import { describe, expect, it } from 'vitest';
 import { MongoTargetSchemaVerifier } from '../src/core/migrations/mongo-target-schema-verifier';
 import { MongoTargetContractSerializer } from '../src/core/mongo-target-contract-serializer';
 
+/** A contract as a stored `contract.json` holds it: with its format version. */
+function storedContract(contract: unknown): unknown {
+  return { formatVersion: 1, ...(contract as Record<string, unknown>) };
+}
+
 function deserializedContract() {
   const json = {
     targetFamily: 'mongo' as const,
@@ -44,7 +49,7 @@ function deserializedContract() {
       namespaceId: UNBOUND_DOMAIN_NAMESPACE_ID,
     }),
   };
-  return new MongoTargetContractSerializer().deserializeContract(json);
+  return new MongoTargetContractSerializer().deserializeContract(storedContract(json));
 }
 
 describe('MongoTargetSchemaVerifier', () => {
@@ -67,7 +72,7 @@ describe('MongoTargetSchemaVerifier', () => {
       },
       domain: applicationDomainOf({ models: {}, namespaceId: UNBOUND_DOMAIN_NAMESPACE_ID }),
     };
-    const contract = new MongoTargetContractSerializer().deserializeContract(json);
+    const contract = new MongoTargetContractSerializer().deserializeContract(storedContract(json));
     const schema = new MongoSchemaIR([], { fromDatabase: false });
 
     const result = verifier.verifySchema({ contract, schema });
@@ -108,7 +113,7 @@ describe('MongoTargetSchemaVerifier', () => {
       },
       domain: applicationDomainOf({ models: {}, namespaceId: UNBOUND_DOMAIN_NAMESPACE_ID }),
     };
-    const contract = new MongoTargetContractSerializer().deserializeContract(json);
+    const contract = new MongoTargetContractSerializer().deserializeContract(storedContract(json));
     const schema = new MongoSchemaIR(
       [
         new MongoSchemaCollection({

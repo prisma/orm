@@ -167,7 +167,7 @@ withTempDir(({ createTempDir }) => {
         mkdirSync(refsDir, { recursive: true });
         writeFileSync(
           join(refsDir, 'dangling.json'),
-          `${JSON.stringify({ hash: danglingHash, invariants: [] }, null, 2)}\n`,
+          `${JSON.stringify({ formatVersion: 1, hash: danglingHash, invariants: [] }, null, 2)}\n`,
         );
 
         const check = await runMigrationCheck(ctx, ['--json']);

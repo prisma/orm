@@ -1,3 +1,4 @@
+import { isFormatVersionError } from '@internal/contract/format-version';
 import { coordinateKey, elementCoordinates } from '@internal/framework-components/ir';
 import { ifDefined } from '@internal/utils/defined';
 import { EMPTY_CONTRACT_HASH } from '../constants';
@@ -209,12 +210,19 @@ function contractViolations(input: IntegrityComputationInput): readonly Integrit
   const elementClaimedBy = new Map<string, string[]>();
   const elementLabel = new Map<string, string>();
 
-  for (const { space } of input.spaces) {
+  for (const { space, headRefProblem } of input.spaces) {
+    if (headRefProblem !== null) continue;
     let contract: ReturnType<AggregateContractSpace['contract']>;
     try {
       contract = space.contract();
     } catch (error) {
-      out.push({ kind: 'contractUnreadable', spaceId: space.spaceId, detail: detailOf(error) });
+      if (isFormatVersionError(error)) throw error;
+      out.push({
+        kind: 'contractUnreadable',
+        spaceId: space.spaceId,
+        detail: detailOf(error),
+        hash: space.headRef?.hash,
+      });
       continue;
     }
 

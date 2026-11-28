@@ -5,6 +5,11 @@ import { describe, expect, it } from 'vitest';
 import { SqliteContractSerializer } from '../src/core/sqlite-contract-serializer';
 import { SqliteDatabase } from '../src/core/sqlite-unbound-database';
 
+/** A contract as a stored `contract.json` holds it: with its format version. */
+function storedContract(contract: unknown): unknown {
+  return { formatVersion: 1, ...(contract as Record<string, unknown>) };
+}
+
 function makeContractWithTablesJson() {
   return createSqlContract({
     target: 'sqlite',
@@ -34,7 +39,7 @@ function makeContractWithTablesJson() {
 describe('SqliteContractSerializer namespace hydration', () => {
   it('materialises table-bearing unbound namespaces with qualifyTable()', () => {
     const serializer = new SqliteContractSerializer();
-    const contract = serializer.deserializeContract(makeContractWithTablesJson());
+    const contract = serializer.deserializeContract(storedContract(makeContractWithTablesJson()));
     const namespace = contract.storage.namespaces[UNBOUND_NAMESPACE_ID]!;
     expect(namespace).toBeInstanceOf(SqliteDatabase);
     if (!(namespace instanceof SqliteDatabase)) {

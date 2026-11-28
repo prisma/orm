@@ -80,7 +80,7 @@ describe('db update with statements on MongoDB', () => {
     tempDirs.push(dir);
     const migrationsDir = join(dir, 'migrations');
     await writeContractSnapshot(migrationsDir, ORIGIN_HASH, {
-      contractJson: origin,
+      contractJson: { formatVersion: 1, ...origin },
       contractDts: '',
     });
 

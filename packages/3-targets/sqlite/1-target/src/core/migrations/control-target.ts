@@ -16,6 +16,7 @@ import { SqliteContractSerializer } from '../sqlite-contract-serializer';
 import { diffSqliteSchema, sqliteContractToSchema } from './diff-database-schema';
 import { createSqliteMigrationPlanner } from './planner';
 import type { SqlitePlanTargetDetails } from './planner-target-details';
+import { readSqliteOperations } from './read-operations';
 import { createSqliteMigrationRunner } from './runner';
 import { SqliteSchemaVerifier } from './sqlite-schema-verifier';
 
@@ -38,6 +39,7 @@ function createSqliteControlTargetDescriptor(): SqlControlTargetDescriptor<
     classifySubjectGranularity: relationalNodeGranularity,
     classifyEntityKind: relationalNodeEntityKind,
     accessChangesOf: () => [],
+    readOperations: readSqliteOperations,
     migrations: {
       createPlanner(adapter: SqlControlAdapter<'sqlite'>): MigrationPlanner<'sql', 'sqlite'> {
         return createSqliteMigrationPlanner(adapter);

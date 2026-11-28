@@ -1,32 +1,5 @@
 [
   {
-    "path": "./cli/control-api",
-    "export": "executeMigrateShowPlan",
-    "test": "value",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "48136a521f8b1c82",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). `ControlClient` gains the required method `bringPrismaSpaceUpToDate`, so a `createClient` factory passed to `executeMigrateShowPlan` must return a client that has it (prisma/orm#31234)."
-  },
-  {
-    "path": "./migration-tools",
-    "export": "ResolveRecordedPathInputs",
-    "test": "type",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "92993736b5146aba",
-    "reason": "Its `space` now needs only a space's contract, migration graph, head reference and migrations, so the Prisma space, which has no folder on disk, can be passed (prisma/orm#31234)."
-  },
-  {
-    "path": "./migration-tools/aggregate",
-    "export": "ResolveRecordedPathInputs",
-    "test": "type",
-    "kind": "break",
-    "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "92993736b5146aba",
-    "reason": "Its `space` now needs only a space's contract, migration graph, head reference and migrations, so the Prisma space, which has no folder on disk, can be passed (prisma/orm#31234)."
-  },
-  {
     "path": "./cli",
     "export": "ormConfigSection",
     "test": "value",
@@ -50,8 +23,8 @@
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "6c8076a2fdd1bffd",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+    "fingerprint": "e8c55ed2a0aa1f21",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). A type it uses also changes in prisma/orm#31200: an unreadable-contract integrity violation (`contractUnreadable`) carries `hash`, the head whose snapshot could not be read, and the options of `db update` gain the optional `onUnreadableOrigin`."
   },
   {
     "path": "./cli/control-api",
@@ -86,7 +59,7 @@
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "1691ad1e8980a26a",
+    "fingerprint": "91ad14fd014cf669",
     "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
   },
   {
@@ -113,8 +86,8 @@
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "775d053d4da9cbe5",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+    "fingerprint": "9d64c9834ab7fbb6",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). A type it uses also changes in prisma/orm#31200: an unreadable-contract integrity violation (`contractUnreadable`) carries `hash`, the head whose snapshot could not be read, and the options of `db update` gain the optional `onUnreadableOrigin`."
   },
   {
     "path": "./cli/control-api",
@@ -140,8 +113,8 @@
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "13a4be347e319cdc",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+    "fingerprint": "c94fe7b099301ad4",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). A type it uses also changes in prisma/orm#31200: an unreadable-contract integrity violation (`contractUnreadable`) carries `hash`, the head whose snapshot could not be read, and the options of `db update` gain the optional `onUnreadableOrigin`."
   },
   {
     "path": "./cli/control-api",
@@ -154,12 +127,30 @@
   },
   {
     "path": "./cli/control-api",
+    "export": "buildMigrationSpaceGraphEntries",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "655022d4574f9744",
+    "reason": "The `contractUnreadable` integrity violation now carries `hash`, the head whose contract snapshot could not be read, so a refusal and `migration check` can name that snapshot and the command that writes it again (prisma/orm#31200)."
+  },
+  {
+    "path": "./cli/control-api",
     "export": "buildReadAggregate",
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "3f2cb2739f09ffac",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+    "fingerprint": "6e28b630bd92e8bc",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). It also takes the option `whenFileUnreadable`: by default a ref or migration file it cannot read fails the load, and `'report'` keeps the aggregate without it for a command that lists and reports each such file, as `migration list`, `graph`, `status` and `check` do (prisma/orm#31200)."
+  },
+  {
+    "path": "./cli/control-api",
+    "export": "checkSingleTarget",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "8d29998b3912a7a8",
+    "reason": "`migration check` now reads, through the family's contract reader, each snapshot a later command interprets (each one a ref names, the space's head, and each one no migration of the space starts from), and reports each migration and ref it could not read, so a check space carries the family's reader, the space's head and the unreadable migrations and refs, all required (prisma/orm#31200)."
   },
   {
     "path": "./cli/control-api",
@@ -167,8 +158,17 @@
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "9603fc53a53b1326",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+    "fingerprint": "29f17baa5fb46ca0",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). A type it uses also changes in prisma/orm#31200: an unreadable-contract integrity violation (`contractUnreadable`) carries `hash`, the head whose snapshot could not be read, and the options of `db update` gain the optional `onUnreadableOrigin`."
+  },
+  {
+    "path": "./cli/control-api",
+    "export": "enumerateCheckSpaces",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "5e5b209d8c94f1cf",
+    "reason": "It takes one options object, in which the family's contract reader is required, so a caller cannot get a check that leaves the snapshots unread by leaving out an argument; each check space it returns also carries the space's head and the refs it could not read (prisma/orm#31200)."
   },
   {
     "path": "./cli/control-api",
@@ -185,7 +185,7 @@
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "ce3671206359603b",
+    "fingerprint": "d50304fbbf1f1e53",
     "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
   },
   {
@@ -203,8 +203,8 @@
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "767278ed630ba176",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+    "fingerprint": "16355eec576542bd",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). A type it uses also changes in prisma/orm#31200: an unreadable-contract integrity violation (`contractUnreadable`) carries `hash`, the head whose snapshot could not be read, and the options of `db update` gain the optional `onUnreadableOrigin`."
   },
   {
     "path": "./cli/control-api",
@@ -217,12 +217,21 @@
   },
   {
     "path": "./cli/control-api",
+    "export": "executeMigrateShowPlan",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "ddf25b8012876718",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). `ControlClient` gains the required method `bringPrismaSpaceUpToDate`, so a `createClient` factory passed to `executeMigrateShowPlan` must return a client that has it (prisma/orm#31234). A type it uses also changes in prisma/orm#31200: an unreadable-contract integrity violation (`contractUnreadable`) carries `hash`, the head whose snapshot could not be read, and the options of `db update` gain the optional `onUnreadableOrigin`."
+  },
+  {
+    "path": "./cli/control-api",
     "export": "executeMigrationNewCommand",
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "2fd4d74bf9938382",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+    "fingerprint": "223cd17e8031aad6",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). A type it uses also changes in prisma/orm#31200: an unreadable-contract integrity violation (`contractUnreadable`) carries `hash`, the head whose snapshot could not be read, and the options of `db update` gain the optional `onUnreadableOrigin`."
   },
   {
     "path": "./cli/control-api",
@@ -230,8 +239,8 @@
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "319c1d9f9acef8ee",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+    "fingerprint": "47704f2b9564ff42",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). A type it uses also changes in prisma/orm#31200: an unreadable-contract integrity violation (`contractUnreadable`) carries `hash`, the head whose snapshot could not be read, and the options of `db update` gain the optional `onUnreadableOrigin`."
   },
   {
     "path": "./cli/control-api",
@@ -266,8 +275,8 @@
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "a2e10d86931eb460",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+    "fingerprint": "83f1915018a0adb8",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). A type it uses also changes in prisma/orm#31200: an unreadable-contract integrity violation (`contractUnreadable`) carries `hash`, the head whose snapshot could not be read, and the options of `db update` gain the optional `onUnreadableOrigin`."
   },
   {
     "path": "./cli/control-api",
@@ -280,12 +289,57 @@
   },
   {
     "path": "./cli/control-api",
+    "export": "mapIntegrityViolations",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "a37bdc75c0231d5d",
+    "reason": "The `contractUnreadable` integrity violation now carries `hash`, the head whose contract snapshot could not be read, so a refusal and `migration check` can name that snapshot and the command that writes it again (prisma/orm#31200)."
+  },
+  {
+    "path": "./cli/control-api",
+    "export": "migrationSpaceListEntriesFromAggregate",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "2fb58712c7ba587d",
+    "reason": "The `contractUnreadable` integrity violation now carries `hash`, the head whose contract snapshot could not be read, so a refusal and `migration check` can name that snapshot and the command that writes it again (prisma/orm#31200)."
+  },
+  {
+    "path": "./cli/control-api",
+    "export": "refuseContractSpaceIntegrity",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "28e5aeafe6c2374c",
+    "reason": "The `contractUnreadable` integrity violation now carries `hash`, the head whose contract snapshot could not be read, so a refusal and `migration check` can name that snapshot and the command that writes it again (prisma/orm#31200)."
+  },
+  {
+    "path": "./cli/control-api",
+    "export": "refusePackageCorruptionOnAggregate",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "53ccbe1ecbc3c18b",
+    "reason": "The `contractUnreadable` integrity violation now carries `hash`, the head whose contract snapshot could not be read, so a refusal and `migration check` can name that snapshot and the command that writes it again (prisma/orm#31200)."
+  },
+  {
+    "path": "./cli/control-api",
     "export": "resolveContractRefToSnapshot",
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
     "fingerprint": "cb55547e875233fe",
     "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./cli/control-api",
+    "export": "runMigrationCheck",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "f066539a45297620",
+    "reason": "`migration check` now reads, through the family's contract reader, each snapshot a later command interprets (each one a ref names, the space's head, and each one no migration of the space starts from), and reports each migration and ref it could not read, so a check space carries the family's reader, the space's head and the unreadable migrations and refs, all required (prisma/orm#31200)."
   },
   {
     "path": "./cli/control-api/testing",
@@ -302,8 +356,8 @@
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "d1e159408852bf4f",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+    "fingerprint": "54367da0e7a8c81f",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). A type it uses also changes in prisma/orm#31200: an unreadable-contract integrity violation (`contractUnreadable`) carries `hash`, the head whose snapshot could not be read, and the options of `db update` gain the optional `onUnreadableOrigin`."
   },
   {
     "path": "./cli/control-api/testing",
@@ -311,8 +365,8 @@
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "b797ca2573e747b6",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+    "fingerprint": "552a9be7c68adb88",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). A type it uses also changes in prisma/orm#31200: an unreadable-contract integrity violation (`contractUnreadable`) carries `hash`, the head whose snapshot could not be read, and the options of `db update` gain the optional `onUnreadableOrigin`."
   },
   {
     "path": "./cli/control-api/testing",
@@ -415,6 +469,15 @@
   },
   {
     "path": "./migration-tools",
+    "export": "DescriptorSelfConsistencyInputs",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "cdf641fa74af1df7",
+    "reason": "assertDescriptorSelfConsistency takes the whole contract.json, so it can read the file’s format version before anything else in it (prisma/orm#31200)."
+  },
+  {
+    "path": "./migration-tools",
     "export": "Migration",
     "test": "constructor",
     "kind": "break",
@@ -464,8 +527,17 @@
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "3609d055b269eaf2",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+    "fingerprint": "42cb35e9f2866742",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). A type it uses also changes in prisma/orm#31200: an unreadable-contract integrity violation (`contractUnreadable`) carries `hash`, the head whose snapshot could not be read, and the options of `db update` gain the optional `onUnreadableOrigin`."
+  },
+  {
+    "path": "./migration-tools",
+    "export": "ResolveRecordedPathInputs",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "92993736b5146aba",
+    "reason": "Its `space` now needs only a space's contract, migration graph, head reference and migrations, so the Prisma space, which has no folder on disk, can be passed (prisma/orm#31234)."
   },
   {
     "path": "./migration-tools",
@@ -482,8 +554,8 @@
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "9cc0bbfef518dbce",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+    "fingerprint": "e61873332c750c1d",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). A type it uses also changes in prisma/orm#31200: an unreadable-contract integrity violation (`contractUnreadable`) carries `hash`, the head whose snapshot could not be read, and the options of `db update` gain the optional `onUnreadableOrigin`."
   },
   {
     "path": "./migration-tools",
@@ -505,6 +577,15 @@
   },
   {
     "path": "./migration-tools",
+    "export": "assertDescriptorSelfConsistency",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "7e6931d67e1a255b",
+    "reason": "assertDescriptorSelfConsistency takes the whole contract.json, so it can read the file’s format version before anything else in it (prisma/orm#31200)."
+  },
+  {
+    "path": "./migration-tools",
     "export": "buildMigrationArtifacts",
     "test": "value",
     "kind": "break",
@@ -514,12 +595,48 @@
   },
   {
     "path": "./migration-tools",
+    "export": "collectAggregateNamespaces",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "27398d35c9189a37",
+    "reason": "The `contractUnreadable` integrity violation now carries `hash`, the head whose contract snapshot could not be read, so a refusal and `migration check` can name that snapshot and the command that writes it again (prisma/orm#31200)."
+  },
+  {
+    "path": "./migration-tools",
+    "export": "contractSpaceFromJson",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "181952587e5c9e11",
+    "reason": "contractSpaceFromJson requires the extension’s spaceId, so an error in a file the extension ships names the extension and the user knows to upgrade it (prisma/orm#31200)."
+  },
+  {
+    "path": "./migration-tools",
+    "export": "createContractSpaceAggregate",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "b4618cea9f211a9e",
+    "reason": "The `contractUnreadable` integrity violation now carries `hash`, the head whose contract snapshot could not be read, so a refusal and `migration check` can name that snapshot and the command that writes it again (prisma/orm#31200)."
+  },
+  {
+    "path": "./migration-tools",
     "export": "planMigration",
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "9807b8e7e40b5dfe",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+    "fingerprint": "861042aabc02ed58",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). A type it uses also changes in prisma/orm#31200: an unreadable-contract integrity violation (`contractUnreadable`) carries `hash`, the head whose snapshot could not be read, and the options of `db update` gain the optional `onUnreadableOrigin`."
+  },
+  {
+    "path": "./migration-tools",
+    "export": "spacesInApplyOrder",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "0a938b272e86298f",
+    "reason": "The `contractUnreadable` integrity violation now carries `hash`, the head whose contract snapshot could not be read, so a refusal and `migration check` can name that snapshot and the command that writes it again (prisma/orm#31200)."
   },
   {
     "path": "./migration-tools",
@@ -527,8 +644,8 @@
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "13f5c19b1e55d582",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+    "fingerprint": "02c02d9f3906a069",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). A type it uses also changes in prisma/orm#31200: an unreadable-contract integrity violation (`contractUnreadable`) carries `hash`, the head whose snapshot could not be read, and the options of `db update` gain the optional `onUnreadableOrigin`."
   },
   {
     "path": "./migration-tools/aggregate",
@@ -536,8 +653,17 @@
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "3609d055b269eaf2",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+    "fingerprint": "42cb35e9f2866742",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). A type it uses also changes in prisma/orm#31200: an unreadable-contract integrity violation (`contractUnreadable`) carries `hash`, the head whose snapshot could not be read, and the options of `db update` gain the optional `onUnreadableOrigin`."
+  },
+  {
+    "path": "./migration-tools/aggregate",
+    "export": "ResolveRecordedPathInputs",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "92993736b5146aba",
+    "reason": "Its `space` now needs only a space's contract, migration graph, head reference and migrations, so the Prisma space, which has no folder on disk, can be passed (prisma/orm#31234)."
   },
   {
     "path": "./migration-tools/aggregate",
@@ -554,8 +680,8 @@
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "9cc0bbfef518dbce",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+    "fingerprint": "e61873332c750c1d",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). A type it uses also changes in prisma/orm#31200: an unreadable-contract integrity violation (`contractUnreadable`) carries `hash`, the head whose snapshot could not be read, and the options of `db update` gain the optional `onUnreadableOrigin`."
   },
   {
     "path": "./migration-tools/aggregate",
@@ -577,12 +703,39 @@
   },
   {
     "path": "./migration-tools/aggregate",
+    "export": "collectAggregateNamespaces",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "27398d35c9189a37",
+    "reason": "The `contractUnreadable` integrity violation now carries `hash`, the head whose contract snapshot could not be read, so a refusal and `migration check` can name that snapshot and the command that writes it again (prisma/orm#31200)."
+  },
+  {
+    "path": "./migration-tools/aggregate",
+    "export": "createContractSpaceAggregate",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "b4618cea9f211a9e",
+    "reason": "The `contractUnreadable` integrity violation now carries `hash`, the head whose contract snapshot could not be read, so a refusal and `migration check` can name that snapshot and the command that writes it again (prisma/orm#31200)."
+  },
+  {
+    "path": "./migration-tools/aggregate",
     "export": "planMigration",
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "9807b8e7e40b5dfe",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+    "fingerprint": "861042aabc02ed58",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). A type it uses also changes in prisma/orm#31200: an unreadable-contract integrity violation (`contractUnreadable`) carries `hash`, the head whose snapshot could not be read, and the options of `db update` gain the optional `onUnreadableOrigin`."
+  },
+  {
+    "path": "./migration-tools/aggregate",
+    "export": "spacesInApplyOrder",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "0a938b272e86298f",
+    "reason": "The `contractUnreadable` integrity violation now carries `hash`, the head whose contract snapshot could not be read, so a refusal and `migration check` can name that snapshot and the command that writes it again (prisma/orm#31200)."
   },
   {
     "path": "./migration-tools/aggregate",
@@ -590,8 +743,8 @@
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "13f5c19b1e55d582",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+    "fingerprint": "02c02d9f3906a069",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). A type it uses also changes in prisma/orm#31200: an unreadable-contract integrity violation (`contractUnreadable`) carries `hash`, the head whose snapshot could not be read, and the options of `db update` gain the optional `onUnreadableOrigin`."
   },
   {
     "path": "./migration-tools/migration",
@@ -646,5 +799,32 @@
     "lastRelease": "8.0.0-rc.25",
     "fingerprint": "77c63ad096b14f4e",
     "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./migration-tools/spaces",
+    "export": "DescriptorSelfConsistencyInputs",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "cdf641fa74af1df7",
+    "reason": "assertDescriptorSelfConsistency takes the whole contract.json, so it can read the file’s format version before anything else in it (prisma/orm#31200)."
+  },
+  {
+    "path": "./migration-tools/spaces",
+    "export": "assertDescriptorSelfConsistency",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "7e6931d67e1a255b",
+    "reason": "assertDescriptorSelfConsistency takes the whole contract.json, so it can read the file’s format version before anything else in it (prisma/orm#31200)."
+  },
+  {
+    "path": "./migration-tools/spaces",
+    "export": "contractSpaceFromJson",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "181952587e5c9e11",
+    "reason": "contractSpaceFromJson requires the extension’s spaceId, so an error in a file the extension ships names the extension and the user knows to upgrade it (prisma/orm#31200)."
   }
 ]

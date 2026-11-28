@@ -19,6 +19,7 @@ function genuineContract(storage: Record<string, unknown>) {
   const storageHash = computeStorageHash({ target: TARGET, targetFamily: TARGET_FAMILY, storage });
   return {
     contractJson: {
+      formatVersion: 1,
       storage: { ...storage, storageHash },
       target: TARGET,
       targetFamily: TARGET_FAMILY,

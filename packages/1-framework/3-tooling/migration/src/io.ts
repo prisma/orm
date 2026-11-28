@@ -1,4 +1,5 @@
 import { copyFile, mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { isFormatVersionError } from '@internal/contract/format-version';
 import type { MigrationMetadata, MigrationPackage } from '@internal/framework-components/control';
 import { ifDefined } from '@internal/utils/defined';
 import { type } from 'arktype';
@@ -16,6 +17,10 @@ import {
   errorProvidedInvariantsMismatch,
   MigrationToolsError,
 } from './errors';
+import {
+  parseMigrationMetadataDocument,
+  printMigrationMetadataDocument,
+} from './formats/migration-metadata/versions';
 import { verifyMigrationHash } from './hash';
 import { deriveProvidedInvariants } from './invariants';
 import { MigrationOpsSchema } from './op-schema';
@@ -39,14 +44,9 @@ function hasErrnoCode(error: unknown, code: string): boolean {
   return error instanceof Error && (error as { code?: string }).code === code;
 }
 
-const MigrationMetadataSchema = type({
-  '+': 'reject',
-  from: 'string > 0 | null',
-  to: 'string',
-  migrationHash: 'string',
-  providedInvariants: 'string[]',
-  createdAt: 'string',
-});
+function migrationMetadataJson(metadata: MigrationMetadata): string {
+  return JSON.stringify(printMigrationMetadataDocument(metadata), null, 2);
+}
 
 export async function writeMigrationPackage(
   dir: string,
@@ -64,9 +64,7 @@ export async function writeMigrationPackage(
     throw error;
   }
 
-  await writeFile(join(dir, MANIFEST_FILE), JSON.stringify(metadata, null, 2), {
-    flag: 'wx',
-  });
+  await writeFile(join(dir, MANIFEST_FILE), migrationMetadataJson(metadata), { flag: 'wx' });
   await writeFile(join(dir, OPS_FILE), JSON.stringify(ops, null, 2), { flag: 'wx' });
 }
 
@@ -177,7 +175,7 @@ export async function writeMigrationMetadata(
   dir: string,
   metadata: MigrationMetadata,
 ): Promise<void> {
-  await writeFile(join(dir, MANIFEST_FILE), `${JSON.stringify(metadata, null, 2)}\n`);
+  await writeFile(join(dir, MANIFEST_FILE), `${migrationMetadataJson(metadata)}\n`);
 }
 
 export async function writeMigrationOps(dir: string, ops: MigrationOps): Promise<void> {
@@ -212,12 +210,17 @@ export async function readMigrationPackage(
     throw error;
   }
 
-  let metadata: MigrationMetadata;
+  let manifest: unknown;
   try {
-    metadata = JSON.parse(manifestRaw);
+    manifest = JSON.parse(manifestRaw);
   } catch (e) {
     throw errorInvalidJson(manifestPath, e instanceof Error ? e.message : String(e));
   }
+  const parsedMetadata = parseMigrationMetadataDocument(manifest, manifestPath);
+  if (!parsedMetadata.ok) {
+    throw errorInvalidManifest(manifestPath, parsedMetadata.failure);
+  }
+  const metadata = parsedMetadata.value;
 
   let ops: MigrationOps;
   try {
@@ -225,8 +228,6 @@ export async function readMigrationPackage(
   } catch (e) {
     throw errorInvalidJson(opsPath, e instanceof Error ? e.message : String(e));
   }
-
-  validateMetadata(metadata, manifestPath);
   validateOps(ops, opsPath);
 
   // Re-derive before the hash check so format/duplicate diagnostics
@@ -292,9 +293,9 @@ async function readMigrationPackageRaw(dir: string): Promise<OnDiskMigrationPack
     return null;
   }
 
-  let metadata: MigrationMetadata;
+  let manifest: unknown;
   try {
-    metadata = JSON.parse(manifestRaw);
+    manifest = JSON.parse(manifestRaw);
   } catch {
     return null;
   }
@@ -305,8 +306,9 @@ async function readMigrationPackageRaw(dir: string): Promise<OnDiskMigrationPack
     return null;
   }
 
-  const result = MigrationMetadataSchema(metadata);
-  if (result instanceof type.errors) return null;
+  const parsedMetadata = parseMigrationMetadataDocument(manifest, manifestPath);
+  if (!parsedMetadata.ok) return null;
+  const metadata = parsedMetadata.value;
 
   const opsResult = MigrationOpsSchema(ops);
   if (opsResult instanceof type.errors) return null;
@@ -328,16 +330,6 @@ function arraysEqual(a: readonly string[], b: readonly string[]): boolean {
     if (a[i] !== b[i]) return false;
   }
   return true;
-}
-
-function validateMetadata(
-  metadata: unknown,
-  filePath: string,
-): asserts metadata is MigrationMetadata {
-  const result = MigrationMetadataSchema(metadata);
-  if (result instanceof type.errors) {
-    throw errorInvalidManifest(filePath, result.summary);
-  }
 }
 
 function validateOps(ops: unknown, filePath: string): asserts ops is MigrationOps {
@@ -425,6 +417,7 @@ export async function readMigrationsDir(
     try {
       pkg = await readMigrationPackage(entryPath, options);
     } catch (error) {
+      if (isFormatVersionError(error)) throw error;
       const dirName = entry;
       if (MigrationToolsError.is(error)) {
         if (error.code === 'MIGRATION.HASH_MISMATCH') {

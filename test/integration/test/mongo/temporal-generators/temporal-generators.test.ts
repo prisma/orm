@@ -45,7 +45,7 @@ const serializeContract: SerializeContract = (contract) =>
 async function emitNormalized(contract: FrameworkContract): Promise<Record<string, unknown>> {
   const familyInstance = mongoFamilyDescriptor.create(mongoStack);
   const normalized = familyInstance.deserializeContract(
-    enrichContract(contract, [mongoTargetDescriptor, mongoAdapter]),
+    serializeContract(enrichContract(contract, [mongoTargetDescriptor, mongoAdapter])),
   );
   const emitted = await emit(normalized, mongoStack, mongoFamilyDescriptor.emission, {
     serializeContract,

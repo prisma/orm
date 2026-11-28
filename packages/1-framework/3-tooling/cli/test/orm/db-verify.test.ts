@@ -62,7 +62,7 @@ async function projectDir(options: { readonly contract?: boolean } = {}): Promis
     await mkdir(join(dir, 'output'), { recursive: true });
     await writeFile(
       join(dir, 'output', 'contract.json'),
-      JSON.stringify({ storage: { storageHash: HASH_A }, target: 'postgres' }),
+      JSON.stringify({ formatVersion: 1, storage: { storageHash: HASH_A }, target: 'postgres' }),
       'utf-8',
     );
   }

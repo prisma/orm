@@ -44,6 +44,7 @@ import { createPostgresAdapter } from '../src/core/adapter';
 import type { PostgresContract } from '../src/core/types';
 
 const contract = new SqlContractSerializer().deserializeContract({
+  formatVersion: 1,
   target: 'postgres',
   targetFamily: 'sql',
   profileHash: 'test-profile',

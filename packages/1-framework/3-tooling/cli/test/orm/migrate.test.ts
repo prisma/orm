@@ -115,7 +115,7 @@ async function buildProject(): Promise<string> {
     join(cwd, 'contract.json'),
     JSON.stringify({
       storage: { storageHash: C2, namespaces: {} },
-      schemaVersion: '1.0.0',
+      formatVersion: 1,
       target: TARGET,
       targetFamily: FAMILY,
     }),
@@ -214,7 +214,7 @@ function refsDirOf(cwd: string): string {
 
 async function storeSnapshot(cwd: string, hash: string): Promise<void> {
   await writeContractSnapshot(join(cwd, 'migrations'), hash, {
-    contractJson: { storage: { storageHash: hash, namespaces: {} } },
+    contractJson: { formatVersion: 1, storage: { storageHash: hash, namespaces: {} } },
     contractDts: SNAPSHOT_CONTRACT_DTS,
   });
 }
@@ -376,7 +376,7 @@ describe('migrate', () => {
     it('does not render a snapshot the store already holds', async () => {
       const cwd = await buildProject();
       await writeContractSnapshot(join(cwd, 'migrations'), C2, {
-        contractJson: { storage: { storageHash: C2, namespaces: {} } },
+        contractJson: { formatVersion: 1, storage: { storageHash: C2, namespaces: {} } },
         contractDts: SNAPSHOT_CONTRACT_DTS,
       });
       mocks.renderContractDts.mockResolvedValue(

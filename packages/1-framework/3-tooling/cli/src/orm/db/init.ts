@@ -27,6 +27,7 @@ import { controlProgressReporter } from '../progress';
 import { migrationResultBlocks, migrationResultNextActions } from './migration-blocks';
 import { plannerWarningsCollector } from './planner-warnings';
 import { prepareMigrationRun } from './prepare';
+import { unrecordedSnapshotWarning } from './unrecorded-snapshots';
 
 function initPresentations(inputs: {
   readonly document: MigrationCommandResult;
@@ -181,6 +182,7 @@ export function createDbInitCommand(createClient: CreateControlClient) {
 
         const plannerWarnings = plannerWarningsCollector(ctx.report);
         const result = await client.dbInit({
+          onUnrecordedSnapshot: unrecordedSnapshotWarning(ctx.report, 'db init', ctx.cwd),
           contract: contractJson,
           mode: args.flags.dryRun ? 'plan' : 'apply',
           migrationsDir,

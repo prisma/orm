@@ -210,6 +210,16 @@ describe('arktypeJsonDescriptor.factory(params)', () => {
   });
 });
 
+describe('arktypeJsonDescriptor.paramsSchema', () => {
+  it('refuses a key the parameters do not define', () => {
+    const { typeParams } = arktypeJsonColumn(productSchema);
+    const validate = (params: unknown) =>
+      arktypeJsonDescriptor.paramsSchema['~standard'].validate(params);
+    expect(validate(typeParams)).not.toHaveProperty('issues');
+    expect(validate({ ...typeParams, unexpected: 1 })).toHaveProperty('issues');
+  });
+});
+
 describe('structured error codes', () => {
   it('encode of a non-JSON-representable value raises RUNTIME.ENCODE_FAILED', async () => {
     const codec = arktypeJsonColumn(type('object')).codecFactory(SYNTH_CTX);

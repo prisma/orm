@@ -276,17 +276,16 @@ describe('side-by-side contract examples', () => {
       const familyInstance = mongoFamilyDescriptor.create(mongoStack);
       const frameworkComponents = [mongoTargetDescriptor, mongoAdapter];
 
+      const mongoSerializeContract: SerializeContract = (contract) =>
+        mongoTargetDescriptor.contractSerializer.serializeContract(contract as MongoTargetContract);
       const normalizedTs = familyInstance.deserializeContract(
-        enrichContract(fixture.tsContract, frameworkComponents),
+        mongoSerializeContract(enrichContract(fixture.tsContract, frameworkComponents)),
       );
       const normalizedPsl = familyInstance.deserializeContract(
-        enrichContract(providerResult.value, frameworkComponents),
+        mongoSerializeContract(enrichContract(providerResult.value, frameworkComponents)),
       );
 
       expect(normalizedTs).toEqual(normalizedPsl);
-
-      const mongoSerializeContract: SerializeContract = (contract) =>
-        mongoTargetDescriptor.contractSerializer.serializeContract(contract as MongoTargetContract);
       const emittedTs = await emit(normalizedTs, mongoStack, mongoFamilyDescriptor.emission, {
         serializeContract: mongoSerializeContract,
         ...mongoContractCanonicalizationHooks,

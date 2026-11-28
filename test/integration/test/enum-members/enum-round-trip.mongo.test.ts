@@ -199,7 +199,7 @@ const combined = await readPsl(
 );
 if (!('contract' in combined)) throw new Error(`the PSL did not load: ${combined.messages}`);
 const contractJson = new MongoContractSerializer().serializeContract(
-  contractFromJson<AnyMongoContract>(combined.contract),
+  combined.contract as MongoContract,
 );
 const { enums } = mongoStatic({ contract: contractFromJson<AnyMongoContract>(contractJson) });
 

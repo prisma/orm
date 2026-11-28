@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "1",
+  "formatVersion": 1,
   "targetFamily": "sql",
   "target": "mysql",
   "profileHash": "5212eb1a1220f2d24de13f4efadd4c703f3a1098a5f57e09da0dc26ebb7201d0",

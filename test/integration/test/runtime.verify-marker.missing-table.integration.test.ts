@@ -13,7 +13,10 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { contract } from './sql-builder/fixtures/contract';
 import type { Contract } from './sql-builder/fixtures/generated/contract';
 
-const sqlContract = new PostgresContractSerializer().deserializeContract(contract) as Contract;
+const serializer = new PostgresContractSerializer();
+const sqlContract = serializer.deserializeContract(
+  serializer.serializeContract(contract),
+) as Contract;
 
 describe('runtime verify-marker: missing marker table', {
   timeout: timeouts.databaseOperation,

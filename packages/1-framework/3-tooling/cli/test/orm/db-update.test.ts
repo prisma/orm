@@ -80,7 +80,7 @@ beforeEach(() => {
   writeProjectManifest(projectDir);
   writeFileSync(
     join(projectDir, 'contract.json'),
-    JSON.stringify({ storage: { storageHash: MARKER_HASH } }),
+    JSON.stringify({ formatVersion: 1, storage: { storageHash: MARKER_HASH } }),
   );
   writeFileSync(join(projectDir, 'contract.d.ts'), 'export type Contract = never;\n');
   mocks.connect.mockReset().mockResolvedValue(undefined);
@@ -1329,7 +1329,7 @@ describe('db update', () => {
 
       expect(run.exitCode).toBe(0);
       expect(mocks.renderContractDts).toHaveBeenCalledWith({
-        contract: { storage: { storageHash: MARKER_HASH } },
+        contract: { formatVersion: 1, storage: { storageHash: MARKER_HASH } },
         typesModule: '@acme/orm-db/contract-types',
       });
       expect(mocks.renderContractDts.mock.invocationCallOrder[0]).toBeLessThan(

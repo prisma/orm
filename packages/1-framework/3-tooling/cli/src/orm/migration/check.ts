@@ -8,7 +8,10 @@ import type { Diagnostic } from '@prisma/cli-engine/protocol';
 import { notOk, ok } from '@prisma/cli-engine/protocol';
 import type { CheckFailure, MigrationCheckResult } from '../../commands/json/schemas';
 import { PRECONDITION } from '../../commands/migration-check/exit-codes';
-import { buildReadAggregate } from '../../control-api/operations/contract-space-aggregate-loader';
+import {
+  buildReadAggregate,
+  unreadableFiles,
+} from '../../control-api/operations/contract-space-aggregate-loader';
 import {
   checkSingleTarget,
   enumerateCheckSpaces,
@@ -138,16 +141,18 @@ export const migrationCheckCommand = defineOrmCommand({
     const loaded = await buildReadAggregate(ctx.config, {
       migrationsDir,
       ...ifDefined('verifySnapshotContent', verifySnapshotContent),
+      whenFileUnreadable: 'report',
     });
     if (!loaded.ok) {
       return notOk(normalizeError(loaded.failure));
     }
-    const spaces = await enumerateCheckSpaces(
-      loaded.value.aggregate,
-      migrationsDir,
-      ctx.cwd,
-      verifySnapshotContent,
-    );
+    const spaces = await enumerateCheckSpaces({
+      aggregate: loaded.value.aggregate,
+      projectMigrationsDir: migrationsDir,
+      cwd: ctx.cwd,
+      ...ifDefined('verifySnapshotContent', verifySnapshotContent),
+      deserializeContract: loaded.value.deserializeContract,
+    });
 
     let document: MigrationCheckResult;
     let resolvedSpaceId: string | undefined;
@@ -191,16 +196,29 @@ export const migrationCheckCommand = defineOrmCommand({
       if (!loadedViolations.ok) {
         return notOk(normalizeError(loadedViolations.failure));
       }
-      const violations = loadedViolations.value;
-      const scoped =
-        spaceFilter === undefined
-          ? violations
-          : violations.filter(
-              (violation) => violation.kind !== 'disjointness' && violation.spaceId === spaceFilter,
-            );
+      const violations = [
+        ...loadedViolations.value.filter(
+          (violation) =>
+            violation.kind !== 'refUnreadable' && violation.kind !== 'packageUnloadable',
+        ),
+        ...unreadableFiles(loaded.value.aggregate),
+      ];
+      const spacesNotReadInFull = new Set(
+        spaces
+          .filter((space) => space.unreadableMigrations.length > 0)
+          .map((space) => space.spaceId),
+      );
+      const scoped = violations.filter(
+        (violation) =>
+          (spaceFilter === undefined ||
+            (violation.kind !== 'disjointness' && violation.spaceId === spaceFilter)) &&
+          !(violation.kind === 'headRefNotInGraph' && spacesNotReadInFull.has(violation.spaceId)),
+      );
       const failures: readonly CheckFailure[] = [
         ...checked.value.failures,
-        ...scoped.map((violation) => integrityViolationToCheckFailure(violation, migrationsDir)),
+        ...scoped.map((violation) =>
+          integrityViolationToCheckFailure(violation, migrationsDir, ctx.cwd),
+        ),
       ];
       document =
         failures.length === 0

@@ -5,6 +5,11 @@ import { createSqlContract } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { SqliteContractSerializer } from '../src/core/sqlite-contract-serializer';
 
+/** A contract as a stored `contract.json` holds it: with its format version. */
+function storedContract(contract: unknown): unknown {
+  return { formatVersion: 1, ...(contract as Record<string, unknown>) };
+}
+
 function makeValidContractJson() {
   return createSqlContract({
     target: 'sqlite',
@@ -44,14 +49,14 @@ function makeContractWithTablesJson() {
 describe('SqliteContractSerializer', () => {
   it('deserializes a valid SQL contract envelope', () => {
     const serializer = new SqliteContractSerializer();
-    const contract = serializer.deserializeContract(makeValidContractJson());
+    const contract = serializer.deserializeContract(storedContract(makeValidContractJson()));
     expect(contract.targetFamily).toBe('sql');
     expect(contract.storage.namespaces[UNBOUND_NAMESPACE_ID]!.entries.table ?? {}).toEqual({});
   });
 
   it('hydrates JSON storage into the SQL Contract IR class hierarchy', () => {
     const serializer = new SqliteContractSerializer();
-    const contract = serializer.deserializeContract(makeContractWithTablesJson());
+    const contract = serializer.deserializeContract(storedContract(makeContractWithTablesJson()));
 
     expect(contract.storage).toBeInstanceOf(SqlStorage);
     const userTable = contract.storage.namespaces[UNBOUND_NAMESPACE_ID]!.entries.table?.['user'] as
@@ -64,12 +69,12 @@ describe('SqliteContractSerializer', () => {
   it('rejects an invalid contract (family-shared structural validation runs)', () => {
     const serializer = new SqliteContractSerializer();
     const bad = { ...makeValidContractJson(), targetFamily: 'mongo' };
-    expect(() => serializer.deserializeContract(bad)).toThrow();
+    expect(() => serializer.deserializeContract(storedContract(bad))).toThrow();
   });
 
   it('serializeContract round-trips a JSON-clean contract', () => {
     const serializer = new SqliteContractSerializer();
-    const contract = serializer.deserializeContract(makeContractWithTablesJson());
+    const contract = serializer.deserializeContract(storedContract(makeContractWithTablesJson()));
     const json = serializer.serializeContract(contract);
     const reparsed = JSON.parse(JSON.stringify(json));
     expect(reparsed.storage).not.toHaveProperty('kind');
@@ -121,7 +126,7 @@ describe('control-policy round-trip fidelity', () => {
 
   it('preserves effective control per node across serialize → deserialize', () => {
     const serializer = new SqliteContractSerializer();
-    const contract = serializer.deserializeContract(makeMixedControlContractJson());
+    const contract = serializer.deserializeContract(storedContract(makeMixedControlContractJson()));
     const reparsed = JSON.parse(JSON.stringify(serializer.serializeContract(contract)));
 
     expect(reparsed.defaultControlPolicy).toBe('tolerated');

@@ -1,3 +1,5 @@
+import { isFormatVersionError } from '@internal/contract/format-version';
+import { formatVersionErrorAt } from '@internal/contract/internal/format-version';
 import type { Contract, StorageNamespace } from '@internal/contract/types';
 import type { SchemaEntityCoordinate } from '@internal/framework-components/control';
 import { coordinateKey, elementCoordinates } from '@internal/framework-components/ir';
@@ -39,6 +41,9 @@ function deserializeContractAtPath(
   try {
     return deserializeContract(contractJson);
   } catch (error) {
+    if (isFormatVersionError(error)) {
+      throw formatVersionErrorAt(error, filePath);
+    }
     if (MigrationToolsError.is(error)) {
       throw error;
     }

@@ -78,7 +78,7 @@ function packContract(declared: Declared): Contract<SqlStorage> {
 }
 
 function pack(id: string, declared: Declared): SqlControlExtensionDescriptor<'postgres'> {
-  const contractJson = packContract(declared);
+  const contractJson = Object.assign(packContract(declared), { formatVersion: 1 });
   const space: ContractSpace<Contract<SqlStorage>> = {
     contractJson,
     migrations: [],

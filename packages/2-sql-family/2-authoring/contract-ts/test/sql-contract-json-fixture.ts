@@ -38,7 +38,7 @@ const defaultTables = {
 export function validSqlContractJson(overrides: Record<string, unknown> = {}) {
   const { models, domain, storage, ...rest } = overrides;
   return {
-    schemaVersion: '1',
+    formatVersion: 1,
     target: 'postgres',
     targetFamily: 'sql',
     profileHash: 'test',

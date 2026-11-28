@@ -308,6 +308,7 @@ const INTERVAL_SECONDS_FRACTION = /\d\.(\d+)S$/;
 
 /** The precision and scale of `numeric`. PostgreSQL 15 and later take a negative scale and one above the precision. */
 export const pgNumericParams = arktype({
+  '+': 'reject',
   'precision?': 'number.integer >= 1 & number.integer <= 1000',
   'scale?': 'number.integer >= -1000 & number.integer <= 1000',
 }).narrow(
@@ -319,16 +320,19 @@ export const pgNumericParams = arktype({
 
 /** The length of `char` and `varchar`. */
 export const pgCharacterLengthParams = arktype({
+  '+': 'reject',
   'length?': 'number.integer >= 1 & number.integer <= 10485760',
 });
 
 /** The length of `bit` and `bit varying`. */
 export const pgBitLengthParams = arktype({
+  '+': 'reject',
   'length?': 'number.integer >= 1 & number.integer <= 83886080',
 });
 
 /** The fractional-second precision of the time, timestamp and interval types. */
 export const pgPrecisionParams = arktype({
+  '+': 'reject',
   'precision?': 'number.integer >= 0 & number.integer <= 6',
 });
 
@@ -340,7 +344,7 @@ const withDefaultPrecision = <Params extends { readonly precision?: number }>(pa
 const precisionAsWritten = <Params extends { readonly precision?: number }>(params: Params) =>
   params;
 
-export const pgEnumParams = arktype({ typeName: 'string > 0' });
+export const pgEnumParams = arktype({ '+': 'reject', typeName: 'string > 0' });
 
 /** A type with no parameters that is written and reported by its own name. */
 const namedOnly = (
