@@ -6,7 +6,8 @@ export type TemporalTag =
   | 'Temporal.Instant'
   | 'Temporal.PlainDate'
   | 'Temporal.PlainDateTime'
-  | 'Temporal.PlainTime';
+  | 'Temporal.PlainTime'
+  | (string & {});
 
 /** A Temporal value, of any kind and from any implementation. */
 export interface TemporalValue {

@@ -3,7 +3,7 @@ export const JSON_TYPES = ['string', 'number', 'boolean', 'object', 'array', 'an
 /**
  * The JSON type a codec's value is written as inside a JSON document. `'any'` means the value can be any JSON value, including `null`, as for a JSON codec.
  */
-export type JsonType = (typeof JSON_TYPES)[number];
+export type JsonType = (typeof JSON_TYPES)[number] | (string & {});
 
 export function isJsonType(value: unknown): value is JsonType {
   return JSON_TYPES.some((jsonType) => jsonType === value);

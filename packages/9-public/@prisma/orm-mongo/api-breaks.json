@@ -16,5 +16,14 @@
     "lastRelease": "8.0.0-rc.25",
     "fingerprint": "ba2f4a77c9784772",
     "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./runtime",
+    "export": "MongoClient",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "bcfb3a896b323f0f",
+    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
   }
 ]

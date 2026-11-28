@@ -14,7 +14,7 @@ import type { SqlStorage } from './ir/sql-storage';
  * (e.g. `policy`) stay under `.entries`.
  */
 export const SQL_BUILTIN_KINDS = ['table', 'valueSet', 'valueObject'] as const;
-export type SqlBuiltinKind = (typeof SQL_BUILTIN_KINDS)[number];
+export type SqlBuiltinKind = (typeof SQL_BUILTIN_KINDS)[number] | (string & {});
 
 type SqlEntries<TContract extends Contract<SqlStorage>> = DefaultNamespaceEntries<
   TContract['storage']

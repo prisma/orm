@@ -4,7 +4,7 @@ const newestPostgresVersion = 18 as const;
 const postgresVersions = [15, 16, 17, newestPostgresVersion] as const;
 
 /** A PostgreSQL version Prisma 8 supports. */
-export type PostgresVersion = (typeof postgresVersions)[number];
+export type PostgresVersion = (typeof postgresVersions)[number] | (number & {});
 
 /** The oldest PostgreSQL version Prisma 8 supports. */
 export const POSTGRES_MIN_SERVER_VERSION = `${postgresVersions[0]}` as const;

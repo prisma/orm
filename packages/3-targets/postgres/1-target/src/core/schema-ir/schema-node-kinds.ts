@@ -31,7 +31,8 @@ export const PostgresSchemaNodeKind = {
 } as const;
 
 export type PostgresSchemaNodeKind =
-  (typeof PostgresSchemaNodeKind)[keyof typeof PostgresSchemaNodeKind];
+  | (typeof PostgresSchemaNodeKind)[keyof typeof PostgresSchemaNodeKind]
+  | (string & {});
 
 /**
  * The one real map from a Postgres-specific `nodeKind` to the
@@ -63,7 +64,7 @@ function isPostgresSchemaNodeKind(nodeKind: string): nodeKind is PostgresSchemaN
 
 /** Looks up the subject granularity for a Postgres-specific `nodeKind`. */
 export function postgresNodeGranularity(nodeKind: PostgresSchemaNodeKind): DiffSubjectGranularity {
-  return POSTGRES_NODE_GRANULARITY[nodeKind];
+  return postgresDiffSubjectGranularity(nodeKind);
 }
 
 /**
@@ -77,9 +78,10 @@ export function postgresNodeGranularity(nodeKind: PostgresSchemaNodeKind): DiffS
  * capability) — never stamped onto the issue or the node.
  */
 export function postgresDiffSubjectGranularity(nodeKind: string): DiffSubjectGranularity {
-  return isPostgresSchemaNodeKind(nodeKind)
-    ? postgresNodeGranularity(nodeKind)
-    : relationalNodeGranularity(nodeKind);
+  return (
+    (isPostgresSchemaNodeKind(nodeKind) ? POSTGRES_NODE_GRANULARITY[nodeKind] : undefined) ??
+    relationalNodeGranularity(nodeKind)
+  );
 }
 
 /**

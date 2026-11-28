@@ -36,7 +36,7 @@ export type BaseKey = Extract<RefusalKey, { readonly kind: 'base' }>;
 export type CollectionSettingsKey = Extract<RefusalKey, { readonly kind: 'collectionSettings' }>;
 
 /** What a variant's restatement of a base field changes, which the collection's validator, written from the base, would refuse. */
-export type RestatedFieldDifference = 'storedName' | 'type' | 'nullable' | 'many';
+export type RestatedFieldDifference = 'storedName' | 'type' | 'nullable' | 'many' | (string & {});
 
 /** What a definition names with a name that cannot be an object's own key. */
 export type UnsupportedNameSubject =
@@ -58,7 +58,8 @@ export type IndexShapeRule =
   | 'ttl-with-wildcard'
   | 'projection-without-wildcard'
   | 'collation-without-locale'
-  | 'second-text-index';
+  | 'second-text-index'
+  | (string & {});
 
 /** Why the builder refuses part of a definition, keyed by the part. Each source words the refusal itself. */
 export type BuildRefusal =

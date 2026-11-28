@@ -1,12 +1,30 @@
 [
   {
     "path": "./adapter",
+    "export": "ReturningStatement",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "5525fa49e891026c",
+    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
+  },
+  {
+    "path": "./adapter",
     "export": "createMysqlControlAdapter",
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
     "fingerprint": "8340dcda4d405382",
     "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./adapter",
+    "export": "createMysqlRuntimeAdapterDescriptor",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "2cbe140f5c889270",
+    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
   },
   {
     "path": "./adapter/control",
@@ -25,6 +43,69 @@
     "lastRelease": "8.0.0-rc.25",
     "fingerprint": "7fc550862ce74def",
     "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./adapter/runtime",
+    "export": "createMysqlRuntimeAdapterDescriptor",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "2cbe140f5c889270",
+    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
+  },
+  {
+    "path": "./adapter/sql-renderer",
+    "export": "ReturningStatement",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "5525fa49e891026c",
+    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
+  },
+  {
+    "path": "./driver",
+    "export": "MysqlRuntimeDriver",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "597df791c0c6c382",
+    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
+  },
+  {
+    "path": "./driver",
+    "export": "createMysqlRuntimeDriverDescriptor",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "479fbd94ea3b319a",
+    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
+  },
+  {
+    "path": "./driver/runtime",
+    "export": "MysqlRuntimeDriver",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "597df791c0c6c382",
+    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
+  },
+  {
+    "path": "./driver/runtime",
+    "export": "createMysqlRuntimeDriverDescriptor",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "479fbd94ea3b319a",
+    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
+  },
+  {
+    "path": "./driver/runtime",
+    "export": "default",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "f80b9d581e571c2c",
+    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
   },
   {
     "path": "./target",

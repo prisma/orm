@@ -56,7 +56,7 @@ export interface StoredKeyFill {
  * names the statement that would fill it, and `temporaryValue` fills it with one temporary value
  * when its codec has one.
  */
-export type UnnamedFieldFill = 'refuse' | 'temporaryValue';
+export type UnnamedFieldFill = 'refuse' | 'temporaryValue' | (string & {});
 
 /**
  * A policy that allows `data` operations plans a migration whose `migration.ts` the user can fill,

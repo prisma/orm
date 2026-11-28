@@ -24,7 +24,8 @@ export type UpdateOperator =
   | '$push'
   | '$pull'
   | '$addToSet'
-  | '$pop';
+  | '$pop'
+  | (string & {});
 
 export interface FieldOperation {
   readonly operator: UpdateOperator;

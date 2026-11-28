@@ -50,7 +50,7 @@ import { assertPlaceholdersMatchParams } from './placeholders';
 export type MysqlContract = Contract<SqlStorage>;
 
 /** A statement that can carry `RETURNING`. */
-export type ReturningStatement = 'insert' | 'update' | 'delete';
+export type ReturningStatement = 'insert' | 'update' | 'delete' | (string & {});
 
 const ARTICLED_STATEMENT: Readonly<Record<ReturningStatement, string>> = {
   insert: 'an insert',

@@ -21,7 +21,8 @@ export type MongoMigrationRunnerErrorCode =
   | 'MIGRATION.POLICY_VIOLATION'
   | 'MIGRATION.POSTCHECK_FAILED'
   | 'MIGRATION.PRECHECK_FAILED'
-  | 'MIGRATION.SCHEMA_VERIFY_FAILED';
+  | 'MIGRATION.SCHEMA_VERIFY_FAILED'
+  | (`MIGRATION.${string}` & {});
 
 export function mongoTargetError(
   code: MongoTargetErrorCode,

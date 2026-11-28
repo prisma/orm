@@ -5658,7 +5658,7 @@
 ./type-implementations/temporal-text: interface TemporalValue
 ./type-implementations/temporal-text: interface TemporalValue, readonly optional property calendarId?: string
 ./type-implementations/temporal-text: interface TemporalValue, required property toString: () => string
-./type-implementations/temporal-text: type TemporalTag = 'Temporal.Instant' | 'Temporal.PlainDate' | 'Temporal.PlainDateTime' | 'Temporal.PlainTime'
+./type-implementations/temporal-text: type TemporalTag = 'Temporal.Instant' | 'Temporal.PlainDate' | 'Temporal.PlainDateTime' | 'Temporal.PlainTime' | (string & {})
 ./type-implementations/temporal: function findTemporal(): TemporalImplementation | undefined
 ./type-implementations/temporal: function setFallbackTemporal(implementation: TemporalImplementation): void
 ./type-implementations/temporal: type TemporalImplementation = typeof Temporal
@@ -5711,7 +5711,7 @@
 ./type-implementations: interface TemporalValue, required property toString: () => string
 ./type-implementations: type GeneratorParams = Readonly<Record<string, unknown>> | undefined
 ./type-implementations: type TemporalImplementation = typeof Temporal
-./type-implementations: type TemporalTag = 'Temporal.Instant' | 'Temporal.PlainDate' | 'Temporal.PlainDateTime' | 'Temporal.PlainTime'
+./type-implementations: type TemporalTag = 'Temporal.Instant' | 'Temporal.PlainDate' | 'Temporal.PlainDateTime' | 'Temporal.PlainTime' | (string & {})
 ./utils/abortable: function abortable(signal: AbortSignal): <T>(promise: Promise<T>) => Promise<T>
 ./utils/array-equal: function isArrayEqual<T>(a: readonly T[], b: readonly T[]): boolean
 ./utils/assertions: function assertDefined<T>(value: T | null | undefined, message: string): asserts value is T

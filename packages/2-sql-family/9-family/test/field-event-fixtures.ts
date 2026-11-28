@@ -7,6 +7,7 @@ import { applicationDomainOf } from '@repo/test-utils';
 import { createTestSqlNamespace } from '../../1-core/contract/test/test-support';
 import type {
   CodecControlHooks,
+  FieldEvent,
   FieldEventContext,
   SqlMigrationPlanOperation,
 } from '../src/core/migrations/types';
@@ -93,7 +94,7 @@ export function makeOp(id: string, label = id): OpFactoryCall {
 }
 
 export interface RecordedCall {
-  readonly event: 'added' | 'dropped' | 'altered';
+  readonly event: FieldEvent;
   readonly namespaceId: string;
   readonly tableName: string;
   readonly fieldName: string;
