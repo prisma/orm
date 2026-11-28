@@ -1,5 +1,5 @@
 // Lists the lines a pull request adds to and removes from the packages' api.txt files, and the
-// records it adds to and removes from the three record files (scripts/public-api/records.mjs). Keeps
+// records it adds to and removes from the four record files (scripts/public-api/records.mjs). Keeps
 // one comment with that list current, and fails until the description names each changed export,
 // and the package or app of each changed record.
 
@@ -11,6 +11,7 @@ import {
   BREAKS_FILE,
   EXAMPLES_FILE,
   exportLabel,
+  REMOVED_CODES_FILE,
   REMOVED_FILE,
   recordLine,
 } from '../../../scripts/public-api/records.mjs';
@@ -43,7 +44,8 @@ export function apiChanges(files) {
   for (const file of files) {
     if (file.source === 'breaks') changes.push(...breakChanges(file));
     else if (file.source === 'examples') changes.push(...exampleChanges(file));
-    else if (file.source === 'removed') changes.push(...removedChanges(file));
+    else if (file.source === 'removed') changes.push(...removedChanges(file, REMOVED_PACKAGES));
+    else if (file.source === 'removedCodes') changes.push(...removedChanges(file, REMOVED_CODES));
     else changes.push(...listChanges(file));
   }
   return changes;
@@ -112,28 +114,30 @@ function exampleChanges({ before, after }) {
   });
 }
 
-// A removed package's record is named by the package it is for.
-function removedChanges({ before, after }) {
-  const byPackage = (text) => {
-    const packages = new Map();
-    for (const record of recordsOf(text, REMOVED_FILE)) {
-      const name = typeof record?.package === 'string' ? record.package : REMOVED_FILE;
-      if (!packages.has(name)) packages.set(name, new Set());
-      packages.get(name).add(recordLine(record, 'removed'));
+const REMOVED_PACKAGES = { file: REMOVED_FILE, recordFile: 'removed', key: 'package' };
+const REMOVED_CODES = { file: REMOVED_CODES_FILE, recordFile: 'removedCodes', key: 'code' };
+
+// A record of a removed package is named by the package, and one of a removed error code by the
+// code.
+function removedChanges({ before, after }, { file, recordFile, key }) {
+  const byName = (text) => {
+    const names = new Map();
+    for (const record of recordsOf(text, file)) {
+      const name = typeof record?.[key] === 'string' ? record[key] : file;
+      if (!names.has(name)) names.set(name, new Set());
+      names.get(name).add(recordLine(record, recordFile));
     }
-    return packages;
+    return names;
   };
-  const old = byPackage(before);
-  const current = byPackage(after);
+  const old = byName(before);
+  const current = byName(after);
   return [...new Set([...old.keys(), ...current.keys()])].sort(compareCodeUnits).flatMap((name) => {
     const { added, removed } = difference(
       old.get(name) ?? new Set(),
       current.get(name) ?? new Set(),
     );
     if (added.length === 0 && removed.length === 0) return [];
-    return [
-      { packageName: name, heading: `${REMOVED_FILE}: ${name}`, added, removed, exports: [name] },
-    ];
+    return [{ packageName: name, heading: `${file}: ${name}`, added, removed, exports: [name] }];
   });
 }
 
@@ -149,6 +153,7 @@ export function readChangedFiles({ git }) {
     `packages/9-public/@prisma/*/${BREAKS_FILE}`,
     EXAMPLES_FILE,
     REMOVED_FILE,
+    REMOVED_CODES_FILE,
   ]);
   const files = [];
   for (const entry of status.split('\n')) {
@@ -171,6 +176,7 @@ export function readChangedFiles({ git }) {
 function sourceOf(path) {
   if (path === EXAMPLES_FILE) return { source: 'examples', packageName: undefined };
   if (path === REMOVED_FILE) return { source: 'removed', packageName: undefined };
+  if (path === REMOVED_CODES_FILE) return { source: 'removedCodes', packageName: undefined };
   const match = PACKAGE_FILE.exec(path);
   if (match === null) return undefined;
   return { source: match[2] === 'api.txt' ? 'api' : 'breaks', packageName: match[1] };
@@ -255,7 +261,7 @@ const PACKAGE_FORM =
   'A package name in backticks, on a line with a reason, covers every change in that package.';
 
 const RECORDS_FORM =
-  'A change to a package’s api-breaks.json is named by the package, and a change to examples/last-release-errors.json by `examples/<app>`.';
+  'A change to a package’s api-breaks.json is named by the package, and a change to examples/last-release-errors.json by `examples/<app>`, and a change to packages/9-public/removed-error-codes.json by the error code.';
 
 const isRecord = (change) => change.heading !== undefined;
 const plural = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`;

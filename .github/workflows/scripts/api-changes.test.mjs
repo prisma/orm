@@ -447,6 +447,29 @@ describe('record files', () => {
     ]);
   });
 
+  it('lists a changed record of a removed error code under the code, which must be named', () => {
+    const gone = {
+      code: 'ORM.GONE',
+      lastRelease: '8.1.0',
+      replacedBy: 'ORM.NEW',
+      reason: 'renamed',
+    };
+    assert.deepEqual(
+      apiChanges([{ source: 'removedCodes', before: json([gone]), after: undefined }]),
+      [
+        {
+          packageName: 'ORM.GONE',
+          heading: 'packages/9-public/removed-error-codes.json: ORM.GONE',
+          added: [],
+          removed: [
+            '{"code":"ORM.GONE","lastRelease":"8.1.0","replacedBy":"ORM.NEW","reason":"renamed"}',
+          ],
+          exports: ['ORM.GONE'],
+        },
+      ],
+    );
+  });
+
   it('counts no change when only the order of keys or records changes', () => {
     const reordered = {
       reason: 'Join scopes merge by name',
@@ -562,6 +585,7 @@ describe('readChangedFiles', () => {
       'HEAD^1:examples/last-release-errors.json': '[1]',
       'HEAD:examples/last-release-errors.json': '[2]',
       'HEAD:packages/9-public/removed-packages.json': '[]',
+      'HEAD:packages/9-public/removed-error-codes.json': '[3]',
     };
     const git = (args) => {
       calls.push(args.join(' '));
@@ -575,6 +599,7 @@ describe('readChangedFiles', () => {
           'M\texamples/last-release-errors.json',
           'M\texamples/demo/last-release-errors.json',
           'A\tpackages/9-public/removed-packages.json',
+          'A\tpackages/9-public/removed-error-codes.json',
           '',
         ].join('\n');
       }
@@ -587,11 +612,12 @@ describe('readChangedFiles', () => {
       { source: 'api', packageName: '@prisma/orm-old', before: 'old', after: undefined },
       { source: 'breaks', packageName: '@prisma/orm-postgres', before: undefined, after: '[]' },
       { source: 'api', packageName: '@prisma/orm-postgres', before: 'before', after: 'after' },
+      { source: 'removedCodes', packageName: undefined, before: undefined, after: '[3]' },
       { source: 'removed', packageName: undefined, before: undefined, after: '[]' },
     ]);
     assert.equal(
       calls[0],
-      'diff --name-status --no-renames HEAD^1 HEAD -- packages/9-public/@prisma/*/api.txt packages/9-public/@prisma/*/api-breaks.json examples/last-release-errors.json packages/9-public/removed-packages.json',
+      'diff --name-status --no-renames HEAD^1 HEAD -- packages/9-public/@prisma/*/api.txt packages/9-public/@prisma/*/api-breaks.json examples/last-release-errors.json packages/9-public/removed-packages.json packages/9-public/removed-error-codes.json',
     );
     assert.ok(!calls.some((call) => call.startsWith('merge-base')));
   });
