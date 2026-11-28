@@ -2,8 +2,9 @@
  * Prisma's own tables on PostgreSQL, through the commands.
  *
  * A database a release candidate of Prisma 8 set up keeps Prisma's tables in the schema
- * `prisma_contract`. Every command that changes a database renames it to `_prisma` and writes the
- * `_prisma` space's rows before it reads anything; a command that only reads, and a dry run, say an
+ * `prisma_contract`. Every command that changes a database renames it to `_prisma`, moves the
+ * release candidate's marker rows into `_prisma.signatures` and its policies into `_prisma.config`,
+ * and writes the `_prisma` space's rows before it reads anything; a command that only reads, and a dry run, say an
  * earlier release wrote the tables and change nothing. The release candidate's tables are built
  * from the statements it ran, copied as text, and its rows as it would have written them after
  * applying one migration, so nothing here depends on today's code for the old form.
@@ -122,12 +123,44 @@ async function schemas(connectionString: string): Promise<readonly unknown[]> {
   return result.rows.map((row) => row['name']);
 }
 
-async function markers(connectionString: string) {
+async function signatures(connectionString: string) {
   const result = await sql(
     connectionString,
-    'SELECT space, core_hash FROM _prisma.marker ORDER BY space',
+    'SELECT space, core_hash FROM _prisma.signatures ORDER BY space',
   );
   return result.rows;
+}
+
+async function prismaTables(connectionString: string): Promise<readonly unknown[]> {
+  const result = await sql(
+    connectionString,
+    `SELECT table_name AS name FROM information_schema.tables WHERE table_schema = '_prisma' ORDER BY 1`,
+  );
+  return result.rows.map((row) => row['name']);
+}
+
+async function recordedPolicies(connectionString: string): Promise<readonly unknown[]> {
+  const result = await sql(connectionString, 'SELECT policies FROM _prisma.config');
+  return result.rows.map((row) => row['policies']);
+}
+
+const MIGRATE_ONLY = {
+  change: ['migrate'],
+  dataProtection: {
+    dataLoss: 'data-loss-with-consent',
+    accessWidening: 'access-widening-with-consent',
+  },
+};
+
+async function recordReleaseCandidatePolicies(
+  connectionString: string,
+  policies: unknown,
+): Promise<void> {
+  await sql(
+    connectionString,
+    `UPDATE prisma_contract.marker SET meta = $1::jsonb WHERE space = 'app'`,
+    [JSON.stringify({ policies })],
+  );
 }
 
 async function ledger(connectionString: string) {
@@ -164,9 +197,10 @@ withTempDir(({ createTempDir }) => {
     const db = useDevDatabase();
 
     it(
-      'renames the schema, keeps every row, applies the pending migration from where the database is, and changes nothing on a second run',
+      'renames the schema, moves every row and the policies, applies the pending migration from where the database is, and changes nothing on a second run',
       async () => {
         const { ctx, first } = await releaseCandidateProject(db.connectionString, createTempDir);
+        await recordReleaseCandidatePolicies(db.connectionString, MIGRATE_ONLY);
         swapContract(ctx, 'contract-additive');
         expect((await runContractEmit(ctx)).exitCode, 'emit additive').toBe(0);
         const planned = await planMigrationAndSelfEmit(ctx, [
@@ -204,7 +238,9 @@ withTempDir(({ createTempDir }) => {
         ];
         const expectedState = {
           schemas: ['_prisma'],
-          markers: [
+          tables: ['config', 'contract', 'ledger', 'signatures'],
+          policies: [MIGRATE_ONLY],
+          signatures: [
             { space: PRISMA_SPACE_ID, core_hash: PRISMA_TABLES_HEAD },
             { space: 'app', core_hash: second.to },
           ],
@@ -213,7 +249,9 @@ withTempDir(({ createTempDir }) => {
         };
         const state = async () => ({
           schemas: await schemas(db.connectionString),
-          markers: await markers(db.connectionString),
+          tables: await prismaTables(db.connectionString),
+          policies: await recordedPolicies(db.connectionString),
+          signatures: await signatures(db.connectionString),
           ledger: await ledger(db.connectionString),
           userColumns: await userColumns(db.connectionString),
         });
@@ -301,21 +339,10 @@ withTempDir(({ createTempDir }) => {
     const db = useDevDatabase();
 
     it(
-      'renames the schema, keeps the policy, and is refused by it',
+      'renames the schema, moves the policy into _prisma.config, and is refused by it',
       async () => {
         const { ctx } = await releaseCandidateProject(db.connectionString, createTempDir);
-        const policies = {
-          change: ['migrate'],
-          dataProtection: {
-            dataLoss: 'data-loss-with-consent',
-            accessWidening: 'access-widening-with-consent',
-          },
-        };
-        await sql(
-          db.connectionString,
-          `UPDATE prisma_contract.marker SET meta = $1::jsonb WHERE space = 'app'`,
-          [JSON.stringify({ policies })],
-        );
+        await recordReleaseCandidatePolicies(db.connectionString, MIGRATE_ONLY);
         swapContract(ctx, 'contract-additive');
         expect((await runContractEmit(ctx)).exitCode, 'emit additive').toBe(0);
 
@@ -323,17 +350,13 @@ withTempDir(({ createTempDir }) => {
 
         expect(update.exitCode, 'db update').not.toBe(0);
         expect(engineError(update)).toMatchObject({ code: 'MIGRATION.CHANGE_POLICY_FORBIDS' });
-        const appMeta = await sql(
-          db.connectionString,
-          `SELECT meta FROM _prisma.marker WHERE space = 'app'`,
-        );
         expect({
           schemas: await schemas(db.connectionString),
-          appMeta: appMeta.rows.map((row) => row['meta']),
+          policies: await recordedPolicies(db.connectionString),
           userColumns: await userColumns(db.connectionString),
         }).toEqual({
           schemas: ['_prisma'],
-          appMeta: [{ policies }],
+          policies: [MIGRATE_ONLY],
           userColumns: ['email', 'id'],
         });
       },
@@ -356,7 +379,7 @@ withTempDir(({ createTempDir }) => {
 
         expect({
           schemas: await schemas(db.connectionString),
-          spaces: (await markers(db.connectionString)).map((row) => row['space']),
+          spaces: (await signatures(db.connectionString)).map((row) => row['space']),
           firstLedgerRow: (await ledger(db.connectionString))[0],
           userColumns: await userColumns(db.connectionString),
         }).toEqual({
@@ -388,10 +411,10 @@ withTempDir(({ createTempDir }) => {
 
         expect({
           schemas: await schemas(db.connectionString),
-          markers: await markers(db.connectionString),
+          signatures: await signatures(db.connectionString),
         }).toEqual({
           schemas: ['_prisma'],
-          markers: [
+          signatures: [
             { space: PRISMA_SPACE_ID, core_hash: PRISMA_TABLES_HEAD },
             { space: 'app', core_hash: first.to },
           ],
@@ -414,7 +437,7 @@ withTempDir(({ createTempDir }) => {
         expect(init.exitCode, `db init: ${init.stderr}`).toBe(0);
         expect({
           schemas: await schemas(db.connectionString),
-          spaces: (await markers(db.connectionString)).map((row) => row['space']),
+          spaces: (await signatures(db.connectionString)).map((row) => row['space']),
           prismaLedger: (await ledger(db.connectionString)).filter(
             (row) => row['space'] === PRISMA_SPACE_ID,
           ),
@@ -456,11 +479,11 @@ withTempDir(({ createTempDir }) => {
         expect({
           broughtUpToDate: init.stderr.includes(BROUGHT_UP_TO_DATE),
           schemas: await schemas(db.connectionString),
-          markers: await markers(db.connectionString),
+          signatures: await signatures(db.connectionString),
         }).toEqual({
           broughtUpToDate: true,
           schemas: ['_prisma'],
-          markers: [
+          signatures: [
             { space: PRISMA_SPACE_ID, core_hash: PRISMA_TABLES_HEAD },
             { space: 'app', core_hash: first.to },
           ],
@@ -489,6 +512,30 @@ withTempDir(({ createTempDir }) => {
           why: expect.stringContaining('"prisma_contract"."marker"'),
           nextActions: [expect.objectContaining({ kind: 'open-url', url: UPGRADE_INSTRUCTIONS })],
         });
+        expect(await schemas(db.connectionString)).toEqual(['prisma_contract']);
+      },
+      timeouts.spinUpPpgDev,
+    );
+  });
+
+  describe("db migrate on a database a release candidate set up, where a view depends on the release candidate's marker", () => {
+    const db = useDevDatabase();
+
+    it(
+      'stops, names the view with its schema in the message a person reads, and changes nothing',
+      async () => {
+        const { ctx } = await releaseCandidateProject(db.connectionString, createTempDir);
+        await sql(
+          db.connectionString,
+          'CREATE VIEW public.marker_view AS SELECT space, core_hash FROM prisma_contract.marker',
+        );
+
+        const migrate = await runMigrate(ctx);
+
+        expect(migrate.exitCode).not.toBe(0);
+        expect(`${migrate.stdout}${migrate.stderr}`).toContain(
+          'In this database, those objects are view public.marker_view.',
+        );
         expect(await schemas(db.connectionString)).toEqual(['prisma_contract']);
       },
       timeouts.spinUpPpgDev,
@@ -539,7 +586,7 @@ withTempDir(({ createTempDir }) => {
         const status = await runMigrationStatus(ctx, ['--json']);
         expect(status.exitCode, `migration status: ${status.stderr}`).toBe(0);
 
-        expect((await markers(db.connectionString)).map((row) => row['space'])).toEqual([
+        expect((await signatures(db.connectionString)).map((row) => row['space'])).toEqual([
           PRISMA_SPACE_ID,
           'app',
         ]);

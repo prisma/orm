@@ -707,7 +707,7 @@ describe('Postgres adapter', () => {
     expect(typeof adapter.profile.readMarker).toBe('function');
   });
 
-  it('readMarker returns no-table when neither the _prisma nor the release-candidate marker table exists', async () => {
+  it('readMarker returns no-table when neither _prisma.signatures nor the release-candidate marker table exists', async () => {
     const calls: Array<{ sql: string; params: readonly unknown[] | undefined }> = [];
     const queryable: SqlQueryable = {
       execute: async () => ({ affectedRows: 0 }),
@@ -722,7 +722,7 @@ describe('Postgres adapter', () => {
     expect(result).toEqual({ kind: 'no-table' });
     expect(calls).toHaveLength(2);
     expect(calls[0]?.sql).toContain('"information_schema"."tables"');
-    expect(calls[0]?.params).toEqual(['_prisma', 'marker']);
+    expect(calls[0]?.params).toEqual(['_prisma', 'signatures']);
     expect(calls[1]?.sql).toContain('"information_schema"."tables"');
     expect(calls[1]?.params).toEqual(['prisma_contract', 'marker']);
   });
@@ -881,15 +881,11 @@ describe('Postgres adapter', () => {
     expect(sql).toContain('"user"."id" IN ($1, 2)');
   });
 
-  it('readMarker parses a present marker row into a ContractMarkerRecord', async () => {
+  it('readMarker parses a present signature row into a ContractMarkerRecord', async () => {
     const markerRow = {
       core_hash: 'test-core',
       profile_hash: 'test-profile',
-      contract_json: { storage: {}, target: 'postgres' },
-      canonical_version: 1,
-      updated_at: new Date('2026-04-30T00:00:00Z'),
-      app_tag: 'app',
-      meta: {},
+      signed_at: new Date('2026-04-30T00:00:00Z'),
       invariants: '{"inv-1"}',
     };
     let call = 0;
@@ -908,10 +904,12 @@ describe('Postgres adapter', () => {
 
     expect(result.kind).toBe('present');
     if (result.kind !== 'present') return;
-    expect(result.record.storageHash).toBe('test-core');
-    expect(result.record.profileHash).toBe('test-profile');
-    expect(result.record.appTag).toBe('app');
-    expect(result.record.invariants).toEqual(['inv-1']);
+    expect(result.record).toMatchObject({
+      storageHash: 'test-core',
+      profileHash: 'test-profile',
+      updatedAt: new Date('2026-04-30T00:00:00Z'),
+      invariants: ['inv-1'],
+    });
   });
 
   it('parenthesizes composite expressions before appending IS NULL / IS NOT NULL', () => {

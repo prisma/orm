@@ -1,5 +1,9 @@
 import type { Contract } from '@internal/contract/types';
-import { PRISMA_SPACE_ID } from '@internal/framework-components/control';
+import {
+  APP_SPACE_ID,
+  databasePoliciesOf,
+  PRISMA_SPACE_ID,
+} from '@internal/framework-components/control';
 import { applyInstalledContractSpace } from '@internal/migration-tools/spaces';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -8,6 +12,7 @@ import {
   releaseCandidateRows,
 } from './fixtures/release-candidate-prisma-tables';
 import {
+  controlAdapter,
   createDriver,
   createTestDatabase,
   familyInstance,
@@ -20,6 +25,14 @@ import {
 const contractSpace = postgresTargetDescriptor.contractSpace!;
 const headHash = contractSpace.headRef.hash;
 const [firstMigration] = contractSpace.migrations;
+
+const migrateOnly = {
+  change: ['migrate'],
+  dataProtection: {
+    dataLoss: 'data-loss-forbidden',
+    accessWidening: 'access-widening-with-consent',
+  },
+};
 
 describe("applying the Postgres target's _prisma contract space", { concurrent: false }, () => {
   let database: Awaited<ReturnType<typeof createTestDatabase>>;
@@ -68,11 +81,16 @@ describe("applying the Postgres target's _prisma contract space", { concurrent: 
     return result.rows.map((row) => row.name);
   }
 
-  async function markers() {
+  async function signatures() {
     const result = await driver.query<{ space: string; core_hash: string; invariants: string }>(
-      'select space, core_hash, invariants::text as invariants from _prisma.marker order by space',
+      'select space, core_hash, invariants::text as invariants from _prisma.signatures order by space',
     );
     return result.rows;
+  }
+
+  async function recordedPolicies(): Promise<readonly unknown[]> {
+    const result = await driver.query<{ policies: unknown }>('select policies from _prisma.config');
+    return result.rows.map((row) => row.policies);
   }
 
   async function ledger() {
@@ -97,12 +115,12 @@ describe("applying the Postgres target's _prisma contract space", { concurrent: 
     expect({
       schemas: await schemas(),
       tables: await tablesIn('_prisma'),
-      markers: await markers(),
+      signatures: await signatures(),
       ledger: await ledger(),
     }).toEqual({
       schemas: ['_prisma'],
-      tables: ['contract', 'ledger', 'marker'],
-      markers: [{ space: '_prisma', core_hash: headHash, invariants: '{}' }],
+      tables: ['config', 'contract', 'ledger', 'signatures'],
+      signatures: [{ space: '_prisma', core_hash: headHash, invariants: '{}' }],
       ledger: [{ space: '_prisma', migration_name: firstMigration?.dirName }],
     });
   });
@@ -118,12 +136,12 @@ describe("applying the Postgres target's _prisma contract space", { concurrent: 
     expect({
       schemas: await schemas(),
       tables: await tablesIn('_prisma'),
-      markers: await markers(),
+      signatures: await signatures(),
       ledger: await ledger(),
     }).toEqual({
       schemas: ['_prisma'],
-      tables: ['contract', 'ledger', 'marker'],
-      markers: [
+      tables: ['config', 'contract', 'ledger', 'signatures'],
+      signatures: [
         { space: '_prisma', core_hash: headHash, invariants: '{}' },
         { space: 'app', core_hash: 'app-hash', invariants: '{app:invariant}' },
       ],
@@ -132,6 +150,101 @@ describe("applying the Postgres target's _prisma contract space", { concurrent: 
         { space: '_prisma', migration_name: firstMigration?.dirName },
       ],
     });
+  });
+
+  it("moves a release candidate's rows into signatures and its application's policies into config, and drops the marker", {
+    timeout: testTimeout,
+  }, async () => {
+    await createReleaseCandidateTables();
+    await driver.query(
+      `update prisma_contract.marker set meta = $1::jsonb, updated_at = '2026-10-01T00:00:00Z' where space = 'app'`,
+      [JSON.stringify({ policies: migrateOnly, kept: 'elsewhere' })],
+    );
+    await driver.query(
+      `insert into prisma_contract.marker (space, core_hash, profile_hash, invariants, meta, updated_at)
+       values ('pgvector', 'ext-hash', 'ext-profile', '{ext:invariant}', '{"policies": {"change": ["reconcile"]}}', '2026-10-02T00:00:00Z')`,
+    );
+
+    const result = await apply();
+
+    const signed = await driver.query<{ space: string; profile_hash: string; signed_at: string }>(
+      `select space, profile_hash, to_char(signed_at at time zone 'UTC', 'YYYY-MM-DD') as signed_at
+       from _prisma.signatures where space <> '_prisma' order by space`,
+    );
+    expect(result.ok && result.value.outcome).toBe('applied');
+    expect({
+      tables: await tablesIn('_prisma'),
+      signatures: await signatures(),
+      signed: signed.rows,
+      policies: await recordedPolicies(),
+    }).toEqual({
+      tables: ['config', 'contract', 'ledger', 'signatures'],
+      signatures: [
+        { space: '_prisma', core_hash: headHash, invariants: '{}' },
+        { space: 'app', core_hash: 'app-hash', invariants: '{app:invariant}' },
+        { space: 'pgvector', core_hash: 'ext-hash', invariants: '{ext:invariant}' },
+      ],
+      signed: [
+        { space: 'app', profile_hash: 'app-profile', signed_at: '2026-10-01' },
+        { space: 'pgvector', profile_hash: 'ext-profile', signed_at: '2026-10-02' },
+      ],
+      policies: [migrateOnly],
+    });
+  });
+
+  it("records no policies when the release candidate's application row records none", {
+    timeout: testTimeout,
+  }, async () => {
+    await createReleaseCandidateTables();
+
+    await apply();
+
+    expect({ tables: await tablesIn('_prisma'), policies: await recordedPolicies() }).toEqual({
+      tables: ['config', 'contract', 'ledger', 'signatures'],
+      policies: [],
+    });
+  });
+
+  it('moves policies a release candidate stored as JSON null as they are, so they are still reported as unreadable', {
+    timeout: testTimeout,
+  }, async () => {
+    await createReleaseCandidateTables();
+    await driver.query(
+      `update prisma_contract.marker set meta = '{"policies": null}' where space = 'app'`,
+    );
+
+    await apply();
+
+    const marker = await controlAdapter.readMarker(driver, APP_SPACE_ID);
+    expect({
+      policies: await recordedPolicies(),
+      meta: marker?.meta,
+      readable: databasePoliciesOf(marker).ok,
+    }).toEqual({ policies: [null], meta: { policies: null }, readable: false });
+  });
+
+  it("changes nothing on a second call after moving a release candidate's rows", {
+    timeout: testTimeout,
+  }, async () => {
+    await createReleaseCandidateTables();
+    await driver.query(`update prisma_contract.marker set meta = $1::jsonb where space = 'app'`, [
+      JSON.stringify({ policies: migrateOnly }),
+    ]);
+    await apply();
+    const before = {
+      signatures: await signatures(),
+      ledger: await ledger(),
+      policies: await recordedPolicies(),
+    };
+
+    const result = await apply();
+
+    expect(result.ok && result.value).toEqual({ outcome: 'atHead', operationsExecuted: 0 });
+    expect({
+      signatures: await signatures(),
+      ledger: await ledger(),
+      policies: await recordedPolicies(),
+    }).toEqual(before);
   });
 
   it('stops, names the table and changes nothing when a table lacks an expected column', {
@@ -164,6 +277,83 @@ describe("applying the Postgres target's _prisma contract space", { concurrent: 
     });
   });
 
+  it("stops, names them and changes nothing when other objects depend on the release candidate's marker table", {
+    timeout: testTimeout,
+  }, async () => {
+    await createReleaseCandidateTables();
+    await driver.query(
+      'create view public.marker_report as select space, core_hash from prisma_contract.marker',
+    );
+    await driver.query(
+      'create function public.latest_marker() returns prisma_contract.marker language sql as $$ select * from prisma_contract.marker limit 1 $$',
+    );
+    await driver.query(
+      'create function public.count_markers(markers prisma_contract.marker[]) returns int language sql as $$ select cardinality(markers) $$',
+    );
+
+    try {
+      const result = await apply();
+
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect({
+        code: result.failure.code,
+        summary: result.failure.message,
+        why: result.failure.why,
+        dependents: result.failure.meta.blockingObjects,
+        schemas: await schemas(),
+        markers: (await driver.query('select space from prisma_contract.marker')).rows,
+      }).toEqual({
+        code: 'MIGRATION.PRECHECK_FAILED',
+        summary:
+          'Table "prisma_contract"."marker" cannot be dropped while function public.count_markers(prisma_contract.marker[]), function public.latest_marker() and view public.marker_report depend on it.',
+        why: expect.stringContaining(
+          'then create them again over "_prisma"."signatures" once the command has run.',
+        ),
+        dependents: [
+          { kind: 'function', name: 'public.count_markers(prisma_contract.marker[])' },
+          { kind: 'function', name: 'public.latest_marker()' },
+          { kind: 'view', name: 'public.marker_report' },
+        ],
+        schemas: ['prisma_contract'],
+        markers: [{ space: 'app' }],
+      });
+    } finally {
+      await driver.query('drop view public.marker_report');
+      await driver.query('drop function public.latest_marker()');
+      await driver.query('drop function public.count_markers(prisma_contract.marker[])');
+    }
+  });
+
+  it("stops before anything changes when the only dependent takes an array of the release candidate's marker rows", {
+    timeout: testTimeout,
+  }, async () => {
+    await createReleaseCandidateTables();
+    await driver.query(
+      'create function public.count_markers(markers prisma_contract.marker[]) returns int language sql as $$ select cardinality(markers) $$',
+    );
+
+    try {
+      const result = await apply();
+
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect({
+        code: result.failure.code,
+        dependents: result.failure.meta.blockingObjects,
+        databaseUnchanged: result.failure.meta.databaseUnchanged,
+        schemas: await schemas(),
+      }).toEqual({
+        code: 'MIGRATION.PRECHECK_FAILED',
+        dependents: [{ kind: 'function', name: 'public.count_markers(prisma_contract.marker[])' }],
+        databaseUnchanged: true,
+        schemas: ['prisma_contract'],
+      });
+    } finally {
+      await driver.query('drop function public.count_markers(prisma_contract.marker[])');
+    }
+  });
+
   it('stops when the old schema exists and the new one holds a table', {
     timeout: testTimeout,
   }, async () => {
@@ -189,9 +379,9 @@ describe("applying the Postgres target's _prisma contract space", { concurrent: 
     const result = await apply();
 
     expect(result.ok && result.value.outcome).toBe('applied');
-    expect({ schemas: await schemas(), markers: await markers() }).toEqual({
+    expect({ schemas: await schemas(), signatures: await signatures() }).toEqual({
       schemas: ['_prisma'],
-      markers: [
+      signatures: [
         { space: '_prisma', core_hash: headHash, invariants: '{}' },
         { space: 'app', core_hash: 'app-hash', invariants: '{app:invariant}' },
       ],
@@ -284,7 +474,7 @@ describe("applying the Postgres target's _prisma contract space", { concurrent: 
     expect(result.ok ? result.value.outcome : result.failure).toBe('applied');
     expect({ schemas: await schemas(), tables: await tablesIn('_prisma') }).toEqual({
       schemas: ['_prisma'],
-      tables: ['contract', 'ledger', 'marker'],
+      tables: ['config', 'contract', 'ledger', 'signatures'],
     });
   });
 
@@ -302,6 +492,175 @@ describe("applying the Postgres target's _prisma contract space", { concurrent: 
     );
     expect(message).toContain('ALTER TABLE "prisma_contract"."ledger" OWNER TO <migrating role>');
     expect(await schemas()).toEqual(['prisma_contract']);
+  });
+
+  /** Applies as `prisma_migrator`, with what a role that is not a superuser needs to change the schema here. */
+  async function applyAsMigrator(): Promise<Awaited<ReturnType<typeof apply>>> {
+    const { rows } = await driver.query<{ name: string }>('select current_database() as name');
+    const database = `"${rows[0]?.name}"`;
+    await driver.query(`grant create on database ${database} to prisma_migrator`);
+    await allowDevelopmentServerLog('grant', 'to');
+    await driver.query('set role prisma_migrator');
+    try {
+      return await apply();
+    } finally {
+      await driver.query('reset role');
+      await driver.query(`revoke create on database ${database} from prisma_migrator`);
+      await allowDevelopmentServerLog('revoke', 'from');
+    }
+  }
+
+  async function appSignatures() {
+    return (await signatures()).filter((row) => row.space !== '_prisma');
+  }
+
+  it("stops before anything changes when row-level security is forced on the release candidate's marker table", {
+    timeout: testTimeout,
+  }, async () => {
+    await createReleaseCandidateTables();
+    await giveReleaseCandidateTablesTo('prisma_migrator');
+    await driver.query('alter table prisma_contract.marker enable row level security');
+    await driver.query('alter table prisma_contract.marker force row level security');
+
+    const result = await applyAsMigrator();
+
+    const keptRows = (await schemas()).includes('prisma_contract')
+      ? 'select space from prisma_contract.marker'
+      : "select space from _prisma.signatures where space <> '_prisma'";
+    expect({
+      code: result.ok ? result.value.outcome : result.failure.code,
+      message: result.ok ? undefined : result.failure.message,
+      schemas: await schemas(),
+      markers: (await driver.query(keptRows)).rows,
+    }).toEqual({
+      code: 'MIGRATION.PRECHECK_FAILED',
+      message: expect.stringContaining(
+        'Row-level security must not hide any row of table "prisma_contract"."marker" from the role that runs this command, because this migration copies its rows into "_prisma"."signatures" and "_prisma"."config" and then drops it, so a row it cannot read would be lost. The role owns the table, as the checks before this one require, so it can turn off forced row-level security on it with ALTER TABLE "prisma_contract"."marker" NO FORCE ROW LEVEL SECURITY. Or run the command once as a role that bypasses row-level security and also owns the schema and its tables.',
+      ),
+      schemas: ['prisma_contract'],
+      markers: [{ space: 'app' }],
+    });
+  });
+
+  it("moves the release candidate's rows when its owner runs the command and row-level security is enabled on the marker table but not forced", {
+    timeout: testTimeout,
+  }, async () => {
+    await createReleaseCandidateTables();
+    await giveReleaseCandidateTablesTo('prisma_migrator');
+    await driver.query('alter table prisma_contract.marker enable row level security');
+
+    const result = await applyAsMigrator();
+
+    expect({
+      outcome: result.ok ? result.value.outcome : result.failure,
+      schemas: await schemas(),
+      signatures: await appSignatures(),
+    }).toEqual({
+      outcome: 'applied',
+      schemas: ['_prisma'],
+      signatures: [{ space: 'app', core_hash: 'app-hash', invariants: '{app:invariant}' }],
+    });
+  });
+
+  it("moves the release candidate's rows when row-level security is forced and a role that bypasses it and owns the tables runs the command", {
+    timeout: testTimeout,
+  }, async () => {
+    await createReleaseCandidateTables();
+    await giveReleaseCandidateTablesTo('prisma_migrator');
+    await driver.query('alter table prisma_contract.marker enable row level security');
+    await driver.query('alter table prisma_contract.marker force row level security');
+
+    await driver.query('alter role prisma_migrator bypassrls');
+    let result: Awaited<ReturnType<typeof apply>>;
+    try {
+      result = await applyAsMigrator();
+    } finally {
+      await driver.query('alter role prisma_migrator nobypassrls');
+    }
+
+    expect({
+      outcome: result.ok ? result.value.outcome : result.failure,
+      schemas: await schemas(),
+      signatures: await appSignatures(),
+    }).toEqual({
+      outcome: 'applied',
+      schemas: ['_prisma'],
+      signatures: [{ space: 'app', core_hash: 'app-hash', invariants: '{app:invariant}' }],
+    });
+  });
+
+  it('stops before moving, saying what a non-owner can do, when row-level security hides rows of a marker table already in _prisma', {
+    timeout: testTimeout,
+  }, async () => {
+    await createReleaseCandidateTables();
+    await driver.query('alter schema prisma_contract rename to _prisma');
+    await driver.query('alter schema _prisma owner to prisma_migrator');
+    await driver.query('alter table _prisma.marker enable row level security');
+    await driver.query('grant select on _prisma.marker to prisma_migrator');
+
+    const result = await applyAsMigrator();
+
+    expect({
+      code: result.ok ? result.value.outcome : result.failure.code,
+      message: result.ok ? undefined : result.failure.message,
+      markers: (await driver.query('select space from _prisma.marker')).rows,
+    }).toEqual({
+      code: 'MIGRATION.PRECHECK_FAILED',
+      message: expect.stringContaining(
+        'Row-level security must not hide any row of table "_prisma"."marker" from the role that runs this command, because this migration copies its rows into "_prisma"."signatures" and "_prisma"."config" and then drops it, so a row it cannot read would be lost. A role that owns the table can turn off forced row-level security on it with ALTER TABLE "_prisma"."marker" NO FORCE ROW LEVEL SECURITY, then run the command. A role that does not own the table can do neither that nor the drop, so run the command as the table\'s owner, or as a role that bypasses row-level security and also owns the table.',
+      ),
+      markers: [{ space: 'app' }],
+    });
+  });
+
+  function executeOf(operationId: string): readonly string[] {
+    const operation = firstMigration?.ops.find((op) => op.id === operationId) as
+      | { readonly execute: readonly { readonly sql: string }[] }
+      | undefined;
+    return (operation?.execute ?? []).map((step) => step.sql);
+  }
+
+  it('stops while moving, and keeps every row of marker, when its owner forces row-level security after the check before the move', {
+    timeout: testTimeout,
+  }, async () => {
+    await createReleaseCandidateTables();
+    await giveReleaseCandidateTablesTo('prisma_migrator');
+    await driver.query('alter schema prisma_contract rename to _prisma');
+    for (const sql of [
+      ...executeOf('_prisma.create-table.signatures'),
+      ...executeOf('_prisma.create-table.config'),
+    ]) {
+      await driver.query(sql);
+    }
+    await driver.query('alter table _prisma.signatures owner to prisma_migrator');
+    await driver.query('alter table _prisma.config owner to prisma_migrator');
+    await driver.query('alter table _prisma.marker enable row level security');
+    await driver.query('alter table _prisma.marker force row level security');
+
+    await allowDevelopmentServerLog('grant', 'to');
+    await driver.query('begin');
+    await driver.query('set local role prisma_migrator');
+    let failure: unknown;
+    try {
+      for (const sql of executeOf('_prisma.move-marker')) {
+        await driver.query(sql);
+      }
+    } catch (error) {
+      failure = error;
+    } finally {
+      await driver.query('rollback');
+      await allowDevelopmentServerLog('revoke', 'from');
+    }
+
+    expect({
+      failure: failure instanceof Error ? failure.message : failure,
+      markers: (await driver.query('select space from _prisma.marker')).rows,
+    }).toEqual({
+      failure: expect.stringContaining(
+        'Row-level security must not hide any row of table "_prisma"."marker" from the role that runs this command',
+      ),
+      markers: [{ space: 'app' }],
+    });
   });
 
   it('touches nothing on a second call', { timeout: testTimeout }, async () => {
@@ -351,9 +710,9 @@ describe("applying the Postgres target's _prisma contract space", { concurrent: 
     const result = await apply();
 
     expect(result.ok && result.value.outcome).toBe('applied');
-    expect({ tables: await tablesIn('_prisma'), markers: await markers() }).toEqual({
-      tables: ['contract', 'ledger', 'marker'],
-      markers: [
+    expect({ tables: await tablesIn('_prisma'), signatures: await signatures() }).toEqual({
+      tables: ['config', 'contract', 'ledger', 'signatures'],
+      signatures: [
         { space: '_prisma', core_hash: headHash, invariants: '{}' },
         { space: 'app', core_hash: 'app-hash', invariants: '{app:invariant}' },
       ],
@@ -467,7 +826,9 @@ describe("applying the Postgres target's _prisma contract space", { concurrent: 
     expect(message).toContain(
       'The role that runs this command must have the CREATE privilege on the database',
     );
-    expect(message).toContain('GRANT CREATE ON DATABASE <database> TO <migrating role>');
+    expect(message).toContain(
+      'GRANT CREATE ON DATABASE <database> TO <migrating role>, or run the command once as a role that has it and also owns the schema and its tables.',
+    );
     expect(message).not.toContain('privileges of the role that owns');
     expect(await schemas()).toEqual(['prisma_contract']);
   });
@@ -477,7 +838,7 @@ describe("applying the Postgres target's _prisma contract space", { concurrent: 
   }, async () => {
     await apply();
     await driver.query(
-      "update _prisma.marker set core_hash = 'later-release' where space = '_prisma'",
+      "update _prisma.signatures set core_hash = 'later-release' where space = '_prisma'",
     );
     await driver.query(
       `insert into _prisma.ledger (space, migration_name, migration_hash, origin_core_hash, destination_core_hash, operations)

@@ -3,7 +3,7 @@
 **Status:** Proposed
 **Date:** 2026-11-27
 **Domain:** Migration System, Adapters & Targets
-**Changes:** [ADR 212](ADR%20212%20-%20Contract%20spaces.md) (one space is read from the installed package), [ADR 021](ADR%20021%20-%20Contract%20Marker%20Storage.md) (the tables are created by a migration), [ADR 320](ADR%20320%20-%20Databases%20record%20a%20change%20policy%20and%20a%20data%20protection%20policy.md) (a refused command has still brought Prisma's own tables up to date). Each is updated in place.
+**Changes:** [ADR 212](ADR%20212%20-%20Contract%20spaces.md) (one space is read from the installed package), [ADR 021](ADR%20021%20-%20Contract%20Marker%20Storage.md) (the tables are created by a migration), [ADR 320](ADR%20320%20-%20Databases%20record%20a%20change%20policy%20and%20a%20data%20protection%20policy.md) (a refused command has still brought Prisma's own tables up to date; on PostgreSQL the policies are in `_prisma.config`). Each is updated in place. On PostgreSQL the marker is split into `_prisma.signatures` and `_prisma.config` ([ADR 021](ADR%20021%20-%20Contract%20Marker%20Storage.md)). Supersedes [ADR 042](ADR%20042%20-%20Contract%20Marker%20Evolution.md).
 
 ## At a glance
 
@@ -34,7 +34,7 @@ The space's name is `_prisma` on every target. The framework holds that name as 
 
 Each target has its own contract and migrations, in its own database's terms. The framework has no say in what a target stores or what it calls it, because the target also writes the queries against it.
 
-The space's own row in the marker table records the hash of its contract, which says which form the tables are in, and the invariants its migrations provided. No version number is needed. Its migrations leave ledger rows like any other space's.
+The space's own row in the marker table (`_prisma.signatures` on PostgreSQL) records the hash of its contract, which says which form the tables are in, and the invariants its migrations provided. No version number is needed. Its migrations leave ledger rows like any other space's.
 
 ### It is applied in a first phase, from the installed package
 
@@ -70,7 +70,7 @@ If the user's migration fails after the phase, Prisma's own tables stay up to da
 
 Application instances on an earlier release keep reading these tables while a deploy is in progress, and a team may roll a release back. So within a major, a migration of this space after the first adds columns, tables or rows and changes nothing that exists. A test in the target package checks it. A change that is not an addition goes into the next major's migrations and is applied the same way.
 
-One thing must stay fixed for longer than a major: where a release finds the space's own row. Every release reads it from the marker table, through its columns, before it knows which form the tables are in. A later major that moved that table or removed one of those columns would make every earlier release see no row and plan from an empty database. So the marker table and the columns a release reads keep their place and form in every later major. Any change to them is made before `8.0.0`, and the marker table's planned split into a table of signatures and a table of configuration is done in the same release.
+One thing must stay fixed for longer than a major: where a release finds the space's own row. Every release reads it from the marker table, through its columns, before it knows which form the tables are in. A later major that moved that table or removed one of those columns would make every earlier release see no row and plan from an empty database. So the marker table and the columns a release reads keep their place and form in every later major. On PostgreSQL that is `_prisma.signatures` with `space`, `core_hash`, `profile_hash` and `invariants`, fixed from `8.0.0`. The release candidates' single `marker` table, which also held the policies, was split into `signatures` and `config` before `8.0.0` for that reason: after it, the split could never have been made.
 
 The migrating role must own the schema and its tables, since a later migration that adds a column needs ownership of the table. The first migration checks that before it renames, and a later migration that alters a table checks it in its own precheck, so the role gets a message with the statement that fixes it rather than a database error.
 
@@ -93,11 +93,13 @@ On PostgreSQL the first migration:
 
 1. Checks the release candidate's tables, where they exist, for the expected columns. A database from before the release candidates can have these tables in an older form; the command then stops and names the table. Those forms are not migrated.
 2. Renames the schema `prisma_contract` to `_prisma` ([ADR 338](ADR%20338%20-%20Names%20Prisma%20puts%20in%20a%20database%20or%20a%20query%20begin%20with%20_prisma.md)). `ALTER SCHEMA … RENAME` changes only the catalogue, so it is instant at any size.
-3. Creates the schema and each table that is missing, and checks the result.
+3. Creates the schema and each table that is missing: `signatures`, `config`, `ledger` and `contract`.
+4. Moves the release candidate's `marker` rows into `signatures`, moves the application row's policies into `config`, and drops `marker`. The three happen together or not at all, and are skipped once `marker` is gone.
+5. Checks the result.
 
 More cases stop it without changing anything, each checked on its own with a message that gives the statement that fixes it: the role does not have the privileges of the owner of `prisma_contract` or of one of its tables; the role may not create schemas in the database, which PostgreSQL requires for a rename; `_prisma` already exists and holds anything, so it is not clear which schema to keep; `_prisma` exists and is empty but owned by another role. An empty `_prisma` the role owns is dropped, and the rename goes ahead.
 
-A user's own `_prisma.marker` that lacks the columns Prisma reads is treated as no row, so the first migration's checks run and stop the command with a message that names the table. A command that only reads gets the database's own error in that case.
+A user's own `_prisma.signatures` that lacks the columns Prisma reads is treated as no row, so the first migration's checks run and stop the command with a message that names the table. A command that only reads gets the database's own error in that case.
 
 The text of a failed check is part of the migration's hash, so it carries no address. The command-line error around it gives the address of the upgrade instructions.
 

@@ -77,7 +77,7 @@ function namingTheMigration(
 /** The access changes of one migration's operations; a family that refuses an operation names its position in the migration, and this names the migration. */
 function accessChangesOfMigration(
   input: Pick<ResolveRecordedPathInputs, 'accessChangesOf'>,
-  pkg: OnDiskMigrationPackage,
+  pkg: MigrationPackage,
   spaceId: string,
 ): readonly MigrationAccessChange[] {
   try {

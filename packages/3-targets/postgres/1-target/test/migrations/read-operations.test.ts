@@ -57,6 +57,14 @@ describe('readPostgresOperations', () => {
     expect(readPostgresOperations([schemaDrop])).toEqual([schemaDrop]);
   });
 
+  it('refuses a table dependents mark that does not name a table', () => {
+    const op = structuredClone(schemaDrop);
+    Reflect.set(op.precheck[0]!.meta, 'tableDependents', { schema: 'billing' });
+    expect(reasonOf(() => readPostgresOperations([op]))).toContain(
+      'precheck[0].meta.tableDependents.table',
+    );
+  });
+
   it.each([
     [
       'the target details',
@@ -67,6 +75,16 @@ describe('readPostgresOperations', () => {
       'a schema contents mark',
       (op: typeof schemaDrop) => Reflect.set(op.precheck[0]!.meta.schemaContents, 'unexpected', 1),
       'precheck[0].meta.schemaContents.unexpected',
+    ],
+    [
+      'a table dependents mark',
+      (op: typeof schemaDrop) =>
+        Reflect.set(op.precheck[0]!.meta, 'tableDependents', {
+          schema: 'billing',
+          table: 'invoice',
+          unexpected: 1,
+        }),
+      'precheck[0].meta.tableDependents.unexpected',
     ],
   ])('refuses a key %s does not define', (_, addKey, path) => {
     const op = structuredClone(schemaDrop);

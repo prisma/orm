@@ -144,7 +144,7 @@ withTempDir(({ createTempDir }) => {
           // The external space's marker advanced to its head ref with zero DDL.
           await withClient(connectionString, async (client) => {
             const result = await client.query(
-              'SELECT core_hash FROM _prisma.marker WHERE space = $1',
+              'SELECT core_hash FROM _prisma.signatures WHERE space = $1',
               [TEST_EXTERNAL_SPACE_ID],
             );
             expect(result.rows.length).toBe(1);

@@ -31,8 +31,8 @@ withTempDir(({ createTempDir }) => {
           await withClient(connectionString, async (client) => {
             await bootstrapPostgresSignMarkerTables(client);
             await client.query(`
-              INSERT INTO _prisma.marker (space, core_hash, profile_hash, contract_json)
-              VALUES ('retired-extension', 'retired', 'retired-profile', '{}')
+              INSERT INTO _prisma.signatures (space, core_hash, profile_hash)
+              VALUES ('retired-extension', 'retired', 'retired-profile')
               ON CONFLICT (space) DO NOTHING
             `);
           });
@@ -49,7 +49,7 @@ withTempDir(({ createTempDir }) => {
 
           expect(errorJson).toMatchObject({
             code: 'MIGRATION.CONTRACT_SPACE_VIOLATION',
-            why: expect.stringContaining('`_prisma.marker` rows'),
+            why: expect.stringContaining('`_prisma.signatures` rows'),
           });
           const meta = errorJson['meta'] as
             | { violations?: Array<{ kind: string; spaceId: string }> }

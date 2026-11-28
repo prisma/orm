@@ -1,10 +1,11 @@
 /**
  * A ref's policies declared with `migration ref policy set`, then applied to a PostgreSQL database
  * by a deploy given consent: the command changes only the ref file, so the database takes on the
- * policies only when `db migrate --to <ref> --permit-policy-change` applies them.
+ * policies only when `db migrate --to <ref> --permit-policy-change` applies them. They are recorded
+ * in `_prisma.config`, read back from there, and obeyed by a later `db update`.
  */
 
-import { timeouts, withDevDatabase } from '@repo/test-utils';
+import { timeouts, withClient, withDevDatabase } from '@repo/test-utils';
 import stripAnsi from 'strip-ansi';
 import { describe, expect, it } from 'vitest';
 import { withTempDir } from './utils/cli-test-helpers';
@@ -14,9 +15,12 @@ import {
   planTo,
   readPolicyRef,
   setupPolicyProject,
+  writeContract,
 } from './utils/database-policies-journey';
 import {
   parseJsonOutput,
+  runContractEmit,
+  runDbUpdate,
   runMigrate,
   runMigrationStatus,
   runRef,
@@ -86,15 +90,20 @@ withTempDir(({ createTempDir }) => {
           ]);
 
           expect(applied.exitCode, `db migrate: ${applied.stdout}\n${applied.stderr}`).toBe(0);
-          expect((await appMarker(project))?.meta).toEqual({
-            policies: {
-              change: ['migrate'],
-              dataProtection: {
-                dataLoss: 'data-loss-forbidden',
-                accessWidening: 'access-widening-with-consent',
-              },
+          const recorded = {
+            change: ['migrate'],
+            dataProtection: {
+              dataLoss: 'data-loss-forbidden',
+              accessWidening: 'access-widening-with-consent',
             },
-          });
+          };
+          const config = await withClient(connectionString, (client) =>
+            client.query<{ policies: unknown }>('select policies from _prisma.config'),
+          );
+          expect({
+            config: config.rows.map((row) => row.policies),
+            meta: (await appMarker(project))?.meta,
+          }).toEqual({ config: [recorded], meta: { policies: recorded } });
 
           const status = await runMigrationStatus(project.ctx, ['--to', 'production', '--json']);
           const human = await runMigrationStatus(project.ctx, ['--to', 'production']);
@@ -102,6 +111,12 @@ withTempDir(({ createTempDir }) => {
           expect(status.exitCode, `status: ${status.stdout}\n${status.stderr}`).toBe(0);
           expect(parseJsonOutput(status)).toMatchObject({ policyDifferences: [] });
           expect(stripAnsi(`${human.stdout}\n${human.stderr}`)).not.toContain('policies differ');
+
+          writeContract(project, 'next');
+          expect((await runContractEmit(project.ctx)).exitCode).toBe(0);
+          const update = await runDbUpdate(project.ctx, ['--json']);
+
+          expect(errorOf(update)).toMatchObject({ code: 'MIGRATION.CHANGE_POLICY_FORBIDS' });
         });
       },
       timeouts.spinUpPpgDev,

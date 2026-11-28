@@ -61,7 +61,7 @@ async function emitContract(ctx: JourneyContext, psl: string, label: string): Pr
 async function markerHash(connectionString: string): Promise<unknown> {
   const { rows } = await sql(
     connectionString,
-    "SELECT core_hash FROM _prisma.marker WHERE space = 'app'",
+    "SELECT core_hash FROM _prisma.signatures WHERE space = 'app'",
   );
   return rows[0]?.['core_hash'];
 }

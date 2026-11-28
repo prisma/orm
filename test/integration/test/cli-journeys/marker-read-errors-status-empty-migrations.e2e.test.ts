@@ -12,8 +12,8 @@ import {
 
 async function plantNullInvariants(connectionString: string) {
   await withClient(connectionString, async (client) => {
-    await client.query('ALTER TABLE _prisma.marker ALTER COLUMN invariants DROP NOT NULL');
-    await client.query(`UPDATE _prisma.marker SET invariants = NULL WHERE space = 'app'`);
+    await client.query('ALTER TABLE _prisma.signatures ALTER COLUMN invariants DROP NOT NULL');
+    await client.query(`UPDATE _prisma.signatures SET invariants = NULL WHERE space = 'app'`);
   });
 }
 

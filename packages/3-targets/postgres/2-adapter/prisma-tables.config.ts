@@ -11,6 +11,7 @@ import postgresAdapter from '@internal/adapter-postgres/control';
 import { defineConfig as ormConfig } from '@internal/cli/config-types';
 import sql from '@internal/family-sql/control';
 import { prismaContract } from '@internal/sql-contract-psl/provider';
+import { capabilitiesFromKeys } from '@internal/sql-contract-ts/contract-builder';
 import postgres from '@internal/target-postgres/control';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
 import { definePrismaConfig } from '@prisma/cli-engine';
@@ -25,6 +26,7 @@ export default definePrismaConfig({
         output: '../1-target/src/contract.json',
         target: postgres,
         createNamespace: postgresCreateNamespace,
+        capabilities: capabilitiesFromKeys(['sql.checkConstraint', 'sql.scalarList']),
       }),
       typesModule: '#contract-types',
     },

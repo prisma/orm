@@ -5,6 +5,7 @@ import type {
   LedgerEntryRecord,
 } from '@internal/contract/types';
 import {
+  errorMarkerReadFailed,
   errorMarkerRowCorrupt,
   rethrowMarkerReadError,
   withMarkerReadErrorHandling,
@@ -29,7 +30,7 @@ import {
 } from '@internal/framework-components/codec';
 import {
   APP_SPACE_ID,
-  DATABASE_POLICIES_META_KEY,
+  type DatabasePolicies,
   isPrismaSpace,
   type MarkerDestination,
   type MarkerInsert,
@@ -52,6 +53,7 @@ import type {
   LoweredStatement,
   LowererContext,
   MarkerReadResult,
+  SelectAst,
   SqlExecuteRequest,
 } from '@internal/sql-relational-core/ast';
 import {
@@ -78,7 +80,12 @@ import {
   type PostgresCodecRegistry,
   parsePostgresListText,
 } from '@internal/target-postgres/codecs';
-import { PRISMA_TABLE_NAMES, PRISMA_TABLES_SCHEMA } from '@internal/target-postgres/contract-free';
+import {
+  PRISMA_TABLE_NAMES,
+  PRISMA_TABLES_SCHEMA,
+  prismaTableLocation,
+  RECORD_DATABASE_POLICIES_SQL,
+} from '@internal/target-postgres/contract-free';
 import type {
   AddColumnAction,
   AddConstraintAction,
@@ -131,16 +138,19 @@ import { ifDefined } from '@internal/utils/defined';
 import { adapterError } from './adapter-errors';
 import { encodeControlQueryParams } from './control-codecs';
 import {
+  CONFIG_ROW_ALIAS,
+  config,
   execute,
   ledger,
   ledgerContract,
   ledgerReadShape,
-  marker,
   mergeInvariants,
-  metaRecordingPolicies,
   NOW,
+  PRISMA_SPACE_SIGNATURE_COLUMNS,
   prismaTableExists,
   prismaTableHasColumns,
+  signatures,
+  withPolicies,
 } from './marker-ledger';
 import {
   errorPrismaTablesFromEarlierRelease,
@@ -151,8 +161,9 @@ import { reportedSqlType } from './reported-sql-type';
 import { renderLoweredSql } from './sql-renderer';
 import type { PostgresContract } from './types';
 
-const POSTGRES_MARKER_TABLE = `${PRISMA_TABLES_SCHEMA}.${PRISMA_TABLE_NAMES.marker}`;
-const POSTGRES_LEDGER_TABLE = `${PRISMA_TABLES_SCHEMA}.${PRISMA_TABLE_NAMES.ledger}`;
+const POSTGRES_SIGNATURES_TABLE = prismaTableLocation(PRISMA_TABLE_NAMES.signatures);
+const POSTGRES_CONFIG_TABLE = prismaTableLocation(PRISMA_TABLE_NAMES.config);
+const POSTGRES_LEDGER_TABLE = prismaTableLocation(PRISMA_TABLE_NAMES.ledger);
 
 /**
  * Tables another migration tool, not Prisma 8, keeps in an application schema: Prisma 7's ledger. `introspect` leaves them out unless the contract declares a table of that name in the same namespace.
@@ -163,41 +174,97 @@ function markerRowDecodeWhy(detail: string): string {
   return `Invalid contract marker row: ${detail}`;
 }
 
-function decodeMarkerInteger(value: string): number {
-  if (!/^-?\d+$/.test(value)) {
-    throw new TypeError(`expected integer text, got ${JSON.stringify(value)}`);
-  }
-  return Number(value);
+/** The policies the framework reads from the application space's record, which on PostgreSQL are the one row of `_prisma.config`, passed on as stored, JSON `null` included. */
+function policiesMeta(
+  space: string,
+  configRow: unknown,
+  policies: unknown,
+): { readonly meta?: { policies: unknown } } {
+  return space === APP_SPACE_ID && configRow === true ? { meta: { policies } } : {};
 }
 
+/** Whether the role may read the policies column of `_prisma.config`, and whether row-level security filters what it reads there, from the catalogues. */
+const CONFIG_ACCESS_SQL = `SELECT pg_catalog.has_column_privilege(c.oid, $3, 'SELECT') AS "readable",
+  pg_catalog.row_security_active(c.oid) AS "filtered"
+FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+WHERE n.nspname = $1 AND c.relname = $2`;
+
+function errorConfigUnreadable(why: string) {
+  return errorMarkerReadFailed({ why, space: APP_SPACE_ID, markerLocation: POSTGRES_CONFIG_TABLE });
+}
+
+/** Refuses a role that would read no row of `_prisma.config` while it holds one, so the defaults are never read in place of the policies. Under row-level security a role cannot tell a hidden row from a missing one, so any filtering is refused. */
+async function assertPoliciesReadable(driver: SqlControlDriverInstance<'postgres'>): Promise<void> {
+  const { rows } = await driver.query<{ readonly readable: boolean; readonly filtered: boolean }>(
+    CONFIG_ACCESS_SQL,
+    [PRISMA_TABLES_SCHEMA, PRISMA_TABLE_NAMES.config, config.policies.columnName],
+  );
+  const [access] = rows;
+  if (access === undefined) return;
+  if (!access.readable) {
+    throw errorConfigUnreadable(
+      `The role that runs this command may not read ${POSTGRES_CONFIG_TABLE}, which records the database's policies. Grant it SELECT on ${POSTGRES_CONFIG_TABLE}.`,
+    );
+  }
+  if (access.filtered) {
+    throw errorConfigUnreadable(
+      `Row-level security applies to the role that runs this command on ${POSTGRES_CONFIG_TABLE}, which records the database's policies, so Prisma cannot tell whether it hides the policies. Run the command as a role row-level security does not apply to, such as the table's owner, or disable row-level security on ${POSTGRES_CONFIG_TABLE}.`,
+    );
+  }
+}
+
+/** `query` with the policies of `_prisma.config`, when that table holds them. A database without the table, such as one a later release changed, reads as recording no policies; a role that may not read the table, or that row-level security applies to there, gets an error, so it never reads the defaults in place of the policies. */
+async function withPoliciesWhenRecorded(
+  driver: SqlControlDriverInstance<'postgres'>,
+  query: SelectAst,
+): Promise<SelectAst> {
+  if (
+    !(await prismaTableHasColumns(driver, PRISMA_TABLE_NAMES.config, [config.policies.columnName]))
+  ) {
+    return query;
+  }
+  await assertPoliciesReadable(driver);
+  return withPolicies(query);
+}
+
+/** A row of `_prisma.signatures`, with `_prisma.config`'s policies beside it, in the form the SQL family's marker parser reads, whose `updated_at` is the row's `signed_at`. */
 function decodePostgresMarkerRow(row: unknown, space: string): Record<string, unknown> {
   if (typeof row !== 'object' || row === null) {
     const cause = new TypeError(`expected object marker row, got ${typeof row}`);
     throw errorMarkerRowCorrupt({
       why: markerRowDecodeWhy(cause.message),
       space,
-      markerLocation: POSTGRES_MARKER_TABLE,
+      markerLocation: POSTGRES_SIGNATURES_TABLE,
       cause,
     });
   }
-  const record = blindCast<
-    { readonly invariants: unknown; readonly canonical_version: unknown } & Record<string, unknown>,
-    'Postgres marker rows are object-shaped at this boundary'
+  const {
+    signed_at,
+    invariants,
+    policies,
+    [CONFIG_ROW_ALIAS]: configRow,
+    ...record
+  } = blindCast<
+    {
+      readonly invariants: unknown;
+      readonly signed_at?: unknown;
+      readonly policies?: unknown;
+    } & Record<string, unknown>,
+    'Postgres signature rows are object-shaped at this boundary'
   >(row);
   try {
     return {
       ...record,
-      ...(typeof record.canonical_version === 'string'
-        ? { canonical_version: decodeMarkerInteger(record.canonical_version) }
-        : {}),
-      invariants: parsePostgresListText(record.invariants),
+      ...policiesMeta(space, configRow, policies),
+      ...ifDefined('updated_at', signed_at),
+      invariants: parsePostgresListText(invariants),
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     throw errorMarkerRowCorrupt({
       why: markerRowDecodeWhy(message),
       space,
-      markerLocation: POSTGRES_MARKER_TABLE,
+      markerLocation: POSTGRES_SIGNATURES_TABLE,
       cause: error,
     });
   }
@@ -220,7 +287,7 @@ type PostgresLedgerRow = {
 export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
   readonly familyId = 'sql' as const;
   readonly targetId = 'postgres' as const;
-  readonly markerLocation = POSTGRES_MARKER_TABLE;
+  readonly markerLocation = POSTGRES_SIGNATURES_TABLE;
 
   /** `declaredDataTypes` are the stack's data types in assembly order, which introspection resolves each column's reported type over. */
   constructor(
@@ -305,7 +372,7 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
   }
 
   /**
-   * Reads the contract marker from `_prisma.marker`. Probes
+   * Reads the signature of `space` from `_prisma.signatures`. Probes
    * `information_schema.tables` first so a fresh database (where the
    * `_prisma` schema doesn't yet exist) returns `null` instead of a
    * "relation does not exist" error — some Postgres wire-protocol clients
@@ -325,12 +392,27 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
     driver: SqlControlDriverInstance<'postgres'>,
     space: string,
   ): Promise<MarkerReadResult> {
-    const markerContext = { space, markerLocation: POSTGRES_MARKER_TABLE };
-    return withMarkerReadErrorHandling(() => this.readMarkerResult(driver, space), markerContext);
+    const markerContext = { space, markerLocation: POSTGRES_SIGNATURES_TABLE };
+    return withMarkerReadErrorHandling(
+      () => this.readMarkerResult(driver, space, 'with-policies'),
+      markerContext,
+    );
+  }
+
+  /** Reads the signature of `space` from `_prisma.signatures` alone, as the SQL client's check on first use does: it compares hashes, so a role needs `SELECT` on that table only. */
+  async readSignatureDiscriminated(
+    driver: SqlControlDriverInstance<'postgres'>,
+    space: string,
+  ): Promise<MarkerReadResult> {
+    const markerContext = { space, markerLocation: POSTGRES_SIGNATURES_TABLE };
+    return withMarkerReadErrorHandling(
+      () => this.readMarkerResult(driver, space, 'signature-only'),
+      markerContext,
+    );
   }
 
   /**
-   * Reads every row from `_prisma.marker` and returns them keyed
+   * Reads every row from `_prisma.signatures` and returns them keyed
    * by `space`. Mirrors the existence probe in {@link readMarker}: a
    * fresh database without the `_prisma` schema returns an empty
    * map rather than raising "relation does not exist".
@@ -338,7 +420,7 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
   async readAllMarkers(
     driver: SqlControlDriverInstance<'postgres'>,
   ): Promise<ReadonlyMap<string, ContractMarkerRecord>> {
-    const markerContext = { space: APP_SPACE_ID, markerLocation: POSTGRES_MARKER_TABLE };
+    const markerContext = { space: APP_SPACE_ID, markerLocation: POSTGRES_SIGNATURES_TABLE };
     return withMarkerReadErrorHandling(() => this.readAllMarkersResult(driver), markerContext);
   }
 
@@ -346,26 +428,17 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
     driver: SqlControlDriverInstance<'postgres'>,
   ): Promise<ReadonlyMap<string, ContractMarkerRecord>> {
     const lower = (query: AnyQueryAst) => this.lower(query, { contract: undefined });
-    if (!(await prismaTableExists(lower, driver, PRISMA_TABLE_NAMES.marker))) {
+    if (!(await prismaTableExists(lower, driver, PRISMA_TABLE_NAMES.signatures))) {
       if (await prismaTablesFromEarlierRelease(lower, driver, undefined)) {
         throw errorPrismaTablesFromEarlierRelease();
       }
       return new Map();
     }
 
-    const fetch = marker
-      .select(
-        marker.space,
-        marker.core_hash,
-        marker.profile_hash,
-        marker.contract_json,
-        marker.canonical_version,
-        marker.updated_at,
-        marker.app_tag,
-        marker.meta,
-        marker.invariants,
-      )
-      .build();
+    const fetch = await withPoliciesWhenRecorded(
+      driver,
+      signatures.select(...PRISMA_SPACE_SIGNATURE_COLUMNS).build(),
+    );
     const rawRows = await execute(lower, driver, fetch);
     const rows = blindCast<
       ReadonlyArray<{ space: string } & Record<string, unknown>>,
@@ -380,7 +453,7 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
       } catch (error) {
         rethrowMarkerReadError(error, {
           space: row.space,
-          markerLocation: POSTGRES_MARKER_TABLE,
+          markerLocation: POSTGRES_SIGNATURES_TABLE,
         });
       }
     }
@@ -443,7 +516,7 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
   }
 
   /**
-   * Stamps the initial marker row for `space` via the shared contract-free DML
+   * Stamps the initial signature row for `space` via the shared contract-free DML
    * builder, lowered through {@link lower} and executed on the driver. See the
    * `SqlControlAdapter.initMarker` contract.
    */
@@ -453,22 +526,18 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
     destination: MarkerInsert,
   ): Promise<void> {
     const lower = (query: AnyQueryAst) => this.lower(query, { contract: undefined });
-    if (!(await prismaTableExists(lower, driver, PRISMA_TABLE_NAMES.marker))) {
-      throw errorPrismaTablesMissing(this.markerLocation);
+    if (!(await prismaTableExists(lower, driver, PRISMA_TABLE_NAMES.signatures))) {
+      throw errorPrismaTablesMissing([PRISMA_TABLE_NAMES.signatures], this.markerLocation);
     }
     await execute(
       lower,
       driver,
-      marker
+      signatures
         .insert({
           space,
           core_hash: destination.storageHash,
           profile_hash: destination.profileHash,
-          contract_json: null,
-          canonical_version: null,
-          updated_at: NOW,
-          app_tag: null,
-          meta: {},
+          signed_at: NOW,
           invariants: destination.invariants ?? [],
         })
         .build(),
@@ -480,45 +549,31 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
     space: string,
     destination: MarkerDestination,
   ): Promise<void> {
-    const policies = destination.databasePolicies;
     await execute(
       (query) => this.lower(query, { contract: undefined }),
       driver,
-      marker
+      signatures
         .upsert({
           space,
           core_hash: destination.storageHash,
           profile_hash: destination.profileHash,
-          contract_json: null,
-          canonical_version: null,
-          updated_at: NOW,
-          app_tag: null,
-          meta:
-            policies === undefined
-              ? {}
-              : { [DATABASE_POLICIES_META_KEY]: storedDatabasePolicies(policies) },
+          signed_at: NOW,
           invariants: destination.invariants ?? [],
         })
-        .onConflict(marker.space)
-        .doUpdate((excluded: ExcludedProxy<MarkerUpsertSchema>) => ({
+        .onConflict(signatures.space)
+        .doUpdate((excluded: ExcludedProxy<SignatureUpsertSchema>) => ({
           core_hash: excluded.core_hash,
           profile_hash: excluded.profile_hash,
-          contract_json: excluded.contract_json,
-          canonical_version: excluded.canonical_version,
-          updated_at: NOW,
-          app_tag: excluded.app_tag,
-          ...ifDefined(
-            'meta',
-            policies === undefined ? undefined : metaRecordingPolicies(policies),
-          ),
+          signed_at: NOW,
           invariants: excluded.invariants,
         }))
         .build(),
     );
+    await this.recordDatabasePolicies(driver, destination.databasePolicies);
   }
 
   /**
-   * Compare-and-swap advance of the marker row for `space`. See the
+   * Compare-and-swap advance of the signature row for `space`. See the
    * `SqlControlAdapter.updateMarker` contract.
    */
   async updateMarker(
@@ -535,23 +590,34 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
       destination.invariants === undefined
         ? undefined
         : mergeInvariants(currentInvariants, destination.invariants);
-    const policies = destination.databasePolicies;
 
-    const query = marker
+    const query = signatures
       .update()
       .set({
         core_hash: destination.storageHash,
         profile_hash: destination.profileHash,
-        updated_at: NOW,
+        signed_at: NOW,
         ...ifDefined('invariants', mergedInvariants),
-        ...ifDefined('meta', policies === undefined ? undefined : metaRecordingPolicies(policies)),
       })
-      .where(marker.space.eq(space).and(marker.core_hash.eq(expectedFrom)))
-      .returning(marker.space)
+      .where(signatures.space.eq(space).and(signatures.core_hash.eq(expectedFrom)))
+      .returning(signatures.space)
       .build();
 
     const rows = await execute((q) => this.lower(q, { contract: undefined }), driver, query);
-    return rows.length > 0;
+    if (rows.length === 0) return false;
+    await this.recordDatabasePolicies(driver, destination.databasePolicies);
+    return true;
+  }
+
+  /** The database's policies are one row of `_prisma.config`, written beside the application space's signature in the same transaction. */
+  private async recordDatabasePolicies(
+    driver: SqlControlDriverInstance<'postgres'>,
+    policies: DatabasePolicies | undefined,
+  ): Promise<void> {
+    if (policies === undefined) return;
+    await driver.query(RECORD_DATABASE_POLICIES_SQL, [
+      JSON.stringify(storedDatabasePolicies(policies)),
+    ]);
   }
 
   async withTransaction<T>(
@@ -625,42 +691,47 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
   }
 
   /**
-   * A marker table in `_prisma` that lacks a column this select names was not created by Prisma's first migration. For the Prisma space's own row that reads as no row, so the phase runs the first migration, whose check of the marker table's columns stops it and names the table.
+   * A signatures table in `_prisma` that lacks a column the Prisma space's row is read through was not created by Prisma's first migration. For that row it reads as no row, so the phase runs the first migration, whose check of the table's columns stops it and names the table.
    */
-  private async readMarkerResult(driver: SqlControlDriverInstance<'postgres'>, space: string) {
+  private async readMarkerResult(
+    driver: SqlControlDriverInstance<'postgres'>,
+    space: string,
+    read: 'with-policies' | 'signature-only',
+  ) {
     const lower = (query: AnyQueryAst) => this.lower(query, { contract: undefined });
-    if (!(await prismaTableExists(lower, driver, PRISMA_TABLE_NAMES.marker))) {
+    if (!(await prismaTableExists(lower, driver, PRISMA_TABLE_NAMES.signatures))) {
       return (await prismaTablesFromEarlierRelease(lower, driver, space))
         ? { kind: 'earlier-release' as const }
         : { kind: 'no-table' as const };
     }
 
-    const selected = [
-      marker.core_hash,
-      marker.profile_hash,
-      marker.contract_json,
-      marker.canonical_version,
-      marker.updated_at,
-      marker.app_tag,
-      marker.meta,
-      marker.invariants,
-    ];
     if (
       isPrismaSpace(space) &&
       !(await prismaTableHasColumns(
-        lower,
         driver,
-        PRISMA_TABLE_NAMES.marker,
-        [marker.space, ...selected].map((column) => column.columnName),
+        PRISMA_TABLE_NAMES.signatures,
+        PRISMA_SPACE_SIGNATURE_COLUMNS.map((column) => column.columnName),
       ))
     ) {
       return { kind: 'absent' as const };
     }
 
-    const fetch = marker
+    const selected = isPrismaSpace(space)
+      ? [signatures.core_hash, signatures.profile_hash, signatures.invariants]
+      : [
+          signatures.core_hash,
+          signatures.profile_hash,
+          signatures.signed_at,
+          signatures.invariants,
+        ];
+    const signature = signatures
       .select(...selected)
-      .where(marker.space.eq(space))
+      .where(signatures.space.eq(space))
       .build();
+    const fetch =
+      space === APP_SPACE_ID && read === 'with-policies'
+        ? await withPoliciesWhenRecorded(driver, signature)
+        : signature;
     const result = await execute(lower, driver, fetch);
     const row = result[0];
     if (!row) return { kind: 'absent' as const };
@@ -668,7 +739,7 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
       const decodedRow = decodePostgresMarkerRow(row, space);
       return { kind: 'present' as const, record: parseContractMarkerRow(decodedRow) };
     } catch (error) {
-      rethrowMarkerReadError(error, { space, markerLocation: POSTGRES_MARKER_TABLE });
+      rethrowMarkerReadError(error, { space, markerLocation: POSTGRES_SIGNATURES_TABLE });
     }
   }
 
@@ -2094,15 +2165,11 @@ async function pgRenderAlterTable(
   };
 }
 
-type MarkerUpsertSchema = {
+type SignatureUpsertSchema = {
   readonly space: ColumnDescriptor;
   readonly core_hash: ColumnDescriptor;
   readonly profile_hash: ColumnDescriptor;
-  readonly contract_json: ColumnDescriptor;
-  readonly canonical_version: ColumnDescriptor;
-  readonly updated_at: ColumnDescriptor;
-  readonly app_tag: ColumnDescriptor;
-  readonly meta: ColumnDescriptor;
+  readonly signed_at: ColumnDescriptor;
   readonly invariants: ColumnDescriptor;
 };
 

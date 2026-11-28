@@ -132,8 +132,6 @@ async function writeMatchingMarker(
     await seedTestMarker(client, {
       storageHash: contract.storage.storageHash,
       profileHash: contract.profileHash ?? contract.storage.storageHash,
-      contractJson: contract,
-      canonicalVersion: 1,
     });
   });
 }

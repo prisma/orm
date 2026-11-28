@@ -1,6 +1,6 @@
 # ADR 021 — Contract marker storage & verification modes
 
-**Status:** Accepted. [ADR 339](ADR%20339%20-%20Each%20target%20has%20a%20contract%20space%20for%20Prisma%27s%20own%20tables.md) makes these tables a contract space the target package carries. On PostgreSQL they are created and changed by that space's migrations, which every command that changes a database applies first, instead of by statements each runner issued on first use, and they are in the schema `_prisma` ([ADR 338](ADR%20338%20-%20Names%20Prisma%20puts%20in%20a%20database%20or%20a%20query%20begin%20with%20_prisma.md)). SQLite, MySQL, MariaDB and MongoDB still create their tables on first use. [ADR 320](ADR%20320%20-%20Databases%20record%20a%20change%20policy%20and%20a%20data%20protection%20policy.md) adds `meta.policies`, the policies in force, and requires every marker write to preserve the `meta` keys it does not own. [ADR 333](ADR%20333%20-%20The%20runtime's%20marker%20check%20only%20warns.md) supersedes what this record says the runtime does when the marker cannot be read or decoded, and its strict-mode refusals: the runtime's check only warns.
+**Status:** Accepted. [ADR 339](ADR%20339%20-%20Each%20target%20has%20a%20contract%20space%20for%20Prisma%27s%20own%20tables.md) makes these tables a contract space the target package carries. On PostgreSQL they are created and changed by that space's migrations, which every command that changes a database applies first, instead of by statements each runner issued on first use, and they are in the schema `_prisma` ([ADR 338](ADR%20338%20-%20Names%20Prisma%20puts%20in%20a%20database%20or%20a%20query%20begin%20with%20_prisma.md)). SQLite, MySQL, MariaDB and MongoDB still create their tables on first use. On PostgreSQL each contract space's marker is a row of `_prisma.signatures`, and the database's policies ([ADR 320](ADR%20320%20-%20Databases%20record%20a%20change%20policy%20and%20a%20data%20protection%20policy.md)) are in a table of their own, `_prisma.config`; on the other targets they are still under the marker's `meta.policies`. [ADR 333](ADR%20333%20-%20The%20runtime's%20marker%20check%20only%20warns.md) supersedes what this record says the runtime does when the marker cannot be read or decoded, and its strict-mode refusals: the runtime's check only warns.
 
 ## Context
 
@@ -8,7 +8,7 @@ The runtime and the migration runner must know which data contract a database cu
 
 ## Decision
 
-Store the current contract identity in a small, reserved table, `_prisma.marker` on PostgreSQL, in each database:
+Store the current contract identity in a small, reserved table, `_prisma.signatures` on PostgreSQL, in each database:
 - The marker records the core hash of the data contract and the profile hash pinned by the contract (declared capability profile)
 - The runtime implements three verification modes: startup, onFirstUse, and always
 - Cross-environment drift is reported with structured errors and remediation guidance, never auto-patched
@@ -17,24 +17,29 @@ Store the current contract identity in a small, reserved table, `_prisma.marker`
 
 ### Default for Postgres
 
-The table as the first migration of the Prisma space creates it:
+The tables as the first migration of the Prisma space creates them:
 
 ```sql
 create schema if not exists _prisma;
 
-create table if not exists _prisma.marker (
-  space text not null default 'app',
+create table _prisma.signatures (
+  space text primary key,
   core_hash text not null,
   profile_hash text not null,
-  contract_json jsonb,
-  canonical_version int,
   invariants text[] not null default '{}',
-  updated_at timestamptz not null default now(),
-  app_tag text,
-  meta jsonb not null default '{}',
-  primary key (space)
+  signed_at timestamptz not null default now()
+);
+
+create table _prisma.config (
+  id boolean primary key default true,
+  policies jsonb not null default '{}',
+  constraint config_single_row check (id)
 );
 ```
+
+A row of `signatures` says which contract one contract space was signed with. `config` holds at most one row, for the whole database: the policies in force, in the same form a ref declares them. They are two tables because they describe different things: a signature belongs to one space, and a policy governs every space in the database. A database whose `config` has no row takes the default policies.
+
+The release candidates kept one table, `prisma_contract.marker`, with the columns `contract_json`, `canonical_version`, `app_tag` and `meta` as well. Nothing read the first three, and `meta` held only the policies. The Prisma space's first migration moves each of its rows into `signatures`, moves the application row's `meta.policies` into `config`, and drops it.
 
 ### Schema evolution (TML-2397)
 
@@ -47,18 +52,16 @@ The marker was originally a singleton — one row keyed by `id smallint primary 
 Prisma 8 does not convert a marker of the singleton shape: the project keeps no code for databases an earlier pre-release wrote. A database that still has one fails when the marker is read. On PostgreSQL a command that only reads reports `CONTRACT.PRISMA_SPACE_BEHIND`, and a command that changes the database stops at the Prisma space's column check with `MIGRATION.PRECHECK_FAILED`; on the other targets the read fails as `CONTRACT.MARKER_READ_FAILED`.
 
 ### Notes
-- One row per loaded contract space, primary-keyed by `space`. The application has one row (`space = 'app'`); each loaded extension has one row; the Prisma space has one row (`space = '_prisma'`), which records the form these tables themselves are in.
+- `signatures` has one row per loaded contract space, primary-keyed by `space`. The application has one row (`space = 'app'`); each loaded extension has one row; the Prisma space has one row (`space = '_prisma'`), which records the form these tables themselves are in.
 - core_hash is the canonical hash of contract.json after canonicalization
 - profile_hash mirrors the contract-pinned capability profile and is used to enforce equality at verification time
-- contract_json is optional complete contract JSON for drift analysis and PPg features
-- canonical_version tracks the canonicalization version used for the contract_json
 - invariants is the set-semantic, monotonic record of `invariantId`s that have been applied to this database at least once in its history. Populated by server-side union on every successful `migrate`; never shrinks. The reading is "applied-at-least-once," not "currently true of the data" — the data transform's `check` is the authority for the latter. See [ADR 208 — Invariant-aware migration routing](ADR%20208%20-%20Invariant-aware%20migration%20routing.md) for the full semantics.
-- app_tag is optional human context (service or deployment name)
-- meta is reserved for forward-compatible fields the platform may add later
+- signed_at is when the row was last written
+- A contract is never stored in these tables. On PostgreSQL the ledger's contracts are kept in `_prisma.contract`, keyed by hash.
 
 ### Other targets
-- **MySQL**: the table `_prisma_marker` in the current database
-- **SQLite**: the table `_prisma_marker` with the same columns (including the `space` PK); the runner merges the `invariants` set inside `BEGIN EXCLUSIVE` (no native text-array merge in SQL). A singleton-shape marker fails when read, as on Postgres.
+- **MySQL**: the table `_prisma_marker` in the current database, with the columns of the release candidates' PostgreSQL marker; the policies are under `meta.policies`
+- **SQLite**: the table `_prisma_marker` with the same columns as MySQL's (including the `space` PK); the runner merges the `invariants` set inside `BEGIN EXCLUSIVE` (no native text-array merge in SQL). A singleton-shape marker fails when read, as on Postgres.
 - **Mongo**: `_prisma_migrations` collection with one marker document per loaded contract space, keyed `{_id: <spaceId>, space: <spaceId>, ...}` (see [ADR 212](./ADR%20212%20-%20Contract%20spaces.md) and [Subsystem 10 — Contract spaces](../subsystems/10.%20MongoDB%20Family.md#contract-spaces)). Ledger entries gain a `space` field too. `invariants` is read as `doc.invariants ?? []` so docs without the field transparently report the empty set (natural schemaless behaviour, not a compat shim).
 - Adapters must provide DDL for creating and reading the marker consistently
 
@@ -72,15 +75,9 @@ Prisma 8 does not convert a marker of the singleton shape: the project keeps no 
 - Reads are cheap, cached per process, and invalidated by configurable TTLs or explicit cache busting
 - If the marker is missing, the runtime reports contract/marker-missing and refuses to execute in strict mode
 
-## Contract storage modes
-- **off**: contract_json is null, only hashes are stored (default for backward compatibility)
-- **compressed**: contract_json contains gzipped canonical JSON for space efficiency
-- **full**: contract_json contains complete canonical JSON for drift analysis and PPg features
-- **Verification**: hash equality is authoritative; JSON equality is diagnostic only
-
 ## Namespacing and multi-tenant
 - Default behavior is per schema for Postgres
-- Each database has one `_prisma.marker`
+- Each database has one `_prisma.signatures` and one `_prisma.config`
 - The runtime verifies against the schema implied by the Plan's meta.refs or a configured default schema
 - Alternative centralized mode is supported for platforms that mandate a single control schema
 - Adapters surface a markerLocator to find the correct row keyed by schema_name or tenant_id
@@ -145,7 +142,6 @@ createRuntime({
   verify: 'startup' | 'onFirstUse' | 'always',
   verifyCacheTtlMs?: number,
   markerLocator?: { schema?: string, centralized?: { schema: string, key: string } },
-  contractStorage?: 'off' | 'compressed' | 'full'
 })
 ```
 
@@ -166,13 +162,15 @@ createRunner({
 
 ## Security
 - The marker table should be owned by a role with DDL privileges
-- Application roles require SELECT on `_prisma.marker` only
-- The runner role requires UPDATE on `_prisma.marker` and INSERT on the ledger, and owns the `_prisma` schema, since a later release may change these tables
+- Application roles require SELECT on `_prisma.signatures` only: the SQL client's check on first use reads the application space's row and never the policies
+- Any role that runs Prisma's commands reads `_prisma.config` as well as `_prisma.signatures`, since the commands read the policies; the runner role also writes both tables and the ledger, and owns the `_prisma` schema, since a later release may change these tables
 - No secrets are stored in the marker or ledger
 
 ## Alternatives considered
 - **Storing the hash in database comments or extension metadata**: rejected due to portability and permission variability across vendors
 - **Storing the hash outside the database in an app config store**: rejected because it breaks the invariant that the database can self-describe its contract
+- **The policies under the application row's `meta`, in the marker**, as the release candidates did. Rejected on PostgreSQL: the policies govern every space in the database, so a row that belongs to one space is the wrong place for them, and a reader had to know which space's row held them.
+- **The contract's JSON in the marker**, for drift analysis. Rejected: nothing read it, every writer wrote `NULL`, and a contract is large. Where contracts are kept, PostgreSQL's `_prisma.contract` keeps them once per hash.
 - **Recording a full migration history as the source of truth**: retained as an optional ledger for audit, but the marker remains the authoritative state
 
 ## Consequences

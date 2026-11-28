@@ -6,7 +6,13 @@ import {
 } from '@internal/target-postgres/contract-free';
 import postgres from '@internal/target-postgres/control';
 import { describe, expect, it } from 'vitest';
-import { ledger, ledgerContract, ledgerReadShape, marker } from '../src/core/marker-ledger';
+import {
+  config,
+  ledger,
+  ledgerContract,
+  ledgerReadShape,
+  signatures,
+} from '../src/core/marker-ledger';
 
 interface ContractColumn {
   readonly codecId: string;
@@ -87,27 +93,31 @@ describe("the descriptions of Prisma's own tables", () => {
           ),
       );
     expect({
-      marker: handleColumns(marker),
+      signatures: handleColumns(signatures),
       ledgerReadShape: handleColumns(ledgerReadShape),
       ledgerOutside: outside(ledger, 'ledger'),
       ledgerContractOutside: outside(ledgerContract, 'contract'),
+      configOutside: outside(config, 'config'),
     }).toEqual({
-      marker: contractColumns('marker'),
+      signatures: contractColumns('signatures'),
       ledgerReadShape: contractColumns('ledger'),
       ledgerOutside: [],
       ledgerContractOutside: [],
+      configOutside: [],
     });
   });
 
   it('keep the tables in the schema names the target defines', () => {
     expect({
-      marker: marker.source,
+      signatures: signatures.source,
       ledger: ledgerReadShape.source,
       contract: ledgerContract.source,
+      config: config.source,
     }).toMatchObject({
-      marker: { name: 'marker', schema: PRISMA_TABLES_SCHEMA },
+      signatures: { name: 'signatures', schema: PRISMA_TABLES_SCHEMA },
       ledger: { name: 'ledger', schema: PRISMA_TABLES_SCHEMA },
       contract: { name: 'contract', schema: PRISMA_TABLES_SCHEMA },
+      config: { name: 'config', schema: PRISMA_TABLES_SCHEMA },
     });
     expect({
       current: PRISMA_TABLES_SCHEMA,

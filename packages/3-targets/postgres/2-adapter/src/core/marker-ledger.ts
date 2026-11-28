@@ -1,48 +1,69 @@
-import {
-  DATABASE_POLICIES_META_KEY,
-  type DatabasePolicies,
-  storedDatabasePolicies,
-} from '@internal/framework-components/control';
 import type { SqlControlDriverInstance } from '@internal/sql-contract/types';
 import {
   type AnyQueryAst,
-  ColumnRef,
+  JoinAst,
+  LiteralExpr,
   type LoweredStatement,
-  ParamRef,
+  ProjectionItem,
   RawExpr,
+  type SelectAst,
 } from '@internal/sql-relational-core/ast';
+import { PG_TIMESTAMPTZ_STRING_CODEC_ID } from '@internal/target-postgres/codec-ids';
 import {
-  PG_JSONB_CODEC_ID,
-  PG_TIMESTAMPTZ_STRING_CODEC_ID,
-} from '@internal/target-postgres/codec-ids';
-import {
-  int4,
   int8,
   jsonb,
   PRISMA_TABLE_NAMES,
   PRISMA_TABLES_SCHEMA,
   type PrismaTableName,
   pgTable,
+  type RELEASE_CANDIDATE_MARKER_TABLE,
   text,
   textArray,
   timestamptz,
 } from '@internal/target-postgres/contract-free';
 import { encodeControlQueryParams } from './control-codecs';
 
-export const marker = pgTable(
-  { name: PRISMA_TABLE_NAMES.marker, schema: PRISMA_TABLES_SCHEMA },
+/** One row per contract space: the hashes of the contract it was signed with, its invariants, and when it was signed. */
+export const signatures = pgTable(
+  { name: PRISMA_TABLE_NAMES.signatures, schema: PRISMA_TABLES_SCHEMA },
   {
     space: text(),
     core_hash: text(),
     profile_hash: text(),
-    contract_json: jsonb({ nullable: true }),
-    canonical_version: int4({ nullable: true }),
-    updated_at: timestamptz(),
-    app_tag: text({ nullable: true }),
-    meta: jsonb(),
     invariants: textArray(),
+    signed_at: timestamptz(),
   },
 );
+
+/** The database's one row of settings: the policies, as the framework stores them. */
+export const config = pgTable(
+  { name: PRISMA_TABLE_NAMES.config, schema: PRISMA_TABLES_SCHEMA },
+  { policies: jsonb() },
+);
+
+/**
+ * The columns every release of Prisma 8 reads the Prisma space's own row through. A later release may add columns to `_prisma.signatures` and change the rest of Prisma's own tables, but never these, so each release recognises the row whatever release brought the database further.
+ */
+export const PRISMA_SPACE_SIGNATURE_COLUMNS = [
+  signatures.space,
+  signatures.core_hash,
+  signatures.profile_hash,
+  signatures.invariants,
+] as const;
+
+/** The alias under which {@link withPolicies} says whether `_prisma.config` has a row, which tells a missing row apart from policies stored as JSON `null`. */
+export const CONFIG_ROW_ALIAS = 'config_row';
+
+/** `query`, a read of `_prisma.signatures`, with the policies of `_prisma.config` beside each row, in the same statement, so a signature and the policies are read from the same state. */
+export function withPolicies(query: SelectAst): SelectAst {
+  return query
+    .withProjection([
+      ...query.projection,
+      config.policies.toProjectionItem(),
+      ProjectionItem.of(CONFIG_ROW_ALIAS, config.policies.isNotNull().ast),
+    ])
+    .withJoins([JoinAst.left(config.source, LiteralExpr.of(true))]);
+}
 
 /**
  * Writeable subset of the `_prisma.ledger` table. Omits the
@@ -101,32 +122,10 @@ export const infoSchemaTables = pgTable(
   { table_schema: text(), table_name: text() },
 );
 
-export const infoSchemaColumns = pgTable(
-  { name: 'columns', schema: 'information_schema' },
-  { table_schema: text(), table_name: text(), column_name: text() },
-);
-
 export const NOW = new RawExpr({
   parts: ['now()'],
   returns: { codecId: PG_TIMESTAMPTZ_STRING_CODEC_ID, nullable: false },
 });
-
-/**
- * The marker's `meta` with `policies` set to `policies`, merged in the statement so the other
- * keys are kept as the row holds them when it is written.
- */
-export function metaRecordingPolicies(policies: DatabasePolicies): RawExpr {
-  return new RawExpr({
-    parts: [
-      'jsonb_set(coalesce(',
-      ColumnRef.of('marker', 'meta'),
-      `, '{}'::jsonb), '{${DATABASE_POLICIES_META_KEY}}', `,
-      ParamRef.of(storedDatabasePolicies(policies), { codec: { codecId: PG_JSONB_CODEC_ID } }),
-      ')',
-    ],
-    returns: { codecId: PG_JSONB_CODEC_ID, nullable: false },
-  });
-}
 
 type Lower = (query: AnyQueryAst) => LoweredStatement;
 
@@ -163,7 +162,7 @@ export type PostgresMarkerWriteDriver = SqlControlDriverInstance<'postgres'>;
 export async function prismaTableExists(
   lower: Lower,
   driver: MarkerDriver,
-  table: PrismaTableName,
+  table: PrismaTableName | typeof RELEASE_CANDIDATE_MARKER_TABLE,
   schema: string = PRISMA_TABLES_SCHEMA,
 ): Promise<boolean> {
   const probe = infoSchemaTables
@@ -173,18 +172,24 @@ export async function prismaTableExists(
   return (await execute(lower, driver, probe)).length > 0;
 }
 
-/** Whether one of Prisma's own tables in `schema` has every column in `columns`, by name. */
+/** The columns of a table, from the catalogues, which list them whatever privileges the role holds on the table; `information_schema.columns` lists only columns the role may use. */
+const CATALOG_COLUMNS_SQL = `SELECT a.attname AS "column_name"
+FROM pg_catalog.pg_attribute a
+JOIN pg_catalog.pg_class c ON c.oid = a.attrelid
+JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+WHERE n.nspname = $1 AND c.relname = $2 AND a.attnum > 0 AND NOT a.attisdropped`;
+
+/** Whether one of Prisma's own tables in `schema` has every column in `columns`, by name, whatever privileges the role holds on it. A role that may not read the table then gets PostgreSQL's permission error from the read that follows, never a table that seems to lack the column. */
 export async function prismaTableHasColumns(
-  lower: Lower,
   driver: MarkerDriver,
   table: PrismaTableName,
   columns: readonly string[],
   schema: string = PRISMA_TABLES_SCHEMA,
 ): Promise<boolean> {
-  const probe = infoSchemaColumns
-    .select(infoSchemaColumns.column_name)
-    .where(infoSchemaColumns.table_schema.eq(schema).and(infoSchemaColumns.table_name.eq(table)))
-    .build();
-  const present = new Set((await execute(lower, driver, probe)).map((row) => row['column_name']));
+  const { rows } = await driver.query<{ readonly column_name: string }>(CATALOG_COLUMNS_SQL, [
+    schema,
+    table,
+  ]);
+  const present = new Set(rows.map((row) => row.column_name));
   return columns.every((column) => present.has(column));
 }

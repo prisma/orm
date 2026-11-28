@@ -407,16 +407,12 @@ function preparedExecution(
 
 export async function setupTestSchema(runtime: PgIntegrationRuntime): Promise<void> {
   await runtime.query('create schema if not exists _prisma');
-  await runtime.query(`create table if not exists _prisma.marker (
-    space text not null primary key default 'app',
+  await runtime.query(`create table if not exists _prisma.signatures (
+    space text not null primary key,
     core_hash text not null,
     profile_hash text not null,
-    contract_json jsonb,
-    canonical_version int,
-    updated_at timestamptz not null default now(),
-    app_tag text,
-    meta jsonb not null default '{}',
-    invariants text[] not null default '{}'
+    invariants text[] not null default '{}',
+    signed_at timestamptz not null default now()
   )`);
   await runtime.query('create extension if not exists vector');
 

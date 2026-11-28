@@ -1,5 +1,6 @@
 import { createSqlOperationsReader } from '@internal/family-sql/control';
 import { type } from 'arktype';
+import { TableDependentsJson } from './dependent-objects';
 import type { PostgresPlanTargetDetails } from './planner-target-details';
 import { SchemaContentsJson } from './schema-contents';
 
@@ -14,5 +15,8 @@ export const PostgresTargetDetailsJson = type({
 
 export const readPostgresOperations = createSqlOperationsReader<PostgresPlanTargetDetails>({
   targetDetails: PostgresTargetDetailsJson,
-  stepMeta: type({ 'schemaContents?': SchemaContentsJson }),
+  stepMeta: type({
+    'schemaContents?': SchemaContentsJson,
+    'tableDependents?': TableDependentsJson,
+  }),
 });

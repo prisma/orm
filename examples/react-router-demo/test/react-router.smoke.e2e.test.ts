@@ -18,16 +18,12 @@ const contractJsonPath = join(exampleDir, 'src', 'prisma', 'contract.json');
 // setup that would expand the scope and the flake surface.
 const TEST_SCHEMA_SQL = `
 create schema if not exists _prisma;
-create table if not exists _prisma.marker (
-  space text not null primary key default 'app',
-  core_hash text not null default '',
-  profile_hash text not null default '',
-  contract_json jsonb,
-  canonical_version int,
-  updated_at timestamptz not null default now(),
-  app_tag text,
-  meta jsonb not null default '{}',
-  invariants text[] not null default '{}'
+create table if not exists _prisma.signatures (
+  space text not null primary key,
+  core_hash text not null,
+  profile_hash text not null,
+  invariants text[] not null default '{}',
+  signed_at timestamptz not null default now()
 );
 create table if not exists "user" (
   id uuid primary key default gen_random_uuid(),

@@ -232,7 +232,7 @@ withTempDir(({ createTempDir }) => {
             invariant: TEST_BASELINE_INVARIANT_ID,
             extensionMarker: 'absent',
           });
-          writeRace(project, `UPDATE _prisma.marker SET core_hash = $1 WHERE space = 'app'`);
+          writeRace(project, `UPDATE _prisma.signatures SET core_hash = $1 WHERE space = 'app'`);
 
           const sign = await runOnEngine(project, ['db', 'sign', '--json']);
 

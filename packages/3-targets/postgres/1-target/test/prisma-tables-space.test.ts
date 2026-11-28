@@ -28,15 +28,16 @@ function prismaTablesSpace() {
 }
 
 describe("the Postgres target's contract space for Prisma's own tables", () => {
-  it('describes the tables marker, ledger and contract in schema _prisma', () => {
+  it('describes the tables signatures, config, ledger and contract in schema _prisma', () => {
     const { storage } = prismaTablesSpace().contractJson as Contract<SqlStorage>;
     const prismaNamespace = storage.namespaces[PRISMA_SPACE_ID] as {
       readonly entries: { readonly table: Record<string, unknown> };
     };
     expect(Object.keys(prismaNamespace.entries.table).sort()).toEqual([
+      'config',
       'contract',
       'ledger',
-      'marker',
+      'signatures',
     ]);
   });
 
@@ -50,13 +51,10 @@ describe("the Postgres target's contract space for Prisma's own tables", () => {
 
   it('passes the self-consistency check', () => {
     const space = prismaTablesSpace();
-    const contract = space.contractJson as Contract<SqlStorage>;
     expect(() =>
       assertDescriptorSelfConsistency({
         extensionId: PRISMA_SPACE_ID,
-        target: contract.target,
-        targetFamily: contract.targetFamily,
-        storage: contract.storage,
+        contractJson: space.contractJson,
         headRefHash: space.headRef.hash,
         ...sqlContractCanonicalizationHooks,
       }),

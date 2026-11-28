@@ -197,7 +197,7 @@ Space identifiers are constrained to `[a-z][a-z0-9_-]{0,63}` (filesystem-safe an
 
 ### Marker schema gains a `space` column
 
-The marker table (`_prisma.marker` on PostgreSQL) was a single-row table keyed by `id`. It becomes one row per loaded contract space, primary-keyed by `space`, plus one row for the Prisma space itself. Prisma 8 does not convert a marker of the single-row layout: reading one fails; see [ADR 021 — Contract Marker Storage](./ADR%20021%20-%20Contract%20Marker%20Storage.md).
+The marker table was a single-row table keyed by `id`. It becomes one row per loaded contract space (on PostgreSQL, a row of `_prisma.signatures`), primary-keyed by `space`, plus, on a target that carries the Prisma space (PostgreSQL today), one row for that space. Prisma 8 does not convert a marker of the single-row layout: reading one fails; see [ADR 021 — Contract Marker Storage](./ADR%20021%20-%20Contract%20Marker%20Storage.md).
 
 | `space`       | `applied_content_hash` | `applied_invariants`                          |
 | ------------- | ---------------------- | --------------------------------------------- |

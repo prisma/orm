@@ -222,7 +222,7 @@ export interface SqlMigrationPlanContractInfo {
 export interface SqlMigrationPlan<TTargetDetails> extends MigrationPlan {
   /**
    * Contract space this plan applies to. The runner uses this to key the
-   * marker row (in `_prisma.marker` on PostgreSQL) it writes/reads (`space = <spaceId>`),
+   * marker row (in `_prisma.signatures` on PostgreSQL) it writes/reads (`space = <spaceId>`),
    * so per-extension plans hit per-extension marker rows instead of all
    * collapsing onto the app's row.
    *

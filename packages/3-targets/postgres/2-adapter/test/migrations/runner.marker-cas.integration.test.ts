@@ -69,19 +69,19 @@ describe('PostgresMigrationRunner marker compare-and-swap', { concurrent: false 
           operationClass: 'additive',
           target: {
             id: 'postgres',
-            details: { schema: '_prisma', objectType: 'table', name: 'marker' },
+            details: { schema: '_prisma', objectType: 'table', name: 'signatures' },
           },
           precheck: [],
           execute: [
             {
               description: 'move the marker',
-              sql: "update _prisma.marker set core_hash = 'moved' where space = 'app'",
+              sql: "update _prisma.signatures set core_hash = 'moved' where space = 'app'",
             },
           ],
           postcheck: [
             {
               description: 'the marker moved',
-              sql: "select exists (select 1 from _prisma.marker where space = 'app' and core_hash = 'moved')",
+              sql: "select exists (select 1 from _prisma.signatures where space = 'app' and core_hash = 'moved')",
             },
           ],
         },

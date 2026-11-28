@@ -24,11 +24,11 @@ async function searchPathOfNewConnection(connectionString: string): Promise<stri
 async function pgvectorMarkerHash(connectionString: string): Promise<string | undefined> {
   return withClient(connectionString, async (client) => {
     const exists = await client.query<{ present: boolean }>(
-      "SELECT to_regclass('_prisma.marker') IS NOT NULL AS present",
+      "SELECT to_regclass('_prisma.signatures') IS NOT NULL AS present",
     );
     if (exists.rows[0]?.present !== true) return undefined;
     const result = await client.query<{ core_hash: string }>(
-      'SELECT core_hash FROM _prisma.marker WHERE space = $1',
+      'SELECT core_hash FROM _prisma.signatures WHERE space = $1',
       [pgvector.id],
     );
     return result.rows[0]?.core_hash;

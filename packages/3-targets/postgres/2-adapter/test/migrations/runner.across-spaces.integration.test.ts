@@ -182,7 +182,7 @@ describe('PostgresMigrationRunner.execute', { concurrent: false }, () => {
     );
     if (markerSchemaExists.rows[0]?.exists) {
       const markers = await driver!.query<{ space: string }>(
-        "select space from _prisma.marker where space <> '_prisma'",
+        "select space from _prisma.signatures where space <> '_prisma'",
       );
       expect(markers.rows).toEqual([]);
     }
@@ -212,7 +212,7 @@ describe('PostgresMigrationRunner.execute', { concurrent: false }, () => {
     expect(result.ok).toBe(true);
 
     const markerRow = await driver!.query<{ space: string; core_hash: string }>(
-      "select space, core_hash from _prisma.marker where space <> '_prisma' order by space",
+      "select space, core_hash from _prisma.signatures where space <> '_prisma' order by space",
     );
     expect(markerRow.rows).toEqual([
       {

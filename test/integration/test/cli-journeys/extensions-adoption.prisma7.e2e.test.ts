@@ -90,7 +90,7 @@ async function markerInvariants(
 ): Promise<Record<string, readonly string[]>> {
   return withClient(connectionString, async (client) => {
     const result = await client.query(
-      "SELECT space, invariants FROM _prisma.marker WHERE space <> '_prisma' ORDER BY space",
+      "SELECT space, invariants FROM _prisma.signatures WHERE space <> '_prisma' ORDER BY space",
     );
     return Object.fromEntries(result.rows.map((row) => [row.space, row.invariants]));
   });
@@ -109,7 +109,7 @@ async function appliedMigrations(connectionString: string, spaceId: string): Pro
 async function pgvectorMarkerHash(connectionString: string): Promise<string | undefined> {
   return withClient(connectionString, async (client) => {
     const result = await client.query(
-      "SELECT core_hash FROM _prisma.marker WHERE space = 'pgvector'",
+      "SELECT core_hash FROM _prisma.signatures WHERE space = 'pgvector'",
     );
     return result.rows[0]?.core_hash;
   });
