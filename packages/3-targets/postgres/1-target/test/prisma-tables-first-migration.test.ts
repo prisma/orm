@@ -145,6 +145,29 @@ describe("the first migration of the Postgres target's _prisma space", () => {
     });
   });
 
+  it('locks marker against changes to its row-level security, then checks it again, before it copies and drops it', () => {
+    const move = ops.find((op) => op.id === '_prisma.move-marker');
+    const statements = (move?.execute ?? []).map((step) => step.sql.split('\n')[0]);
+    const recheck = move?.execute[1]?.sql ?? '';
+    expect({
+      statements,
+      recheckRaises: recheck.includes('RAISE EXCEPTION'),
+      recheckNamesTheTable: recheck.includes(
+        "WHERE n.nspname = '_prisma' AND c.relname = 'marker' AND c.relrowsecurity",
+      ),
+    }).toEqual({
+      statements: [
+        'LOCK TABLE "_prisma"."marker" IN SHARE MODE',
+        'DO $$',
+        'INSERT INTO "_prisma"."signatures" ("space", "core_hash", "profile_hash", "invariants", "signed_at")',
+        'INSERT INTO "_prisma"."config" ("policies")',
+        'DROP TABLE "_prisma"."marker"',
+      ],
+      recheckRaises: true,
+      recheckNamesTheTable: true,
+    });
+  });
+
   it('ends at the contract its snapshot holds', () => {
     expect(endContract.storage.storageHash).toBe(metadata.to);
   });

@@ -172,13 +172,16 @@ SELECT NOT EXISTS (
   WHERE d.deptype = 'n' AND NOT (d.classid = 'pg_class'::regclass AND d.objid = t.oid)
 ) AS "result"`;
 /** Row-level security filters a read without an error, so a copy would move only the rows it shows and the drop would lose the rest. A superuser or a role with BYPASSRLS is not filtered, nor is the table's owner unless the table forces it. */
-const absentOrRowSecurityHidesNoRow = `SELECT ${isSuperuser}
+function rowSecurityHidesNoRow(schema: string, table: string): string {
+  return `${isSuperuser}
   OR (SELECT rolbypassrls FROM pg_roles WHERE rolname = current_user)
   OR NOT EXISTS (
     SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
-    WHERE n.nspname = $1 AND c.relname = $2 AND c.relrowsecurity
+    WHERE n.nspname = ${schema} AND c.relname = ${table} AND c.relrowsecurity
       AND (c.relforcerowsecurity OR NOT pg_has_role(current_user, c.relowner, 'USAGE'))
-  ) AS "result"`;
+  )`;
+}
+const absentOrRowSecurityHidesNoRow = `SELECT ${rowSecurityHidesNoRow('$1', '$2')} AS "result"`;
 const mayCreateInDatabase = `SELECT ${isSuperuser}
   OR has_database_privilege(current_database(), 'CREATE') AS "result"`;
 
@@ -231,8 +234,23 @@ function rowSecurityHidesNoMarkerRow(schema: string, whatTheRoleCanDo: string) {
   };
 }
 
+function raiseUnlessRowSecurityHidesNoMarkerRow(check: { readonly description: string }): string {
+  return `DO $$
+BEGIN
+  IF NOT (${rowSecurityHidesNoRow(`'${SCHEMA}'`, "'marker'")}) THEN
+    RAISE EXCEPTION '%', '${check.description.replaceAll("'", "''")}';
+  END IF;
+END
+$$`;
+}
+
 const turnOffForcedRowSecurity = (schema: string) =>
   `ALTER TABLE ${qualified('marker', schema)} NO FORCE ROW LEVEL SECURITY`;
+
+const moveMarkerRowSecurityCheck = rowSecurityHidesNoMarkerRow(
+  SCHEMA,
+  `A role that owns the table can turn off forced row-level security on it with ${turnOffForcedRowSecurity(SCHEMA)}, then run the command. A role that does not own the table can do neither that nor the drop, so run the command as the table's owner, or as a role that bypasses row-level security and also owns the table.`,
+);
 
 export default class M extends Migration {
   override describe() {
@@ -377,13 +395,16 @@ export default class M extends Migration {
           id: 'postgres',
           details: { schema: SCHEMA, objectType: 'table', name: 'marker' },
         },
-        precheck: [
-          rowSecurityHidesNoMarkerRow(
-            SCHEMA,
-            `A role that owns the table can turn off forced row-level security on it with ${turnOffForcedRowSecurity(SCHEMA)}, then run the command. A role that does not own the table can do neither that nor the drop, so run the command as the table's owner, or as a role that bypasses row-level security and also owns the table.`,
-          ),
-        ],
+        precheck: [moveMarkerRowSecurityCheck],
         execute: [
+          {
+            description: `lock table ${qualified('marker')} in SHARE mode until the command commits, so that neither its row-level security nor its rows can change before it is dropped`,
+            sql: `LOCK TABLE ${qualified('marker')} IN SHARE MODE`,
+          },
+          {
+            description: `check again, under the lock, that row-level security hides no row of ${qualified('marker')}, since its owner may have turned it on after the check before this step`,
+            sql: raiseUnlessRowSecurityHidesNoMarkerRow(moveMarkerRowSecurityCheck),
+          },
           {
             description: `copy each row of ${qualified('marker')} into ${qualified('signatures')}, with its hashes, its invariants and when it was written`,
             sql: `INSERT INTO ${qualified('signatures')} ("space", "core_hash", "profile_hash", "invariants", "signed_at")

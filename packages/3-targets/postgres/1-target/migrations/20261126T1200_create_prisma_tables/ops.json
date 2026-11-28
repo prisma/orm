@@ -619,6 +619,14 @@
     ],
     "execute": [
       {
+        "description": "lock table \"_prisma\".\"marker\" in SHARE mode until the command commits, so that neither its row-level security nor its rows can change before it is dropped",
+        "sql": "LOCK TABLE \"_prisma\".\"marker\" IN SHARE MODE"
+      },
+      {
+        "description": "check again, under the lock, that row-level security hides no row of \"_prisma\".\"marker\", since its owner may have turned it on after the check before this step",
+        "sql": "DO $$\nBEGIN\n  IF NOT ((SELECT rolsuper FROM pg_roles WHERE rolname = current_user)\n  OR (SELECT rolbypassrls FROM pg_roles WHERE rolname = current_user)\n  OR NOT EXISTS (\n    SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace\n    WHERE n.nspname = '_prisma' AND c.relname = 'marker' AND c.relrowsecurity\n      AND (c.relforcerowsecurity OR NOT pg_has_role(current_user, c.relowner, 'USAGE'))\n  )) THEN\n    RAISE EXCEPTION '%', 'Row-level security must not hide any row of table \"_prisma\".\"marker\" from the role that runs this command, because this migration copies its rows into \"_prisma\".\"signatures\" and \"_prisma\".\"config\" and then drops it, so a row it cannot read would be lost. A role that owns the table can turn off forced row-level security on it with ALTER TABLE \"_prisma\".\"marker\" NO FORCE ROW LEVEL SECURITY, then run the command. A role that does not own the table can do neither that nor the drop, so run the command as the table''s owner, or as a role that bypasses row-level security and also owns the table.';\n  END IF;\nEND\n$$"
+      },
+      {
         "description": "copy each row of \"_prisma\".\"marker\" into \"_prisma\".\"signatures\", with its hashes, its invariants and when it was written",
         "sql": "INSERT INTO \"_prisma\".\"signatures\" (\"space\", \"core_hash\", \"profile_hash\", \"invariants\", \"signed_at\")\nSELECT \"space\", \"core_hash\", \"profile_hash\", \"invariants\", \"updated_at\" FROM \"_prisma\".\"marker\""
       },

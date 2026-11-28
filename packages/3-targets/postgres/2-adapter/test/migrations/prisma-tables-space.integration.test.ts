@@ -613,6 +613,56 @@ describe("applying the Postgres target's _prisma contract space", { concurrent: 
     });
   });
 
+  function executeOf(operationId: string): readonly string[] {
+    const operation = firstMigration?.ops.find((op) => op.id === operationId) as
+      | { readonly execute: readonly { readonly sql: string }[] }
+      | undefined;
+    return (operation?.execute ?? []).map((step) => step.sql);
+  }
+
+  it('stops while moving, and keeps every row of marker, when its owner forces row-level security after the check before the move', {
+    timeout: testTimeout,
+  }, async () => {
+    await createReleaseCandidateTables();
+    await giveReleaseCandidateTablesTo('prisma_migrator');
+    await driver.query('alter schema prisma_contract rename to _prisma');
+    for (const sql of [
+      ...executeOf('_prisma.create-table.signatures'),
+      ...executeOf('_prisma.create-table.config'),
+    ]) {
+      await driver.query(sql);
+    }
+    await driver.query('alter table _prisma.signatures owner to prisma_migrator');
+    await driver.query('alter table _prisma.config owner to prisma_migrator');
+    await driver.query('alter table _prisma.marker enable row level security');
+    await driver.query('alter table _prisma.marker force row level security');
+
+    await allowDevelopmentServerLog('grant', 'to');
+    await driver.query('begin');
+    await driver.query('set local role prisma_migrator');
+    let failure: unknown;
+    try {
+      for (const sql of executeOf('_prisma.move-marker')) {
+        await driver.query(sql);
+      }
+    } catch (error) {
+      failure = error;
+    } finally {
+      await driver.query('rollback');
+      await allowDevelopmentServerLog('revoke', 'from');
+    }
+
+    expect({
+      failure: failure instanceof Error ? failure.message : failure,
+      markers: (await driver.query('select space from _prisma.marker')).rows,
+    }).toEqual({
+      failure: expect.stringContaining(
+        'Row-level security must not hide any row of table "_prisma"."marker" from the role that runs this command',
+      ),
+      markers: [{ space: 'app' }],
+    });
+  });
+
   it('touches nothing on a second call', { timeout: testTimeout }, async () => {
     await apply();
     const ledgerBefore = await ledger();
