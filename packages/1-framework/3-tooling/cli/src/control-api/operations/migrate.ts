@@ -242,6 +242,7 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
     inForce,
     ref,
     permitPolicyChange: options.permitPolicyChange ?? false,
+    overrideChangePolicy: false,
     targetHash: appTargetHash,
     invocation: options.invocation,
   });

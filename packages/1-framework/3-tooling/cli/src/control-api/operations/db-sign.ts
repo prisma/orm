@@ -158,7 +158,7 @@ export async function signContractSpaces<TFamilyId extends string, TTargetId ext
   const inForce = markers.has(appSpaceId)
     ? databasePoliciesInForce(markers, appSpaceId, familyInstance.markerLocation)
     : undefined;
-  if (inForce !== undefined && options.force !== true) {
+  if (inForce !== undefined) {
     const permitted = checkRunPolicies({
       command: 'db sign',
       app: appSpaceOf(aggregate),
@@ -166,6 +166,7 @@ export async function signContractSpaces<TFamilyId extends string, TTargetId ext
       inForce,
       ref: undefined,
       permitPolicyChange: false,
+      overrideChangePolicy: options.force === true,
       targetHash: aggregate.app.contract().storage.storageHash,
       invocation: options.invocation,
     });
