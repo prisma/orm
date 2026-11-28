@@ -16,7 +16,7 @@ changes:
 
 The change `prisma-tables-move-to-prisma-schema` describes the whole upgrade, including how the first command moves the rows. This entry covers only text in the project that names the marker table.
 
-Search the project for `_prisma.marker` and `prisma_contract.marker`, outside `node_modules`, build output and planned migrations, and for docs that describe "the marker table". In each:
+Search the project for `_prisma.marker` and `prisma_contract.marker`, outside `node_modules`, build output and planned migrations, and for docs that describe "the marker table". Also search for SQL that names `marker` without a schema, in code that sets `search_path` to include `prisma_contract`: such a query reads the same table, and fails once it is dropped; changing `search_path` does not help, since `_prisma` has no `marker` either. In each:
 
 - Where it reads which contract a space was signed with, its hashes or its invariants, name `_prisma.signatures`. Use `signed_at` where it used `updated_at`. The columns `contract_json`, `canonical_version`, `app_tag` and `meta` are gone.
 - Where it reads the policies from `meta -> 'policies'` on the application's row, read the `policies` column of `_prisma.config`, which has at most one row.
