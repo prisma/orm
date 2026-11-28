@@ -10,6 +10,7 @@ CI checks every pull request for changes that would break code written against t
 | [The description does not name a change](#the-description-does-not-name-a-change) | `API changes named` | A pull request that changes an `api.txt` names each changed export in its description, with a reason |
 | [A break against the last release](#a-break-against-the-last-release) | `API compatibility` (`pnpm api:compat`) | Code written against the last release still compiles against the build |
 | [The last release's example apps fail](#the-last-releases-example-apps-fail) | `API compatibility` (`pnpm api:compat:examples`) | The example apps, as they were at the last release, compile against the build |
+| [An error code is no longer in the published code](#an-error-code-is-no-longer-in-the-published-code) | `API compatibility` (`pnpm api:compat:error-codes`) | Every error code that appears in the last release's published code still appears in the build's |
 
 Each of them fails the job. The last release is the newest release tag at or below the version in the root `package.json` of the branch your pull request merges into, not whatever the registry tags as `latest`. Every package is compared with that release's version of it. A break is allowed only when you [record it](#recording-a-break-you-mean) as deliberate. A check that could not compare at all, for example because the registry was unreachable, also fails.
 
@@ -201,6 +202,34 @@ The apps' type tests assert exact types, so they also fail on a change that is s
 
 A record matches one error by app, file, line, code and message. Unlike a break record it has no fingerprint, so it keeps matching while the error's place and text stay the same. If the message changes, the record matches nothing, which fails the job, and the job prints a new record to replace it.
 
+## An error code is no longer in the published code
+
+Users match on error codes such as `ORM.ARGUMENT_INVALID`, so a code that disappears breaks their handling of it without any compile error. `pnpm api:compat:error-codes` collects the codes written as text in the JavaScript of each package's `dist` folder: for the last release, from its tarballs on the registry, and for your build, from each package folder. A code that appears in the release's published code and not in your build's fails the job:
+
+```text
+api:compat:error-codes: 421 error codes appear in the published code of the last release 8.1.0, and 420 in this build's; a code that no longer appears fails unless recorded in packages/9-public/removed-error-codes.json
+  no longer appears  DRIVER.PREPARE_FAILED (@prisma/orm-family-sql)
+    to record it: {"code":"DRIVER.PREPARE_FAILED","lastRelease":"8.1.0","replacedBy":null,"reason":"…"}
+```
+
+The check finds a code wherever its text appears, which includes places that only compare a code, such as a `case 'MIGRATION.REF_NOT_RESOLVABLE':` in the command-line tool. So if you delete the place that raises a code while a comparison with it remains, the check still passes. Codes form one space across all packages, so a code that moves from one package to another passes too.
+
+Within a major version, removing or renaming a code is a breaking change, which the [compatibility policy](oss/versioning.md#what-stays-compatible) does not allow. If you did not mean to remove the code, put it back. The record exists for a deliberate break, as `api-breaks.json` does: before release 8.0.0, or in a new major version. To record one, copy the printed record into `packages/9-public/removed-error-codes.json`, a JSON array, and replace the `…` in `reason` with why. Set `replacedBy` to the code that takes its place, or leave it `null` when no code replaces it. Name the code in your description's `## API changes` section, as the `API changes named` job requires, and in the release notes.
+
+A record fails the job when:
+
+- the build's published code still contains its code;
+- the last release's published code does not contain its code;
+- its `replacedBy` names a code that does not appear in the build's published code;
+- another record is for the same code;
+- its `lastRelease` is later than the last release.
+
+A record made against an earlier release no longer applies; the job lists it as removable, and you delete it.
+
+When `packages/9-public/removed-packages.json` records a package as removed, the job does not read that package's codes, so they need no records of their own. A code that another package still contains is checked as usual.
+
+To run it yourself, run `pnpm build`, then `pnpm api:compat:error-codes`. It downloads one tarball per package, and needs no install.
+
 ## What the checks do not see
 
-The checks compare declarations, so a reviewer is the only check for behaviour: runtime results, error codes, command output and file formats. They also miss a break inside an undecided comparison, a result type no example app uses, and a few kinds of type change. The full list is in the decision record, under "What the checks do not see".
+The checks compare declarations, and which error codes appear in the published code, so a reviewer is the only check for other behaviour: runtime results, which failure raises which code, command output and file formats. They also miss a break inside an undecided comparison, a result type no example app uses, and a few kinds of type change. The full list is in the decision record, under "What the checks do not see".

@@ -1,5 +1,6 @@
 import { deepStrictEqual, rejects, strictEqual } from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { after, before, describe, it } from 'node:test';
@@ -7,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import {
   compareVersions,
   fetchPackument,
+  fetchReleaseTarball,
   isExemptExport,
   isReleased,
   isVersion,
@@ -132,16 +134,74 @@ describe('fetchPackument', () => {
     strictEqual(calls, 3);
   });
 
-  it('does not retry an error the registry answers', async () => {
+  it('does not retry an answer that refuses the request', async () => {
     let calls = 0;
     const fetchImpl = async () => {
       calls++;
-      return new Response('', { status: 500 });
+      return new Response('', { status: 403 });
     };
     await rejects(fetchPackument('@prisma/orm-a', { fetchImpl, retryDelayMs: 0 }), {
-      message: 'could not read @prisma/orm-a from the registry: it answered 500',
+      message: 'could not read @prisma/orm-a from the registry: it answered 403',
     });
     strictEqual(calls, 1);
+  });
+
+  it('retries a server error', async () => {
+    let calls = 0;
+    const fetchImpl = async () => {
+      calls++;
+      if (calls === 1) return new Response('', { status: 503 });
+      return new Response(JSON.stringify({ versions: {} }), { status: 200 });
+    };
+    deepStrictEqual(await fetchPackument('@prisma/orm-a', { fetchImpl, retryDelayMs: 0 }), {
+      versions: {},
+    });
+    strictEqual(calls, 2);
+  });
+
+  it('cancels the body of every answer it does not read', async () => {
+    const unread = [];
+    const answer = (status) => {
+      const response = new Response('body', { status });
+      unread.push(response);
+      return response;
+    };
+    let calls = 0;
+    const fetchImpl = async () => {
+      calls++;
+      return answer(calls === 1 ? 503 : calls === 2 ? 429 : 403);
+    };
+    await rejects(fetchPackument('@prisma/orm-a', { fetchImpl, retryDelayMs: 0 }));
+    await fetchPackument('@prisma/orm-a', { fetchImpl: async () => answer(404) });
+    deepStrictEqual(
+      unread.map((response) => response.bodyUsed || response.body.locked),
+      [true, true, true, true],
+    );
+  });
+
+  it('retries an answer that asks it to slow down', async () => {
+    let calls = 0;
+    const fetchImpl = async () => {
+      calls++;
+      if (calls === 1) return new Response('', { status: 429 });
+      return new Response(JSON.stringify({ versions: {} }), { status: 200 });
+    };
+    deepStrictEqual(await fetchPackument('@prisma/orm-a', { fetchImpl, retryDelayMs: 0 }), {
+      versions: {},
+    });
+    strictEqual(calls, 2);
+  });
+
+  it('waits longer before each further attempt', async () => {
+    const started = Date.now();
+    let calls = 0;
+    const fetchImpl = async () => {
+      calls++;
+      if (calls < 3) throw new TypeError('fetch failed');
+      return new Response('{}', { status: 200 });
+    };
+    await fetchPackument('@prisma/orm-a', { fetchImpl, retryDelayMs: 40 });
+    strictEqual(Date.now() - started >= 110, true);
   });
 
   it('ends in one message naming what failed when every attempt fails', async () => {
@@ -152,6 +212,105 @@ describe('fetchPackument', () => {
       message:
         'could not read @prisma/orm-a from the registry after 3 attempts: fetch failed (getaddrinfo ENOTFOUND)',
     });
+  });
+});
+
+describe('fetchReleaseTarball', () => {
+  const TARBALL = 'https://registry.npmjs.org/@prisma/orm-a/-/orm-a-8.0.0-rc.3.tgz';
+  const bytes = Buffer.from('the tarball');
+  const integrity = `sha512-${createHash('sha512').update(bytes).digest('base64')}`;
+  const packument = (dist) => async () => ({ versions: { '8.0.0-rc.3': { dist } } });
+  const options = (fetchImpl, dist = { tarball: TARBALL, integrity }) => ({
+    packument: packument(dist),
+    fetchImpl,
+    retryDelayMs: 0,
+  });
+
+  it('returns the tarball the registry lists for the version', async () => {
+    const tarball = await fetchReleaseTarball(
+      '@prisma/orm-a',
+      '8.0.0-rc.3',
+      options(async (url) => {
+        strictEqual(url, TARBALL);
+        return new Response(bytes);
+      }),
+    );
+    deepStrictEqual(tarball, bytes);
+  });
+
+  it('is undefined when the registry has no such version', async () => {
+    strictEqual(
+      await fetchReleaseTarball('@prisma/orm-a', '8.0.0', {
+        packument: async () => ({ versions: {} }),
+      }),
+      undefined,
+    );
+  });
+
+  it('retries an answer that breaks off while it is read, and keeps the cause', async () => {
+    let calls = 0;
+    const broken = {
+      ok: true,
+      status: 200,
+      arrayBuffer: async () => {
+        throw new TypeError('terminated', { cause: new Error('ECONNRESET') });
+      },
+    };
+    const fetchImpl = async () => (++calls === 1 ? broken : new Response(bytes));
+    deepStrictEqual(
+      await fetchReleaseTarball('@prisma/orm-a', '8.0.0-rc.3', options(fetchImpl)),
+      bytes,
+    );
+    strictEqual(calls, 2);
+    await rejects(
+      fetchReleaseTarball(
+        '@prisma/orm-a',
+        '8.0.0-rc.3',
+        options(async () => broken),
+      ),
+      {
+        message: `could not read ${TARBALL} from the registry after 3 attempts: terminated (ECONNRESET)`,
+      },
+    );
+  });
+
+  it('refuses a tarball whose integrity does not match', async () => {
+    const other = `sha512-${createHash('sha512').update('other').digest('base64')}`;
+    await rejects(
+      fetchReleaseTarball(
+        '@prisma/orm-a',
+        '8.0.0-rc.3',
+        options(async () => new Response(bytes), { tarball: TARBALL, integrity: other }),
+      ),
+      LastReleaseError,
+    );
+  });
+
+  it('refuses a registry entry that lists no integrity', async () => {
+    await rejects(
+      fetchReleaseTarball(
+        '@prisma/orm-a',
+        '8.0.0-rc.3',
+        options(async () => new Response(bytes), { tarball: TARBALL }),
+      ),
+      (error) =>
+        error instanceof LastReleaseError &&
+        /@prisma\/orm-a@8\.0\.0-rc\.3: the registry lists no integrity/.test(error.message),
+    );
+  });
+
+  it('refuses a tarball that is not on the registry', async () => {
+    await rejects(
+      fetchReleaseTarball(
+        '@prisma/orm-a',
+        '8.0.0-rc.3',
+        options(async () => new Response(bytes), {
+          tarball: 'https://example.com/orm-a.tgz',
+          integrity,
+        }),
+      ),
+      LastReleaseError,
+    );
   });
 });
 

@@ -121,7 +121,7 @@ A `Diagnostic` is a recorded finding: pure data, never thrown, no stack. It carr
 
 Bugs are outside the scheme entirely. An invariant break throws an `InternalError`, which is never meant to be caught except at the outermost boundary for crash reporting. The distinction is the one drawn in [Error Handling.md](../../Error%20Handling.md): **failures and operational errors are structured envelopes; findings are diagnostics; bugs are `InternalError`.**
 
-Numeric `PN-DOMAIN-NNNN` codes are retired. A published-code crosswalk (below) maps every one to its dotted name. **Error codes freeze at RC**; the crosswalk is the compatibility contract for the rename.
+Numeric `PN-DOMAIN-NNNN` codes are retired. A published-code crosswalk (below) maps every one to its dotted name. **A dotted code that the last release used is removed or renamed only with a record** in `packages/9-public/removed-error-codes.json`, which CI enforces; see [Adoption and freeze scope](#adoption-and-freeze-scope).
 
 ## Why one scheme, and why structural
 
@@ -260,9 +260,13 @@ Scope of the ban:
 
 ## Adoption and freeze scope
 
-The **taxonomy** — the namespace list, the naming conventions, and the crosswalk of every published code — froze at RC, validated against the entire throw surface so there are no namespace gaps. What grows afterwards is the **sweep**: codeless user-facing throws are converted plane by plane under the fixed conventions. Adding a code to a previously-codeless site is additive and non-breaking; only renames of already-published codes break consumers, and those are all recorded in the crosswalk.
+The **taxonomy** — the namespace list, the naming conventions, and the crosswalk from every retired numeric code to its dotted one — was fixed at the first release candidate, validated against the entire throw surface so there are no namespace gaps. What grows afterwards is the **sweep**: codeless user-facing throws are converted plane by plane under the fixed conventions. Adding a code to a previously-codeless site is additive and non-breaking.
 
-The `fix` → `nextActions` field migration trails the same way: the target shape is frozen here, and the call sites that still pass a `fix` string convert cluster by cluster under a ratchet. A converted site sets **both** fields — `fix` for the surfaces that still render prose, `nextActions` for the ones that read structure — so the sweep never regresses what a user sees. Carrying both is the transition cost, not the destination; `fix` leaves the type when the last site converts (see [Alternatives considered](#alternatives-considered)). The same trail carries the completed-envelope JSON shape — commands whose JSON output predates this ADR converge on the one contract (a `diagnostics` array and the documented exit code on the envelope) as they convert. Freezing the shape before the sweep is what keeps `Diagnostic` and the error envelope aligned — converting first and settling the shape afterwards would let the two drift while half the tree used each spelling.
+Removing or renaming a dotted code breaks every consumer that matches on it. Within a major version the [compatibility policy](../../oss/versioning.md#what-stays-compatible) does not allow it. A deliberate removal, before release 8.0.0 or in a new major, is recorded in `packages/9-public/removed-error-codes.json` with its reason and the code that replaces it (`replacedBy`, or null when no code does), and the release notes name it. A record applies only while the release it names is the last release, so the lasting history of a dotted rename is the release notes. The crosswalk covers only the changes made when this scheme was adopted: the move from numeric codes, and the dotted codes renamed or deleted then, listed under [Dotted-code reconciliations](#dotted-code-reconciliations-no-rename-except-where-noted).
+
+The `API compatibility` job enforces the record with `pnpm api:compat:error-codes`: a code that appears in the last release's published JavaScript and not in the build's fails unless it is recorded. The check finds a code wherever its text appears, so a code that is no longer raised but is still compared somewhere passes. [Public API Compatibility](../../Public%20API%20Compatibility.md#an-error-code-is-no-longer-in-the-published-code) says how to record a removal.
+
+The `fix` → `nextActions` field migration trails the same way as the sweep: the target shape is frozen here, and the call sites that still pass a `fix` string convert cluster by cluster under a ratchet. A converted site sets **both** fields — `fix` for the surfaces that still render prose, `nextActions` for the ones that read structure — so the sweep never regresses what a user sees. Carrying both is the transition cost, not the destination; `fix` leaves the type when the last site converts (see [Alternatives considered](#alternatives-considered)). The same trail carries the completed-envelope JSON shape — commands whose JSON output predates this ADR converge on the one contract (a `diagnostics` array and the documented exit code on the envelope) as they convert. Freezing the shape before the sweep is what keeps `Diagnostic` and the error envelope aligned — converting first and settling the shape afterwards would let the two drift while half the tree used each spelling.
 
 ## Crosswalk (retired → dotted)
 
@@ -384,7 +388,7 @@ The `migration check` failure catalogue (`PN-MIG-CHECK-NNN`) converts to self-de
 
 ### Positive
 
-- One code space: consumers, dashboards, and CI match errors by dotted code, not brittle strings; the crosswalk is the single rename record.
+- One code space: consumers, dashboards, and CI match errors by dotted code, not brittle strings. The crosswalk records the changes made when the scheme was adopted, and a dotted code leaves afterwards only with a record CI checks.
 - Recognition survives the control/execution split, the wire, and duplicate imports, because it is structural.
 - The same envelope serves a throw and a `Result` failure — no per-boundary conversion type.
 - A command that reports problems does not have to throw to do it. `migration check` returns its violations; the exit code says how it went; nothing on the path is an exception.
@@ -420,4 +424,4 @@ What is rejected is the permanent dual surface, not a period in which both exist
 
 **Trim severity to `'error' | 'warn'`.** Rejected on evidence: `CLI.INIT_USER_ABORTED` ships with `severity: 'info'`, and the migration-status diagnostics publish `'warn' | 'info'` in their JSON schema. See [The severity scale](#the-severity-scale).
 
-**Convert every existing throw site in one change.** Rejected: it is not one coherent review, and it collides with the code freeze at RC. Only the *codes* must freeze; the conversion is ratcheted down afterward, plane by plane.
+**Convert every existing throw site in one change.** Rejected: it is not one coherent review. Only the *taxonomy* had to be fixed before the first release candidate; the conversion is ratcheted down afterward, plane by plane.

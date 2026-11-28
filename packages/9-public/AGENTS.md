@@ -32,12 +32,13 @@ The description's `## API changes` section must name each changed export and say
 
 ## A change to a record
 
-Three files hold records: a package's `api-breaks.json`, `packages/9-public/removed-packages.json`, and `examples/last-release-errors.json`. Each record accepts one thing CI would otherwise fail on. A new record is a decision to let it through, so review it as one.
+Four files hold records: a package's `api-breaks.json`, `packages/9-public/removed-packages.json`, `examples/last-release-errors.json`, and `packages/9-public/removed-error-codes.json`. Each record accepts one thing CI would otherwise fail on. A new record is a decision to let it through, so review it as one.
 
 - **`kind: break`** breaks users' code. Is the reason one a user would accept, and is the break in the release notes?
 - **`kind: allowed`** claims the promise permits the change. Either it is safe for users: a new optional property that fails an example app's exact type assertion, or a wider return type on a method of an interface that users only implement. Or it breaks only an API with a level that CI cannot recognise as one, such as a member named `preview_run`. Check which, and that it is true. A record that calls a real break allowed hides it from users.
 - **A record replaced with a new `fingerprint`** means the export, or a type it uses, changed again. The new record covers whatever the job reports now, which may be a different break behind the same message. Look at the break the job reports for the current code, not only at the reason, which is often copied unchanged.
 - **A record in `examples/last-release-errors.json` replaced with a new `message`** means the app's error changed. Compare the new message with the old one, and check that the reason still fits.
+- **A record in `removed-error-codes.json`** removes an error code users may match on. Within a major version the policy does not allow that, so the record must be for a deliberate break, before 8.0.0 or in a new major. Is the reason one a user would accept? If `replacedBy` names a code, is that the code now raised for the same failure? Do the release notes name the removal?
 - **A removed record** means the break it covered is gone, or a newer release has become the last release. Both are fine.
 
 When you cannot tell whether users implement a type or only receive it, ask. Do not guess.

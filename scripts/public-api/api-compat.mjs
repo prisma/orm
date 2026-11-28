@@ -45,7 +45,7 @@ import {
   BREAKS_FILE,
   byLastRelease,
   exportLabel,
-  REMOVED_FILE,
+  REMOVED_PACKAGES_FILE,
   RecordsError,
   readRecords as readRecordFile,
 } from './records.mjs';
@@ -68,7 +68,7 @@ export const readRecords = (packageDir, root) =>
   );
 
 export const readRemovedRecords = (root) =>
-  readRecordFile(join(root, REMOVED_FILE), 'removed', REMOVED_FILE);
+  readRecordFile(join(root, REMOVED_PACKAGES_FILE), 'removedPackages', REMOVED_PACKAGES_FILE);
 
 // A released package the repository no longer has is a break, which a record in
 // removed-packages.json covers.
@@ -261,7 +261,7 @@ export function reportText({ version, results, notReleased }) {
       const record = each.record && JSON.stringify(each.record);
       if (record && !printed.has(record)) {
         printed.add(record);
-        if (result.removed) lines.push(`    to record it in ${REMOVED_FILE}: ${record}`);
+        if (result.removed) lines.push(`    to record it in ${REMOVED_PACKAGES_FILE}: ${record}`);
         else {
           lines.push(`    to record it: ${record}`);
           if (printed.size === 1) lines.push(`    ${FROM_DISK}`);
@@ -356,7 +356,7 @@ export function reportMarkdown({ version, results, notReleased }, { maxBytes } =
       items.push(
         '',
         result.removed
-          ? `To record the removal, add to \`${REMOVED_FILE}\`, with the reason:`
+          ? `To record the removal, add to \`${REMOVED_PACKAGES_FILE}\`, with the reason:`
           : `To record these breaks, add to \`${result.name.replace('@prisma/', 'packages/9-public/@prisma/')}/api-breaks.json\`, with the kind and the reason. The fingerprint is taken from the package’s \`api.txt\` as it is on disk: run \`pnpm build\` and \`pnpm api:update\` first, or it will not match.`,
         '',
         '```json',
@@ -478,7 +478,7 @@ export async function main({
   results.push(...removed.results);
   if (removed.problems.length > 0 || removed.removable.length > 0) {
     results.push({
-      name: REMOVED_FILE,
+      name: REMOVED_PACKAGES_FILE,
       recordsFile: true,
       problems: removed.problems,
       removable: removed.removable.map((record) => ({

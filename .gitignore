@@ -17,6 +17,7 @@ packages/e2e-tests/.tmp-output
 # The last release, installed by `pnpm api:compat`.
 /.api-compat/
 /.api-examples/
+/.api-error-codes/
 .pnpm-store
 .cursor/*
 !.cursor/rules-footprint.config.json
