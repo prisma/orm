@@ -262,7 +262,7 @@ Scope of the ban:
 
 The **taxonomy** — the namespace list, the naming conventions, and the crosswalk from every retired numeric code to its dotted one — was fixed at the first release candidate, validated against the entire throw surface so there are no namespace gaps. What grows afterwards is the **sweep**: codeless user-facing throws are converted plane by plane under the fixed conventions. Adding a code to a previously-codeless site is additive and non-breaking.
 
-Removing or renaming a dotted code breaks every consumer that matches on it. Within a major version the [compatibility policy](../../oss/versioning.md#what-stays-compatible) does not allow it. A deliberate removal, before release 8.0.0 or in a new major, is recorded in `packages/9-public/removed-error-codes.json` with its reason and the code that replaces it (`replacedBy`, or null when no code does), and the release notes name it. A record applies only while the release it names is the last release, so the lasting history of a dotted rename is the release notes; the crosswalk covers only the move from numeric codes.
+Removing or renaming a dotted code breaks every consumer that matches on it. Within a major version the [compatibility policy](../../oss/versioning.md#what-stays-compatible) does not allow it. A deliberate removal, before release 8.0.0 or in a new major, is recorded in `packages/9-public/removed-error-codes.json` with its reason and the code that replaces it (`replacedBy`, or null when no code does), and the release notes name it. A record applies only while the release it names is the last release, so the lasting history of a dotted rename is the release notes. The crosswalk covers only the changes made when this scheme was adopted: the move from numeric codes, and the dotted codes renamed or deleted then, listed under [Dotted-code reconciliations](#dotted-code-reconciliations-no-rename-except-where-noted).
 
 The `API compatibility` job enforces the record with `pnpm api:compat:error-codes`: a code that appears in the last release's published JavaScript and not in the build's fails unless it is recorded. The check finds a code wherever its text appears, so a code that is no longer raised but is still compared somewhere passes. [Public API Compatibility](../../Public%20API%20Compatibility.md#an-error-code-is-no-longer-in-the-published-code) says how to record a removal.
 
@@ -388,7 +388,7 @@ The `migration check` failure catalogue (`PN-MIG-CHECK-NNN`) converts to self-de
 
 ### Positive
 
-- One code space: consumers, dashboards, and CI match errors by dotted code, not brittle strings. The crosswalk records the move from numeric codes, and a dotted code leaves only with a record CI checks.
+- One code space: consumers, dashboards, and CI match errors by dotted code, not brittle strings. The crosswalk records the changes made when the scheme was adopted, and a dotted code leaves afterwards only with a record CI checks.
 - Recognition survives the control/execution split, the wire, and duplicate imports, because it is structural.
 - The same envelope serves a throw and a `Result` failure — no per-boundary conversion type.
 - A command that reports problems does not have to throw to do it. `migration check` returns its violations; the exit code says how it went; nothing on the path is an exception.

@@ -139,7 +139,8 @@ const describeError = (error) =>
 
 // A request to the registry, read by `read`, or undefined when the registry has nothing there. It
 // is tried again, after a wait that grows with each attempt, when it does not reach the registry,
-// when the registry answers with a server error, or when the answer breaks off while it is read.
+// when the registry answers with a server error or asks it to slow down (429), or when the answer
+// breaks off while it is read.
 async function requestRegistry(
   url,
   { what = url, read, init, fetchImpl = fetch, attempts = NETWORK_ATTEMPTS, retryDelayMs = 2000 },
@@ -156,7 +157,7 @@ async function requestRegistry(
       failure = describeError(error);
       continue;
     }
-    if (response.status < 500) {
+    if (response.status < 500 && response.status !== 429) {
       throw new LastReleaseError(
         `could not read ${what} from the registry: it answered ${response.status}`,
       );
@@ -191,6 +192,12 @@ export async function fetchReleaseTarball(
   if (!tarball.startsWith(`${REGISTRY}/`)) {
     throw new LastReleaseError(`${name}@${version}: the tarball ${tarball} is not on the registry`);
   }
+  const integrity = /^(sha1|sha256|sha384|sha512)-(\S+)/.exec(String(dist.integrity ?? ''));
+  if (integrity === null) {
+    throw new LastReleaseError(
+      `${name}@${version}: the registry lists no integrity for its tarball`,
+    );
+  }
   const bytes = await requestRegistry(tarball, {
     ...options,
     read: async (response) => Buffer.from(await response.arrayBuffer()),
@@ -198,10 +205,8 @@ export async function fetchReleaseTarball(
   if (bytes === undefined) {
     throw new LastReleaseError(`${name}@${version}: the registry has no tarball at ${tarball}`);
   }
-  const integrity = String(dist.integrity);
-  const separator = integrity.indexOf('-');
-  const digest = createHash(integrity.slice(0, separator)).update(bytes).digest('base64');
-  if (digest !== integrity.slice(separator + 1)) {
+  const [, algorithm, expected] = integrity;
+  if (createHash(algorithm).update(bytes).digest('base64') !== expected) {
     throw new LastReleaseError(`${name}@${version}: the tarball does not match its integrity`);
   }
   return bytes;

@@ -159,6 +159,19 @@ describe('fetchPackument', () => {
     strictEqual(calls, 2);
   });
 
+  it('retries an answer that asks it to slow down', async () => {
+    let calls = 0;
+    const fetchImpl = async () => {
+      calls++;
+      if (calls === 1) return new Response('', { status: 429 });
+      return new Response(JSON.stringify({ versions: {} }), { status: 200 });
+    };
+    deepStrictEqual(await fetchPackument('@prisma/orm-a', { fetchImpl, retryDelayMs: 0 }), {
+      versions: {},
+    });
+    strictEqual(calls, 2);
+  });
+
   it('waits longer before each further attempt', async () => {
     const started = Date.now();
     let calls = 0;
@@ -250,6 +263,19 @@ describe('fetchReleaseTarball', () => {
         options(async () => new Response(bytes), { tarball: TARBALL, integrity: other }),
       ),
       LastReleaseError,
+    );
+  });
+
+  it('refuses a registry entry that lists no integrity', async () => {
+    await rejects(
+      fetchReleaseTarball(
+        '@prisma/orm-a',
+        '8.0.0-rc.3',
+        options(async () => new Response(bytes), { tarball: TARBALL }),
+      ),
+      (error) =>
+        error instanceof LastReleaseError &&
+        /@prisma\/orm-a@8\.0\.0-rc\.3: the registry lists no integrity/.test(error.message),
     );
   });
 

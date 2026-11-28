@@ -220,6 +220,7 @@ async function run({
   removedPackages = [],
   onRegistry = Object.keys(released),
   skills = {},
+  withoutDist = [],
 }) {
   const root = folder();
   const stdout = output();
@@ -234,6 +235,10 @@ async function run({
     packagesAt: () => Object.keys(released),
     download: async (name, _version, dir) => {
       if (!onRegistry.includes(name)) return false;
+      if (withoutDist.includes(name)) {
+        mkdirSync(join(dir, 'package'), { recursive: true });
+        return true;
+      }
       mkdirSync(join(dir, 'package', 'dist'), { recursive: true });
       writeFileSync(join(dir, 'package', 'dist', 'index.mjs'), released[name]);
       if (skills[name] !== undefined) {
@@ -354,6 +359,16 @@ describe('main', () => {
     });
     strictEqual(result.exitCode, 1);
     match(result.stdout, /problem {2}@prisma\/orm-b: .*registry has no version 8\.0\.0-rc\.3/);
+  });
+
+  it('fails when a published package of the release has no dist folder', async () => {
+    const result = await run({
+      released: { '@prisma/orm-a': '"ORM.KEPT"', '@prisma/orm-b': '"ORM.OTHER"' },
+      current: { '@prisma/orm-a': '"ORM.KEPT"' },
+      withoutDist: ['@prisma/orm-b'],
+    });
+    strictEqual(result.exitCode, 1);
+    match(result.stdout, /problem {2}@prisma\/orm-b: the published package has no dist folder/);
   });
 
   it('fails when a package of this build has not been built', async () => {
