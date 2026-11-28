@@ -225,6 +225,7 @@ export default function postgresServerless<
         adapter,
         driver,
         ...toRuntimeOptions(options),
+        prepare: options.prepare,
         closeRefusal: 'when-idle',
       });
       const connection = createConnection(runtime);
