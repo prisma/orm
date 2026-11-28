@@ -7,7 +7,7 @@
 
 ## At a glance
 
-A contract's storage hash identifies the database it describes. Prisma writes that one value into five places, in the project and in the database:
+A contract's storage hash identifies the database it describes. Storage hashes appear in five kinds of place, in the project and in the database:
 
 ```text
 prisma/contract.json                                     "storageHash": "6a0532b8…"
@@ -29,7 +29,7 @@ So the hash is computed from a small, fixed input. The storage hash is the SHA-2
 }
 ```
 
-and the rules that compute it do not change from `8.0.0` to the last `8.x` release. A team that upgrades within Prisma 8 and changes nothing else gets the same hashes, its database still matches, and none of its files changes.
+and the rules that compute it do not change from `8.0.0` to the last `8.x` release. With [the compatibility policy](../../oss/versioning.md#what-stays-compatible), which keeps what a release writes for a source the same within a major, a team that upgrades within Prisma 8 and changes nothing else gets the same hashes, its database still matches, and none of its files changes.
 
 ## Decision
 
@@ -45,7 +45,7 @@ A **family** is a kind of database Prisma supports (SQL or MongoDB), and a **tar
 
 **2. Within a major version, the rules that compute the hashes do not change.** Given the same `storage`, `capabilities` and `execution`, every release of the major computes the same three hashes. The rules include the framework's steps and each family's normal form, and they bind families and targets built outside this repository too.
 
-What is frozen is the step from a contract to its hashes, not what a release writes for a contract source. A release that writes different `storage` for a source, for example to fix how it reads a Prisma schema, gives that contract a new storage hash; the compatibility policy, not this record, says when a release may do that.
+What is frozen is the step from a contract to its hashes, not what a release writes for a contract source. A release that writes different `storage` for a source, for example to fix how it reads a Prisma schema, gives that contract a new storage hash; [the compatibility policy](../../oss/versioning.md#what-stays-compatible), not this record, says when a release may do that.
 
 A later format version within the major may change how a stored file is laid out, but not what its sections hold once converted to the newest layout. Prisma checks a stored contract by converting it and then hashing it, so a layout change that altered the sections would change its hash.
 

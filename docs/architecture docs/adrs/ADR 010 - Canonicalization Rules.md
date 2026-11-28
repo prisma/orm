@@ -142,7 +142,7 @@ The profile hash follows steps 4 to 7 with `capabilities` in place of `storage`,
 
 ## What each family leaves out
 
-Each family names its defaults here. In `storage`, a namespace holds its entries by kind (`table`, `collection`, `valueObject` and kinds a target or extension adds); a value object is a structured type stored inside a row or document; `typeParams` are a type's parameters, such as a `varchar`'s length; `storage.types` holds named column types.
+Each family names its defaults here. In `storage`, a namespace holds its entries by kind (`table`, `collection`, `valueObject`, `valueSet` and kinds a target or extension adds); a value object is a structured type stored inside a row or document; a value set is a named list of allowed values, such as an enum's; `typeParams` are a type's parameters, such as a `varchar`'s length; `storage.types` holds named column types.
 
 | SQL family | MongoDB family |
 | --- | --- |
@@ -151,7 +151,7 @@ Each family names its defaults here. In `storage`, a namespace holds its entries
 | A table's empty `checks`; an index's empty `columns` or empty `options` | A collection's empty `indexes`; an index's `unique` or `sparse` of `false` |
 | A foreign key's `onDelete` or `onUpdate` of `noAction` | A collation's `caseLevel` or `numericOrdering` of `false` |
 | An empty map of entries of any kind other than `table` | An empty map of entries of any kind other than `collection` |
-| A foreign key's obsolete `index` flag, `true` or `false`, which earlier releases wrote and the family reads as absent | An empty `required` or `properties` keyword in a collection validator's `jsonSchema` |
+| A foreign key's obsolete `index` flag, `true` or `false`, which releases of Prisma 8's predecessor project wrote and the family reads as absent | An empty `required` or `properties` keyword anywhere in a collection validator's `jsonSchema`, including its sub-schemas; a field of that name inside `properties` is kept |
 
 `nullable` is always written. A MongoDB collation's `backwards` and `normalization` are always kept, because the server's default for them depends on the locale.
 
@@ -161,7 +161,7 @@ A family built outside this repository names its defaults in its own documentati
 
 ## The written files
 
-- **`contract.json`** is printed with a two-space indent and no trailing newline. Its top-level keys come in a fixed order, starting with the format version, the family, the target and the profile hash (`TOP_LEVEL_ORDER` in `packages/1-framework/0-foundation/contract/src/canonicalization.ts`, where a new top-level section is added). Every key below the top level is sorted, apart from the `_generated` notice the emitter appends.
+- **`contract.json`** is printed with a two-space indent and no trailing newline. Its top-level keys come in a fixed order, starting with the format version, the family, the target and the profile hash (`TOP_LEVEL_ORDER` in `packages/1-framework/0-foundation/contract/src/canonicalization.ts`; a new top-level section is added both there and to the sections `canonicalizeContractToObject` writes, in the same file, or it is left out of the file). Every key below the top level is sorted, apart from the `_generated` notice the emitter appends.
 - **A snapshot's copy** under `migrations/snapshots/<storage hash>/` is compact JSON with every key sorted and a trailing newline.
 
 Neither file's bytes are hashed. The top-level `meta` section is for tooling and is in no hash.
@@ -169,7 +169,7 @@ Neither file's bytes are hashed. The top-level `meta` section is for tooling and
 ## Who computes and who checks
 
 - The family's authoring code computes the storage hash when it builds the contract.
-- The emitter writes it, and refuses to write a `storage` that does not hash to it. That catches a normal form that changes its own output.
+- The emitter writes it, and refuses to write a `storage` that does not hash to it. That catches a normal form whose second application changes its first result, and a hash computed some other way.
 - Reading a snapshot, and loading an extension that ships its own migrations, hash the stored `storage` again and refuse a mismatch with the hash it is stored under.
 
 Every function that computes or checks a storage hash takes the family's `normalizeStorage` as a required argument.
