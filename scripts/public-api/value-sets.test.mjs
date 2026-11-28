@@ -167,7 +167,7 @@ describe('findValueSets', () => {
     );
   });
 
-  it('counts a template only with an unbounded placeholder as a catch-all', () => {
+  it('counts a template only with an unbounded placeholder as a catch-all, and a finite one as a value', () => {
     const sets = findValueSets(
       api(
         "./a: type Finite = 'A' | 'B' | (`C` & {})",
@@ -176,7 +176,28 @@ describe('findValueSets', () => {
     );
     deepStrictEqual(
       sets.map(({ name, open }) => [name, open]),
-      [['Prefixed', true]],
+      [
+        ['Finite', false],
+        ['Prefixed', true],
+      ],
+    );
+  });
+
+  it('reads a kind that is a template with fixed text, through a type parameter, as a discriminator', () => {
+    const sets = findValueSets(
+      api(
+        '(not exported) type ClientKind = `${string}-${string}`',
+        './a: interface Client<K extends ClientKind = ClientKind>',
+        './a: interface Client, readonly required property kind: K',
+        './a: interface Statement, readonly required property kind: "statement"',
+        './a: interface Block, readonly required property kind: string',
+        './a: type Activity = Client | Statement',
+        './a: type Entry = Block | Statement',
+      ),
+    );
+    deepStrictEqual(
+      sets.map(({ name, open }) => [name, open]),
+      [['Activity', false]],
     );
   });
 

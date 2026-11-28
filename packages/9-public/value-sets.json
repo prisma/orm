@@ -651,7 +651,21 @@
     },
     {
       "package": "@prisma/orm-framework",
+      "type": "Activity",
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
+    },
+    {
+      "package": "@prisma/orm-framework",
       "type": "ActivityContext.scope",
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
+    },
+    {
+      "package": "@prisma/orm-framework",
+      "type": "ActivityEndedResult",
       "status": "pending",
       "recommended": "open",
       "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."

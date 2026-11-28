@@ -41,8 +41,16 @@ const KIND_PROPERTY =
   /^(?:class|interface) ([A-Za-z_$][\w$]*), (?:readonly )?(?:required|optional) property kind\??: (.*)$/;
 const LITERAL = /^(?:'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"|-?\d+(?:\.\d+)?|true|false)$/;
 const NAME = /^[A-Za-z_$][\w$]*$/;
+const FINITE_TEMPLATE = /^\(?`[^`$]*`(?: & \{\s*\})?\)?$/;
+const DECLARATION_PARAMS =
+  /^(?:abstract )?(?:class|interface) ([A-Za-z_$][\w$]*)<(.*?)>(?: extends .*| implements .*)?$/;
 const OPEN_LITERALS = /^\(?(?:string|number|`[^`]*\$\{(?:string|number)\}[^`]*`) & \{\s*\}\)?$/;
 const SENTINEL = /^(['"])%future added value\1$/;
+
+function isTemplateWithText(text) {
+  if (!text.startsWith('`') || !text.endsWith('`') || !text.includes('${')) return false;
+  return text.slice(1, -1).replace(/\$\{[^}]*\}/g, '') !== '';
+}
 
 function splitTopLevel(text, separator) {
   const members = [];
@@ -104,6 +112,7 @@ function inlineKinds(member) {
 function readList(text) {
   const aliases = new Map();
   const withKind = new Map();
+  const params = new Map();
   const consts = new Map();
   const properties = new Map();
   for (const line of text.split('\n')) {
@@ -113,6 +122,15 @@ function readList(text) {
     const path = prefix[1];
     const kind = KIND_PROPERTY.exec(declaration);
     if (kind) withKind.set(kind[1], splitTopLevel(kind[2], '|'));
+    const declared = DECLARATION_PARAMS.exec(declaration);
+    if (declared && !params.has(declared[1])) {
+      const constraints = new Map();
+      for (const param of splitTopLevel(declared[2], ',')) {
+        const constraint = /^([A-Za-z_$][\w$]*) extends (.*?)(?: = .*)?$/.exec(param);
+        if (constraint) constraints.set(constraint[1], constraint[2]);
+      }
+      params.set(declared[1], constraints);
+    }
     const constant = CONST.exec(declaration);
     if (constant) consts.set(constant[1], constant[2]);
     const property = PROPERTY.exec(declaration);
@@ -137,7 +155,7 @@ function readList(text) {
     if (path !== undefined && !entry.paths.includes(path)) entry.paths.push(path);
     aliases.set(name, entry);
   }
-  return { aliases, withKind, consts, properties };
+  return { aliases, withKind, consts, properties, params };
 }
 
 function shapeOf(name, list, seen = new Set()) {
@@ -147,10 +165,12 @@ function shapeOf(name, list, seen = new Set()) {
     if (kinds === undefined || seen.has(name)) return {};
     let open = false;
     let values = 0;
-    for (const kind of kinds) {
+    for (const written of kinds) {
+      const kind = list.params.get(name)?.get(written) ?? written;
       if (SENTINEL.test(kind)) open = true;
-      else if (LITERAL.test(kind)) values++;
-      else {
+      else if (LITERAL.test(kind) || FINITE_TEMPLATE.test(kind) || isTemplateWithText(kind)) {
+        values++;
+      } else {
         const inner = NAME.test(kind) ? shapeOf(kind, list, new Set([...seen, name])) : {};
         if (inner.shape !== 'literals') return {};
         values += inner.values;
@@ -167,7 +187,7 @@ function shapeOfMembers(members, list, seen) {
   let open = false;
   let values = 0;
   for (const member of members) {
-    if (LITERAL.test(member)) {
+    if (LITERAL.test(member) || FINITE_TEMPLATE.test(member) || isTemplateWithText(member)) {
       shapes.add('literals');
       values++;
     } else if (OPEN_LITERALS.test(member)) {
