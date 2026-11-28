@@ -6,16 +6,14 @@ import {
 } from '@internal/contract/types';
 import { collectScalarTypeConstructors } from '@internal/framework-components/authoring';
 import {
+  assertDataTypeParams,
   type CodecLookupWithDescriptors,
-  type DataType,
   type DataTypeLookup,
-  type DataTypeParams,
   dataTypeParams,
   validateCodecTypeParams,
 } from '@internal/framework-components/codec';
 import type { AssembledAuthoringContributions } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
-import { isSqlDataType, validateSqlTypeParams } from '@internal/sql-contract/data-type';
 import {
   isStorageTypeInstance,
   nonEmptyTypeParams,
@@ -164,15 +162,17 @@ function typeParamsProblems(
   });
 }
 
-/** Whether `type` refuses `params`. The check of the column's parameters reports that, so its default is not read under them. */
-function refusesParams(type: DataType, params: DataTypeParams): boolean {
-  if (!isSqlDataType(type)) return false;
-  try {
-    validateSqlTypeParams(type, params);
-    return false;
-  } catch (error) {
-    if (isStructuredError(error) && error.code === 'CONTRACT.TYPE_PARAMS_INVALID') return true;
-    throw error;
+/** Refuses, with the data type's own `CONTRACT.TYPE_PARAMS_INVALID`, the first column or storage type that gives type parameters its data type refuses, as planning and the client refuse them. */
+function assertDataTypesAcceptParams(storage: SqlStorage, dataTypes: DataTypeLookup): void {
+  const places = [
+    ...tablesOf(storage).flatMap(({ table }) => Object.values(table.columns)),
+    ...Object.values(storage.types ?? {}).filter(isStorageTypeInstance),
+  ];
+  for (const { dataType, typeParams } of places) {
+    const given = nonEmptyTypeParams(typeParams);
+    const type = dataTypes.get(dataType);
+    if (given === undefined || type === undefined) continue;
+    assertDataTypeParams(type, dataTypeParams(type, given));
   }
 }
 
@@ -217,7 +217,7 @@ function notAList(refused: RefusedDefault): Refusal {
   };
 }
 
-/** Each literal default the column's type does not hold, under the column's parameters, element by element on a list column. A `null` is SQL NULL, which every column takes. */
+/** Each literal default the column's type does not hold, under the column's parameters, which its data type accepts, element by element on a list column. A `null` is SQL NULL, which every column takes. */
 function refusedDefaults(storage: SqlStorage, dataTypes: DataTypeLookup): readonly Refusal[] {
   return tablesOf(storage).flatMap(({ namespaceId, tableName, table }) =>
     Object.entries(table.columns).flatMap(([columnName, column]) => {
@@ -226,7 +226,6 @@ function refusedDefaults(storage: SqlStorage, dataTypes: DataTypeLookup): readon
       const type = dataTypes.get(column.dataType);
       if (type === undefined) return [];
       const params = dataTypeParams(type, nonEmptyTypeParams(column.typeParams));
-      if (refusesParams(type, params)) return [];
       const place = { namespaceId, table: tableName, column: columnName, dataType: type.id };
       const isList = column.many !== undefined && column.many !== false;
       if (isList && columnDefault.value !== null && !Array.isArray(columnDefault.value)) {
@@ -300,12 +299,13 @@ function valueObjectProblems(
 }
 
 /**
- * Checks a deserialized contract against the stack that loads it: each column's codec represents the data type the column names, the codec's parameter schema accepts each type parameter a column, storage type, model field or value-object field gives it, each value-object column uses the codec of the stack's value-object storage type, and each literal default is a value of its column's type under the column's parameters.
+ * Checks a deserialized contract against the stack that loads it: the data type of each column and storage type accepts the type parameters given it, which it refuses with its own error before any other problem is reported, each column's codec represents the data type the column names, the codec's parameter schema accepts each type parameter a column, storage type, model field or value-object field gives it, each value-object column uses the codec of the stack's value-object storage type, and each literal default is a value of its column's type under the column's parameters.
  */
 export function assertContractMatchesStack(
   contract: Contract<SqlStorage>,
   stack: ContractStackCheckInputs,
 ): void {
+  assertDataTypesAcceptParams(contract.storage, stack.dataTypes.lookup);
   const defaults = refusedDefaults(contract.storage, stack.dataTypes.lookup);
   const problems = [
     ...dataTypeProblems(contract.storage, stack.codecLookup),

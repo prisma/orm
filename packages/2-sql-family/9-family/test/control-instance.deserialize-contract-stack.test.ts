@@ -200,7 +200,7 @@ describe('deserializeContract checks each column against the stack', () => {
     );
   });
 
-  describe('type parameters, which the parameter schema of the codec checks', () => {
+  describe('type parameters, which the data type of a column and the parameter schema of the codec check', () => {
     const named = (typeParams: Record<string, unknown>) =>
       contractWith({
         user: table({
@@ -223,6 +223,33 @@ describe('deserializeContract checks each column against the stack', () => {
         expect.objectContaining({
           code: 'CONTRACT.VALIDATION_FAILED',
           message: `${columnsPath}.name.typeParams: ${refusal}`,
+        }),
+      );
+    });
+
+    it('are refused on a column with the error of its data type, when the data type refuses them', () => {
+      expect(() =>
+        familyInstance('Jsonb').deserializeContract(named({ length: 'twenty' })),
+      ).toThrow(
+        expect.objectContaining({
+          code: 'CONTRACT.TYPE_PARAMS_INVALID',
+          message: 't/varchar: length must be a number (was a string)',
+          meta: { dataType: 't/varchar', parameters: ['length'] },
+        }),
+      );
+    });
+
+    it('are refused on a column with the error of its data type before any other problem is reported', () => {
+      const contract = contractWith({
+        user: table({
+          id: col('t/text', 't/int4@1'),
+          name: { ...col('t/varchar', 't/varchar@1'), typeParams: { length: 'twenty' } } as never,
+        }),
+      });
+      expect(() => familyInstance('Jsonb').deserializeContract(contract)).toThrow(
+        expect.objectContaining({
+          code: 'CONTRACT.TYPE_PARAMS_INVALID',
+          message: 't/varchar: length must be a number (was a string)',
         }),
       );
     });
@@ -270,6 +297,29 @@ describe('deserializeContract checks each column against the stack', () => {
       );
       expect(() => familyInstance('Jsonb').deserializeContract(contract)).toThrow(
         `storage.types.Name.typeParams: ${refusal}`,
+      );
+    });
+
+    it('are refused on a storage type with the error of its data type, when the data type refuses them', () => {
+      const contract = contractWith(
+        { user: table({ id: col('t/int4', 't/int4@1') }) },
+        {
+          types: {
+            Name: {
+              kind: 'codec-instance',
+              codecId: 't/varchar@1',
+              dataType: 't/varchar',
+              typeParams: { length: 'twenty' },
+            },
+          },
+        },
+      );
+      expect(() => familyInstance('Jsonb').deserializeContract(contract)).toThrow(
+        expect.objectContaining({
+          code: 'CONTRACT.TYPE_PARAMS_INVALID',
+          message: 't/varchar: length must be a number (was a string)',
+          meta: { dataType: 't/varchar', parameters: ['length'] },
+        }),
       );
     });
 
@@ -351,7 +401,8 @@ describe('deserializeContract checks each column against the stack', () => {
         familyInstance('Jsonb').deserializeContract(priced('1.5', { precision: 'ten', scale: 2 })),
       ).toThrow(
         expect.objectContaining({
-          message: `${columnsPath}.price.typeParams: Invalid typeParams for codec 't/numeric@1': precision must be a number (was a string)`,
+          code: 'CONTRACT.TYPE_PARAMS_INVALID',
+          message: 't/numeric: precision must be a number (was a string)',
         }),
       );
     });
