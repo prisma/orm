@@ -5,6 +5,7 @@ import type {
   LedgerEntryRecord,
 } from '@internal/contract/types';
 import {
+  errorMarkerReadFailed,
   errorMarkerRowCorrupt,
   rethrowMarkerReadError,
   withMarkerReadErrorHandling,
@@ -81,6 +82,7 @@ import {
 } from '@internal/target-postgres/codecs';
 import {
   PRISMA_TABLE_NAMES,
+  PRISMA_TABLES_SCHEMA,
   prismaTableLocation,
   RECORD_DATABASE_POLICIES_SQL,
 } from '@internal/target-postgres/contract-free';
@@ -160,6 +162,7 @@ import { renderLoweredSql } from './sql-renderer';
 import type { PostgresContract } from './types';
 
 const POSTGRES_SIGNATURES_TABLE = prismaTableLocation(PRISMA_TABLE_NAMES.signatures);
+const POSTGRES_CONFIG_TABLE = prismaTableLocation(PRISMA_TABLE_NAMES.config);
 const POSTGRES_LEDGER_TABLE = prismaTableLocation(PRISMA_TABLE_NAMES.ledger);
 
 /**
@@ -180,16 +183,48 @@ function policiesMeta(
   return space === APP_SPACE_ID && configRow === true ? { meta: { policies } } : {};
 }
 
-/** `query` with the policies of `_prisma.config`, when that table holds them. A database without the table, such as one a later release changed, reads as recording no policies; a role that may not read the table gets PostgreSQL's permission error, so it never reads the defaults in place of the policies. */
+/** Whether the role may read the policies column of `_prisma.config`, and whether row-level security filters what it reads there, from the catalogues. */
+const CONFIG_ACCESS_SQL = `SELECT pg_catalog.has_column_privilege(c.oid, $3, 'SELECT') AS "readable",
+  pg_catalog.row_security_active(c.oid) AS "filtered"
+FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+WHERE n.nspname = $1 AND c.relname = $2`;
+
+function errorConfigUnreadable(why: string) {
+  return errorMarkerReadFailed({ why, space: APP_SPACE_ID, markerLocation: POSTGRES_CONFIG_TABLE });
+}
+
+/** Refuses a role that would read no row of `_prisma.config` while it holds one, so the defaults are never read in place of the policies. Under row-level security a role cannot tell a hidden row from a missing one, so any filtering is refused. */
+async function assertPoliciesReadable(driver: SqlControlDriverInstance<'postgres'>): Promise<void> {
+  const { rows } = await driver.query<{ readonly readable: boolean; readonly filtered: boolean }>(
+    CONFIG_ACCESS_SQL,
+    [PRISMA_TABLES_SCHEMA, PRISMA_TABLE_NAMES.config, config.policies.columnName],
+  );
+  const [access] = rows;
+  if (access === undefined) return;
+  if (!access.readable) {
+    throw errorConfigUnreadable(
+      `The role that runs this command may not read ${POSTGRES_CONFIG_TABLE}, which records the database's policies. Grant it SELECT on ${POSTGRES_CONFIG_TABLE}.`,
+    );
+  }
+  if (access.filtered) {
+    throw errorConfigUnreadable(
+      `Row-level security applies to the role that runs this command on ${POSTGRES_CONFIG_TABLE}, which records the database's policies, so Prisma cannot tell whether it hides the policies. Run the command as a role row-level security does not apply to, such as the table's owner, or disable row-level security on ${POSTGRES_CONFIG_TABLE}.`,
+    );
+  }
+}
+
+/** `query` with the policies of `_prisma.config`, when that table holds them. A database without the table, such as one a later release changed, reads as recording no policies; a role that may not read the table, or that row-level security applies to there, gets an error, so it never reads the defaults in place of the policies. */
 async function withPoliciesWhenRecorded(
   driver: SqlControlDriverInstance<'postgres'>,
   query: SelectAst,
 ): Promise<SelectAst> {
-  return (await prismaTableHasColumns(driver, PRISMA_TABLE_NAMES.config, [
-    config.policies.columnName,
-  ]))
-    ? withPolicies(query)
-    : query;
+  if (
+    !(await prismaTableHasColumns(driver, PRISMA_TABLE_NAMES.config, [config.policies.columnName]))
+  ) {
+    return query;
+  }
+  await assertPoliciesReadable(driver);
+  return withPolicies(query);
 }
 
 /** A row of `_prisma.signatures`, with `_prisma.config`'s policies beside it, in the form the SQL family's marker parser reads, whose `updated_at` is the row's `signed_at`. */
