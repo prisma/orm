@@ -179,6 +179,8 @@ The application's role reads `_prisma.signatures` when the client is first used,
 
 A role that runs Prisma's commands reads more. `prisma db verify`, `prisma migration status` and every command that changes the database read the policies from `_prisma.config`, so that role needs `SELECT` on `_prisma.signatures` and on `_prisma.config`. Without `SELECT` on `_prisma.config`, the command stops with `CONTRACT.MARKER_READ_FAILED` and names `_prisma.config`; it never reads the default policies in their place. It stops the same way when row-level security applies to the role on `_prisma.config`, because a row that row-level security hides cannot be told apart from no row. For example, for the application's role:
 
+For example, for the application's role, `app`:
+
 ```sql
 -- Before
 GRANT USAGE ON SCHEMA prisma_contract TO app;
