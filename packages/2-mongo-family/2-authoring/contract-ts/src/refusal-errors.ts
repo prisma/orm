@@ -32,8 +32,9 @@ function codecRefusalError(
       meta: { ...meta, codecId, dataType: refusal.dataType, reason: 'data-type-not-mongo' },
     });
   }
+  const later: '%future added value' = refusal.kind;
   return contractError('CONTRACT.PACK_CONTRIBUTION_INVALID', `${subject} ${refusal.reason}`, {
-    meta: { ...meta, codecId, reason: refusal.kind },
+    meta: { ...meta, codecId, reason: later },
   });
 }
 
@@ -110,10 +111,14 @@ function validatorRefusalError(refusal: MongoContractRefusal): StructuredError {
           },
         },
       );
-    default:
-      return contractError('CONTRACT.ARGUMENT_INVALID', refusal.reason, {
-        meta: { reason: refusal.kind },
-      });
+    default: {
+      const later: '%future added value' = refusal.kind;
+      return contractError(
+        'CONTRACT.ARGUMENT_INVALID',
+        `The collection validator refuses the contract for a reason this version does not name ("${later}").`,
+        { meta: { reason: later } },
+      );
+    }
   }
 }
 
@@ -659,10 +664,14 @@ export function refusalError(refusal: BuildRefusal): StructuredError {
       );
     case 'validator':
       return validatorRefusalError(refusal.refusal);
-    default:
-      return contractError('CONTRACT.ARGUMENT_INVALID', refusal.reason, {
-        meta: { reason: refusal.kind },
-      });
+    default: {
+      const later: '%future added value' = refusal.kind;
+      return contractError(
+        'CONTRACT.ARGUMENT_INVALID',
+        `The contract definition is refused for a reason this version does not name ("${later}").`,
+        { meta: { reason: later } },
+      );
+    }
   }
 }
 

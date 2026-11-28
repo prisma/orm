@@ -149,6 +149,24 @@ describe('findValueSets', () => {
     );
   });
 
+  it('reads a kind written as a union, a member written as an intersection, and drops null', () => {
+    const sets = findValueSets(
+      api(
+        "./a: type Token = { readonly kind: 'word' | 'symbol'; readonly text: string; } | { readonly kind: 'comment'; }",
+        "./a: type Naming = ({ readonly kind: 'wire'; } & WireName) | { readonly kind: 'exact'; }",
+        "./a: type Status = 'applied' | 'pending' | null",
+      ),
+    );
+    deepStrictEqual(
+      sets.map(({ name, shape }) => [name, shape]),
+      [
+        ['Naming', 'objects'],
+        ['Status', 'literals'],
+        ['Token', 'objects'],
+      ],
+    );
+  });
+
   it('drops null and undefined from a property union', () => {
     const [set] = findValueSets(
       api("./a: interface Row, readonly required property status: 'applied' | 'pending' | null"),
@@ -246,6 +264,30 @@ describe('checkValueSets', () => {
     match(problems[0], /Unmarked is pending, but it is not in the framework domain/);
     match(problems[1], /Phase: a pending declaration needs "recommended"/);
     match(problems[2], /Tag is pending, but it is not in the framework domain/);
+  });
+
+  it('fails on a recommendation that is not a status, or on one given outside pending', () => {
+    const framework = {
+      package: '@prisma/orm-framework',
+      text: api("./components: type Phase = 'a' | 'b'"),
+    };
+    const problems = checkValueSets(
+      [...lists, framework],
+      [
+        { ...closedDirection, recommended: 'open' },
+        { ...closedDirection, type: 'Unmarked' },
+        {
+          package: '@prisma/orm-framework',
+          type: 'Phase',
+          status: 'pending',
+          recommended: 'shut',
+          reason: 'Waits.',
+        },
+      ],
+    );
+    deepStrictEqual(problems.length, 2);
+    match(problems[0], /Direction: only a pending declaration has "recommended"/);
+    match(problems[1], /Phase: a pending declaration needs "recommended", one of/);
   });
 
   it('passes when every set is open or declared', () => {

@@ -14,7 +14,7 @@
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "3f55d91f060709d4",
+    "fingerprint": "e5b733af2d2cea39",
     "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
   },
   {
@@ -41,7 +41,7 @@
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "fec153dc28695062",
+    "fingerprint": "0f79bf7902f73397",
     "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
   },
   {
@@ -59,7 +59,7 @@
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "1ce069f41502903f",
+    "fingerprint": "67d3b58e222e07e5",
     "reason": "A MongoDB contract now refuses a field, relation or PSL enum named __proto__ (prisma/orm#31185). The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
   },
   {
@@ -68,7 +68,7 @@
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "d7d16be6e350c763",
+    "fingerprint": "1d4e53c256e4231a",
     "reason": "A MongoDB contract now refuses a field, relation or PSL enum named __proto__ (prisma/orm#31185). The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
   },
   {
@@ -95,7 +95,7 @@
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "7cf100057ff96ad5",
+    "fingerprint": "a3a930fe32adc62a",
     "reason": "A MongoDB contract now refuses a field, relation or PSL enum named __proto__ (prisma/orm#31185). The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
   },
   {
@@ -104,7 +104,7 @@
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "1ce069f41502903f",
+    "fingerprint": "67d3b58e222e07e5",
     "reason": "A MongoDB contract now refuses a field, relation or PSL enum named __proto__ (prisma/orm#31185). The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
   },
   {
@@ -113,7 +113,7 @@
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "d7d16be6e350c763",
+    "fingerprint": "1d4e53c256e4231a",
     "reason": "A MongoDB contract now refuses a field, relation or PSL enum named __proto__ (prisma/orm#31185). The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
   },
   {
@@ -140,7 +140,7 @@
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "7cf100057ff96ad5",
+    "fingerprint": "a3a930fe32adc62a",
     "reason": "A MongoDB contract now refuses a field, relation or PSL enum named __proto__ (prisma/orm#31185). The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
   },
   {

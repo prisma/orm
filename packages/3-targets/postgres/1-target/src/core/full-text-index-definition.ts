@@ -103,8 +103,10 @@ export function describeFullTextIndexProblem(
       return `${subject} indexes text columns, but "${fieldLabel(problem.field)}" is ${problem.codecId === undefined ? 'not a stored scalar field' : `stored as \`${problem.codecId}\``}.`;
     case 'unique':
       return `${subject} is unique, but Postgres builds no unique gin index.`;
-    default:
-      return `${subject} breaks the full-text index rule "${problem.kind}".`;
+    default: {
+      const later: '%future added value' = problem.kind;
+      return `${subject} breaks a full-text index rule this version does not name ("${later}").`;
+    }
   }
 }
 

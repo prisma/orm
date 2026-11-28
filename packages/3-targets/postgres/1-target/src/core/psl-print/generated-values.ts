@@ -3,6 +3,7 @@ import type { SqlPslBuildContext } from '@internal/family-sql/control';
 import { type GeneratorCallRefusal, generatorCallsFor } from '@internal/family-sql/psl-build';
 import type { PslFieldAttribute } from '@internal/framework-components/psl-ast';
 import { sqlCodecColumnLength } from '@internal/sql-contract/data-type';
+import { InternalError } from '@internal/utils/internal-error';
 import { buildAttribute, positionalArg } from '../psl-build/psl-literals';
 import {
   refuseGeneratorOnList,
@@ -42,6 +43,12 @@ function refuse(
         readBack: refusal.readBack,
         refusedBecause: refusal.refusedBecause,
       });
+    default: {
+      const later: '%future added value' = refusal.kind;
+      throw new InternalError(
+        `The PSL printer words every generator refusal of its own release, not "${later}".`,
+      );
+    }
   }
 }
 

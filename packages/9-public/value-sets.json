@@ -194,6 +194,12 @@
     },
     {
       "package": "@prisma/orm-family-mongo",
+      "type": "MongoFieldRewriteMeta",
+      "status": "closed",
+      "reason": "Describes a field-rewrite operation of a MongoDB migration, one kind per operation the planner writes into migration files; a new kind is a new operation, which changes the migration file format and needs a major version."
+    },
+    {
+      "package": "@prisma/orm-family-mongo",
       "type": "MongoFieldShape",
       "status": "closed",
       "reason": "The shapes of a document value the result type describes; a new shape changes every result type, which is a major change."
@@ -328,7 +334,7 @@
       "package": "@prisma/orm-family-mongo",
       "type": "UpdateOperator",
       "status": "input",
-      "reason": "Built by the field accessors and handed back to us by a user's updater; users do not branch on it. Produced by a target, driver or codec author and read by our code; adding a value is an addition for them, and a catch-all member would remove their spelling check."
+      "reason": "Our field accessors build it, a user's updater returns it to us, and only our update lowering reads it; users never write one, and adding a value never breaks them, and a catch-all member would remove their spelling check."
     },
     {
       "package": "@prisma/orm-family-sql",
@@ -400,13 +406,13 @@
       "package": "@prisma/orm-family-sql",
       "type": "BinaryOp",
       "status": "closed",
-      "reason": "Part of the SQL syntax tree; new operators arrive as contributed operations (OperationExpr), as ADR 020 sets out for aggregates, so in 8.x this set gains no operator."
+      "reason": "Users only pass these names in when they build a query; the readers that switch over them are renderers, ours and any target's, which must render every value. A new value would break every renderer, so in 8.x none is added and the set changes only in a major version. An operator an extension needs is a contributed operation (OperationExpr) of its own."
     },
     {
       "package": "@prisma/orm-family-sql",
       "type": "CheckKind",
       "status": "input",
-      "reason": "Produced by implementers of CheckExpressionRenderer and read by our naming code; Produced by a target, driver or codec author and read by our code; adding a value is an addition for them, and a catch-all member would remove their spelling check."
+      "reason": "Implementers of CheckExpressionRenderer produce it and our naming code reads it; adding a value never breaks them, and a catch-all member would remove their spelling check."
     },
     {
       "package": "@prisma/orm-family-sql",
@@ -477,14 +483,14 @@
     {
       "package": "@prisma/orm-family-sql",
       "type": "JsonPathStep",
-      "status": "input",
-      "reason": "Produced by a target, driver or codec author and read by our code; adding a value is an addition for them, and a catch-all member would remove their spelling check."
+      "status": "closed",
+      "reason": "Built by the SQL family's path parser and planner and read by targets, ours and others, which render each step into SQL. A new selector (RFC 9535 also defines index, slice and filter) needs every target to render it, so it is added only in a major version."
     },
     {
       "package": "@prisma/orm-family-sql",
       "type": "JsonType",
       "status": "input",
-      "reason": "A codec author declares it as jsonType and our code reads it; Produced by a target, driver or codec author and read by our code; adding a value is an addition for them, and a catch-all member would remove their spelling check."
+      "reason": "A codec author declares it as jsonType and our emitter and validators read it; adding a value never breaks them, and a catch-all member would remove their spelling check."
     },
     {
       "package": "@prisma/orm-family-sql",
@@ -507,8 +513,8 @@
     {
       "package": "@prisma/orm-family-sql",
       "type": "LoweredParam",
-      "status": "input",
-      "reason": "Produced by a target, driver or codec author and read by our code; adding a value is an addition for them, and a catch-all member would remove their spelling check."
+      "status": "closed",
+      "reason": "Fixed by its meaning: a lowered parameter is bound or inlined as a literal."
     },
     {
       "package": "@prisma/orm-family-sql",
@@ -556,7 +562,7 @@
       "package": "@prisma/orm-family-sql",
       "type": "ReportedLiteralDefault",
       "status": "input",
-      "reason": "Produced by a target, driver or codec author and read by our code; adding a value is an addition for them, and a catch-all member would remove their spelling check."
+      "reason": "A target's default normalizer builds it from the default the database reports, and the SQL family's planner and verifier read it; adding a value never breaks them, and a catch-all member would remove their spelling check."
     },
     {
       "package": "@prisma/orm-family-sql",
@@ -586,7 +592,13 @@
       "package": "@prisma/orm-family-sql",
       "type": "SqlDriverState",
       "status": "input",
-      "reason": "Returned by a driver's state getter and read by our runtime; Produced by a target, driver or codec author and read by our code; adding a value is an addition for them, and a catch-all member would remove their spelling check."
+      "reason": "A driver author returns it from the driver's state getter and our runtime reads it; adding a value never breaks them, and a catch-all member would remove their spelling check."
+    },
+    {
+      "package": "@prisma/orm-family-sql",
+      "type": "SqlObjectNaming",
+      "status": "closed",
+      "reason": "Fixed by its meaning: a database object is named by the derived wire scheme or exactly as written."
     },
     {
       "package": "@prisma/orm-family-sql",
@@ -603,8 +615,8 @@
     {
       "package": "@prisma/orm-family-sql",
       "type": "SqlSlot",
-      "status": "input",
-      "reason": "Produced by a target, driver or codec author and read by our code; adding a value is an addition for them, and a catch-all member would remove their spelling check."
+      "status": "closed",
+      "reason": "Fixed by its meaning: a template slot is a placeholder or SQL text."
     },
     {
       "package": "@prisma/orm-family-sql",
@@ -622,7 +634,7 @@
       "package": "@prisma/orm-family-sql",
       "type": "WindowFn",
       "status": "closed",
-      "reason": "Part of the SQL syntax tree; in 8.x it gains no window function, and until 9.0 a new one arrives as a contributed operation (OperationExpr), as ADR 020 sets out for aggregates."
+      "reason": "Users only pass these names in when they build a query; the readers that switch over them are renderers, ours and any target's, which must render every value. A new value would break every renderer, so in 8.x none is added and the set changes only in a major version. A contributed operation cannot carry a window's PARTITION BY and ORDER BY lists, so functions such as lag and lead wait for 9.0."
     },
     {
       "package": "@prisma/orm-framework",
@@ -641,6 +653,13 @@
     {
       "package": "@prisma/orm-framework",
       "type": "ActivityContext.scope",
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
+    },
+    {
+      "package": "@prisma/orm-framework",
+      "type": "ActivityEndedResult",
       "status": "pending",
       "recommended": "open",
       "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
@@ -892,6 +911,13 @@
     },
     {
       "package": "@prisma/orm-framework",
+      "type": "EnumMemberProblem",
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
+    },
+    {
+      "package": "@prisma/orm-framework",
       "type": "ExpectationFailureReason",
       "status": "pending",
       "recommended": "open",
@@ -998,6 +1024,27 @@
     {
       "package": "@prisma/orm-framework",
       "type": "MigrationPlannerResult",
+      "status": "pending",
+      "recommended": "closed",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
+    },
+    {
+      "package": "@prisma/orm-framework",
+      "type": "MigrationStatementJson",
+      "status": "pending",
+      "recommended": "closed",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
+    },
+    {
+      "package": "@prisma/orm-framework",
+      "type": "MigrationSubject",
+      "status": "pending",
+      "recommended": "open",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
+    },
+    {
+      "package": "@prisma/orm-framework",
+      "type": "MigrationSubjectJson",
       "status": "pending",
       "recommended": "closed",
       "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
@@ -1244,7 +1291,7 @@
       "package": "@prisma/orm-framework",
       "type": "TemporalTag",
       "status": "input",
-      "reason": "A codec author passes it to temporalToText and names it in a codec's identity; Produced by a target, driver or codec author and read by our code; adding a value is an addition for them, and a catch-all member would remove their spelling check."
+      "reason": "A codec author passes it to temporalToText and names it in a codec's identity, and our codecs read it; adding a value never breaks them, and a catch-all member would remove their spelling check."
     },
     {
       "package": "@prisma/orm-framework",
@@ -1318,6 +1365,13 @@
     },
     {
       "package": "@prisma/orm-framework",
+      "type": "WrittenForm",
+      "status": "pending",
+      "recommended": "input",
+      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
+    },
+    {
+      "package": "@prisma/orm-framework",
       "type": "WrittenValue",
       "status": "pending",
       "recommended": "input",
@@ -1327,13 +1381,13 @@
       "package": "@prisma/orm-postgres",
       "type": "PostgresBinding",
       "status": "input",
-      "reason": "Produced by a target, driver or codec author and read by our code; adding a value is an addition for them, and a catch-all member would remove their spelling check."
+      "reason": "Built from what users pass to the client (a client, a pool or a URL) and read only by the driver; adding a value never breaks them, and a catch-all member would remove their spelling check."
     },
     {
       "package": "@prisma/orm-target-mongo",
       "type": "MongoBinding",
       "status": "input",
-      "reason": "Produced by a target, driver or codec author and read by our code; adding a value is an addition for them, and a catch-all member would remove their spelling check."
+      "reason": "Built from what users pass to the client (a MongoClient or a URL) and read only by the driver; adding a value never breaks them, and a catch-all member would remove their spelling check."
     },
     {
       "package": "@prisma/orm-target-mongo",
@@ -1351,7 +1405,13 @@
       "package": "@prisma/orm-target-mysql",
       "type": "MysqlReportedDefault",
       "status": "input",
-      "reason": "Produced by a target, driver or codec author and read by our code; adding a value is an addition for them, and a catch-all member would remove their spelling check."
+      "reason": "The target's default normalizer builds it from the default MySQL reports, and the planner and verifier read it; adding a value never breaks them, and a catch-all member would remove their spelling check."
+    },
+    {
+      "package": "@prisma/orm-target-mysql",
+      "type": "MysqlSqlToken",
+      "status": "closed",
+      "reason": "Fixed by its meaning: the token classes the SQL tokenizer splits text into: words, quoted text, comments, whitespace, symbols and placeholders."
     },
     {
       "package": "@prisma/orm-target-postgres",
@@ -1368,8 +1428,8 @@
     {
       "package": "@prisma/orm-target-postgres",
       "type": "ColumnTypeCheck",
-      "status": "input",
-      "reason": "Produced by a target, driver or codec author and read by our code; adding a value is an addition for them, and a catch-all member would remove their spelling check."
+      "status": "closed",
+      "reason": "Fixed by its meaning: a column's type is checked by its catalog text or by its identity."
     },
     {
       "package": "@prisma/orm-target-postgres",
@@ -1387,7 +1447,7 @@
       "package": "@prisma/orm-target-postgres",
       "type": "PostgresBinding",
       "status": "input",
-      "reason": "Produced by a target, driver or codec author and read by our code; adding a value is an addition for them, and a catch-all member would remove their spelling check."
+      "reason": "Built from what users pass to the client (a client, a pool or a URL) and read only by the driver; adding a value never breaks them, and a catch-all member would remove their spelling check."
     },
     {
       "package": "@prisma/orm-target-postgres",
@@ -1399,13 +1459,13 @@
       "package": "@prisma/orm-target-postgres",
       "type": "PostgresReportedDefault",
       "status": "input",
-      "reason": "Produced by a target, driver or codec author and read by our code; adding a value is an addition for them, and a catch-all member would remove their spelling check."
+      "reason": "The target's default normalizer builds it from the default PostgreSQL reports, and the planner and verifier read it; adding a value never breaks them, and a catch-all member would remove their spelling check."
     },
     {
       "package": "@prisma/orm-target-postgres",
       "type": "PostgresVersion",
-      "status": "input",
-      "reason": "The PostgreSQL versions users may give as the server version in config; Users write these values and pass them to us; adding one never breaks them, and a catch-all member would remove the spelling check, so it stays a plain union."
+      "status": "type-parameter",
+      "reason": "The keys of the record of capabilities per PostgreSQL version in server-version.ts; no exported function or option takes it, and a catch-all member would turn the record into an index signature."
     },
     {
       "package": "@prisma/orm-target-postgres",
@@ -1423,7 +1483,7 @@
       "package": "@prisma/orm-target-sqlite",
       "type": "SqliteReportedDefault",
       "status": "input",
-      "reason": "Produced by a target, driver or codec author and read by our code; adding a value is an addition for them, and a catch-all member would remove their spelling check."
+      "reason": "The target's default normalizer builds it from the default SQLite reports, and the planner and verifier read it; adding a value never breaks them, and a catch-all member would remove their spelling check."
     },
     {
       "package": "@prisma/orm-toolchain",

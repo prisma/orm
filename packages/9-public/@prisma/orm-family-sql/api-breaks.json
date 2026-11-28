@@ -136,6 +136,24 @@
   },
   {
     "path": "./family",
+    "export": "GeneratorCallRefusal",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "eab9429a63d04bdf",
+    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
+  },
+  {
+    "path": "./family",
+    "export": "GeneratorCallsResult",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "3b3c58ec81501f12",
+    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
+  },
+  {
+    "path": "./family",
     "export": "Migration",
     "test": "constructor",
     "kind": "break",
@@ -430,6 +448,15 @@
     "lastRelease": "8.0.0-rc.25",
     "fingerprint": "3a538c8f2807374d",
     "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
+  },
+  {
+    "path": "./family",
+    "export": "generatorCallsFor",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "61a995e190ca5cd1",
+    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
   },
   {
     "path": "./family",
@@ -997,6 +1024,33 @@
     "lastRelease": "8.0.0-rc.25",
     "fingerprint": "2464de5bee58a3ee",
     "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./family/psl-build",
+    "export": "GeneratorCallRefusal",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "eab9429a63d04bdf",
+    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
+  },
+  {
+    "path": "./family/psl-build",
+    "export": "GeneratorCallsResult",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "3b3c58ec81501f12",
+    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
+  },
+  {
+    "path": "./family/psl-build",
+    "export": "generatorCallsFor",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "61a995e190ca5cd1",
+    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
   },
   {
     "path": "./relational-core",

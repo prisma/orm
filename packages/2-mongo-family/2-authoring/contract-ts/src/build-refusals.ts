@@ -7,7 +7,6 @@ import type {
 import type { DataTypeParamsProblem } from '@internal/framework-components/codec';
 import type { GeneratorPhase } from '@internal/framework-components/components';
 import type { FieldOwner, MongoContractRefusal } from '@internal/mongo-contract';
-import { InternalError } from '@internal/utils/internal-error';
 
 /** The part of a definition a refusal is about, by names and positions the definition carries. */
 export type RefusalKey =
@@ -256,10 +255,10 @@ export type BuildRefusal =
   | { readonly kind: 'variantWithoutValue'; readonly key: BaseKey; readonly baseModel: string }
   | {
       readonly kind: 'validator';
-      readonly key: RefusalKey;
+      readonly key: RefusalKey | undefined;
       readonly refusal: MongoContractRefusal;
     }
-  | { readonly kind: '%future added value'; readonly key: RefusalKey; readonly reason: string };
+  | { readonly kind: '%future added value'; readonly key: RefusalKey | undefined };
 
 /** Something the builder accepts but the author probably did not mean, or a warning the source collected. */
 export type BuildWarning = { readonly kind: 'source'; readonly warning: AuthoringWarning };
@@ -273,7 +272,7 @@ export function valueObjectFieldKey(valueObject: string, field: string): FieldKe
 }
 
 /** The key of a validator refusal: the part of the definition its subject names. */
-export function validatorRefusalKey(refusal: MongoContractRefusal): RefusalKey {
+export function validatorRefusalKey(refusal: MongoContractRefusal): RefusalKey | undefined {
   switch (refusal.kind) {
     case 'embeddedModelHasVariants':
       return { kind: 'relation', model: refusal.modelName, relation: refusal.relationName };
@@ -287,8 +286,7 @@ export function validatorRefusalKey(refusal: MongoContractRefusal): RefusalKey {
     case 'documentId':
       return modelFieldKey(refusal.modelName, refusal.fieldName);
     default:
-      throw new InternalError(
-        `The contract builder has no key for the validator refusal "${refusal.kind}" of its own release.`,
-      );
+      refusal.kind satisfies '%future added value';
+      return undefined;
   }
 }

@@ -19,9 +19,12 @@ export const DECLARATIONS_FILE = 'packages/9-public/value-sets.json';
 export const STATUSES = ['closed', 'input', 'type-parameter', 'pending'];
 export const RECOMMENDATIONS = ['open', 'closed', 'input', 'type-parameter'];
 
+// The public packages whose import paths are built from packages/1-framework, by their tsdown
+// configs; @prisma/orm-framework also publishes two paths built from packages/3-targets/0-shared.
 const FRAMEWORK_DOMAIN = {
   '@prisma/orm-toolchain': () => true,
-  '@prisma/orm-framework': (path) => !path.startsWith('./type-implementations'),
+  '@prisma/orm-framework': (path) =>
+    !path.startsWith('./type-implementations') && !path.startsWith('./target-package-config'),
 };
 
 const LIST_FILE = 'api.txt';
@@ -79,11 +82,21 @@ function aliasOf(declaration) {
   return rest.startsWith(' = ') ? [head[1], rest.slice(3)] : undefined;
 }
 
-function inlineKind(member) {
-  if (!member.startsWith('{') || !member.endsWith('}')) return undefined;
-  for (const property of splitTopLevel(member.slice(1, -1), ';')) {
-    const kind = KIND_MEMBER.exec(property);
-    if (kind && LITERAL.test(kind[1])) return kind[1];
+function unwrapped(member) {
+  const inner = member.slice(1, -1);
+  return member.startsWith('(') && member.endsWith(')') && splitTopLevel(inner, '|').length === 1
+    ? inner.trim()
+    : member;
+}
+
+function inlineKinds(member) {
+  for (const part of splitTopLevel(unwrapped(member), '&')) {
+    if (!part.startsWith('{') || !part.endsWith('}')) continue;
+    for (const property of splitTopLevel(part.slice(1, -1), ';')) {
+      const kind = KIND_MEMBER.exec(property);
+      const values = kind && splitTopLevel(kind[1], '|');
+      if (values?.every((value) => LITERAL.test(value))) return values;
+    }
   }
   return undefined;
 }
@@ -117,7 +130,10 @@ function readList(text) {
     const alias = aliasOf(declaration);
     if (!alias) continue;
     const [name, body] = alias;
-    const entry = aliases.get(name) ?? { members: splitTopLevel(body, '|'), paths: [] };
+    const members = splitTopLevel(body, '|').filter(
+      (member) => member !== 'undefined' && member !== 'null',
+    );
+    const entry = aliases.get(name) ?? { members, paths: [] };
     if (path !== undefined && !entry.paths.includes(path)) entry.paths.push(path);
     aliases.set(name, entry);
   }
@@ -145,10 +161,12 @@ function shapeOfMembers(members, list, seen) {
     } else if (OPEN_LITERALS.test(member)) {
       shapes.add('literals');
       open = true;
-    } else if (inlineKind(member) !== undefined) {
+    } else if (inlineKinds(member) !== undefined) {
       shapes.add('objects');
-      if (SENTINEL.test(inlineKind(member))) open = true;
-      else values++;
+      for (const kind of inlineKinds(member)) {
+        if (SENTINEL.test(kind)) open = true;
+        else values++;
+      }
     } else if (TUPLE_ITEM.test(member) || OBJECT_VALUE.test(member) || OBJECT_KEY.test(member)) {
       const items = constValues(member, list);
       if (items === undefined || !items.every((item) => LITERAL.test(item))) return {};

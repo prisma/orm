@@ -68,7 +68,7 @@ export type MongoContractRefusal =
       readonly forbidden: readonly string[];
       readonly reason: string;
     }
-  | { readonly kind: '%future added value'; readonly reason: string };
+  | { readonly kind: '%future added value' };
 
 export interface MongoContractRefusalsInput {
   readonly models: Record<string, ContractModel<MongoModelStorage>>;

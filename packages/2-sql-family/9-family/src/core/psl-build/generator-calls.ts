@@ -31,6 +31,11 @@ export type GeneratorCallRefusal =
       readonly readBack: ExecutionMutationDefaultValue | undefined;
       /** Why the call's binding refuses the column, when it does. */
       readonly refusedBecause: string | undefined;
+    }
+  | {
+      readonly kind: '%future added value';
+      readonly phase: GeneratorPhase;
+      readonly generator: ExecutionMutationDefaultValue;
     };
 
 export type GeneratorCallsResult =

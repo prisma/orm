@@ -3395,7 +3395,7 @@
 ./family/psl-build: type ColumnTypeOf = (tableName: string, columnName: string) => PslTypeCall
 ./family/psl-build: type ColumnTypeReadsDefault = (tableName: string, column: SqlColumnIR, type: PslTypeCall) => Promise<boolean>
 ./family/psl-build: type DefaultMappingResult = { readonly attribute: string; }
-./family/psl-build: type GeneratorCallRefusal = { readonly kind: 'no-function' | 'on-list'; readonly phase: GeneratorPhase; readonly generator: ExecutionMutationDefaultValue; } | { readonly kind: 'reads-back-differently'; readonly phase: GeneratorPhase; readonly generator: ExecutionMutationDefaultValue; readonly text: string; readonly readBack: ExecutionMutationDefaultValue | undefined; readonly refusedBecause: string | undefined; }
+./family/psl-build: type GeneratorCallRefusal = { readonly kind: '%future added value'; readonly phase: GeneratorPhase; readonly generator: ExecutionMutationDefaultValue; } | { readonly kind: 'no-function' | 'on-list'; readonly phase: GeneratorPhase; readonly generator: ExecutionMutationDefaultValue; } | { readonly kind: 'reads-back-differently'; readonly phase: GeneratorPhase; readonly generator: ExecutionMutationDefaultValue; readonly text: string; readonly readBack: ExecutionMutationDefaultValue | undefined; readonly refusedBecause: string | undefined; }
 ./family/psl-build: type GeneratorCallsResult = { readonly ok: false; readonly refusal: GeneratorCallRefusal; } | { readonly ok: true; readonly calls: readonly PhaseCallText[]; }
 ./family/psl-build: type InferredTypeConstructors = ReadonlyMap<string, InferredTypeConstructor>
 ./family/psl-infer: function buildChildRelationField(fieldName: string, parentModelName: string, fk: SqlForeignKeyIR, optional: boolean, relationName?: string, hostTable?: SqlTableIR): RelationField
@@ -4109,7 +4109,7 @@
 ./family: type DocumentPlace = readonly string[]
 ./family: type FieldEvent = 'added' | 'altered' | 'dropped' | (string & {})
 ./family: type FieldStorageEffect = { readonly kind: 'renameColumn'; readonly table: ModelTable; readonly from: string; readonly to: string; } | { readonly kind: 'unchanged'; }
-./family: type GeneratorCallRefusal = { readonly kind: 'no-function' | 'on-list'; readonly phase: GeneratorPhase; readonly generator: ExecutionMutationDefaultValue; } | { readonly kind: 'reads-back-differently'; readonly phase: GeneratorPhase; readonly generator: ExecutionMutationDefaultValue; readonly text: string; readonly readBack: ExecutionMutationDefaultValue | undefined; readonly refusedBecause: string | undefined; }
+./family: type GeneratorCallRefusal = { readonly kind: '%future added value'; readonly phase: GeneratorPhase; readonly generator: ExecutionMutationDefaultValue; } | { readonly kind: 'no-function' | 'on-list'; readonly phase: GeneratorPhase; readonly generator: ExecutionMutationDefaultValue; } | { readonly kind: 'reads-back-differently'; readonly phase: GeneratorPhase; readonly generator: ExecutionMutationDefaultValue; readonly text: string; readonly readBack: ExecutionMutationDefaultValue | undefined; readonly refusedBecause: string | undefined; }
 ./family: type GeneratorCallsResult = { readonly ok: false; readonly refusal: GeneratorCallRefusal; } | { readonly ok: true; readonly calls: readonly PhaseCallText[]; }
 ./family: type InferredRelations = { readonly relationsByTable: ReadonlyMap<string, readonly RelationField[]>; }
 ./family: type InferredTypeConstructors = ReadonlyMap<string, InferredTypeConstructor>

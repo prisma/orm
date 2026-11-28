@@ -120,7 +120,7 @@ export function refusalAtWrittenPositions(
   refusal: BuildRefusal,
   removedIndexes: readonly RemovedIndex[],
 ): BuildRefusal {
-  if (refusal.key.kind !== 'index' || removedIndexes.length === 0) return refusal;
+  if (refusal.key?.kind !== 'index' || removedIndexes.length === 0) return refusal;
   const key = {
     ...refusal.key,
     position: writtenIndexPosition(removedIndexes, refusal.key.model, refusal.key.position),

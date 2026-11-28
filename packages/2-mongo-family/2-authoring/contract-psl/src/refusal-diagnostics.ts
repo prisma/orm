@@ -211,10 +211,12 @@ function validatorDiagnostic(
     }
     case 'embeddedModelHasVariants':
       throw new InternalError('A PSL schema writes no embed relations.');
-    default:
+    default: {
+      const later: '%future added value' = refusal.kind;
       throw new InternalError(
-        `The PSL interpreter words every validator refusal of its own release, not "${refusal.kind}".`,
+        `The PSL interpreter words every validator refusal of its own release, not "${later}".`,
       );
+    }
   }
 }
 
@@ -550,8 +552,13 @@ export function refusalDiagnostic(
     case 'listedVariantMissing':
     case 'baseUnknown':
     case 'variantWithoutValue':
-    default:
       throw new InternalError(`A PSL definition cannot be refused with "${refusal.kind}".`);
+    default: {
+      const later: '%future added value' = refusal.kind;
+      throw new InternalError(
+        `The PSL interpreter words every refusal of its own release, not "${later}".`,
+      );
+    }
   }
 }
 

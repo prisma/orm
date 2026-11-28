@@ -1,3 +1,4 @@
+import { InternalError } from '@internal/utils/internal-error';
 import { describe, expect, it } from 'vitest';
 import { type IndexSite, refusalDiagnostic, type SchemaSites } from '../src/refusal-diagnostics';
 
@@ -29,5 +30,17 @@ describe('refusalDiagnostic for an index rule a later release adds', () => {
       code: 'PSL_INVALID_INDEX',
       message: 'Index on model "User" breaks the index rule "future-rule"',
     });
+  });
+
+  it('treats a refusal of a kind it does not know as a bug of the release', () => {
+    expect(() => refusalDiagnostic({ kind: '%future added value', key: undefined }, sites)).toThrow(
+      InternalError,
+    );
+    expect(() =>
+      refusalDiagnostic(
+        { kind: 'validator', key: undefined, refusal: { kind: '%future added value' } },
+        sites,
+      ),
+    ).toThrow(InternalError);
   });
 });
