@@ -1252,12 +1252,50 @@ function buildIncludeChildScalarSelect(
   include: IncludeExpr,
   scalar: IncludeScalar<unknown>,
 ): SelectAst {
-  const {
-    codec: resultCodec,
-    input: inputCodec,
-    lower: resultLowering,
-  } = scalarAggregateOf(contract, aggregates, include, scalar);
+  const aggregate = scalarAggregateOf(contract, aggregates, include, scalar);
   const state = scalar.state;
+  const child = state.tables.root;
+  const correlation = buildIncludeChildCorrelation(contract, parent, include, state);
+
+  if (!needsInnerScoping(state)) {
+    const select = SelectAst.from(child.tableSource(contract))
+      .withProjection([
+        includeScalarProjection(
+          include,
+          scalar,
+          aggregate,
+          scalar.column === undefined ? undefined : child.column(scalar.column),
+        ),
+      ])
+      .withWhere(correlation.whereExpr);
+    return withJunctionJoins(select, correlation.junctionJoins);
+  }
+
+  const innerAlias = scope.alias(`${include.relationName}__scalar`);
+  const inner = buildIncludeScalarInnerSelect(contract, scope, include, scalar, correlation);
+
+  // Outer aggregating SELECT over the shaped inner row set.
+  return SelectAst.from(DerivedTableSource.as(innerAlias, inner)).withProjection([
+    includeScalarProjection(
+      include,
+      scalar,
+      aggregate,
+      scalar.column === undefined ? undefined : ColumnRef.of(innerAlias, scalar.column),
+    ),
+  ]);
+}
+
+interface IncludeChildCorrelation {
+  readonly whereExpr: AnyExpression;
+  readonly junctionJoins: ReadonlyArray<JoinAst>;
+}
+
+function buildIncludeChildCorrelation(
+  contract: Contract<SqlStorage>,
+  parent: IncludeParent,
+  include: IncludeExpr,
+  state: CollectionState,
+): IncludeChildCorrelation {
   const child = state.tables.root;
   const parentLocalRefs = resolveParentLocalRefs(
     parent,
@@ -1265,9 +1303,6 @@ function buildIncludeChildScalarSelect(
     localColumnsForRowInclude(include),
   );
   const childWhere = buildStateWhere(contract, state);
-
-  let whereExpr: AnyExpression;
-  let junctionJoins: JoinAst[] = [];
 
   if (include.through !== undefined) {
     const artifacts = buildManyToManyJunctionArtifacts(
@@ -1277,127 +1312,155 @@ function buildIncludeChildScalarSelect(
       requireJunction(include),
       include.through,
     );
-    whereExpr = childWhere ? AndExpr.of([artifacts.whereExpr, childWhere]) : artifacts.whereExpr;
-    junctionJoins = [artifacts.junctionJoin];
-  } else {
-    const joinExpr = buildIncludeJoinExpr(include, child, parentLocalRefs);
-    whereExpr = childWhere ? AndExpr.of([joinExpr, childWhere]) : joinExpr;
+    return {
+      whereExpr: andWithChildWhere(artifacts.whereExpr, childWhere),
+      junctionJoins: [artifacts.junctionJoin],
+    };
   }
+  return {
+    whereExpr: andWithChildWhere(buildIncludeJoinExpr(include, child, parentLocalRefs), childWhere),
+    junctionJoins: [],
+  };
+}
 
+function andWithChildWhere(
+  expr: AnyExpression,
+  childWhere: AnyExpression | undefined,
+): AnyExpression {
+  return childWhere ? AndExpr.of([expr, childWhere]) : expr;
+}
+
+function withJunctionJoins(select: SelectAst, junctionJoins: ReadonlyArray<JoinAst>): SelectAst {
+  return junctionJoins.length > 0 ? select.withJoins(junctionJoins) : select;
+}
+
+function hasItems<T>(items: readonly T[] | undefined): items is readonly T[] {
+  return items !== undefined && items.length > 0;
+}
+
+function needsInnerScoping(state: CollectionState): boolean {
   const hasPagination = state.limit !== undefined || state.offset !== undefined;
-  const hasDistinct =
-    (state.distinct !== undefined && state.distinct.length > 0) ||
-    (state.distinctOn !== undefined && state.distinctOn.length > 0);
-  const needsInnerScoping = hasPagination || hasDistinct;
+  const hasDistinct = hasItems(state.distinct) || hasItems(state.distinctOn);
+  return hasPagination || hasDistinct;
+}
 
-  if (!needsInnerScoping) {
-    const aggregateExpr = buildIncludeAggregateExpr(
-      scalar,
-      scalar.column === undefined ? undefined : child.column(scalar.column),
-      resultLowering,
-      inputCodec,
-    );
-    const jsonObjectExpr = JsonObjectExpr.fromEntries([
-      JsonObjectExpr.entry('value', jsonEntryProjection(aggregateExpr, { codec: resultCodec })),
-    ]);
-    let select = SelectAst.from(child.tableSource(contract))
-      .withProjection([ProjectionItem.of(include.relationName, jsonObjectExpr)])
-      .withWhere(whereExpr);
-    if (junctionJoins.length > 0) {
-      select = select.withJoins(junctionJoins);
-    }
-    return select;
-  }
-
-  // Inner SELECT: materialise the shaped row set. Project only what
-  // the outer aggregate needs (the aggregate's column, or a constant
-  // for COUNT). ORDER BY columns are accessible via the FROM scope
-  // and don't need to be in the projection. Distinct columns are
-  // accessible to ROW_NUMBER OVER PARTITION BY the same way.
-  //
-  // Exception: when `state.distinct` (Prisma-style ROW_NUMBER dedup)
-  // is combined with `orderBy`, we must reapply the ordering on the
-  // wrapped (post-dedup) result so subsequent LIMIT / OFFSET slices
-  // the ordered deduped rows. Postgres has no contract that rows
-  // exit the `WHERE rn=1` wrap in any particular order. To do that
-  // we carry hidden order columns through the wrap and re-reference
-  // them on the wrapped alias — mirrors the row-include lowering in
-  // `buildIncludeChildRowsSelect`'s distinct branch.
-  const innerAlias = scope.alias(`${include.relationName}__scalar`);
-  const needsHiddenOrderProjection =
-    state.distinct !== undefined &&
-    state.distinct.length > 0 &&
-    state.orderBy !== undefined &&
-    state.orderBy.length > 0;
-  const hiddenOrderProjection: ReadonlyArray<ProjectionItem> = needsHiddenOrderProjection
-    ? state.orderBy.map((item, index) =>
-        ProjectionItem.of(`${include.relationName}__order_${index}`, item.expr),
-      )
-    : [];
-  const innerProjection: ProjectionItem[] = [
-    ...(scalar.column !== undefined
-      ? [ProjectionItem.of(scalar.column, child.column(scalar.column))]
-      : [ProjectionItem.of('__row', LiteralExpr.of(1))]),
-    ...hiddenOrderProjection,
-  ];
-
-  let inner = SelectAst.from(child.tableSource(contract))
-    .withProjection(innerProjection)
-    .withWhere(whereExpr);
-  if (junctionJoins.length > 0) {
-    inner = inner.withJoins(junctionJoins);
-  }
-
-  if (state.distinctOn !== undefined && state.distinctOn.length > 0) {
-    inner = inner.withDistinctOn(state.distinctOn.map((column) => child.column(column)));
-    if (state.orderBy !== undefined && state.orderBy.length > 0) {
-      inner = inner.withOrderBy(state.orderBy);
-    }
-  } else if (state.distinct !== undefined && state.distinct.length > 0) {
-    // Prisma-style `.distinct(cols)`: ROW_NUMBER dedup, mirroring
-    // `buildIncludeChildRowsSelect`'s distinct lowering. The ranking
-    // orderBy feeds the OVER clause so dedup picks the right
-    // representative; the reapplied orderBy below sequences the
-    // surviving rows for LIMIT / OFFSET.
-    const rankedAlias = scope.alias(`${include.relationName}__scalar_distinct`);
-    inner = wrapWithRowNumberDedup({
-      base: inner,
-      distinctColumnRefs: state.distinct.map((column) => child.column(column)),
-      rankingOrderBy: state.orderBy ?? [],
-      rankedAlias,
-    });
-    if (state.orderBy !== undefined && state.orderBy.length > 0) {
-      inner = inner.withOrderBy(
-        state.orderBy.map((item, index) =>
-          item.withExpr(ColumnRef.of(rankedAlias, `${include.relationName}__order_${index}`)),
-        ),
-      );
-    }
-  } else if (state.orderBy !== undefined && state.orderBy.length > 0) {
-    inner = inner.withOrderBy(state.orderBy);
-  }
-
-  if (state.limit !== undefined) {
-    inner = inner.withLimit(state.limit);
-  }
-  if (state.offset !== undefined) {
-    inner = inner.withOffset(state.offset);
-  }
-
-  // Outer aggregating SELECT over the shaped inner row set.
-  const outerAggregateExpr = buildIncludeAggregateExpr(
+function includeScalarProjection(
+  include: IncludeExpr,
+  scalar: IncludeScalar<unknown>,
+  aggregate: ReturnType<typeof scalarAggregateOf>,
+  columnExpr: ColumnRef | undefined,
+): ProjectionItem {
+  const aggregateExpr = buildIncludeAggregateExpr(
     scalar,
-    scalar.column === undefined ? undefined : ColumnRef.of(innerAlias, scalar.column),
-    resultLowering,
-    inputCodec,
+    columnExpr,
+    aggregate.lower,
+    aggregate.input,
   );
-  const outerJsonObjectExpr = JsonObjectExpr.fromEntries([
-    JsonObjectExpr.entry('value', jsonEntryProjection(outerAggregateExpr, { codec: resultCodec })),
+  const jsonObjectExpr = JsonObjectExpr.fromEntries([
+    JsonObjectExpr.entry('value', jsonEntryProjection(aggregateExpr, { codec: aggregate.codec })),
   ]);
+  return ProjectionItem.of(include.relationName, jsonObjectExpr);
+}
 
-  return SelectAst.from(DerivedTableSource.as(innerAlias, inner)).withProjection([
-    ProjectionItem.of(include.relationName, outerJsonObjectExpr),
-  ]);
+// Inner SELECT: materialise the shaped row set. Project only what
+// the outer aggregate needs (the aggregate's column, or a constant
+// for COUNT). ORDER BY columns are accessible via the FROM scope
+// and don't need to be in the projection. Distinct columns are
+// accessible to ROW_NUMBER OVER PARTITION BY the same way.
+//
+// Exception: when `state.distinct` (Prisma-style ROW_NUMBER dedup)
+// is combined with `orderBy`, we must reapply the ordering on the
+// wrapped (post-dedup) result so subsequent LIMIT / OFFSET slices
+// the ordered deduped rows. Postgres has no contract that rows
+// exit the `WHERE rn=1` wrap in any particular order. To do that
+// we carry hidden order columns through the wrap and re-reference
+// them on the wrapped alias — mirrors the row-include lowering in
+// `buildIncludeChildRowsSelect`'s distinct branch.
+function buildIncludeScalarInnerSelect(
+  contract: Contract<SqlStorage>,
+  scope: TableScope,
+  include: IncludeExpr,
+  scalar: IncludeScalar<unknown>,
+  correlation: IncludeChildCorrelation,
+): SelectAst {
+  const state = scalar.state;
+  const inner = withJunctionJoins(
+    SelectAst.from(state.tables.root.tableSource(contract))
+      .withProjection(includeScalarInnerProjection(include, scalar))
+      .withWhere(correlation.whereExpr),
+    correlation.junctionJoins,
+  );
+  return withLimitAndOffset(applyInnerDistinctAndOrder(scope, include, state, inner), state);
+}
+
+function includeScalarInnerProjection(
+  include: IncludeExpr,
+  scalar: IncludeScalar<unknown>,
+): ProjectionItem[] {
+  const state = scalar.state;
+  const valueProjection =
+    scalar.column !== undefined
+      ? ProjectionItem.of(scalar.column, state.tables.root.column(scalar.column))
+      : ProjectionItem.of('__row', LiteralExpr.of(1));
+  const hiddenOrderProjection: ReadonlyArray<ProjectionItem> =
+    hasItems(state.distinct) && hasItems(state.orderBy)
+      ? state.orderBy.map((item, index) =>
+          ProjectionItem.of(`${include.relationName}__order_${index}`, item.expr),
+        )
+      : [];
+  return [valueProjection, ...hiddenOrderProjection];
+}
+
+function applyInnerDistinctAndOrder(
+  scope: TableScope,
+  include: IncludeExpr,
+  state: CollectionState,
+  inner: SelectAst,
+): SelectAst {
+  const child = state.tables.root;
+  if (hasItems(state.distinctOn)) {
+    const deduped = inner.withDistinctOn(state.distinctOn.map((column) => child.column(column)));
+    return hasItems(state.orderBy) ? deduped.withOrderBy(state.orderBy) : deduped;
+  }
+  if (hasItems(state.distinct)) {
+    return applyRowNumberDistinct(scope, include, state, state.distinct, inner);
+  }
+  return hasItems(state.orderBy) ? inner.withOrderBy(state.orderBy) : inner;
+}
+
+// Prisma-style `.distinct(cols)`: ROW_NUMBER dedup, mirroring
+// `buildIncludeChildRowsSelect`'s distinct lowering. The ranking
+// orderBy feeds the OVER clause so dedup picks the right
+// representative; the reapplied orderBy below sequences the
+// surviving rows for LIMIT / OFFSET.
+function applyRowNumberDistinct(
+  scope: TableScope,
+  include: IncludeExpr,
+  state: CollectionState,
+  distinct: readonly string[],
+  inner: SelectAst,
+): SelectAst {
+  const child = state.tables.root;
+  const rankedAlias = scope.alias(`${include.relationName}__scalar_distinct`);
+  const ranked = wrapWithRowNumberDedup({
+    base: inner,
+    distinctColumnRefs: distinct.map((column) => child.column(column)),
+    rankingOrderBy: state.orderBy ?? [],
+    rankedAlias,
+  });
+  if (!hasItems(state.orderBy)) {
+    return ranked;
+  }
+  return ranked.withOrderBy(
+    state.orderBy.map((item, index) =>
+      item.withExpr(ColumnRef.of(rankedAlias, `${include.relationName}__order_${index}`)),
+    ),
+  );
+}
+
+function withLimitAndOffset(select: SelectAst, state: CollectionState): SelectAst {
+  const limited = state.limit !== undefined ? select.withLimit(state.limit) : select;
+  return state.offset !== undefined ? limited.withOffset(state.offset) : limited;
 }
 
 function buildIncludeAggregateExpr(
