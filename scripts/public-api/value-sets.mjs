@@ -38,10 +38,10 @@ const KIND_MEMBER = /^(?:readonly )?kind\??: (.*)$/;
 const PROPERTY =
   /^(?:abstract )?(?:class|interface) ([A-Za-z_$][\w$]*), (?:(?:readonly|static|protected|public) )*(?:required|optional) property ([A-Za-z_$][\w$]*)\??: (.*)$/;
 const KIND_PROPERTY =
-  /^(?:class|interface) ([A-Za-z_$][\w$]*), (?:readonly )?(?:required|optional) property kind\??: /;
+  /^(?:class|interface) ([A-Za-z_$][\w$]*), (?:readonly )?(?:required|optional) property kind\??: (.*)$/;
 const LITERAL = /^(?:'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"|-?\d+(?:\.\d+)?|true|false)$/;
 const NAME = /^[A-Za-z_$][\w$]*$/;
-const OPEN_LITERALS = /^\(?(?:string|number|`[^`]*`) & \{\s*\}\)?$/;
+const OPEN_LITERALS = /^\(?(?:string|number|`[^`]*\$\{(?:string|number)\}[^`]*`) & \{\s*\}\)?$/;
 const SENTINEL = /^(['"])%future added value\1$/;
 
 function splitTopLevel(text, separator) {
@@ -103,7 +103,7 @@ function inlineKinds(member) {
 
 function readList(text) {
   const aliases = new Map();
-  const withKind = new Set();
+  const withKind = new Map();
   const consts = new Map();
   const properties = new Map();
   for (const line of text.split('\n')) {
@@ -112,7 +112,7 @@ function readList(text) {
     const declaration = line.slice(prefix[0].length);
     const path = prefix[1];
     const kind = KIND_PROPERTY.exec(declaration);
-    if (kind) withKind.add(kind[1]);
+    if (kind) withKind.set(kind[1], splitTopLevel(kind[2], '|'));
     const constant = CONST.exec(declaration);
     if (constant) consts.set(constant[1], constant[2]);
     const property = PROPERTY.exec(declaration);
@@ -143,11 +143,23 @@ function readList(text) {
 function shapeOf(name, list, seen = new Set()) {
   const alias = list.aliases.get(name);
   if (alias === undefined) {
-    return list.withKind.has(name) ? { shape: 'objects', open: false, values: 1 } : {};
+    const kinds = list.withKind.get(name);
+    if (kinds === undefined || seen.has(name)) return {};
+    let open = false;
+    let values = 0;
+    for (const kind of kinds) {
+      if (SENTINEL.test(kind)) open = true;
+      else if (LITERAL.test(kind)) values++;
+      else {
+        const inner = NAME.test(kind) ? shapeOf(kind, list, new Set([...seen, name])) : {};
+        if (inner.shape !== 'literals') return {};
+        values += inner.values;
+      }
+    }
+    return { shape: 'objects', open, values };
   }
   if (seen.has(name)) return {};
-  seen.add(name);
-  return shapeOfMembers(alias.members, list, seen);
+  return shapeOfMembers(alias.members, list, new Set([...seen, name]));
 }
 
 function shapeOfMembers(members, list, seen) {
@@ -192,16 +204,14 @@ function constValues(member, list) {
   if (type === undefined) return undefined;
   if (tuple) {
     const items = /^readonly \[(.*)\]$/.exec(type);
-    return items && splitTopLevel(items[1], ',');
+    return items ? splitTopLevel(items[1], ',') : undefined;
   }
   const properties = /^\{(.*)\}$/.exec(type);
-  return (
-    properties &&
-    splitTopLevel(properties[1], ';').map((property) =>
-      key
-        ? `'${/^(?:readonly )?([\w$]+)\??: /.exec(property)?.[1]}'`
-        : property.replace(/^(?:readonly )?[\w$]+\??: /, ''),
-    )
+  if (!properties) return undefined;
+  return splitTopLevel(properties[1], ';').map((property) =>
+    key
+      ? `'${/^(?:readonly )?([\w$]+)\??: /.exec(property)?.[1]}'`
+      : property.replace(/^(?:readonly )?[\w$]+\??: /, ''),
   );
 }
 
@@ -222,7 +232,7 @@ export function findValueSets(text) {
   return sets.sort((a, b) => compareCodeUnits(a.name, b.name));
 }
 
-export function checkValueSets(lists, declarations) {
+export function checkValueSets(lists, declarations, { version } = {}) {
   const problems = [];
   const exported = new Map();
   for (const { package: pkg, text } of lists) {
@@ -255,6 +265,12 @@ export function checkValueSets(lists, declarations) {
     if (declaration.status !== 'pending' && declaration.recommended !== undefined) {
       problems.push(
         `${key}: only a pending declaration has "recommended", in ${DECLARATIONS_FILE}`,
+      );
+      continue;
+    }
+    if (declaration.status === 'pending' && version !== undefined && !version.includes('-')) {
+      problems.push(
+        `${key} is pending, but ${version} is not a prerelease: decide it before the release`,
       );
       continue;
     }
@@ -312,7 +328,10 @@ export function readDeclarations(file) {
 
 export function main({ root, stdout = process.stdout, stderr = process.stderr }) {
   const lists = readPublishedLists(root);
-  const problems = checkValueSets(lists, readDeclarations(join(root, DECLARATIONS_FILE)));
+  const { version } = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+  const problems = checkValueSets(lists, readDeclarations(join(root, DECLARATIONS_FILE)), {
+    version,
+  });
   for (const problem of problems) stderr.write(`${problem}\n`);
   if (problems.length > 0) return 1;
   const count = lists.reduce((sum, { text }) => sum + findValueSets(text).length, 0);

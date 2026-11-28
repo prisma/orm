@@ -2,6 +2,7 @@ import type { SqlPslBuildContext } from '@internal/family-sql/control';
 import { describe, expect, it, vi } from 'vitest';
 import { describeFullTextIndexProblem } from '../src/core/full-text-index-definition';
 import { buildGeneratorAttributes } from '../src/core/psl-print/generated-values';
+import { postgresNodeEntityKind } from '../src/core/schema-ir/schema-node-kinds';
 
 vi.mock('@internal/family-sql/psl-build', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -26,6 +27,13 @@ describe('defaults over sets a later release may add to', () => {
       'The index breaks a full-text index rule this version does not name ("%future added value").',
     );
   });
+
+  it.each(['__proto__', 'constructor', 'toString'])(
+    'maps the node kind %s, an inherited property name, to no entity',
+    (kind) => {
+      expect(postgresNodeEntityKind(kind)).toBeUndefined();
+    },
+  );
 
   it('treats a generator refusal of a kind it does not know as a bug of the release', () => {
     expect(() =>

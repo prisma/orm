@@ -164,11 +164,34 @@ A level on a member, such as a method named `preview_run` on a class, is not rea
 
 ## Sets of values
 
-An exported type that lists the values of something, such as a union of error codes, a union of objects told apart by a literal `kind`, or a property whose type is written as such a union, is a set of values. Which way its values flow decides what it must be. A set users receive from us and may switch over is open or closed. A set whose values users only pass to us, such as an option or a codec's `jsonType`, is an input: adding a value never breaks them, and a catch-all member would remove their spelling check, so it stays a plain union. A set that is a type parameter of other types, such as the built-in kinds that key a contract view's entries, stays closed in form.
+An exported type that lists the values of something is a set of values: a union of error codes, a union of objects told apart by a literal `kind`, or a property whose type is written as such a union. Each set is one of four kinds:
 
-An open set may gain a value in any release. Its type carries a catch-all member, which stops a `never` exhaustiveness check from compiling, so users write a default branch from the start, while the named values still autocomplete: `(string & {})` for strings, a template such as `` (`MIGRATION.${string}` & {}) `` for codes under a prefix, `(number & {})` for numbers, and an object member whose `kind` is `'%future added value'` for a union of objects, which keeps narrowing on `kind` working. That sentinel may carry only the members every kind has, such as `key`, so code that reads them still compiles. Where our own code switches over an open set of objects, its default branch assigns the kind to the sentinel's type (`const later: '%future added value' = refusal.kind`), so a kind we add without a case still fails to compile. It suits a union users only receive: on a union users also pass in, it lets them pass a value that cannot exist, and it cannot carry the methods of a union of classes, which is one reason the syntax-tree unions are closed. A closed set changes only in a major version. Error and refusal codes are open, and so is any set an extension can add to.
+- **Open:** we may add a value in any 8.x release. Its type carries a catch-all member, so a user's `never` exhaustiveness check does not compile and a new value falls to their default branch.
+- **Closed:** it changes only in a major version.
+- **Input:** users only pass its values to us, such as an option or a codec's `jsonType`. Adding a value never breaks them, and a catch-all member would remove their spelling check, so it stays a plain union.
+- **Type parameter:** it keys other types, such as the built-in kinds that key a contract view's entries. It stays a plain union.
 
-`pnpm api:sets` reads the `api.txt` lists and fails on a set that has no catch-all member and is not in `packages/9-public/value-sets.json`. Each entry there names its package and its type, or `Type.property` for a property, with a reason and one of four statuses: `closed`, `input`, `type-parameter`, or `pending`. `pending` is allowed only for a set in the framework domain (`packages/1-framework`) while we agree whether this work may change it, and carries the status we recommend in `recommended`. The check also fails on an entry that names no exported set or names an open one, and on two entries for one set.
+Which way the values flow decides the kind. A set users receive from us and may switch over is open or closed: error and refusal codes are open, and so is any set an extension can add to.
+
+The catch-all member of an open set:
+
+- A union of strings gets `(string & {})`, which keeps the named values in editor completion.
+- A union of codes under a prefix gets a template with an unbounded placeholder, such as `` (`MIGRATION.${string}` & {}) ``.
+- A union of numbers gets `(number & {})`.
+- A union of objects gets a member whose `kind` is `'%future added value'`, which keeps narrowing on `kind` working.
+
+Limits of the object sentinel:
+
+- It carries only the members every kind has, such as `key`, so code that reads them still compiles.
+- It suits a union users only receive. On a union users also pass in, it lets them pass a value that cannot exist.
+- It cannot carry the methods of a union of classes, which is one reason the syntax-tree unions are closed.
+- Where our own code switches over an open set of objects, its default branch assigns the kind to the sentinel's type (`const later: '%future added value' = refusal.kind`), so a kind we add without a case still fails to compile. For an open set of strings or numbers no such check is possible.
+
+`pnpm api:sets` reads the `api.txt` lists and fails on a set that has no catch-all member and is not in `packages/9-public/value-sets.json`. Each entry names its package and its type, or `Type.property` for a property, with a reason and one of four statuses: `closed`, `input`, `type-parameter` or `pending`.
+
+- `pending` is allowed only for a set in the framework domain (`packages/1-framework`) while we agree whether this work may change it. It carries the status we recommend in `recommended`.
+- `pending` fails once the root `package.json` version is not a prerelease, so 8.0.0 cannot be cut with one.
+- The check also fails on an entry that names no exported set or names an open one, and on two entries for one set.
 
 ## Recording a break you mean
 

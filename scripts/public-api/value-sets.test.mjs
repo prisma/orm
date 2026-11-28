@@ -167,6 +167,59 @@ describe('findValueSets', () => {
     );
   });
 
+  it('counts a template only with an unbounded placeholder as a catch-all', () => {
+    const sets = findValueSets(
+      api(
+        "./a: type Finite = 'A' | 'B' | (`C` & {})",
+        "./a: type Prefixed = 'M.A' | 'M.B' | (`M.${string}` & {})",
+      ),
+    );
+    deepStrictEqual(
+      sets.map(({ name, open }) => [name, open]),
+      [['Prefixed', true]],
+    );
+  });
+
+  it('reads the kinds of named declarations, the sentinel among them', () => {
+    const sets = findValueSets(
+      api(
+        './a: interface Sel, readonly required property kind: "select"',
+        "./a: interface Later, readonly required property kind: '%future added value'",
+        './a: interface Loose, readonly required property kind: string',
+        './a: type Open = Later | Sel',
+        './a: type NotCases = Loose | Sel',
+      ),
+    );
+    deepStrictEqual(
+      sets.map(({ name, open }) => [name, open]),
+      [['Open', true]],
+    );
+  });
+
+  it('skips a constant whose type lists no values', () => {
+    deepStrictEqual(
+      findValueSets(
+        api('./a: const VALUES: readonly string[]', './a: type Value = (typeof VALUES)[number]'),
+      ),
+      [],
+    );
+  });
+
+  it('finds a union whose branches share a member union', () => {
+    const sets = findValueSets(
+      api(
+        "(not exported) type Inner = 'a' | 'b'",
+        "(not exported) type Left = 'c' | Inner",
+        "(not exported) type Right = 'd' | Inner",
+        './a: type Outer = Left | Right',
+      ),
+    );
+    deepStrictEqual(
+      sets.map(({ name }) => name),
+      ['Outer'],
+    );
+  });
+
   it('drops null and undefined from a property union', () => {
     const [set] = findValueSets(
       api("./a: interface Row, readonly required property status: 'applied' | 'pending' | null"),
@@ -288,6 +341,31 @@ describe('checkValueSets', () => {
     deepStrictEqual(problems.length, 2);
     match(problems[0], /Direction: only a pending declaration has "recommended"/);
     match(problems[1], /Phase: a pending declaration needs "recommended", one of/);
+  });
+
+  it('refuses pending once the release is not a prerelease', () => {
+    const framework = {
+      package: '@prisma/orm-framework',
+      text: api("./components: type Phase = 'a' | 'b'"),
+    };
+    const declarations = [
+      closedDirection,
+      { ...closedDirection, type: 'Unmarked' },
+      {
+        package: '@prisma/orm-framework',
+        type: 'Phase',
+        status: 'pending',
+        recommended: 'open',
+        reason: 'Waits.',
+      },
+    ];
+    deepStrictEqual(
+      checkValueSets([...lists, framework], declarations, { version: '8.0.0-rc.25' }),
+      [],
+    );
+    const problems = checkValueSets([...lists, framework], declarations, { version: '8.0.0' });
+    deepStrictEqual(problems.length, 1);
+    match(problems[0], /Phase is pending, but 8\.0\.0 is not a prerelease/);
   });
 
   it('passes when every set is open or declared', () => {

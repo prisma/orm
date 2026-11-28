@@ -380,7 +380,9 @@ export function refusalDiagnostic(
             'PSL_INVALID_INDEX',
             refusal.rule === 'wildcard-with-type'
               ? `wildcard() fields cannot be combined with type: ${wildcardTypeOf(site.index)}`
-              : (INDEX_SHAPE_MESSAGES[refusal.rule]?.(model) ??
+              : ((Object.hasOwn(INDEX_SHAPE_MESSAGES, refusal.rule)
+                  ? INDEX_SHAPE_MESSAGES[refusal.rule]?.(model)
+                  : undefined) ??
                   `Index on model "${model}" breaks the index rule "${refusal.rule}"`),
           );
         case 'indexScopeConflict':

@@ -19,4 +19,17 @@ describe('returningRefusal for a statement a later release adds', () => {
       'MySQL cannot return the rows a merge writes; it has no RETURNING',
     );
   });
+
+  it.each(['__proto__', 'constructor', 'toString'])(
+    'names %s, an inherited property name, as a statement',
+    (name) => {
+      const probe = new ReturningRefusalProbe(
+        createMysqlBuiltinCodecLookup(),
+        mysqlTargetDescriptorMetaRuntime,
+      );
+      expect(probe.refusalFor(name)).toBe(
+        `MySQL cannot return the rows a ${name} writes; it has no RETURNING`,
+      );
+    },
+  );
 });

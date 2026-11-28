@@ -2890,7 +2890,7 @@
 ./family/control: interface ControlPolicySubject, readonly required property createsNewObject: boolean
 ./family/control: interface ControlPolicySubject, readonly required property namespaceId: string
 ./family/control: interface ConvertedColumn
-./family/control: interface ConvertedColumn, readonly required property by: 'cast' | 'conversion' | (string & {})
+./family/control: interface ConvertedColumn, readonly required property by: 'cast' | 'conversion'
 ./family/control: interface ConvertedColumn, readonly required property column: string
 ./family/control: interface ConvertedColumn, readonly required property table: string
 ./family/control: interface CreateSqlMigrationPlanOptions, readonly optional property meta?: AnyRecord
@@ -3642,7 +3642,7 @@
 ./family: interface ControlPolicySubject, readonly required property createsNewObject: boolean
 ./family: interface ControlPolicySubject, readonly required property namespaceId: string
 ./family: interface ConvertedColumn
-./family: interface ConvertedColumn, readonly required property by: 'cast' | 'conversion' | (string & {})
+./family: interface ConvertedColumn, readonly required property by: 'cast' | 'conversion'
 ./family: interface ConvertedColumn, readonly required property column: string
 ./family: interface ConvertedColumn, readonly required property table: string
 ./family: interface CreateSqlMigrationPlanOptions, readonly optional property meta?: AnyRecord

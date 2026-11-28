@@ -394,7 +394,7 @@ export function refusalError(refusal: BuildRefusal): StructuredError {
     case 'indexShape':
       return contractError(
         'CONTRACT.INDEX_INVALID',
-        `Model "${refusal.key.model}" index ${refusal.signature} ${INDEX_SHAPE_MESSAGES[refusal.rule] ?? `breaks the index rule "${refusal.rule}".`}`,
+        `Model "${refusal.key.model}" index ${refusal.signature} ${(Object.hasOwn(INDEX_SHAPE_MESSAGES, refusal.rule) ? INDEX_SHAPE_MESSAGES[refusal.rule] : undefined) ?? `breaks the index rule "${refusal.rule}".`}`,
         {
           meta: {
             modelName: refusal.key.model,

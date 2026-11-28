@@ -15,6 +15,21 @@ describe('refusalError for a value a later release adds', () => {
     );
   });
 
+  it.each(['__proto__', 'constructor', 'toString'])(
+    'words the index rule %s, an inherited property name, by its name',
+    (rule) => {
+      const error = refusalError({
+        kind: 'indexShape',
+        key: { kind: 'index', model: 'User', position: 0 },
+        rule,
+        signature: '{ email: 1 }',
+      });
+      expect(error.message).toBe(
+        `Model "User" index { email: 1 } breaks the index rule "${rule}".`,
+      );
+    },
+  );
+
   it('words a restated-field difference it does not know by its name', () => {
     const error = refusalError({
       kind: 'restatedBaseFieldDiffers',

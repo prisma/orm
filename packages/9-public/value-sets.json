@@ -422,6 +422,12 @@
     },
     {
       "package": "@prisma/orm-family-sql",
+      "type": "ConvertedColumn.by",
+      "status": "closed",
+      "reason": "Written into a migration's ops.json by our planner and read back by our operations reader, which accepts only these two values; a new value changes the stored migration format, so it changes only in a major version."
+    },
+    {
+      "package": "@prisma/orm-family-sql",
       "type": "DdlTableConstraint",
       "status": "closed",
       "reason": "Code users write over the SQL syntax tree is exhaustive over its kinds, as our renderers and ExprVisitor are, and new SQL functions and operators arrive as contributed operations (OperationExpr), as ADR 020 sets out for aggregates; so in 8.x the tree gains no new kind and the set changes only in a major version. A catch-all member would also lack the methods the classes share (accept, rewrite)."
@@ -645,21 +651,7 @@
     },
     {
       "package": "@prisma/orm-framework",
-      "type": "Activity",
-      "status": "pending",
-      "recommended": "open",
-      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
-    },
-    {
-      "package": "@prisma/orm-framework",
       "type": "ActivityContext.scope",
-      "status": "pending",
-      "recommended": "open",
-      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
-    },
-    {
-      "package": "@prisma/orm-framework",
-      "type": "ActivityEndedResult",
       "status": "pending",
       "recommended": "open",
       "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
@@ -1132,13 +1124,6 @@
       "status": "pending",
       "recommended": "input",
       "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain."
-    },
-    {
-      "package": "@prisma/orm-framework",
-      "type": "PslNamespaceEntry",
-      "status": "pending",
-      "recommended": "open",
-      "reason": "In the framework domain (packages/1-framework); pending until we agree whether this work may change that domain. The PSL syntax tree and its tokens: users only receive them, and new PSL syntax may add kinds, so open; where the members are classes with shared methods, closed, because the sentinel cannot carry those methods."
     },
     {
       "package": "@prisma/orm-framework",

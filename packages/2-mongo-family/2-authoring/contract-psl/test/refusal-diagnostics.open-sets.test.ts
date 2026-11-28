@@ -32,6 +32,24 @@ describe('refusalDiagnostic for an index rule a later release adds', () => {
     });
   });
 
+  it.each(['__proto__', 'constructor', 'toString'])(
+    'words the index rule %s, an inherited property name, by its name',
+    (rule) => {
+      const diagnostic = refusalDiagnostic(
+        {
+          kind: 'indexShape',
+          key: { kind: 'index', model: 'User', position: 0 },
+          rule,
+          signature: '{ email: 1 }',
+        },
+        sites,
+      );
+      expect(diagnostic).toMatchObject({
+        message: `Index on model "User" breaks the index rule "${rule}"`,
+      });
+    },
+  );
+
   it('treats a refusal of a kind it does not know as a bug of the release', () => {
     expect(() => refusalDiagnostic({ kind: '%future added value', key: undefined }, sites)).toThrow(
       InternalError,

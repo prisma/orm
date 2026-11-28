@@ -106,7 +106,9 @@ const POSTGRES_NODE_ENTITY_KIND: Partial<Readonly<Record<PostgresSchemaNodeKind,
 
 /** Looks up the storage entityKind for a Postgres-specific `nodeKind`. */
 export function postgresNodeEntityKind(nodeKind: PostgresSchemaNodeKind): string | undefined {
-  return POSTGRES_NODE_ENTITY_KIND[nodeKind];
+  return Object.hasOwn(POSTGRES_NODE_ENTITY_KIND, nodeKind)
+    ? POSTGRES_NODE_ENTITY_KIND[nodeKind]
+    : undefined;
 }
 
 /**
