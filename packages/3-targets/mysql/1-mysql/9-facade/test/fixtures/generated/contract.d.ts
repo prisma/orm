@@ -28,6 +28,11 @@ export type AggregateTypes = {
   readonly avg: {
     readonly byCodec: {
       readonly 'mysql/bigint@1': { readonly output: 'mysql/double@1'; readonly nullable: true };
+      readonly 'mysql/bigintnumber@1': {
+        readonly output: 'mysql/double@1';
+        readonly nullable: true;
+      };
+      readonly 'mysql/double@1': { readonly output: 'mysql/double@1'; readonly nullable: true };
       readonly 'mysql/int@1': { readonly output: 'mysql/double@1'; readonly nullable: true };
     };
   };
@@ -65,6 +70,7 @@ export type AggregateTypes = {
         readonly nullable: true;
       };
       readonly 'mysql/datetime@1': { readonly output: 'mysql/datetime@1'; readonly nullable: true };
+      readonly 'mysql/decimal@1': { readonly output: 'mysql/decimal@1'; readonly nullable: true };
       readonly 'mysql/double@1': { readonly output: 'mysql/double@1'; readonly nullable: true };
       readonly 'mysql/enum@1': { readonly output: 'mysql/enum@1'; readonly nullable: true };
       readonly 'mysql/int@1': { readonly output: 'mysql/int@1'; readonly nullable: true };
@@ -117,6 +123,7 @@ export type AggregateTypes = {
         readonly nullable: true;
       };
       readonly 'mysql/datetime@1': { readonly output: 'mysql/datetime@1'; readonly nullable: true };
+      readonly 'mysql/decimal@1': { readonly output: 'mysql/decimal@1'; readonly nullable: true };
       readonly 'mysql/double@1': { readonly output: 'mysql/double@1'; readonly nullable: true };
       readonly 'mysql/enum@1': { readonly output: 'mysql/enum@1'; readonly nullable: true };
       readonly 'mysql/int@1': { readonly output: 'mysql/int@1'; readonly nullable: true };
@@ -151,12 +158,22 @@ export type AggregateTypes = {
         readonly output: 'mysql/bigintnumber@1';
         readonly nullable: true;
       };
+      readonly 'mysql/bigintnumber@1': {
+        readonly output: 'mysql/bigintnumber@1';
+        readonly nullable: true;
+      };
+      readonly 'mysql/decimal@1': { readonly output: 'mysql/decimal@1'; readonly nullable: true };
+      readonly 'mysql/double@1': { readonly output: 'mysql/double@1'; readonly nullable: true };
       readonly 'mysql/int@1': { readonly output: 'mysql/bigintnumber@1'; readonly nullable: true };
     };
   };
   readonly sumBigInt: {
     readonly byCodec: {
       readonly 'mysql/bigint@1': { readonly output: 'mysql/bigint@1'; readonly nullable: true };
+      readonly 'mysql/bigintnumber@1': {
+        readonly output: 'mysql/bigint@1';
+        readonly nullable: true;
+      };
       readonly 'mysql/int@1': { readonly output: 'mysql/bigint@1'; readonly nullable: true };
     };
   };
@@ -471,6 +488,7 @@ type ContractBase = Omit<
       readonly defaultInInsert: true;
       readonly enums: true;
       readonly foreignKeys: true;
+      readonly interactiveTransactions: true;
       readonly jsonAgg: true;
       readonly jsonAggWithoutTruncation: true;
       readonly limit: true;

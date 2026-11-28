@@ -94,22 +94,34 @@ export function contractOf(models: Record<string, ModelSpec>): Contract<SqlStora
             id,
             entries: {
               table: Object.fromEntries(
-                inNamespace(id)
-                  .flatMap(([, spec]) => (spec.table === null ? [] : [spec]))
-                  .map((spec) => [
-                    spec.table,
+                [
+                  ...new Set(
+                    inNamespace(id).flatMap(([, spec]) =>
+                      spec.table === null ? [] : [spec.table],
+                    ),
+                  ),
+                ].map((table) => {
+                  const specs = inNamespace(id)
+                    .map(([, spec]) => spec)
+                    .filter((spec) => spec.table === table);
+                  const control = specs.find((spec) => spec.control !== undefined)?.control;
+                  return [
+                    table,
                     new StorageTable({
                       columns: Object.fromEntries(
-                        Object.values(spec.fields ?? {}).flatMap((column) =>
-                          column === null ? [] : [[column, text]],
+                        specs.flatMap((spec) =>
+                          Object.values(spec.fields ?? {}).flatMap((column) =>
+                            column === null ? [] : [[column, text]],
+                          ),
                         ),
                       ),
                       uniques: [],
                       indexes: [],
                       foreignKeys: [],
-                      ...(spec.control === undefined ? {} : { control: spec.control }),
+                      ...(control === undefined ? {} : { control }),
                     }),
-                  ]),
+                  ];
+                }),
               ),
             },
           }),
@@ -206,6 +218,7 @@ export function fakeTarget(
   const tables = new Map(initial.map((table) => [table, new Set(columns[table] ?? [])]));
   const existingNamespaces = namespaces === undefined ? undefined : new Set(namespaces);
   const schemaTables: SchemaTables = {
+    sameName,
     hasTable: (namespaceId, table) => tables.has(`${namespaceId}.${table}`),
     hasColumn: (namespaceId, table, column) =>
       tables.get(`${namespaceId}.${table}`)?.has(column) === true,
@@ -252,11 +265,6 @@ export function fakeTarget(
       call(`table ${rename.namespaceId}.${rename.from} -> ${rename.to}`),
     renameColumnCall: (rename: ColumnRename) =>
       call(`column ${rename.namespaceId}.${rename.table}.${rename.from} -> ${rename.to}`),
-    renderTableRename: (rename: TableRename) =>
-      `renameTable ${rename.namespaceId}.${rename.from} -> ${rename.to}`,
-    tableRenameByHand: (rename: TableRename) => [
-      `RENAME ${rename.namespaceId}.${rename.from} TO ${rename.to}`,
-    ],
     apply: ({ text }) => {
       const [kind, from, , to] = text.split(' ');
       if (kind === 'namespace' && from !== undefined) {
@@ -326,7 +334,7 @@ export function renameNamespace(from: string, to: string): ResolvedNamespaceRena
 /** The planned statements, with each call given by its text. */
 export function planned(result: ReturnType<typeof planStatements<FakeCall>>) {
   if (!result.ok) throw new Error(`expected a plan, got: ${result.failure.summary}`);
-  const { origins: _origins, ...value } = result.value;
+  const { origins: _origins, storageRenames: _storageRenames, ...value } = result.value;
   return { ...value, calls: value.calls.map((call) => call.text) };
 }
 

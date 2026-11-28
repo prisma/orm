@@ -61,7 +61,7 @@ describe('PostgresMigrationPlanner authoring surface', () => {
             tables: {},
           }),
         },
-        pgVersion: '',
+        serverVersionNumber: undefined,
         roles: [],
         existingSchemas: [],
       });

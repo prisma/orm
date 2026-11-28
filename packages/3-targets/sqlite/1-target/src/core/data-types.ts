@@ -101,6 +101,7 @@ const SQLITE_MAX_LENGTH = 2147483647;
 
 /** The length of `character` and `character varying`, which SQLite accepts and does not enforce, up to SQLite's largest string length, so a double holds every accepted length exactly. */
 export const sqliteCharacterLengthParams = arktype({
+  '+': 'reject',
   'length?': `number.integer >= 1 & number.integer <= ${SQLITE_MAX_LENGTH}`,
 });
 

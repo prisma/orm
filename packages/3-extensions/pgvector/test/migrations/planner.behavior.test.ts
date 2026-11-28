@@ -109,7 +109,7 @@ describe('PostgresMigrationPlanner - subset/superset/conflict handling', () => {
       },
       roles: [],
       existingSchemas: [],
-      pgVersion: '',
+      serverVersionNumber: undefined,
     });
 
     const result = planner.plan({
@@ -153,7 +153,7 @@ describe('PostgresMigrationPlanner - subset/superset/conflict handling', () => {
       },
       roles: [],
       existingSchemas: [],
-      pgVersion: '',
+      serverVersionNumber: undefined,
     });
 
     const result = planner.plan({
@@ -207,7 +207,7 @@ describe('PostgresMigrationPlanner - subset/superset/conflict handling', () => {
       },
       roles: [],
       existingSchemas: [],
-      pgVersion: '',
+      serverVersionNumber: undefined,
     });
 
     const result = planner.plan({
@@ -804,7 +804,7 @@ async function planUserTableOperations(
     },
     roles: [],
     existingSchemas: [],
-    pgVersion: '',
+    serverVersionNumber: undefined,
   });
   const result = planner.plan({
     contract,

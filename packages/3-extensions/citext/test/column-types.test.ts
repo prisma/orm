@@ -1,4 +1,4 @@
-import { defineContract } from '@internal/postgres/contract-builder';
+import { defineContract, postgres18, postgresDriver } from '@internal/postgres/contract-builder';
 import { describe, expect, it } from 'vitest';
 import { citext, citextColumn } from '../src/exports/column-types';
 import citextPack from '../src/exports/pack';
@@ -14,7 +14,10 @@ describe('citext column type', () => {
 
   it('builds a column of the citext/citext data type', () => {
     const contract = defineContract(
-      { extensions: { citext: citextPack } },
+      {
+        requiredCapabilities: [...postgres18, ...postgresDriver],
+        extensions: { citext: citextPack },
+      },
       ({ field, model, type }) => ({
         models: {
           User: model('User', {

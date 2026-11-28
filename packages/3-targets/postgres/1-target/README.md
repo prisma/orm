@@ -10,12 +10,12 @@ Postgres target pack for Prisma 8.
 
 ## Purpose
 
-Provides the Postgres target descriptor (`SqlControlTargetDescriptor`) for CLI config. The target descriptor includes capabilities and type information directly as properties, as well as factories for creating migration planners and runners.
+Provides the Postgres target descriptor (`SqlControlTargetDescriptor`) for CLI config. The target descriptor includes type information directly as properties, as well as factories for creating migration planners and runners. The target also holds the table of which PostgreSQL version provides which capability (`postgresCapabilitiesByVersion` in `src/core/server-version.ts`). The supported versions, the oldest and the newest (`POSTGRES_MIN_SERVER_VERSION`, `POSTGRES_NEWEST_VERSION`) are in `src/core/server-version-range.ts`, exported as `./server-version-range`; that module imports nothing, so the facade's `init` entrypoint can use it without loading framework code. The table must have a row for exactly those versions. The facade builds its lists of capability keys for each version (`postgres15` to `postgres18`) from this table, and the refusal of a database names, for each missing capability, the first version that provides it. The descriptors' own `capabilities` are empty. The runtime descriptor's `databaseCapabilities` names every flag that is a fact about the database, so the client's check of its adapter and driver leaves those to signing. The control descriptor's `databaseCapabilitiesNotProvided` compares the contract's capabilities with the server's `server_version_num`, for `db verify`, `db sign` and the runner, and returns what the database does not provide as data (`DatabaseCapabilitiesNotProvided`), which verification and the runner render with the framework's text function.
 
 ## Responsibilities
 
 - **Target Descriptor Export**: Exports the Postgres `SqlControlTargetDescriptor` for use in CLI configuration files
-- **Descriptor-First Design**: All declarative fields (version, capabilities, types, operations) are properties directly on the descriptor, eliminating the need for separate manifest files
+- **Descriptor-First Design**: All declarative fields (version, types, operations) are properties directly on the descriptor, eliminating the need for separate manifest files
 - **Multi-Plane Support**: Provides both migration-plane (control) and runtime-plane entry points for the Postgres target
 - **Planner Factory**: Implements `migrations.createPlanner()` to create Postgres-specific migration planners
 - **Runner Factory**: Implements `migrations.createRunner()` to create Postgres-specific migration runners
@@ -63,7 +63,7 @@ import postgresDriver from '@internal/driver-postgres/control';
 // - targetId: 'postgres'
 // - id: 'postgres'
 // - version: '0.0.1'
-// - capabilities, types, operations (directly on descriptor)
+// - capabilities: {}; types and operations (directly on descriptor)
 // - migrations.createPlanner(): creates a Postgres migration planner
 // - migrations.createRunner(): creates a Postgres migration runner
 
@@ -232,7 +232,7 @@ Inbound Postgres list framing is target-owned; see [ADR 251](../../../../docs/ar
 
 ## Architecture
 
-This package provides both control and runtime entry points for the Postgres target. All declarative fields (version, capabilities, types, operations) are defined directly on the descriptor, so the published entry points never touch the filesystem. The `./pack` entry point provides a pure pack ref for contract authoring. The runtime entry point provides target-specific runtime behavior such as Postgres list decoding.
+This package provides both control and runtime entry points for the Postgres target. All declarative fields (version, types, operations) are defined directly on the descriptor, so the published entry points never touch the filesystem. The `./pack` entry point provides a pure pack ref for contract authoring. The runtime entry point provides target-specific runtime behavior such as Postgres list decoding.
 
 ## Error Handling
 
@@ -258,7 +258,9 @@ See `@internal/family-sql/control` README for full error code documentation.
 
 ## Introspection session settings
 
-Postgres prints a `timestamptz` value in the session's time zone, and dates, intervals and `bytea` values in the session's styles, so the same stored default can read back as different text on two servers. The adapter therefore runs the whole introspection read with `TimeZone = UTC`, `DateStyle = ISO, MDY`, `IntervalStyle = postgres`, and `bytea_output = hex`, and restores the caller's settings when it finishes, including when the read fails. Inside a caller's transaction the settings are set and restored locally; outside one they are set and restored for the session. Column defaults, check constraint text, index predicates, and policy expressions are all read under those settings, so their text does not depend on the server, the role, or what the caller had set.
+Postgres prints a `timestamptz` value in the session's time zone, dates, intervals and `bytea` values in the session's styles, and `money` in the session's monetary locale, so the same stored default can read back as different text on two servers. The adapter therefore runs the whole introspection read with `TimeZone = UTC`, `DateStyle = ISO, MDY`, `IntervalStyle = postgres`, `bytea_output = hex` and `lc_monetary = C`. The settings are always local to a transaction, so they never reach a server connection that a connection pooler shares with other clients. Inside a caller's transaction they are set locally and the caller's values are restored locally afterwards; outside one, the read runs in a transaction of its own, which is rolled back. Column defaults, check constraint text, index predicates, and policy expressions are all read under those settings, so their text does not depend on the server, the role, or what the caller had set.
+
+The migration runner sets `lc_monetary = C` locally in its transaction for the same reason: PostgreSQL reads a `money` literal in DDL, such as `DEFAULT '12.34'::money`, by the monetary locale, and `C` stores it exactly.
 
 ## Exports
 

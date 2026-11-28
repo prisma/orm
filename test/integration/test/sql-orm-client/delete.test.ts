@@ -154,6 +154,45 @@ describe.each(includeStrategies)('integration/delete (%s)', (strategy) => {
   );
 
   it(
+    'deleteAll() after two where() calls is one DELETE with RETURNING whose rows are the deleted rows',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        const users = createReturningUsersCollection(runtime, strategy);
+
+        await seedUsers(runtime, [
+          { id: 1, name: 'Remove', email: 'a@example.com' },
+          { id: 2, name: 'Remove', email: 'b@example.com' },
+          { id: 3, name: 'Remove', email: 'c@example.com' },
+          { id: 4, name: 'Keep', email: 'd@example.com' },
+        ]);
+        await seedPosts(runtime, [
+          { id: 10, title: 'Draft', userId: 1, views: 0 },
+          { id: 11, title: 'Draft', userId: 2, views: 0 },
+          { id: 12, title: 'Draft', userId: 4, views: 0 },
+        ]);
+
+        runtime.resetExecutions();
+        const deleted = await users
+          .where((user) => user.posts.some((post) => post.title.eq('Draft')))
+          .where({ name: 'Remove' })
+          .select('id', 'name')
+          .deleteAll()
+          .toArray();
+
+        expect(runtime.executions.map(({ sql }) => sql.split(' ')[0])).toEqual(['DELETE']);
+        expect(runtime.executions[0]?.sql).toContain('RETURNING');
+        expect(deleted.sort((a, b) => a.id - b.id)).toEqual([
+          { id: 1, name: 'Remove' },
+          { id: 2, name: 'Remove' },
+        ]);
+        const remaining = await runtime.query<{ id: number }>('select id from users order by id');
+        expect(remaining).toEqual([{ id: 3 }, { id: 4 }]);
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
     'delete() with include() returns the deleted row with a pre-delete snapshot of its relations',
     async () => {
       await withCollectionRuntime(async (runtime) => {

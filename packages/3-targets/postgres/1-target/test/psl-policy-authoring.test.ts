@@ -39,6 +39,11 @@ import { PostgresSchema, postgresCreateNamespace } from '../src/core/postgres-sc
 import { computeContentHash } from '../src/core/rls/canonicalize';
 import { postgresDataTypeSupport } from './fixtures/postgres-data-type-support';
 
+/** A contract as a stored `contract.json` holds it: with its format version. */
+function storedContract(contract: unknown): unknown {
+  return { formatVersion: 1, ...(contract as Record<string, unknown>) };
+}
+
 const postgresCodecLookup = createPostgresBuiltinCodecLookup();
 
 const assembled = assembleAuthoringContributions([
@@ -343,10 +348,10 @@ describe('PostgresContractSerializer policy round-trip', () => {
     const serializer = new PostgresContractSerializer();
     const input = makeContractWithPolicy();
 
-    const contract = serializer.deserializeContract(input);
+    const contract = serializer.deserializeContract(storedContract(input));
     const json = serializer.serializeContract(contract);
     const reparsed = JSON.parse(JSON.stringify(json)) as typeof json;
-    const roundTripped = serializer.deserializeContract(reparsed);
+    const roundTripped = serializer.deserializeContract(storedContract(reparsed));
 
     const ns = roundTripped.storage.namespaces['public'] as PostgresSchema;
     expect(ns).toBeInstanceOf(PostgresSchema);

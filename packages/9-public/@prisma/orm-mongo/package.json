@@ -1,10 +1,13 @@
 {
   "name": "@prisma/orm-mongo",
-  "version": "8.0.0-rc.24",
+  "version": "8.0.0-rc.25",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
-  "description": "Prisma 8 for MongoDB: the one package a MongoDB application installs",
+  "description": "Prisma 8 for MongoDB: the package a MongoDB application installs for its database, beside the platform packages it names as peers",
+  "keywords": [
+    "prisma-orm-extension"
+  ],
   "files": [
     "dist",
     "skills"
@@ -16,25 +19,29 @@
     "clean": "rm -rf dist src-gen skills"
   },
   "dependencies": {
-    "@prisma/orm-family-mongo": "workspace:8.0.0-rc.24",
-    "@prisma/orm-framework": "workspace:8.0.0-rc.24",
-    "@prisma/orm-target-mongo": "workspace:8.0.0-rc.24",
-    "@prisma/orm-toolchain": "workspace:8.0.0-rc.24",
     "mongodb-connection-string-url": "catalog:",
     "pathe": "^2.0.3",
     "tinyglobby": "catalog:",
     "temporal-spec": "1.0.1"
   },
   "devDependencies": {
-    "@internal/mongo": "workspace:8.0.0-rc.24",
-    "@repo/tsconfig": "workspace:8.0.0-rc.24",
-    "@repo/tsdown": "workspace:8.0.0-rc.24",
+    "@internal/mongo": "workspace:8.0.0-rc.25",
+    "@prisma/orm-family-mongo": "workspace:8.0.0-rc.25",
+    "@prisma/orm-framework": "workspace:8.0.0-rc.25",
+    "@prisma/orm-target-mongo": "workspace:8.0.0-rc.25",
+    "@prisma/orm-toolchain": "workspace:8.0.0-rc.25",
+    "@repo/tsconfig": "workspace:8.0.0-rc.25",
+    "@repo/tsdown": "workspace:8.0.0-rc.25",
     "tsdown": "catalog:",
     "typescript": "catalog:"
   },
   "peerDependencies": {
+    "@prisma/orm-family-mongo": "workspace:8.0.0-rc.25",
+    "@prisma/orm-framework": "workspace:8.0.0-rc.25",
+    "@prisma/orm-target-mongo": "workspace:8.0.0-rc.25",
+    "@prisma/orm-toolchain": "workspace:8.0.0-rc.25",
     "mongodb": "^7.0.0",
-    "temporal-polyfill": "^1.0.4",
+    "temporal-polyfill": "^1.0.8",
     "typescript": ">=5.9"
   },
   "peerDependenciesMeta": {
@@ -64,8 +71,10 @@
     "./contract/contract-validation-error": "./dist/contract__contract-validation-error.mjs",
     "./contract/default-namespace": "./dist/contract__default-namespace.mjs",
     "./contract/enum-accessor": "./dist/contract__enum-accessor.mjs",
+    "./contract/format-version": "./dist/contract__format-version.mjs",
     "./contract/hashing": "./dist/contract__hashing.mjs",
     "./contract/hashing-utils": "./dist/contract__hashing-utils.mjs",
+    "./contract/internal/format-version": "./dist/contract__internal__format-version.mjs",
     "./contract/is-plain-record": "./dist/contract__is-plain-record.mjs",
     "./contract/resolve-domain-model": "./dist/contract__resolve-domain-model.mjs",
     "./contract/types": "./dist/contract__types.mjs",
@@ -123,6 +132,7 @@
     "./utils/canonical-stringify": "./dist/utils__canonical-stringify.mjs",
     "./utils/casts": "./dist/utils__casts.mjs",
     "./utils/defined": "./dist/utils__defined.mjs",
+    "./utils/guards": "./dist/utils__guards.mjs",
     "./utils/hash-content": "./dist/utils__hash-content.mjs",
     "./utils/internal-error": "./dist/utils__internal-error.mjs",
     "./utils/json": "./dist/utils__json.mjs",
@@ -134,6 +144,7 @@
     "./utils/suppress-idle-connection-errors": "./dist/utils__suppress-idle-connection-errors.mjs",
     "./utils/text": "./dist/utils__text.mjs",
     "./utils/types": "./dist/utils__types.mjs",
+    "./utils/upgrade-guides": "./dist/utils__upgrade-guides.mjs",
     "./value": "./dist/value.mjs",
     "./value/mongodb-types": "./dist/value__mongodb-types.mjs",
     "./vite-plugin-contract-emit": "./dist/vite-plugin-contract-emit.mjs",

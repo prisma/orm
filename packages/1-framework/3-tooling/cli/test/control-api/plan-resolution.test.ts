@@ -48,7 +48,7 @@ function makePkg(from: string, to: string, dirName: string): OnDiskMigrationPack
 function sampleContractIR(storageHash: string): ContractIR {
   return {
     contract: {
-      schemaVersion: '1',
+      formatVersion: 1,
       targetFamily: 'sql',
       target: 'postgres',
       profileHash: `${'p'.repeat(64)}`,
@@ -155,14 +155,14 @@ describe('resolveFromForPlan', () => {
     }
   });
 
-  it('suggests a contract placeholder when no ref reaches the graph', async () => {
+  it('suggests the end of the history as the origin when no ref reaches the graph', async () => {
     const bundles = [makePkg(E, HASH_A, 'm1')];
     const space = makeSpace(bundles);
     const result = await resolveFromForPlan(baseInput({ space }));
 
     expect(result.ok).toBe(false);
     if (!result.ok) {
-      expectRefuse(result.failure, 'MIGRATION.PLAN_ORIGIN_UNKNOWN', '--from <contract>');
+      expectRefuse(result.failure, 'MIGRATION.PLAN_ORIGIN_UNKNOWN', `--from ${HASH_A}`);
       expect(result.failure.fix).toContain('ref set db <contract>');
     }
   });
@@ -351,7 +351,7 @@ describe('resolveFromForPlan', () => {
 
     expect(result.ok).toBe(false);
     if (!result.ok) {
-      expectRefuse(result.failure, 'MIGRATION.HASH_NOT_IN_GRAPH', '--from <contract>');
+      expectRefuse(result.failure, 'MIGRATION.HASH_NOT_IN_GRAPH', '--from ');
       expect(result.failure.fix).toContain('ref set db <contract>');
     }
   });
@@ -501,6 +501,59 @@ describe('resolveFromForPlan', () => {
     }
   });
 
+  it('advises upgrading or restoring a predecessor snapshot that is not valid JSON, never emitting the contract', async () => {
+    const snapshotPath = `/project/migrations/snapshots/${HASH_A}/contract.json`;
+    const space = makeSpace(
+      [makePkg(E, HASH_A, '001_init'), makePkg(HASH_A, HASH_B, '002_next')],
+      {},
+      vi.fn().mockRejectedValue(
+        new MigrationToolsError('MIGRATION.INVALID_JSON', 'Invalid JSON', {
+          why: `Failed to parse ${snapshotPath}`,
+          fix: 'Fix the JSON.',
+          meta: { filePath: snapshotPath, parseError: 'Unexpected token' },
+        }),
+      ),
+    );
+    const result = await resolveFromForPlan(baseInput({ space, optionsFrom: HASH_A }));
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.failure.why).toBe(
+        `Predecessor contract at ${snapshotPath} failed to deserialize: Unexpected token`,
+      );
+      expect(result.failure.fix).toContain('follow the app upgrade instructions');
+      expect(result.failure.fix).not.toContain('contract emit');
+      expect(result.failure.fix).not.toContain('db migrate');
+    }
+  });
+
+  it('advises deleting a predecessor snapshot at the emitted contract and writing it again with db migrate', async () => {
+    const snapshotPath = `/project/migrations/snapshots/${HASH_A}/contract.json`;
+    const space = makeSpace(
+      [makePkg(E, HASH_A, '001_init')],
+      { db: { hash: HASH_A, invariants: [] } },
+      vi.fn().mockRejectedValue(
+        new MigrationToolsError(
+          'MIGRATION.CONTRACT_DESERIALIZATION_FAILED',
+          'Contract failed to deserialize',
+          {
+            why: 'zzz must be removed',
+            fix: 'Re-emit.',
+            meta: { filePath: snapshotPath, message: 'zzz must be removed' },
+          },
+        ),
+      ),
+    );
+    const result = await resolveFromForPlan(baseInput({ space }));
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.failure.fix).toContain(
+        `/snapshots/${HASH_A} and run \`{bin} db migrate --advance-ref db\`, which applies any pending migrations to the configured database, then moves the db ref to contract.json and writes the snapshot again from it.`,
+      );
+    }
+  });
+
   it('surfaces INVALID_REF_FILE when the ref pointer file is malformed', async () => {
     const space = makeSpace(
       [],
@@ -564,6 +617,35 @@ describe('resolveToForPlan', () => {
     }
   });
 
+  it('returns the ref a ref name names, with the policies it declares', async () => {
+    const bundles = [makePkg(E, HASH_A, 'm1')];
+    const policies = { dataProtection: { dataLoss: 'data-loss-forbidden' } } as const;
+    const space = makeSpace(
+      bundles,
+      { production: { hash: HASH_A, invariants: [], policies } },
+      vi.fn().mockResolvedValue(contractAtResult(HASH_A)),
+    );
+    const result = await resolveToForPlan('production', baseToInput({ space }));
+
+    expect(result.ok ? result.value.ref : result.failure).toEqual({
+      name: 'production',
+      hash: HASH_A,
+      invariants: [],
+      policies,
+    });
+  });
+
+  it('returns no ref for a hash', async () => {
+    const bundles = [makePkg(E, HASH_A, 'm1')];
+    const contractAt = vi
+      .fn()
+      .mockResolvedValue(contractAtResult(HASH_A, { provenance: 'graph-node' }));
+    const space = makeSpace(bundles, {}, contractAt);
+    const result = await resolveToForPlan(HASH_A, baseToInput({ space }));
+
+    expect(result.ok ? result.value.ref : result.failure).toBeUndefined();
+  });
+
   it('resolves a full hash that is a graph node via the bundle destination contract artifacts', async () => {
     const bundles = [makePkg(E, HASH_A, 'm1')];
     const contractAt = vi
@@ -606,6 +688,19 @@ describe('resolveToForPlan', () => {
       expectRefuse(result.failure, 'MIGRATION.REF_WRONG_GRAMMAR', '--from @empty');
       expect(result.failure.message).toContain('origin');
       expect(result.failure.meta?.['input']).toBe('@empty');
+    }
+    expect(contractAt).not.toHaveBeenCalled();
+  });
+
+  it('refuses the empty contract by its hash as a target, as it refuses @empty', async () => {
+    const contractAt = vi.fn();
+    const space = makeSpace([makePkg(E, HASH_A, 'm1')], {}, contractAt);
+    const result = await resolveToForPlan(E, baseToInput({ space }));
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expectRefuse(result.failure, 'MIGRATION.REF_WRONG_GRAMMAR', '--from @empty');
+      expect(result.failure.meta?.['input']).toBe(E);
     }
     expect(contractAt).not.toHaveBeenCalled();
   });
@@ -675,6 +770,58 @@ describe('resolveDefaultOriginHash', () => {
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.failure.code).toBe('MIGRATION.HASH_NOT_IN_GRAPH');
+    }
+  });
+});
+
+describe('origin refusals under --config', () => {
+  const CONFIG = 'apps/api/prisma.config.ts';
+  const invocation = { cwd: '/work', configPath: CONFIG, dbGiven: false };
+  const commandsOf = (error: CliStructuredError) =>
+    (error.nextActions ?? []).flatMap((action) =>
+      action.kind === 'run-command' && action.command !== undefined ? [action.command] : [],
+    );
+
+  beforeEach(() => {
+    migrationCounter = 0;
+  });
+
+  it('print every command with the --config migration plan and migration new were given', async () => {
+    const staging = { staging: { hash: HASH_A, invariants: [] } };
+    const orphanDb = { db: { hash: HASH_ORPHAN, invariants: [] }, ...staging };
+    const failures = [
+      await resolveFromForPlan({
+        space: makeSpace([makePkg(E, HASH_A, 'm1')], staging),
+        invocation,
+      }),
+      await resolveFromForPlan({
+        space: makeSpace([makePkg(E, HASH_A, 'm1')], staging),
+        optionsFrom: HASH_ORPHAN,
+        invocation,
+      }),
+      await resolveFromForPlan({
+        space: makeSpace(
+          [makePkg(E, HASH_A, 'm1')],
+          orphanDb,
+          vi.fn().mockResolvedValue(contractAtResult(HASH_ORPHAN)),
+        ),
+        invocation,
+      }),
+      resolveDefaultOriginHash(makeSpace([makePkg(E, HASH_A, 'm1')], staging), invocation),
+      resolveDefaultOriginHash(makeSpace([makePkg(E, HASH_A, 'm1')], orphanDb), invocation),
+    ].map((result) => (result.ok ? undefined : result.failure));
+
+    expect(failures.map((failure) => failure?.code)).toEqual([
+      'MIGRATION.PLAN_ORIGIN_UNKNOWN',
+      'MIGRATION.HASH_NOT_IN_GRAPH',
+      'MIGRATION.HASH_NOT_IN_GRAPH',
+      'MIGRATION.PLAN_ORIGIN_UNKNOWN',
+      'MIGRATION.HASH_NOT_IN_GRAPH',
+    ]);
+    for (const failure of failures) {
+      const commands = failure === undefined ? [] : commandsOf(failure);
+      expect(commands.length).toBeGreaterThan(0);
+      expect(commands.filter((command) => !command.endsWith(` --config ${CONFIG}`))).toEqual([]);
     }
   });
 });

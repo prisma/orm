@@ -103,5 +103,17 @@ export type {
   RuntimeTransactionOptions,
   TransactionContext,
 } from '../sql-runtime';
-export { SqlRuntimeBase, withTransaction, withTransactionMembers } from '../sql-runtime';
+export {
+  SqlRuntimeBase,
+  withTransaction,
+  withTransactionMembers,
+} from '../sql-runtime';
+export {
+  assertInteractiveTransactionsListed,
+  type InteractiveTransactionsCapability,
+  type InteractiveTransactionsListed,
+  interactiveTransactionsAvailable,
+  type StackProvides,
+  warnOfCapabilitiesNotProvided,
+} from '../stack-capabilities';
 export { createToSql, type RenderedSql, type ToSqlMember } from '../to-sql';

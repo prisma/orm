@@ -79,7 +79,7 @@ Patterns to **catch** the F-family modes live in [`grep-library.md`](./grep-libr
 
 **Mitigation.**
 
-- Dispatch DoR refuses dispatches that fail dispatch-INVEST (in particular *Estimable* + *Small* — see [`docs/drive/principles/sizing.md`](https://github.com/prisma/ignite/blob/main/docs/drive/principles/sizing.md)).
+- Dispatch DoR refuses dispatches that fail dispatch-INVEST (in particular *Estimable* + *Small* — see [dispatch-INVEST](https://github.com/prisma/ignite/blob/main/skills/.pilot/drive-plan-slice/SKILL.md#step-4--check-each-dispatch-against-dispatch-invest)).
 - All admitted dispatches are subject to WIP-inspection cadence (≤ 5 min), including diff reads.
 - Brief pre-names the dispatch's single outcome so the orchestrator can verify each commit serves it.
 
@@ -456,7 +456,7 @@ Patterns to **catch** the F-family modes live in [`grep-library.md`](./grep-libr
 
 - Doc-authoring briefs at close-out must say: **verify every API reference (type, function, field, diagnostic code, file path) against shipped source; treat the spec as *intent only*, never as the API surface.** Don't seed the brief with *predicted* names from the spec either — those carry the same drift.
 - Require the dispatch to return a "verified-against-source" list (symbol → file where confirmed) and an explicit flag of any place shipped code diverged from the brief's expectation.
-- Orchestrator review pass spot-checks every cited symbol / path with grep and resolves every relative link before merge. The `adr-examples-must-match-code` rule covers code *examples*; this failure mode extends the discipline to *all* API references in the prose.
+- Orchestrator review pass spot-checks every cited symbol / path with grep and resolves every relative link before merge. The `doc-review` skill, which the `doc-changes-get-two-independent-reviews` rule points to, has a fact checker check the changed text of a doc against the source: each name, example, command, number, link and statement of behaviour. Some changes get no fact checker: a typo, a mechanical edit across many files, and working files under `projects/`. For a small change the fact checker checks the changed part, and reports the rest of the file only where it contradicts that part. So the spot-check above still applies.
 - Generalises to any Drive project that writes close-out docs from a spec; landed project-context here on first occurrence. If it recurs, promote to canonical (`drive-close-project` / `drive-pr-description` brief discipline) per the team's "after one or two repetitions" rule.
 
 **Reference incident.** 2026-06-04, control-policy close-out ADR (ADR 224, TML-2831). First draft (drawn from `spec.md`) used `effectiveControl` (shipped `effectiveControlPolicy`), `defaultControl` (shipped `defaultControlPolicy`, renamed under TML-2800), and a predicted diagnostic `control_managed_in_external_space` (shipped `controlPolicySuppressedCall`); it also shipped a structurally-wrong `defineContract` TS example and a relative link off by one `../`. All caught in the orchestrator's source-verification review before merge. The implementer's brief *had* asked it to verify against source — which surfaced the divergences in its return — but the brief's own predicted names were themselves from the stale spec, so the verification was doing double duty.
@@ -980,3 +980,37 @@ Per-repo stop conditions beyond the canonical ones:
 **Mitigation.** Before accepting such a finding, find the sibling family's counterpart and what uses it. If the sibling's clients or runtime use the counterpart, keep the type and give it the sibling's role. Put the comparison in the review brief when the slice adds or changes a facade interface.
 
 **Reference incident.** MongoDB `prepare()`, 2026-11: the system-design review of prisma/orm#31054 asked to delete `MongoPrepareMember`, and the fix did. SQL clients extend `PrepareMember<TContract>`. The operator's question "is our API consistent with the SQL runtime's?" found the gap, and the type was restored in the client package before merge.
+
+### F57. A row in a project's register of open findings is marked "decided by a test" and no slice owns it
+
+**Symptom.** At close-out, a row of the project's list of findings reads "decided by test" or "to be checked on a live server". No slice ran that test. Running it shows a user-facing call that fails.
+
+**Root cause.** The row was written when the finding was noticed, as a question for later. The plan's slices were cut from the spec, not from the register, so the question had no owner. Each slice's review looked at its own diff and never at the register.
+
+**Detection signal.** `grep -n -i "decided by\|to be checked\|to confirm\|open:" projects/<project>/<register>.md` returns a row whose state names no pull request, no commit and no issue.
+
+**Mitigation.** When a row is added to a project's register with a question in it, add the test that answers it to a named slice's plan in the same edit. At each slice's close, read the register and answer every open question that slice's code can answer.
+
+**Reference incident.** MySQL proof of concept, 2026-11: the coupling register's row on an `UPDATE` or `DELETE` whose filter reads the written table said "decided by test". Nobody ran it until close-out, where it showed that MySQL refuses every bulk write on a variant stored in its own table and every write filtered through a relation from a model to itself. The fix in the ORM client is a separate issue; MySQL refuses these writes with an error that says what to do.
+
+### F58. A rewrite that makes a write statement run passes every single-connection test and deadlocks under concurrent writes
+
+**Symptom.** A renderer rewrites a write so the database accepts it, for example by wrapping a table in a derived table. Golden SQL tests and live tests pass. Sixteen concurrent single-row writes through the ORM on a table of ten thousand rows fail with a deadlock on every run.
+
+**Root cause.** The rewrite changed what the statement locks: MySQL copies a derived table and takes shared locks on every row it copies. Every test ran one statement on one connection, where locks never conflict.
+
+**Mitigation.** When a dispatch changes the form of a write statement (adds a subquery, a derived table, a join or a lock clause), the reviewer brief grants an execution budget and names a concurrency probe: many concurrent single-row writes through the ORM, on a table large enough that the plan matters, at the isolation level the ORM really uses for that call, on each database the change reaches. Read how the ORM opens transactions for the call before choosing the level.
+
+**Reference incident.** MySQL proof of concept, 2026-11: a derived-table rewrite for writes that read their own table was built, passed its tests, and was withdrawn after a principal-engineer review ran the probe. It deadlocked for `DELETE` at READ COMMITTED too.
+
+### F59. A user-facing message describes the problem through our function names or internals
+
+**Symptom.** An error reads "this defineConfig is for target "mysql"", "its defineContract came from another target's contract-builder entry", or "MySQL lowering: a parameter carries codecId …". The user has a config file and a contract file; they have no "defineConfig" and have never heard of lowering.
+
+**Root cause.** The message was written from inside the code that raises it, using the names in scope there. Reviews checked that the message was true and tested, not whether a user could act on it. Six review rounds and an automated reviewer passed the first example; the operator caught it after approving.
+
+**Detection signal.** In the diff's user-facing strings (`summary`, `why`, `fix`, diagnostics, and docs that quote them): a function name used as a noun the user owns ("this X", "its X", "the X of"), or an internal noun (lowering, adapter, component, provider, registry, descriptor, an internal id such as `__unbound__`).
+
+**Mitigation.** Every implementer and reviewer brief for a dispatch that adds or changes a user-facing message says: read each message as a user who has never seen our source; it must say what the user has, what is wrong with it, and what to change. Naming an API inside an instruction ("Import defineContract from X") is fine. If no user action reaches a message, it is an internal error and needs no rewording.
+
+**Reference incident.** MySQL proof of concept, 2026-11: after the operator rejected one message on prisma/orm#31091, a scan found the same fault in fourteen more, five from that pull request and nine from the project's earlier ones.

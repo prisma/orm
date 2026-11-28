@@ -1,4 +1,5 @@
 import { AsyncIterableResult } from '@internal/framework-components/runtime';
+import type { SqlTransactionOptions } from '@internal/sql-relational-core/ast';
 import { describe, expect, it, vi } from 'vitest';
 import type { Graph } from '../../src/statement-graph/graph';
 import { executeGraph, queryGraph } from '../../src/statement-graph/run-graph';
@@ -25,7 +26,10 @@ interface StubTransaction {
 }
 
 function callbackTransaction(tx: StubTransaction) {
-  return async <R>(fn: (scope: StubTransaction) => PromiseLike<R>): Promise<R> => {
+  return async <R>(
+    fn: (scope: StubTransaction) => PromiseLike<R>,
+    _options?: SqlTransactionOptions,
+  ): Promise<R> => {
     try {
       const result = await fn(tx);
       await tx.commit();
@@ -93,6 +97,23 @@ describe('the transaction a graph runs in', () => {
     await executeGraph(readThenWrite(), contextOf(transactional.runtime));
 
     expect(transactional.open).toHaveBeenCalledTimes(1);
+  });
+
+  it('passes the implicit options outside a transaction and none inside one', async () => {
+    const outside = withTransaction(createMockRuntime());
+    const inside = withTransaction(createMockRuntime());
+    Object.assign(inside.runtime, { inTransaction: () => true });
+    const implicitTransactionOptions = { isolationLevel: 'serializable' } as const;
+
+    for (const { runtime } of [outside, inside]) {
+      runtime.setNextResults([[{ id: 1 }]]);
+      await executeGraph(readThenWrite(), { ...contextOf(runtime), implicitTransactionOptions });
+    }
+
+    expect({
+      outside: outside.open.mock.calls.map(([, options]) => options),
+      inside: inside.open.mock.calls.map(([, options]) => options),
+    }).toEqual({ outside: [implicitTransactionOptions], inside: [undefined] });
   });
 
   it('opens none for an update with includes that writes nothing, which only reads', async () => {

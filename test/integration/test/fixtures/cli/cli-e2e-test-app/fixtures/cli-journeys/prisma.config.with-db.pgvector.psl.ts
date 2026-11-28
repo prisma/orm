@@ -1,8 +1,13 @@
 import postgresAdapter from '@internal/adapter-postgres/control';
 import { defineConfig as ormConfig } from '@internal/cli/config-types';
-import postgresDriver from '@internal/driver-postgres/control';
+import postgresDriverDescriptor from '@internal/driver-postgres/control';
 import pgvector from '@internal/extension-pgvector/control';
 import sql from '@internal/family-sql/control';
+import {
+  postgres18,
+  postgresContractCapabilities,
+  postgresDriver,
+} from '@internal/postgres/config';
 import { prismaContract } from '@internal/sql-contract-psl/provider';
 import postgres from '@internal/target-postgres/control';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
@@ -13,10 +18,11 @@ export default definePrismaConfig({
     family: sql,
     target: postgres,
     adapter: postgresAdapter,
-    driver: postgresDriver,
+    driver: postgresDriverDescriptor,
     extensions: [pgvector],
     contract: {
       ...prismaContract('./contract.prisma', {
+        capabilities: postgresContractCapabilities([...postgres18, ...postgresDriver]),
         output: 'contract.json',
         target: postgres,
         createNamespace: postgresCreateNamespace,

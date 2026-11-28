@@ -18,6 +18,7 @@ import { diffMysqlSchema, mysqlContractToSchema } from './diff-database-schema';
 import { MysqlSchemaVerifier } from './mysql-schema-verifier';
 import { createMysqlMigrationPlanner } from './planner';
 import type { MysqlPlanTargetDetails } from './planner-target-details';
+import { readMysqlOperations } from './read-operations';
 import { createMysqlMigrationRunner } from './runner';
 
 function isSqlContract(contract: Contract | null): contract is Contract<SqlStorage> | null {
@@ -31,6 +32,8 @@ type ControlTargetKeysMysqlBuilds =
   | 'diffSchema'
   | 'classifySubjectGranularity'
   | 'classifyEntityKind'
+  | 'accessChangesOf'
+  | 'readOperations'
   | 'migrations'
   | 'create'
   | 'createPlanner'
@@ -57,6 +60,8 @@ export function createMysqlControlTargetDescriptor<TargetId extends string = 'my
     diffSchema: diffMysqlSchema,
     classifySubjectGranularity: relationalNodeGranularity,
     classifyEntityKind: relationalNodeEntityKind,
+    accessChangesOf: () => [],
+    readOperations: readMysqlOperations,
     migrations: {
       createPlanner(adapter: SqlControlAdapter<TargetId>): MigrationPlanner<'sql', TargetId> {
         return createMysqlMigrationPlanner(adapter, migrationTarget);

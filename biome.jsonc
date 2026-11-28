@@ -1,5 +1,5 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.5.8/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.6.6/schema.json",
   "vcs": {
     "enabled": true,
     "clientKind": "git",
@@ -20,7 +20,11 @@
       "!**/mongo-contract.json",
       "!**/migrations/*/*/migration.json",
       "!**/migrations/*/*/ops.json",
-      "!**/planner-golden/fixtures/*/planned.golden.json"
+      "!**/planner-golden/fixtures/*/planned.golden.json",
+      // Declaration files written the way the bundler writes them, as input to scripts/public-api.
+      "!scripts/public-api/fixtures/**/*.d.mts",
+      // A package.json that cannot be parsed, as input to scripts/public-api.
+      "!scripts/public-api/fixtures/root-broken/packages/9-public/@prisma/malformed/package.json"
     ]
   },
   "formatter": {
@@ -39,7 +43,7 @@
   "linter": {
     "enabled": true,
     "rules": {
-      "recommended": true,
+      "preset": "recommended",
       "correctness": {
         "noUnusedVariables": "error"
       },
@@ -72,6 +76,13 @@
     },
     "globals": []
   },
+  "markdown": {
+    "formatter": { "enabled": false },
+    "linter": { "enabled": false }
+  },
+  "yaml": {
+    "formatter": { "enabled": false }
+  },
   "overrides": [
     {
       "includes": ["**/*.test.ts", "**/*.test-d.ts", "**/test/**/*.ts"],
@@ -93,6 +104,13 @@
     {
       "includes": ["**/upgrade-instructions/*/fixtures/**"],
       "formatter": { "enabled": false },
+      "assist": { "enabled": false }
+    },
+    // A project a release candidate wrote, kept byte for byte as test input.
+    {
+      "includes": ["**/release-candidate-projects/fixtures/**"],
+      "formatter": { "enabled": false },
+      "linter": { "enabled": false },
       "assist": { "enabled": false }
     },
     {

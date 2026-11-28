@@ -1,3 +1,4 @@
+import postgresAdapter from '@internal/adapter-postgres/runtime';
 import { and, Collection } from '@internal/sql-orm-client';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
@@ -7,7 +8,7 @@ import type { Contract as SelfRelationsContract } from './fixtures/self-relation
 import selfRelationsContractJson from './fixtures/self-relations/generated/contract.json' with {
   type: 'json',
 };
-import { type IncludeStrategy, includeStrategies, postgresAdapterFor } from './helpers';
+import { type IncludeStrategy, includeStrategies, withIncludeStrategy } from './helpers';
 import { timeouts, withPushedContractRuntime } from './integration-helpers';
 import type { PgIntegrationRuntime } from './runtime-helpers';
 
@@ -17,10 +18,10 @@ const selfRelationsContract =
   );
 function selfRelationsContext(strategy: IncludeStrategy): ExecutionContext<SelfRelationsContract> {
   return createExecutionContext({
-    contract: selfRelationsContract,
+    contract: withIncludeStrategy(selfRelationsContract, strategy),
     stack: createSqlExecutionStack({
       target: postgresTarget,
-      adapter: postgresAdapterFor(strategy),
+      adapter: postgresAdapter,
     }),
   });
 }

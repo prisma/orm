@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events';
 import type { PreparedExecuteRequest } from '@internal/sql-relational-core/ast';
 import { timeouts } from '@repo/test-utils';
 import type { Client, Pool } from 'pg';
@@ -277,14 +278,15 @@ describe('pinned-client serialization', { timeout: timeouts.databaseOperation },
 
   it('does not serialize pool-level queries across distinct pool clients', async () => {
     const state = createConcurrencyState();
-    const pool = {
-      connect: async () => ({
-        ...makeTrackedClient(state),
-        release: () => undefined,
-      }),
+    const events = new EventEmitter();
+    const pool = Object.assign(events, {
+      connect: async () => {
+        const client = { ...makeTrackedClient(state), release: () => undefined };
+        events.emit('connect', client);
+        return client;
+      },
       end: async () => undefined,
-      on: () => undefined,
-    };
+    });
     const driver = createBoundDriverFromBinding(
       { kind: 'pgPool', pool: pool as unknown as Pool, ownedByDriver: true },
       { disabled: true },
@@ -293,5 +295,6 @@ describe('pinned-client serialization', { timeout: timeouts.databaseOperation },
     await Promise.all([queryRows(driver, 'select 1'), queryRows(driver, 'select 2')]);
 
     expect(state.maxInFlight).toBe(2);
+    expect([...state.started].sort()).toEqual(['select 1', 'select 2']);
   });
 });

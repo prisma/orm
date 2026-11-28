@@ -5,7 +5,6 @@ import { isStructuredError } from '@internal/utils/structured-error';
 import type { Block, Presentations } from '@prisma/cli-engine';
 import { flag, noDataLines } from '@prisma/cli-engine';
 import { notOk, ok } from '@prisma/cli-engine/protocol';
-import { createControlClient } from '../../control-api/client';
 import { errorFromCaught } from '../../control-api/operations/caught-errors';
 import {
   buildRefAdvancementFields,
@@ -27,6 +26,7 @@ import { controlProgressReporter } from '../progress';
 import { migrationResultBlocks, migrationResultNextActions } from './migration-blocks';
 import { plannerWarningsCollector } from './planner-warnings';
 import { prepareMigrationRun } from './prepare';
+import { unrecordedSnapshotWarning } from './unrecorded-snapshots';
 
 function initPresentations(inputs: {
   readonly document: MigrationCommandResult;
@@ -181,6 +181,7 @@ export function createDbInitCommand(createClient: CreateControlClient) {
 
         const plannerWarnings = plannerWarningsCollector(ctx.report);
         const result = await client.dbInit({
+          onUnrecordedSnapshot: unrecordedSnapshotWarning(ctx.report, 'db init', ctx.cwd),
           contract: contractJson,
           mode: args.flags.dryRun ? 'plan' : 'apply',
           migrationsDir,
@@ -267,5 +268,3 @@ export function createDbInitCommand(createClient: CreateControlClient) {
     },
   });
 }
-
-export const dbInitCommand = createDbInitCommand(createControlClient);

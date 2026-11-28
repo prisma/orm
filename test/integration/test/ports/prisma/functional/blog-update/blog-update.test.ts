@@ -11,12 +11,7 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 //   "should create a user and post and connect them together"  → ported
 //   "should create a user and post and disconnect them"        → ported
 //   "should create a user with posts and a profile and update itself and
-//    nested connections setting fields to null"                → non-ported
-//      Reason: the update uses `profile: { update: {...} }` and
-//      `posts: { updateMany: {...} }` nested patterns. The Prisma 8 ORM
-//      `update()` supports `connect`/`disconnect`/`create` nested relation
-//      mutations but does not expose nested `update` or `updateMany` on
-//      relations — there is no matching public API surface.
+//    nested connections setting fields to null"                → ported
 
 function withBlogUpdate(fn: Parameters<typeof withPostgresPort<Contract>>[1]) {
   return withPostgresPort<Contract>({ contractJson }, fn);
@@ -109,6 +104,83 @@ describe('ports/prisma/functional/blog-update', () => {
 
         expect(response).not.toBeNull();
         expect(response!.posts).toEqual([]);
+      }),
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    'should create a user with posts and a profile and update itself and nested connections setting fields to null',
+    () =>
+      withBlogUpdate(async ({ db }) => {
+        const someDate = Temporal.Instant.from('2020-01-01T00:00:00.348Z');
+        const email = 'dave@example.com';
+        const title = 'nested-nulls';
+        const content = 'Some content.';
+        const optional = 'Some optional text.';
+
+        const user = await db.public.User.select('id').create({
+          email,
+          name: 'Dave',
+          wakesUpAt: someDate,
+          lastLoginAt: someDate,
+          posts: (posts) =>
+            posts.create(
+              Array.from({ length: 5 }, () => ({
+                published: true,
+                title,
+                content,
+                optional,
+                lastReviewedAt: someDate,
+                lastPublishedAt: someDate,
+              })),
+            ),
+          profile: (profile) =>
+            profile.create({
+              bio: 'A bio.',
+              notrequired: 'word',
+              goesToBedAt: someDate,
+              goesToOfficeAt: someDate,
+            }),
+        });
+
+        const response = await db.public.User.select('email', 'name', 'wakesUpAt', 'lastLoginAt')
+          .include('profile', (profile) => profile.select('bio', 'goesToBedAt'))
+          .include('posts', (posts) => posts.select('content', 'title', 'published', 'optional'))
+          .where({ id: user.id })
+          .update({
+            email: 'dave2@example.com',
+            name: null,
+            wakesUpAt: null,
+            lastLoginAt: null,
+            profile: (profile) =>
+              profile.update({
+                notrequired: null,
+                bio: null,
+                goesToBedAt: null,
+                goesToOfficeAt: null,
+              }),
+            posts: (posts) =>
+              posts.updateAll({
+                content: null,
+                optional: null,
+                lastReviewedAt: null,
+                lastPublishedAt: null,
+              }),
+          });
+
+        expect(response).toEqual({
+          email: 'dave2@example.com',
+          name: null,
+          wakesUpAt: null,
+          lastLoginAt: null,
+          profile: { bio: null, goesToBedAt: null },
+          posts: Array.from({ length: 5 }, () => ({
+            content: null,
+            title,
+            published: true,
+            optional: null,
+          })),
+        });
       }),
     timeouts.spinUpPpgDev,
   );

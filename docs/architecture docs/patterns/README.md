@@ -5,7 +5,7 @@ This catalogue is the single place to learn **which structural shapes the Prisma
 The catalogue is distinct from its neighbours:
 
 - **ADRs** ([`../adrs/`](../adrs/)) record one-time decisions. The catalogue records the recurring shapes those decisions instantiate.
-- **Cursor rules** ([`../../../.cursor/rules/`](../../../.cursor/rules/)) are tactical do/don'ts. The catalogue records the structural rationale a rule enforces.
+- **Cursor rules** ([`../../../.agents/rules/`](../../../.agents/rules/)) are tactical do/don'ts. The catalogue records the structural rationale a rule enforces.
 - **Reference docs** ([`../../reference/`](../../reference/)) are subsystem how-to guides. The catalogue records cross-subsystem shapes; subsystem-specific shapes stay in the reference docs.
 
 ## v1 entries
@@ -42,7 +42,7 @@ The process:
 2. Fill in every section — every claim must cite a reference implementation, an ADR, or a rule. **Lead with a grounding example**; the template's own guidance has the writing rules.
 3. Add a row to the table above and link the slug.
 4. Cross-link from any related ADRs, rules, or reference docs.
-5. Open a PR. The **architect persona** ([`.agents/skills/drive-agent-personas/personas/architect.md`](../../../.agents/skills/drive-agent-personas/personas/architect.md)) owns the bar; tech-lead arbitrates if there is disagreement on whether the entry is ready.
+5. Open a PR. The **architect persona** ([`drive-agent-personas/personas/architect.md` in prisma/ignite](https://github.com/prisma/ignite/blob/main/skills/.pilot/drive-agent-personas/personas/architect.md)) owns the bar; tech-lead arbitrates if there is disagreement on whether the entry is ready.
 
 ## Related indexes
 

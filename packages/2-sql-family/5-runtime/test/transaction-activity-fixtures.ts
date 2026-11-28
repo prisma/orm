@@ -16,7 +16,7 @@ import {
   type SqlQueryPlan,
 } from '@internal/sql-relational-core/plan';
 import { ifDefined } from '@internal/utils/defined';
-import { vi } from 'vitest';
+import { expect, vi } from 'vitest';
 import type { SqlMiddleware, SqlMiddlewareContext } from '../src/middleware/sql-middleware';
 import { createSqlExecutionStack } from '../src/sql-context';
 import type { Log } from '../src/sql-runtime';
@@ -249,6 +249,28 @@ export const stages = (events: readonly HookEvent[]) =>
 
 export const transactionStages = (events: readonly HookEvent[]) =>
   names(events).filter((name) => name.startsWith('finalized:transaction'));
+
+export const finalized = (events: readonly HookEvent[]) =>
+  names(events)
+    .filter((name) => name.startsWith('finalized:'))
+    .map((name) => name.slice('finalized:'.length))
+    .join(', ');
+
+export const trace = (events: readonly HookEvent[]) =>
+  events
+    .map((event) => (event.name === 'beforeEncode' ? event.sql : event.name))
+    .filter(
+      (name): name is string =>
+        name !== undefined &&
+        /^(SAVEPOINT|RELEASE|ROLLBACK|begin|commit|rollback|release|destroy|insert)/.test(name),
+    )
+    .join(', ');
+
+export const transactionIds = (events: readonly HookEvent[]) =>
+  events.filter((event) => event.name === 'started:transaction').map((e) => e.activity?.id);
+
+export const rejectsWith = (work: Promise<unknown>, code: string) =>
+  expect(work).rejects.toMatchObject({ code: `RUNTIME.${code}` });
 
 export type Outcome = ActivityFinalizedResult['outcome'];
 

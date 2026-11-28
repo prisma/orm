@@ -4,6 +4,7 @@ import type { SqlStorage } from '@internal/sql-contract/types';
 import type { SqlStatementStats } from '@internal/sql-relational-core/ast';
 import type { RuntimeScope } from '@internal/sql-relational-core/types';
 import { blindCast } from '@internal/utils/casts';
+import { InternalError } from '@internal/utils/internal-error';
 import { getColumnsReadOnTable } from '../collection-contract';
 import {
   consumeCollectionRows,
@@ -84,7 +85,7 @@ async function runAllNodes<Row>(
   if (statementCount(graph) > 1 && graph.writesAnyTable && runtime.transaction !== undefined) {
     return runtime.transaction(
       (tx) => runNodesInOrder<Row>(graph, ctx, tx, callerRows),
-      ctx.implicitTransactionOptions,
+      runtime.inTransaction?.() === true ? undefined : ctx.implicitTransactionOptions,
     );
   }
   return runNodesInOrder<Row>(graph, ctx, runtime, callerRows);
@@ -168,18 +169,19 @@ function shapeRows<Row>(
 ): AsyncIterableResult<Row> {
   const { context, namespaceId, modelName, state } = callerRows;
   const { contract } = context;
+  const read = rowsReadAt(graph, id);
   if (loadsIncludesPerRelation(contract, state.includes)) {
     return consumeRowsWithAttachedIncludes<Row>(
       callerRows,
       storageRows,
-      hiddenColumnsOf(graph, id, state),
+      hiddenColumnsOf(graph, read, state),
     );
   }
   const { tableName } = state.tables.root.storage;
   const selected =
     state.selectedFields ?? getColumnsReadOnTable(contract, namespaceId, modelName, tableName);
   const hiddenColumns = graph
-    .columnsReadFrom(id)
+    .columnsReadFrom(read)
     .map((column) => column.alias)
     .filter((column) => !selected.includes(column));
 
@@ -187,6 +189,21 @@ function shapeRows<Row>(
     stripHiddenMappedFields(contract, namespaceId, modelName, row, hiddenColumns);
     return blindCast<Row, 'the row the read code shaped is the row the caller selected'>(row);
   });
+}
+
+/** The node whose rows reach `id`: followed through every node that passes on the rows of one input. */
+function rowsReadAt(graph: Graph, id: NodeId): NodeId {
+  const slot = graph.nodeAt(id)?.passesRowsOf;
+  if (slot === undefined) {
+    return id;
+  }
+  const [edge, ...others] = [graph.inputsOf(id)[slot] ?? []].flat();
+  if (edge === undefined || others.length > 0) {
+    throw new InternalError(
+      `node ${id} passes on the rows of slot "${slot}", which holds no single edge`,
+    );
+  }
+  return rowsReadAt(graph, edge.from);
 }
 
 function statementNodes(graph: Graph): readonly (readonly [NodeId, Node])[] {

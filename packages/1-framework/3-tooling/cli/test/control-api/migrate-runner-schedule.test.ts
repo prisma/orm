@@ -82,7 +82,7 @@ async function addAllExternalSpace(migrationsDir: string): Promise<void> {
     invariants: [],
   });
   await writeContractSnapshot(migrationsDir, EXTERNAL_HEAD, {
-    contractJson: EXTERNAL_CONTRACT,
+    contractJson: { formatVersion: 1, ...EXTERNAL_CONTRACT },
     contractDts: 'export type Contract = never;\n',
   });
 }
@@ -95,7 +95,7 @@ function allExternalExtension(): ControlExtensionDescriptor<'sql', 'postgres'> {
     targetId: 'postgres',
     version: '1.0.0',
     contractSpace: {
-      contractJson: EXTERNAL_CONTRACT,
+      contractJson: Object.assign(EXTERNAL_CONTRACT, { formatVersion: 1 }),
       headRef: { hash: EXTERNAL_HEAD, invariants: [] },
       migrations: [],
     },
@@ -128,12 +128,13 @@ function fakeFamily(
 ): ControlFamilyInstance<'sql', unknown> {
   const used: Pick<
     ControlFamilyInstance<'sql', unknown>,
-    'familyId' | 'deserializeContract' | 'readAllMarkers'
+    'familyId' | 'deserializeContract' | 'readAllMarkers' | 'accessChangesOf'
   > = {
     familyId: 'sql',
     deserializeContract: (json) =>
       blindCast<Contract, 'the snapshots in this test are written from Contract values'>(json),
     readAllMarkers: async () => markers,
+    accessChangesOf: () => [],
   };
   return blindCast<
     ControlFamilyInstance<'sql', unknown>,

@@ -48,7 +48,7 @@ The CLI is namespaced by the *subject* of the command, not by whether it touches
 | **`db <verb>`** | A live database. | `db update`, `db verify`, `db sign`, `db init` |
 | **`migration <verb>`** | The migration artifacts and graph. | `migration plan`, `migration new`, `migration show`, `migration list`, `migration graph`, `migration check`, `migration status`, `migration log` |
 | **`contract <verb>`** | Contracts. | `contract emit` |
-| **`ref <verb>`** | Refs. | `ref set`, `ref list`, `ref delete` |
+| **`ref <verb>`** | Refs. | `ref set`, `ref list`, `ref delete`, `ref policy show`, `ref policy set`, `ref policy delete` |
 
 ### Read-only vs mutating, not offline vs live
 
@@ -146,7 +146,7 @@ The load-bearing semantics of a ref is **"the contract CD will `migrate --to` in
 Consequences:
 - Refs are **environment-named** (`production`, `staging`, ...). The Git-generic `head` ref has been dropped — it carried no information the emitted `contract.json` doesn't already imply.
 - A ref is a *promise* the repo makes about the next CD run. The PR is the moment that promise is staked.
-- The `db` ref differs in meaning, not mechanics. It has two roles: it is the default origin of `migration plan`, and it is the checkpoint of the contract the project's dev database was last brought to — written by `db init` / `db update` when run against the default URL, and by `db sign` regardless of `--db` (unless `--no-advance-ref`). A signature that must not replace the default origin passes `--advance-ref <name>` to checkpoint another ref instead. A default name, not a magic one — see [ADR 218](../../../architecture%20docs/adrs/ADR%20218%20-%20Refs%20with%20paired%20contract%20snapshots%20and%20universal%20graph-node%20invariant.md).
+- The `db` ref differs in meaning, not mechanics. It has two roles: it is the default origin of `migration plan`, and it is the checkpoint of the contract the project's dev database was last brought to — written by `db init` / `db update` when run against the default URL, by `db migrate` against the default URL outside CI, and by `db sign` regardless of `--db` (unless `--no-advance-ref`). A signature that must not replace the default origin passes `--advance-ref <name>` to checkpoint another ref instead. A default name, not a magic one — see [ADR 218](../../../architecture%20docs/adrs/ADR%20218%20-%20Refs%20with%20paired%20contract%20snapshots%20and%20universal%20graph-node%20invariant.md).
 
 ### Initialization vs adoption-by-signing
 
@@ -179,7 +179,7 @@ Grouped by sub-area so the relationships are visible. Some terms appear in more 
 - **Contract IR** — the in-memory canonical form of a contract (before emission).
 - **PSL** — Prisma Schema Language. One of two authoring surfaces for contracts (and the canonical one for extensions).
 - **TypeScript contract** — TypeScript-authored contract using `typescriptContract(...)`. Second authoring surface.
-- **Storage hash** (`storageHash`) — deterministic hash over the contract's storage-affecting parts (`schemaVersion`, `targetFamily`, `target`, `storage`). The identity of a *contract* in the migration graph. (Formerly `coreHash`.) **User-facing convention:** when the CLI says "hash" without qualification, it means the storage hash. Contract references resolve to one.
+- **Storage hash** (`storageHash`) — deterministic hash over the contract's storage-affecting parts (`targetFamily`, `target`, `storage`, and the fixed entry `"schemaVersion": "1"`). The identity of a *contract* in the migration graph. (Formerly `coreHash`.) **User-facing convention:** when the CLI says "hash" without qualification, it means the storage hash. Contract references resolve to one.
 - **Profile hash** (`profileHash`) — deterministic hash over the contract's declared capabilities. The identity of a *capability profile* the database must satisfy. **Not user-facing. Candidate for retirement.** Should not appear in CLI output; if it does, it must be qualified.
 - **Migration hash** (`migrationHash` / `migrationId`) — content-addressed hash over `(strippedManifest, ops)`. The identity of a migration as a *physical effect on storage*, independent of cosmetic contract details. **Always qualified as "migration hash" in user-facing prose.** Used only when a migration must be referred to by unambiguous identity (integrity checks, error messages about hash mismatch). The common path is referring to a migration by its directory name.
 - **Canonicalization** — deterministic JSON ordering that makes hashes reproducible across runs and machines.

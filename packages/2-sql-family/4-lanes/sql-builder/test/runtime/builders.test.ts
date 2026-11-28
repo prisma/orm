@@ -317,8 +317,23 @@ describe('joins', () => {
       fns.eq(f.users.id, f.posts.user_id),
     );
     expect(() => joined.select('id' as never)).toThrow(
-      expect.objectContaining({ code: 'ORM.COLUMN_UNKNOWN' }),
+      expect.objectContaining({ code: 'ORM.COLUMN_AMBIGUOUS' }),
     );
+  });
+
+  it('a column name three joined tables have is not a top-level field', () => {
+    const d = db();
+    const joined = d.public.users
+      .innerJoin(d.public.posts, (f, fns) => fns.eq(f.users.id, f.posts.user_id))
+      .innerJoin(d.public.profiles, (f, fns) => fns.eq(f.users.id, f.profiles.user_id));
+    expect(() => joined.select('id' as never)).toThrow(
+      expect.objectContaining({ code: 'ORM.COLUMN_AMBIGUOUS' }),
+    );
+    const ast = getAst(joined.select((f) => ({ id: f.profiles.id, email: f.email })));
+    expect(ast.projection.map((item) => item.expr)).toEqual([
+      ColumnRef.of('profiles', 'id'),
+      ColumnRef.of('users', 'email'),
+    ]);
   });
 
   it('top-level fields from the nullable side of an outer join stay qualified', () => {
@@ -364,6 +379,19 @@ describe('self-join via as()', () => {
     expect((ast.from as TableSource).alias).toBe('u1');
     expect(ast.joins).toHaveLength(1);
     expect((ast.joins![0]!.source as TableSource).alias).toBe('u2');
+  });
+
+  it('a column name three aliases share is not a top-level field', () => {
+    const d = db();
+    const joined = d.public.users
+      .as('u1')
+      .innerJoin(d.public.users.as('u2'), (f, fns) => fns.eq(f.u1.id, f.u2.id))
+      .innerJoin(d.public.users.as('u3'), (f, fns) => fns.eq(f.u1.id, f.u3.id));
+    expect(() => joined.select('email' as never)).toThrow(
+      expect.objectContaining({ code: 'ORM.COLUMN_AMBIGUOUS' }),
+    );
+    const ast = getAst(joined.select((f) => ({ email: f.u3.email })));
+    expect(ast.projection.map((item) => item.expr)).toEqual([ColumnRef.of('u3', 'email')]);
   });
 });
 
@@ -522,7 +550,7 @@ describe('distinct', () => {
       distinctOn(s: string): void;
     };
     expect(() => query.distinctOn('id')).toThrow(
-      'distinctOn() requires capability postgres.distinctOn',
+      '`distinctOn()` is unavailable: your contract declares no dependency on `postgres.distinctOn`',
     );
   });
 });
@@ -547,6 +575,23 @@ describe('lateral joins', () => {
     expect((ast.joins![0]!.source as DerivedTableSource).alias).toBe('recent_posts');
   });
 
+  it('inside a lateral subquery, a name the parent tables also have needs its table', () => {
+    const d = db();
+    const topLevelNames: string[][] = [];
+    d.public.users
+      .innerJoin(d.public.posts, (f, fns) => fns.eq(f.users.id, f.posts.user_id))
+      .lateralJoin('profile', (lateral) =>
+        lateral
+          .from(d.public.profiles)
+          .select('bio')
+          .where((f, fns) => {
+            topLevelNames.push(['id', 'bio'].filter((name) => Reflect.get(f, name) !== undefined));
+            return fns.eq(f.profiles.user_id, f.users.id);
+          }),
+      );
+    expect(topLevelNames).toEqual([['bio']]);
+  });
+
   it('lateralJoin throws without capability', () => {
     const d = dbNoCapabilities();
     const users = d.public.users as unknown as { lateralJoin(alias: string, fn: unknown): void };
@@ -556,7 +601,9 @@ describe('lateral joins', () => {
         (lateral: { from(t: unknown): { select(...args: string[]): unknown } }) =>
           lateral.from(d.public.posts).select('id'),
       ),
-    ).toThrow('lateralJoin() requires capability sql.lateral');
+    ).toThrow(
+      '`lateralJoin()` is unavailable: your contract declares no dependency on `sql.lateral`',
+    );
   });
 });
 

@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "1",
+  "formatVersion": 1,
   "targetFamily": "sql",
   "target": "mariadb",
   "profileHash": "c3165876e6069b3fd8cde4fadadb0b534082345d678b2c81c8c83e9225ce21d8",
@@ -453,6 +453,7 @@
       "defaultInInsert": true,
       "enums": true,
       "foreignKeys": true,
+      "interactiveTransactions": true,
       "jsonAgg": true,
       "limit": true,
       "orderBy": true

@@ -7,7 +7,7 @@
  */
 
 import { createPostgresBuiltinCodecLookup } from '@internal/adapter-postgres/control';
-import { fullTextIndex } from '@internal/postgres/contract-builder';
+import { fullTextIndex, postgres18, postgresDriver } from '@internal/postgres/contract-builder';
 import { createPostgresBuiltinDataTypeLookup } from '@internal/target-postgres/data-types';
 import { CreateIndexCall } from '@internal/target-postgres/op-factory-call';
 import { contractToPostgresDatabaseSchemaNode } from '@internal/target-postgres/planner';
@@ -30,6 +30,7 @@ import { postgresTypeLookups } from './postgres-type-lookups';
 
 function postContract(naming: { readonly name: string } | { readonly map: string }) {
   return defineContract({
+    requiredCapabilities: [...postgres18, ...postgresDriver],
     models: {
       Post: model('Post', {
         fields: {
@@ -51,11 +52,14 @@ function postContract(naming: { readonly name: string } | { readonly map: string
 }
 
 /** The CREATE INDEX the migration planner's op factory renders for the contract's index. */
-async function createIndexStatements(contract: unknown): Promise<readonly string[]> {
+async function createIndexStatements(
+  contract: ReturnType<typeof postContract>,
+): Promise<readonly string[]> {
+  const serializer = new PostgresContractSerializer();
   const validated = blindCast<
     Parameters<typeof contractToPostgresDatabaseSchemaNode>[0],
     'the contract was built for the Postgres target; the serializer returns the framework supertype'
-  >(new PostgresContractSerializer().deserializeContract(contract));
+  >(serializer.deserializeContract(serializer.serializeContract(contract)));
   const root = contractToPostgresDatabaseSchemaNode(validated, {
     annotationNamespace: 'pg',
     ...postgresTypeLookups,
@@ -79,7 +83,7 @@ async function createIndexStatements(contract: unknown): Promise<readonly string
 
 async function createPostTableWithIndex(
   connectionString: string,
-  contract: unknown,
+  contract: ReturnType<typeof postContract>,
   options: { readonly withIndex: boolean } = { withIndex: true },
 ) {
   const statements = options.withIndex ? await createIndexStatements(contract) : [];

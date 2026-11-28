@@ -1,6 +1,6 @@
 # @internal/sqlite
 
-One-package SQLite setup for Prisma 8. Install this single package to get config, runtime, contract authoring, control-plane access, and migration helpers — no reach-ins to internal packages required.
+SQLite setup for Prisma 8, published as `@prisma/orm-sqlite`. An application installs it beside the platform packages it names as peer dependencies (`@prisma/orm-framework`, `@prisma/orm-family-sql`, `@prisma/orm-target-sqlite` and `@prisma/orm-toolchain`, at the same version), and gets config, runtime, contract authoring, control-plane access, and migration helpers from it — no reach-ins to internal packages required.
 
 ## Package Classification
 
@@ -91,6 +91,10 @@ await control.dbUpdate({
 });
 ```
 
+### `@internal/sqlite/init`
+
+The init contribution `prisma orm init` loads after installing the package, which it takes by its package name, `--target @prisma/orm-sqlite`: its default export is an `InitContribution` (from `@internal/cli/init-contribution`) holding the PSL and TypeScript starter contracts, `db.ts`, the `.env.example` body and the quick reference (`src/init/init-quick-reference.md`, copied into `dist/`). `DATABASE_URL` holds the path of the database file, `./dev.db` in `.env.example`, relative to the folder commands and the app run from: `prisma.config.ts` passes it as `db.connection` and `db.ts` as `path`. It installs no driver, since the driver is Node's `node:sqlite`, and states no server requirement and has no `--probe-db` probe. It imports no framework code that runs. Published as `@prisma/orm-sqlite/init`.
+
 ### `@internal/sqlite/migration`
 
 Re-exports all migration operation helpers from `@internal/target-sqlite/migration` (`Migration`, `MigrationCLI`, `col`, `lit`, `fn`, `primaryKey`, `foreignKey`, `unique`, `addColumn`, `dropTable`, `createIndex`, `dropIndex`, `dropColumn`, `recreateTable`, `dataTransform`, `placeholder`, `rawSql`). `createTable` is no longer a free export — it is a protected method on `Migration`; call it as `this.createTable({...})` inside `get operations()`.
@@ -109,7 +113,7 @@ Reads stream row by row: the driver steps through each result with `StatementSyn
 
 Pass `collections` to give models custom collection classes: `sqlite({ contract, path, collections: { Post: PostCollection } })`, where `PostCollection` extends `Collection<Contract, 'Post'>` from `@prisma/orm-sqlite/orm-client`. `db.orm.Post`, and the ORM inside `db.transaction(...)`, then return a `PostCollection`. The client's type carries the classes as its second type parameter, which defaults to no classes.
 
-Pass `log` (an object with `info`, `warn`, `error` and an optional `debug` method, each taking one event object; `console` works, and the type is `Log` from `@prisma/orm-sqlite/family-runtime`) to receive what the runtime logs: the marker-verification warnings `CONTRACT.MARKER_MISSING` and `CONTRACT.MARKER_MISMATCH` from the first query, the warnings `lints()` emits for rules whose severity is `warn`, and the errors a middleware's `activityEnded` or `activityFinalized` hook throws, which the runtime logs and swallows. It also receives the warning `runtime.close.waiting-for-activities` when `close()` is waiting only for activities whose handles were never ended or for transactions still open, with the counts `openActivities` and `openTransactions`; `close()` waits for each such transaction until it commits or rolls back. If `log` has a `debug` method, it also receives debug events, for example when a middleware intercepts a statement. `budgets()` violations reach `log` only in `mode: 'permissive'` (see *Running plans and rendering SQL*). Without `log`, the runtime drops these events.
+Pass `log` (an object with `info`, `warn`, `error` and an optional `debug` method, each taking one event object; `console` works, and the type is `Log` from `@prisma/orm-sqlite/family-runtime`) to receive what the runtime logs: the marker-verification warnings `CONTRACT.MARKER_MISSING`, `CONTRACT.MARKER_MISMATCH`, `CONTRACT.MARKER_READ_FAILED` and `CONTRACT.MARKER_ROW_CORRUPT` from the client's first use of the database (its first query, connection or transaction), the warnings `lints()` emits for rules whose severity is `warn`, and the errors a middleware's `activityEnded` or `activityFinalized` hook throws, which the runtime logs and swallows. It also receives the warning `runtime.close.waiting-for-activities` when `close()` is waiting only for activities whose handles were never ended or for transactions still open, with the counts `openActivities` and `openTransactions`; `close()` waits for each such transaction until it commits or rolls back. If `log` has a `debug` method, it also receives debug events, for example when a middleware intercepts a statement. `budgets()` violations reach `log` only in `mode: 'permissive'` (see *Running plans and rendering SQL*). Without `log`, the runtime drops these events.
 
 `db.orm` offers `fragment` beside the models, unless a model is named `fragment`. A fragment is a reusable query step:
 
@@ -141,7 +145,7 @@ Import `{ IsolationLevel }` from `@prisma/orm-sqlite/runtime`. `SqliteTransactio
 
 Callback options also accept `timeout` defaults and overrides independently of isolation. Local `undefined` inherits; `null` disables an inherited deadline. Synchronous SQLite calls can delay deadline observation. See [callback timeouts](../../../../docs/reference/transaction-options.md#timeout).
 
-`db.transaction(async (tx) => ...)` commits when the callback returns and rolls back when it throws. `tx` offers the client's query members, with the same types: `sql`, `orm` (with the client's custom collection classes and `fragment`), `raw`, `prepare`, `query`, `execute`, `toSql` and `enums`. Every statement they send runs inside the transaction. `tx` has no `close`, `[Symbol.asyncDispose]`, `transaction` or `runtime()`. The type is `SqliteTransactionContext<Contract>`.
+`db.transaction(async (tx) => ...)` commits when the callback returns and rolls back when it throws. `tx` offers the client's query members, with the same types: `sql`, `orm` (with the client's custom collection classes and `fragment`), `raw`, `prepare`, `query`, `execute`, `toSql` and `enums`. Every statement they send runs inside the transaction. `tx` has no `close`, `[Symbol.asyncDispose]` or `runtime()`. `tx.transaction(async (inner) => ...)` runs the callback in a savepoint, and `inner` has the same type and members as `tx`, to any depth. When the callback throws, the work since the savepoint is rolled back, the call rejects with the same error and `tx` can be used again. The type is `SqliteTransactionContext<Contract>`.
 
 ```ts
 await db.transaction(async (tx) => {

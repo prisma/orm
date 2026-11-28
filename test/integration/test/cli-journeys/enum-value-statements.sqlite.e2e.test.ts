@@ -5,9 +5,7 @@
  *
  * S1 renames the value to `RETIRED`, which stores `retired`, with `--rename Status.ARCHIVED:Status.RETIRED` through `migration plan` and `migrate`. S2 deletes the value through `db update`: refused until `--delete Status.ARCHIVED` answers, then the rows that held it hold NULL.
  *
- * S7 changes the stored value of `ARCHIVED` under `db update` with no migrations, and follows the two-run way the refusal leads with. S8 shifts integer stored values along with two renames in one `db update`.
- *
- * S9 and S10 swap the stored values of `ACTIVE` and `ARCHIVED` under `db update`, with and without migrations. S11 refuses renames that move stored values in a cycle.
+ * S8 shifts integer stored values along with two renames in one `db update`. S11 refuses renames that move stored values in a cycle, and follows the two plans the refusal leads with. A member that keeps its name while its stored value changes is in `enum-stored-values.sqlite.e2e.test.ts`.
  *
  * S3 has a required `status`: with no row holding the value, `--delete` removes it; while rows hold it, `--delete` fails at apply with `MIGRATION.PRECHECK_FAILED` saying how to keep them and changes nothing, and `--rename` applies.
  *
@@ -21,7 +19,6 @@ import { describe, expect, it } from 'vitest';
 import { withTempDir, writeProjectManifest } from '../utils/cli-test-helpers';
 import {
   engineError,
-  getMigrationDirs,
   type JourneyContext,
   latestMigrationDirName,
   parseJsonOutput,
@@ -56,29 +53,6 @@ model Task {
 const FROM_PSL = contractWith('  ARCHIVED = "archived"\n');
 const RENAMED_PSL = contractWith('  RETIRED = "retired"\n');
 const REMOVED_PSL = contractWith('');
-function twoTablesWith(archived: string): string {
-  return `// use prisma-8
-
-enum Status {
-  @@type("sqlite/text@1")
-  ACTIVE = "active"
-  ARCHIVED = "${archived}"
-}
-
-model Task {
-  id     Int     @id
-  status Status?
-  @@map("task")
-}
-
-model Note {
-  id    Int     @id
-  state Status?
-  @@map("note")
-}
-`;
-}
-
 function nextActionLabels(result: Parameters<typeof engineError>[0]): readonly string[] {
   return (engineError(result)?.nextActions ?? []).map(({ label }) => label);
 }
@@ -194,11 +168,12 @@ withTempDir(({ createTempDir }) => {
           { id: 3, status: null },
         ]);
         await expectVerified(ctx, 'S1.07');
-        const count = getMigrationDirs(ctx).length;
-        const fresh = await runMigrationPlan(ctx, ['--from', dirName, '--json']);
-        expect(fresh.exitCode, `S1.08: plan with no change: ${fresh.stderr}`).toBe(0);
-        expect(parseJsonOutput<{ noOp: boolean }>(fresh).noOp, 'S1.08: plan is empty').toBe(true);
-        expect(getMigrationDirs(ctx), 'S1.08: nothing written').toHaveLength(count);
+        const dryRun = await runDbUpdate(ctx, ['--dry-run', '--json']);
+        expect(dryRun.exitCode, `S1.08: db update --dry-run: ${dryRun.stderr}`).toBe(0);
+        expect(
+          parseJsonOutput<{ plan: { operations: readonly unknown[] } }>(dryRun).plan.operations,
+          'S1.08: nothing left to plan',
+        ).toEqual([]);
       },
       timeouts.spinUpPpgDev,
     );
@@ -286,9 +261,20 @@ withTempDir(({ createTempDir }) => {
             '1 row of "task" holds "archived" in column "status", which takes no NULL, so the value cannot be removed.',
           actions: [
             'To keep that data under a new enum value, add a member to enum "Status" in the contract source, run `prisma-test contract emit`, then run `prisma-test db update --rename \'Status.ARCHIVED:Status.<new member>\'`',
-            'To keep that data under another stored value, change the stored value "archived" to one the enum keeps in the database yourself, then re-run `prisma-test db update --delete Status.ARCHIVED`',
+            expect.stringMatching(
+              /^To keep that data by hand, plan the change with `prisma-test migration plan --from db --delete Status\.ARCHIVED`, make the edits below/,
+            ),
           ],
         });
+        const advised = await runMigrationPlan(held, [
+          '--from',
+          'db',
+          '--delete',
+          'Status.ARCHIVED',
+          '--name',
+          'as-advised',
+        ]);
+        expect(advised.exitCode, `S3.09: the advised plan runs: ${advised.stderr}`).toBe(0);
         expect(tasks(held.dbPath), 'S3.09: nothing changed').toEqual([
           { id: 1, status: 'archived' },
           { id: 2, status: 'active' },
@@ -306,64 +292,6 @@ withTempDir(({ createTempDir }) => {
           { id: 2, status: 'active' },
         ]);
         await expectVerified(held, 'S3.12');
-      },
-      timeouts.spinUpPpgDev,
-    );
-  });
-
-  describe('S4 (SQLite): keep the data of a member that keeps its name with a new stored value, as the question advises', () => {
-    it(
-      'rewrites the value in both tables the enum types when the advice is followed as printed',
-      async () => {
-        const ctx = setupSqliteJourney(createTempDir, twoTablesWith('archived'));
-        await emit(ctx, twoTablesWith('archived'), 'S4.01');
-        const initial = await planMigrationAndSelfEmit(ctx, ['--name', 'initial']);
-        expect(initial.exitCode, `S4.02: plan initial: ${initial.stderr}`).toBe(0);
-        expect((await runMigrate(ctx)).exitCode, 'S4.02: migrate initial').toBe(0);
-        const origin = latestMigrationDirName(ctx);
-        withDatabase(ctx.dbPath, (db) => {
-          db.exec(
-            `INSERT INTO "task" (id, status) VALUES (1, 'archived'), (2, 'active');
-             INSERT INTO "note" (id, state) VALUES (1, 'archived')`,
-          );
-        });
-        await emit(ctx, twoTablesWith('old'), 'S4.03');
-
-        const asked = await runMigrationPlan(ctx, ['--from', origin, '--json']);
-        const question = nextActionLabels(asked)[0] ?? '';
-        expect(
-          question.match(/replace this\.removeStoredValue/g),
-          'S4.04: one edit per column',
-        ).toHaveLength(2);
-        const plan = await runMigrationPlan(ctx, [
-          '--name',
-          'keep',
-          '--from',
-          origin,
-          '--delete',
-          'Status.ARCHIVED',
-        ]);
-        expect(plan.exitCode, `S4.05: plan: ${plan.stderr}`).toBe(0);
-        const dirName = latestMigrationDirName(ctx);
-        const file = join(ctx.testDir, 'migrations', 'app', dirName, 'migration.ts');
-        writeFileSync(file, followEdits(readFileSync(file, 'utf-8'), question));
-        const reEmit = await selfEmitMigration(ctx, ['--dir', `migrations/app/${dirName}`]);
-        expect(reEmit.exitCode, `S4.06: node migration.ts: ${reEmit.stderr}`).toBe(0);
-        expect((await runMigrate(ctx)).exitCode, 'S4.07: migrate').toBe(0);
-
-        expect(tasks(ctx.dbPath)).toEqual([
-          { id: 1, status: 'old' },
-          { id: 2, status: 'active' },
-        ]);
-        expect(
-          withDatabase(ctx.dbPath, (db) =>
-            db
-              .prepare('SELECT id, state FROM "note" ORDER BY id')
-              .all()
-              .map((row) => ({ ...row })),
-          ),
-        ).toEqual([{ id: 1, state: 'old' }]);
-        await expectVerified(ctx, 'S4.08');
       },
       timeouts.spinUpPpgDev,
     );
@@ -454,60 +382,6 @@ withTempDir(({ createTempDir }) => {
     );
   });
 
-  describe('S7 (SQLite): keep the data of a member that keeps its name with a new stored value, through db update alone', () => {
-    it(
-      'leads the refusal with the two-run way, and following it keeps the rows and the member name',
-      async () => {
-        const ctx = setupSqliteJourney(createTempDir);
-        await emit(ctx, FROM_PSL, 'S7.01');
-        expect((await runDbUpdate(ctx, ['--json'])).exitCode, 'S7.02: create').toBe(0);
-        seedRows(ctx.dbPath);
-        await emit(ctx, contractWith('  ARCHIVED = "old"\n'), 'S7.03');
-
-        const refused = await runDbUpdate(ctx, ['--no-interactive', '--json']);
-        expect(engineError(refused)?.code, 'S7.04').toBe('CLI.CONSENT_REQUIRED');
-        expect(nextActionLabels(refused), 'S7.04: the way that keeps the data first').toEqual([
-          "To keep it with db update, change it in two runs. First rename member ARCHIVED of enum Status in the contract source to a name the enum does not have and give it a stored value the enum does not use, run `prisma-test contract emit`, and run `prisma-test db update --rename 'Status.ARCHIVED:Status.<temporary member>'`. Then rename that member back to ARCHIVED with its final stored value, run `prisma-test contract emit`, and run `prisma-test db update --rename 'Status.<temporary member>:Status.ARCHIVED'`.",
-          'Run the command again with --delete Status.ARCHIVED',
-        ]);
-        expect(engineError(refused)?.why, 'S7.04: says plainly what --delete does').toContain(
-          'db update cannot keep that data in one run, and --delete Status.ARCHIVED removes it.',
-        );
-
-        await emit(ctx, contractWith('  ARCHIVED_TMP = "tmp"\n'), 'S7.05');
-        const first = await runDbUpdate(ctx, [
-          '--rename',
-          'Status.ARCHIVED:Status.ARCHIVED_TMP',
-          '--no-interactive',
-          '--json',
-        ]);
-        expect(first.exitCode, `S7.05: ${JSON.stringify(engineError(first))}`).toBe(0);
-        await emit(ctx, contractWith('  ARCHIVED = "old"\n'), 'S7.06');
-        const second = await runDbUpdate(ctx, [
-          '--rename',
-          'Status.ARCHIVED_TMP:Status.ARCHIVED',
-          '--no-interactive',
-          '--json',
-        ]);
-        expect(second.exitCode, `S7.06: ${JSON.stringify(engineError(second))}`).toBe(0);
-
-        expect(tasks(ctx.dbPath)).toEqual([
-          { id: 1, status: 'old' },
-          { id: 2, status: 'active' },
-          { id: 3, status: null },
-        ]);
-        await expectVerified(ctx, 'S7.07');
-
-        await emit(ctx, contractWith('  ARCHIVED = "older"\n'), 'S7.08');
-        const next = await runDbUpdate(ctx, ['--no-interactive', '--json']);
-        expect(nextActionLabels(next), 'S7.08: the next question names the member').toContain(
-          'Run the command again with --delete Status.ARCHIVED',
-        );
-      },
-      timeouts.spinUpPpgDev,
-    );
-  });
-
   describe('S8 (SQLite): renames that shift integer stored values along', () => {
     const prio = (members: string) => `// use prisma-8
 
@@ -561,11 +435,6 @@ model Job {
     );
   });
 
-  const SWAPPED_PSL = FROM_PSL.replace('ACTIVE = "active"', 'ACTIVE = "archived"').replace(
-    'ARCHIVED = "archived"',
-    'ARCHIVED = "active"',
-  );
-
   async function migratedStart(label: string): Promise<SqliteJourney> {
     const ctx = setupSqliteJourney(createTempDir);
     await emit(ctx, FROM_PSL, `${label}.01`);
@@ -576,139 +445,41 @@ model Job {
     return ctx;
   }
 
-  describe('S9 (SQLite): keep the data of two members that swap stored values, through the plan db update prints', () => {
-    it(
-      'offers only the migration plan way, and following it swaps the rows',
-      async () => {
-        const ctx = await migratedStart('S9');
-        await emit(ctx, SWAPPED_PSL, 'S9.03');
-
-        const refused = await runDbUpdate(ctx, ['--no-interactive', '--json']);
-        expect(engineError(refused)?.code, 'S9.04').toBe('CLI.CONSENT_REQUIRED');
-        const actions = nextActionLabels(refused);
-        expect(
-          actions.filter((label) => label.startsWith('To keep')).length,
-          'S9.04: one way, the same for both values, with no two-run way',
-        ).toBe(1);
-        expect(actions.join('\n')).not.toContain('To keep it with db update');
-        const printed = /`prisma-test migration plan (.+?)`/.exec(actions[0] ?? '')?.[1] ?? '';
-        expect(printed, 'S9.04: the printed plan deletes both values').toMatch(
-          /^--from \S+ --delete Status\.(ACTIVE|ARCHIVED) --delete Status\.(ACTIVE|ARCHIVED)$/,
-        );
-
-        const plan = await runMigrationPlan(ctx, ['--name', 'swap', ...printed.split(' ')]);
-        expect(plan.exitCode, `S9.05: plan: ${plan.stderr}`).toBe(0);
-        const dirName = latestMigrationDirName(ctx);
-        const file = join(ctx.testDir, 'migrations', 'app', dirName, 'migration.ts');
-        writeFileSync(file, followEdits(readFileSync(file, 'utf-8'), actions.join('\n')));
-        const reEmit = await selfEmitMigration(ctx, ['--dir', `migrations/app/${dirName}`]);
-        expect(reEmit.exitCode, `S9.06: node migration.ts: ${reEmit.stderr}`).toBe(0);
-        expect((await runMigrate(ctx)).exitCode, 'S9.07: migrate').toBe(0);
-
-        expect(tasks(ctx.dbPath)).toEqual([
-          { id: 1, status: 'active' },
-          { id: 2, status: 'archived' },
-          { id: 3, status: null },
-        ]);
-        await expectVerified(ctx, 'S9.08');
-      },
-      timeouts.spinUpPpgDev,
-    );
-  });
-
-  describe('S10 (SQLite): two members that swap stored values under db update with no migrations', () => {
-    it(
-      'offers two runs through temporary members, and following them swaps the rows',
-      async () => {
-        const ctx = setupSqliteJourney(createTempDir);
-        await emit(ctx, FROM_PSL, 'S10.01');
-        expect((await runDbUpdate(ctx, ['--json'])).exitCode, 'S10.02: create').toBe(0);
-        seedRows(ctx.dbPath);
-        await emit(ctx, SWAPPED_PSL, 'S10.03');
-
-        const refused = await runDbUpdate(ctx, ['--no-interactive', '--json']);
-        expect(engineError(refused)?.code, 'S10.04').toBe('CLI.CONSENT_REQUIRED');
-        expect(engineError(refused)?.why).toContain(
-          'db update cannot keep that data in one run, because members of the enum swap stored values, and --delete Status.ACTIVE removes it.',
-        );
-        expect(nextActionLabels(refused)).toContain(
-          "To keep it with db update, change them in two runs. First rename members ACTIVE and ARCHIVED of enum Status in the contract source to names the enum does not have and give each a stored value the enum does not use, run `prisma-test contract emit`, and run `prisma-test db update --rename 'Status.ACTIVE:Status.<temporary member for ACTIVE>' --rename 'Status.ARCHIVED:Status.<temporary member for ARCHIVED>'`. Then rename those members back to ACTIVE and ARCHIVED with their final stored values, run `prisma-test contract emit`, and run `prisma-test db update --rename 'Status.<temporary member for ACTIVE>:Status.ACTIVE' --rename 'Status.<temporary member for ARCHIVED>:Status.ARCHIVED'`.",
-        );
-        expect(tasks(ctx.dbPath), 'S10.04: nothing changed').toEqual([
-          { id: 1, status: 'archived' },
-          { id: 2, status: 'active' },
-          { id: 3, status: null },
-        ]);
-
-        await emit(
-          ctx,
-          FROM_PSL.replace('ACTIVE = "active"', 'ACTIVE_TMP = "active_tmp"').replace(
-            'ARCHIVED = "archived"',
-            'ARCHIVED_TMP = "archived_tmp"',
-          ),
-          'S10.05',
-        );
-        const first = await runDbUpdate(ctx, [
-          '--rename',
-          'Status.ACTIVE:Status.ACTIVE_TMP',
-          '--rename',
-          'Status.ARCHIVED:Status.ARCHIVED_TMP',
-          '--no-interactive',
-          '--json',
-        ]);
-        expect(first.exitCode, `S10.05: ${JSON.stringify(engineError(first))}`).toBe(0);
-        await emit(ctx, SWAPPED_PSL, 'S10.06');
-        const second = await runDbUpdate(ctx, [
-          '--rename',
-          'Status.ACTIVE_TMP:Status.ACTIVE',
-          '--rename',
-          'Status.ARCHIVED_TMP:Status.ARCHIVED',
-          '--no-interactive',
-          '--json',
-        ]);
-        expect(second.exitCode, `S10.06: ${JSON.stringify(engineError(second))}`).toBe(0);
-
-        expect(tasks(ctx.dbPath)).toEqual([
-          { id: 1, status: 'active' },
-          { id: 2, status: 'archived' },
-          { id: 3, status: null },
-        ]);
-        await expectVerified(ctx, 'S10.07');
-      },
-      timeouts.spinUpPpgDev,
-    );
-  });
-
   describe('S11 (SQLite): renames that move stored values in a cycle', () => {
     it(
-      'are refused, and the refusal prints the plan to write the rewrites by hand in',
+      'are refused, and the two plans the refusal leads with swap the rows',
       async () => {
         const ctx = await migratedStart('S11');
-        await emit(
-          ctx,
+        const cycle = (x: string) =>
           contractWith('  ARCHIVED = "archived"\n')
-            .replace('ACTIVE = "active"', 'X = "archived"')
-            .replace('ARCHIVED = "archived"', 'Y = "active"'),
-          'S11.03',
-        );
-
-        const refused = await runDbUpdate(ctx, [
+            .replace('ACTIVE = "active"', `X = "${x}"`)
+            .replace('ARCHIVED = "archived"', 'Y = "active"');
+        const renames = [
           '--rename',
           'Status.ACTIVE:Status.X',
           '--rename',
           'Status.ARCHIVED:Status.Y',
-          '--no-interactive',
-          '--json',
-        ]);
+        ];
+        await emit(ctx, cycle('archived'), 'S11.03');
+
+        const refused = await runDbUpdate(ctx, [...renames, '--no-interactive', '--json']);
         expect(engineError(refused)?.code, 'S11.04').toBe('MIGRATION.PLANNING_FAILED');
-        expect(nextActionLabels(refused)).toEqual([
-          expect.stringMatching(
-            /^Leave out the renames in the cycle, and write the rewrites by hand/,
-          ),
-          expect.stringMatching(
-            /^To write the rewrites by hand, plan the change without --rename Status\.ACTIVE:Status\.X and --rename Status\.ARCHIVED:Status\.Y with `prisma-test migration plan --from \S+`, add the rewrites the message describes to the migration\.ts it writes, run `node <migration directory>\/migration\.ts` for the directory it writes, and apply it with `prisma-test db migrate`$/,
-          ),
+        expect(nextActionLabels(refused), 'S11.04: the two plans').toEqual([
+          'The plan rewrites a changed stored value in every row that holds it, one value after another, and no order of the rewrites moves values in a cycle. Make the change in two plans: first give "Status.X" a stored value no member stores, such as "prisma_swap", and give "Status.Y" the stored value "active", and plan and apply that with the same statements; then give "Status.X" the stored value "archived", and plan again without them.',
         ]);
+
+        await emit(ctx, cycle('prisma_swap'), 'S11.05');
+        const first = await runDbUpdate(ctx, [...renames, '--no-interactive', '--json']);
+        expect(first.exitCode, `S11.05: plan 1, with the statements: ${first.stderr}`).toBe(0);
+        await emit(ctx, cycle('archived'), 'S11.06');
+        const second = await runDbUpdate(ctx, ['--no-interactive', '--json']);
+        expect(second.exitCode, `S11.06: plan 2, without them: ${second.stderr}`).toBe(0);
+        expect(tasks(ctx.dbPath), 'S11.07: each row keeps its member under its new name').toEqual([
+          { id: 1, status: 'active' },
+          { id: 2, status: 'archived' },
+          { id: 3, status: null },
+        ]);
+        await expectVerified(ctx, 'S11.08');
       },
       timeouts.spinUpPpgDev,
     );

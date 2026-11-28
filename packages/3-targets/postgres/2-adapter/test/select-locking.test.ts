@@ -17,12 +17,27 @@ import { postgresAdapterDescriptorMeta } from '../src/core/descriptor-meta';
 import { renderLoweredSql } from '../src/core/sql-renderer';
 import type { PostgresContract } from '../src/core/types';
 
+const lockFlags = {
+  sql: {
+    forUpdate: true,
+    forShare: true,
+    lockOf: true,
+    lockNowait: true,
+    lockSkipLocked: true,
+  },
+  postgres: {
+    forNoKeyUpdate: true,
+    forKeyShare: true,
+  },
+};
+
 const contract = new SqlContractSerializer().deserializeContract({
+  formatVersion: 1,
   target: 'postgres',
   targetFamily: 'sql',
   profileHash: 'test-profile',
   roots: {},
-  capabilities: {},
+  capabilities: lockFlags,
   extensions: {},
   meta: {},
   storage: {
@@ -56,20 +71,6 @@ const contract = new SqlContractSerializer().deserializeContract({
   domain: applicationDomainOf({ models: {} }),
 }) as PostgresContract;
 
-const lockFlags = {
-  sql: {
-    forUpdate: true,
-    forShare: true,
-    lockOf: true,
-    lockNowait: true,
-    lockSkipLocked: true,
-  },
-  postgres: {
-    forNoKeyUpdate: true,
-    forKeyShare: true,
-  },
-};
-
 const base = SelectAst.from(TableSource.named('job', 'j')).withProjection([
   ProjectionItem.of('id', ColumnRef.of('j', 'id')),
 ]);
@@ -82,9 +83,22 @@ describe('Postgres adapter row locking', () => {
     return adapter.lower(ast.withLocking(locking), { contract }).sql;
   }
 
-  it('reports the seven locking capability flags', () => {
-    expect(adapter.profile.capabilities).toMatchObject(lockFlags);
-    expect(postgresAdapterDescriptorMeta.capabilities).toMatchObject(lockFlags);
+  it('declares no locking flags, which are facts about the database the target declares by version', () => {
+    expect([adapter.profile.capabilities, postgresAdapterDescriptorMeta.capabilities]).toEqual([
+      {},
+      {},
+    ]);
+  });
+
+  it("refuses a clause the contract's capabilities do not list", () => {
+    const withoutLocking = { ...contract, capabilities: {} };
+    expect(() =>
+      adapter.lower(base.withLocking([LockingClause.of('forUpdate')]), {
+        contract: withoutLocking,
+      }),
+    ).toThrow(
+      "This locking clause is unavailable: your contract declares no dependency on `sql.forUpdate`. To enable it, add `sql.forUpdate` to your contract's required capabilities.",
+    );
   });
 
   it.each([
@@ -136,7 +150,7 @@ describe('Postgres adapter row locking', () => {
     );
   });
 
-  describe('refuses a clause the adapter did not report', () => {
+  describe('refuses a clause the capabilities do not list', () => {
     const withoutFlag = (group: 'sql' | 'postgres', flag: string) => ({
       ...lockFlags,
       [group]: { ...lockFlags[group], [flag]: false },
@@ -163,16 +177,15 @@ describe('Postgres adapter row locking', () => {
       expect(() =>
         renderLoweredSql(
           base.withLocking([clause]),
-          contract,
+          { ...contract, capabilities: withoutFlag(group, flag) },
           postgresCodecDescriptorRegistry,
           createPostgresBuiltinDataTypeLookup(),
-          withoutFlag(group, flag),
         ),
       ).toThrow(
         expect.objectContaining({
           name: 'StructuredError',
           code: 'RUNTIME.AST_UNSUPPORTED',
-          message: `Postgres adapter does not report capability ${capability}, which this locking clause needs`,
+          message: `This locking clause is unavailable: your contract declares no dependency on \`${capability}\`. To enable it, add \`${capability}\` to your contract's required capabilities.`,
           meta: { target: 'postgres', feature: 'locking-clause', capability },
         }),
       );

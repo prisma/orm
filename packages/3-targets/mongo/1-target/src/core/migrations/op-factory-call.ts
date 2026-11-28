@@ -563,7 +563,8 @@ function sourceOnOneLine(value: unknown): string {
 }
 
 function propertyName(key: string): string {
-  return /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(key) && key !== '__proto__' ? key : tsStringLiteral(key);
+  if (key === '__proto__') return `[${tsStringLiteral(key)}]`;
+  return /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(key) ? key : tsStringLiteral(key);
 }
 
 /** What `migration.ts` imports for a `removeStoredValue` call beside the call itself. */

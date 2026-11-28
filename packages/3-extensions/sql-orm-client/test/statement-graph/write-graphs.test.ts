@@ -203,12 +203,13 @@ describe('write graphs as they run, on a contract with returning', () => {
     });
   });
 
-  it('delete() finds the row, which is the result, and deletes it', () => {
+  it('delete() finds the row, deletes it, and returns it only if the Delete removed it', () => {
     expect(asRun(deleteFirstGraph(usersOf(context)))).toBe(
       lines(
         "n1 Find users where name = 'Ada' limit 1",
         'n2 Delete users <- FilterData n1 (id->id)',
-        'result: n1',
+        'n3 DeletedRows <- WholeRows n1, Rows n2',
+        'result: n3',
       ),
     );
   });
@@ -269,7 +270,7 @@ describe('write graphs as they run, on a contract without returning', () => {
         error: {
           code: 'ORM.CAPABILITY_MISSING',
           message:
-            'create() with onConflict "skip" on model "User" requires contract capability "returning": without it the rows are read back by key, which finds a skipped row\'s existing match. Use createAndCount() to skip conflicting rows.',
+            '`create()` with onConflict "skip" on model "User" is unavailable: your contract declares no dependency on `sql.returning`. Without it the rows are read back by key, which finds a skipped row\'s existing match. Use createAndCount() to skip conflicting rows. To enable it, add `sql.returning` to your contract\'s required capabilities.',
           meta: { capability: 'returning', action: 'create()' },
         },
         executions: [],
@@ -317,7 +318,7 @@ describe('write graphs as they run, on a contract without returning', () => {
       error: {
         code: 'ORM.CAPABILITY_MISSING',
         message: expect.stringContaining(
-          'create() on model "Folder" cannot find the row it inserts',
+          '`create()` on model "Folder" is unavailable: your contract declares no dependency on `sql.returning`. It cannot find the row it inserts',
         ),
       },
       executions: [],

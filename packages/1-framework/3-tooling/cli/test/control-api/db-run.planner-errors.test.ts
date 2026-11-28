@@ -79,7 +79,7 @@ function auditExtension(space: AuditSpace): ControlExtensionDescriptor<'sql', 'p
     targetId: 'postgres',
     version: '1.0.0',
     contractSpace: {
-      contractJson: AUDIT_CONTRACT,
+      contractJson: Object.assign(AUDIT_CONTRACT, { formatVersion: 1 }),
       headRef: { hash: AUDIT_HEAD, invariants: space.invariants },
       migrations: space.packages,
     },
@@ -107,6 +107,7 @@ function familyWithAuditMarker(hash: string | undefined) {
     introspect: async () => ({ tables: {} }),
     deserializeContract: (json: unknown) => json as Contract,
     storageNameOf: (operation: MigrationPlanOperation) => operation.id,
+    accessChangesOf: () => [],
   } as unknown as ControlFamilyInstance<'sql', unknown>;
 }
 
@@ -129,7 +130,7 @@ async function migrationsDirWith(space: AuditSpace): Promise<string> {
   tempDirs.push(dir);
   const migrationsDir = join(dir, 'migrations');
   await writeContractSnapshot(migrationsDir, AUDIT_HEAD, {
-    contractJson: AUDIT_CONTRACT,
+    contractJson: { formatVersion: 1, ...AUDIT_CONTRACT },
     contractDts: '',
   });
   for (const pkg of space.packages) {

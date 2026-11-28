@@ -1,0 +1,45 @@
+// use prisma-8
+
+model Container {
+  id     Int      @id
+  Record Record[]
+
+  @@map("Container")
+}
+
+model RecordConfig {
+  id     Int      @id
+  Record Record[]
+
+  @@map("RecordConfig")
+}
+
+model RecordLocation {
+  id       Int      @id
+  location String   @unique
+  Record   Record[]
+
+  @@map("RecordLocation")
+}
+
+model RecordType {
+  id     Int      @id
+  type   String   @unique
+  Record Record[]
+
+  @@map("RecordType")
+}
+
+model Record {
+  id           Int            @id
+  location     RecordLocation @relation(fields: [locationId], references: [id])
+  locationId   Int
+  type         RecordType     @relation(fields: [recordTypeId], references: [id])
+  recordTypeId Int
+  config       RecordConfig?  @relation(fields: [configId], references: [id])
+  configId     Int?
+  container    Container      @relation(fields: [containerId], references: [id])
+  containerId  Int
+
+  @@map("Record")
+}

@@ -10,7 +10,12 @@ import type {
 import type { SnapshotContentVerifier } from '@internal/migration-tools/contract-snapshot-store';
 import { ifDefined } from '@internal/utils/defined';
 import type { CliInvocation } from '../../utils/printed-command';
-import type { DbInitResult, OnControlProgress, PlannerWarningsListener } from '../types';
+import type {
+  DbInitResult,
+  OnControlProgress,
+  PlannerWarningsListener,
+  UnrecordedSnapshotListener,
+} from '../types';
 import { executeRun } from './db-run';
 
 /**
@@ -31,7 +36,8 @@ import { executeRun } from './db-run';
  * The loader (sub-spec § Loader) is the sole descriptor-import boundary.
  */
 export interface ExecuteDbInitOptions<TFamilyId extends string, TTargetId extends string>
-  extends PlannerWarningsListener {
+  extends PlannerWarningsListener,
+    UnrecordedSnapshotListener {
   readonly driver: ControlDriverInstance<TFamilyId, TTargetId>;
   readonly adapter: ControlAdapterInstance<TFamilyId, TTargetId>;
   readonly familyInstance: ControlFamilyInstance<TFamilyId, unknown>;
@@ -93,6 +99,7 @@ export async function executeDbInit<TFamilyId extends string, TTargetId extends 
     action: 'dbInit',
     ...ifDefined('verifySnapshotContent', options.verifySnapshotContent),
     ...ifDefined('onPlannerWarnings', options.onPlannerWarnings),
+    ...ifDefined('onUnrecordedSnapshot', options.onUnrecordedSnapshot),
     ...ifDefined('onProgress', options.onProgress),
   });
   return result as DbInitResult;

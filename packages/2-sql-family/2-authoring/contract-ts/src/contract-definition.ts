@@ -334,7 +334,7 @@ export interface ContractDefinition {
   readonly target: TargetPackRef<'sql', string>;
   readonly defaultControlPolicy?: ControlPolicy;
   readonly extensions?: Record<string, ExtensionPackRef<'sql', string>>;
-  /** Capabilities of the stack the contract runs with beyond its target's and extensions', such as its adapter's. They join the target's and the extensions', as `prisma contract emit` joins them. */
+  /** Capabilities the contract records beside its target's and its extensions', joined as `prisma contract emit` joins them. On PostgreSQL they are the author's `requiredCapabilities`; on SQLite, its adapter's set. */
   readonly capabilities?: CapabilityContributor['capabilities'];
   /**
    * Test-fixture escape hatch: pins the emitted `storage.storageHash`

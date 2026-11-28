@@ -12,6 +12,7 @@
     "test/fixtures/**/*",
     "test/packaging/fixtures/**/*",
     "test/authoring/templates/**/*",
-    "test/upgrade-instructions/*/fixtures/**/*"
+    "test/upgrade-instructions/*/fixtures/**/*",
+    "test/release-candidate-projects/fixtures/**/*"
   ]
 }

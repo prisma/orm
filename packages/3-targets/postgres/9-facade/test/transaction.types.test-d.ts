@@ -1,12 +1,17 @@
 import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { expectTypeOf, test } from 'vitest';
-import type { PostgresTransactionOptions } from '../src/exports/runtime';
+import type {
+  InteractiveTransactionsCapability,
+  PostgresTransactionOptions,
+} from '../src/exports/runtime';
 import type { PostgresServerlessConnection } from '../src/exports/serverless';
 import type { PostgresClient } from '../src/runtime/postgres';
 import type { PostgresTransactionContext } from '../src/runtime/postgres-members';
 
-type TestContract = Contract<SqlStorage>;
+type TestContract = Contract<SqlStorage> & {
+  readonly capabilities: InteractiveTransactionsCapability;
+};
 
 test('transaction options are target-specific and preserve inference on both transports', () => {
   expectTypeOf<PostgresTransactionOptions>().not.toBeAny();
@@ -33,11 +38,15 @@ test('transaction options are target-specific and preserve inference on both tra
     .toEqualTypeOf<PostgresTransactionOptions | undefined>();
 });
 
-test('transaction context does not expose a transaction method', () => {
-  type HasTransaction = 'transaction' extends keyof PostgresTransactionContext<TestContract>
-    ? true
-    : false;
-  expectTypeOf<HasTransaction>().toEqualTypeOf<false>();
+test('tx.transaction takes one callback, passes a context of the same type and infers the result', () => {
+  type Tx = PostgresTransactionContext<TestContract>;
+  const tx = {} as Tx;
+  expectTypeOf(tx.transaction).parameters.toEqualTypeOf<[(tx: Tx) => PromiseLike<unknown>]>();
+  expectTypeOf(tx.transaction).parameter(0).parameter(0).toEqualTypeOf<Tx>();
+  expectTypeOf(tx.transaction(async () => 42)).toEqualTypeOf<Promise<number>>();
+  expectTypeOf(
+    tx.transaction(async (inner) => inner.transaction(async () => 'value' as const)),
+  ).toEqualTypeOf<Promise<'value'>>();
 });
 
 test('db.transaction infers the callback return type correctly', () => {

@@ -11,6 +11,7 @@ import {
   createExecutionContext,
   createSqlExecutionStack,
   toRuntimeOptions,
+  warnOfCapabilitiesNotProvided,
 } from '@internal/sql-runtime';
 import postgresTarget from '@internal/target-postgres/runtime';
 import { InternalError } from '@internal/utils/internal-error';
@@ -35,6 +36,7 @@ import {
 } from './postgres-options';
 import { PostgresRuntimeImpl } from './postgres-runtime';
 import type { PostgresTargetId } from './postgres-target-id';
+import type { PostgresStackProvides } from './stack-capabilities';
 
 export interface PostgresServerlessConnection<
   TContract extends Contract<SqlStorage>,
@@ -110,7 +112,7 @@ export default function postgresServerless<
   TContract extends Contract<SqlStorage>,
   TCollections extends CollectionClasses = NoCollectionClasses,
 >(
-  options: PostgresServerlessOptions<TContract, TCollections>,
+  options: PostgresServerlessOptions<TContract, TCollections> & PostgresStackProvides<TContract>,
 ): PostgresServerlessClient<TContract, TCollections> {
   const cursor = validateCursorOptions(options.cursor, 'postgresServerless');
   const transactionOptions = validateTransactionOptions(options.transactionOptions);
@@ -125,8 +127,8 @@ export default function postgresServerless<
   const context = createExecutionContext<TContract, PostgresTargetId>({
     contract,
     stack,
-    driver: postgresDriver,
   });
+  warnOfCapabilitiesNotProvided(contract, stack, options);
   const { sql, raw, enums, nativeEnums, toSql } = buildPostgresStaticContext<TContract>(
     contract,
     context,

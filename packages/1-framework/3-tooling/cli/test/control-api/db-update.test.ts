@@ -126,7 +126,7 @@ function createMockMigrations(overrides?: {
 }
 
 const dummyContract = {
-  schemaVersion: '1',
+  formatVersion: 1,
   target: 'postgres',
   storage: { storageHash: 'dummy', tables: {}, namespaces: {} },
 } as unknown as Contract;
@@ -783,7 +783,7 @@ describe('executeDbUpdate', () => {
       );
 
       expect(result.ok).toBe(true);
-      expect(answerQuestions).toHaveBeenCalledWith([]);
+      expect(answerQuestions).toHaveBeenCalledWith([], []);
     });
 
     it('refuses delete and allow statements that answer no question, before applying', async () => {
@@ -838,7 +838,13 @@ describe('executeDbUpdate', () => {
       );
 
       expect(result.ok).toBe(true);
-      expect(answerQuestions).toHaveBeenCalledWith([]);
+      expect(answerQuestions).toHaveBeenCalledWith(
+        [],
+        [
+          { verb: 'delete', subject: 'user.nickname' },
+          { verb: 'allow', subject: 'user' },
+        ],
+      );
     });
 
     it('rejects an answer callback that leaves a question unanswered, before applying', async () => {

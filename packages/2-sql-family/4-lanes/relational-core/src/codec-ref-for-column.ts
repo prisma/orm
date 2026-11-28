@@ -27,6 +27,7 @@ export function codecRefForStorageColumn(
   const resolved = resolveStorageTable(storage, tableName, namespaceId);
   if (resolved === undefined) return undefined;
   const tableDef = resolved.table;
+  if (!Object.hasOwn(tableDef.columns, columnName)) return undefined;
   const columnDef = tableDef.columns[columnName];
   if (!columnDef) return undefined;
   const typeParams = nonEmptyTypeParams(columnDef.typeParams);

@@ -4,9 +4,7 @@ import {
   type DeclaredDatabasePoliciesIssue,
   parseDeclaredDatabasePolicies,
 } from '@internal/framework-components/control';
-import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
-import { type } from 'arktype';
 import { dirname, join, relative } from 'pathe';
 import {
   errorInvalidRefFile,
@@ -14,6 +12,7 @@ import {
   errorInvalidRefValue,
   MigrationToolsError,
 } from './errors';
+import { parseRefDocument, printRefDocument } from './formats/ref/versions';
 
 export interface RefEntry {
   readonly hash: string;
@@ -68,16 +67,6 @@ export function validateRefValue(value: string): boolean {
   return REF_VALUE_PATTERN.test(value);
 }
 
-const RefEntryFileSchema = type({
-  hash: 'string',
-  invariants: 'string[]',
-  'policies?': 'unknown',
-}).narrow((entry, ctx) => {
-  if (!validateRefValue(entry.hash))
-    return ctx.mustBe(`a valid contract hash (got "${entry.hash}")`);
-  return true;
-});
-
 function policiesIssueText({ path, problem }: DeclaredDatabasePoliciesIssue): string {
   return path === '' ? `policies ${problem}` : `policies.${path} ${problem}`;
 }
@@ -87,11 +76,19 @@ interface RefEntryProblem {
   readonly policyIssues: readonly DeclaredDatabasePoliciesIssue[];
 }
 
-/** The ref entry a ref file's parsed JSON holds, or why it holds none: each invalid field, by its path. */
-function refEntryOf(parsed: unknown): Result<RefEntry, RefEntryProblem> {
-  const entry = RefEntryFileSchema(parsed);
-  if (entry instanceof type.errors) return notOk({ detail: entry.summary, policyIssues: [] });
-  const { hash, invariants, policies } = entry;
+/**
+ * The ref entry a ref file's parsed JSON holds, or why it holds none: each invalid field, by its path. Throws a format version error, naming `filePath`, for a file this release cannot read.
+ */
+function refEntryOf(parsed: unknown, filePath: string): Result<RefEntry, RefEntryProblem> {
+  const content = parseRefDocument(parsed, filePath);
+  if (!content.ok) return notOk({ detail: content.failure, policyIssues: [] });
+  const { hash, invariants, policies } = content.value;
+  if (!validateRefValue(hash)) {
+    return notOk({
+      detail: `hash must be a valid contract hash (got "${hash}")`,
+      policyIssues: [],
+    });
+  }
   if (policies === undefined) return ok({ hash, invariants });
   const declared = parseDeclaredDatabasePolicies(policies);
   if (!declared.ok) {
@@ -146,7 +143,7 @@ export async function readRef(refsDir: string, name: string): Promise<RefEntry> 
     throw errorInvalidRefFile(filePath, 'Failed to parse as JSON');
   }
 
-  const result = refEntryOf(parsed);
+  const result = refEntryOf(parsed, filePath);
   if (!result.ok) {
     throw errorInvalidRefFile(filePath, result.failure.detail, result.failure.policyIssues);
   }
@@ -196,7 +193,7 @@ export async function readRefs(refsDir: string): Promise<Refs> {
       throw errorInvalidRefFile(filePath, 'Failed to parse as JSON');
     }
 
-    const result = refEntryOf(parsed);
+    const result = refEntryOf(parsed, filePath);
     if (!result.ok) {
       throw errorInvalidRefFile(filePath, result.failure.detail, result.failure.policyIssues);
     }
@@ -270,7 +267,7 @@ export async function readRefsTolerant(refsDir: string): Promise<TolerantRefsRes
       continue;
     }
 
-    const result = refEntryOf(parsed);
+    const result = refEntryOf(parsed, filePath);
     if (!result.ok) {
       problems.push({
         refName: name,
@@ -300,12 +297,7 @@ export async function writeRef(refsDir: string, name: string, entry: RefEntry): 
   await mkdir(dir, { recursive: true });
 
   const tmpPath = join(dir, `.${name.split('/').pop()}.json.${Date.now()}.tmp`);
-  const content = {
-    hash: entry.hash,
-    invariants: [...entry.invariants],
-    ...ifDefined('policies', entry.policies),
-  };
-  await writeFile(tmpPath, `${JSON.stringify(content, null, 2)}\n`);
+  await writeFile(tmpPath, `${JSON.stringify(printRefDocument(entry), null, 2)}\n`);
   await rename(tmpPath, filePath);
 }
 

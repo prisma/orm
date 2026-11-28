@@ -10,7 +10,8 @@ const recorded = vi.hoisted(() => ({
   disposals: [] as unknown[],
 }));
 
-vi.mock('pg', () => {
+vi.mock('pg', async () => {
+  const { EventEmitter } = await import('node:events');
   function recordingQuery(connection: number) {
     return vi.fn(async (request: string | { readonly text: string }) => {
       recorded.statements.push({
@@ -22,14 +23,18 @@ vi.mock('pg', () => {
       return { rows: [], rowCount: 0 };
     });
   }
-  class Pool {
-    on = vi.fn().mockReturnThis();
-    connect = vi.fn(async () => ({
-      query: recordingQuery(++recorded.connections),
-      release: vi.fn((reason?: unknown) => recorded.disposals.push(reason)),
-      on: vi.fn(),
-      off: vi.fn(),
-    }));
+  /** Opens a client on each checkout and, as pg-pool does, emits `connect` for it. */
+  class Pool extends EventEmitter {
+    connect = vi.fn(async () => {
+      const client = {
+        query: recordingQuery(++recorded.connections),
+        release: vi.fn((reason?: unknown) => recorded.disposals.push(reason)),
+        on: vi.fn(),
+        off: vi.fn(),
+      };
+      this.emit('connect', client);
+      return client;
+    });
     end = vi.fn().mockResolvedValue(undefined);
     totalCount = 0;
     idleCount = 0;
@@ -47,6 +52,7 @@ vi.mock('pg', () => {
   return { Pool, Client };
 });
 
+import { defineContract, postgres18 } from '../src/exports/contract-builder';
 import postgres, {
   type PostgresTransactionContext,
   type PostgresTransactionOptions,
@@ -365,5 +371,36 @@ describe('a transaction on a serverless connection', () => {
     await db.transaction(useEveryMember);
 
     expect(recorded.statements).toEqual(onOneConnection(everyStatementInTheTransaction));
+  });
+});
+
+describe('transaction() for a contract that does not list interactive transactions', () => {
+  const withoutInteractiveTransactions = defineContract({ requiredCapabilities: postgres18 });
+  const refusal = {
+    code: 'ORM.CAPABILITY_MISSING',
+    meta: { capability: 'sql.interactiveTransactions', method: 'transaction' },
+  };
+
+  it('is refused on the client, before it begins one', async () => {
+    const db = postgres({ contract: withoutInteractiveTransactions, url, verifyMarker: false });
+    recorded.statements.length = 0;
+
+    // @ts-expect-error the contract declares no dependency on sql.interactiveTransactions
+    await expect(db.transaction(async () => 1)).rejects.toMatchObject(refusal);
+    expect(recorded.statements).toEqual([]);
+    await db.close();
+  });
+
+  it('is refused on a serverless connection, before it begins one', async () => {
+    const serverless = postgresServerless({
+      contract: withoutInteractiveTransactions,
+      verifyMarker: false,
+    });
+    await using db = await serverless.connect({ url });
+    recorded.statements.length = 0;
+
+    // @ts-expect-error the contract declares no dependency on sql.interactiveTransactions
+    await expect(db.transaction(async () => 1)).rejects.toMatchObject(refusal);
+    expect(recorded.statements).toEqual([]);
   });
 });

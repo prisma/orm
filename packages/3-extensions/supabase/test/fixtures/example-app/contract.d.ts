@@ -432,21 +432,16 @@ type ContractBase = Omit<
       readonly distinctOn: true;
       readonly forKeyShare: true;
       readonly forNoKeyUpdate: true;
-      readonly jsonAgg: true;
-      readonly lateral: true;
-      readonly limit: true;
-      readonly orderBy: true;
-      readonly returning: true;
     };
     readonly sql: {
       readonly checkConstraint: true;
       readonly defaultInInsert: true;
-      readonly enums: true;
       readonly forShare: true;
       readonly forUpdate: true;
       readonly insertOnConflictSkip: true;
       readonly insertOnConflictTarget: true;
       readonly insertOnConflictWithoutTarget: true;
+      readonly interactiveTransactions: true;
       readonly jsonAgg: true;
       readonly jsonAggWithoutTruncation: true;
       readonly lateral: true;
@@ -464,7 +459,7 @@ type ContractBase = Omit<
       readonly id: 'supabase';
       readonly kind: 'extension';
       readonly targetId: 'postgres';
-      readonly version: '8.0.0-rc.24';
+      readonly version: '8.0.0-rc.25';
     };
   };
   readonly meta: {};

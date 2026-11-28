@@ -9,7 +9,9 @@ import type { ContractSpace, MigrationPackage } from '@internal/framework-compon
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonicalization-hooks';
 import { SqlStorage } from '@internal/sql-contract/types';
+import sqliteTargetDescriptor from '@internal/target-sqlite/control';
 import { sqliteCreateNamespace } from '@internal/target-sqlite/types';
+import { blindCast } from '@internal/utils/casts';
 import { TEST_BASELINE_INVARIANT_ID, TEST_BOX_TABLE, TEST_SPACE_ID } from './constants';
 
 const TARGET = 'sqlite' as const;
@@ -86,7 +88,10 @@ const baselineMigration: MigrationPackage = {
 };
 
 const testSqliteSpace: ContractSpace<Contract<SqlStorage>> = {
-  contractJson: testSqliteSpaceContract,
+  contractJson: blindCast<
+    Contract<SqlStorage>,
+    'an extension descriptor carries its stored contract.json'
+  >(sqliteTargetDescriptor.contractSerializer.serializeContract(testSqliteSpaceContract)),
   migrations: [baselineMigration],
   headRef: { hash: TEST_SQLITE_HEAD_HASH, invariants: [TEST_BASELINE_INVARIANT_ID] },
 };

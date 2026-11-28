@@ -10,6 +10,7 @@ import type { SqlStorage } from '@internal/sql-contract/types';
 import type { SqlSchemaIRNode } from '@internal/sql-schema-ir/types';
 import { blindCast } from '@internal/utils/casts';
 import { postgresResolveDefault } from '../default-normalizer';
+import { ownEntry } from '../own-entry';
 import type { PostgresContract } from '../postgres-schema';
 import { PostgresDatabaseSchemaNode } from '../schema-ir/postgres-database-schema-node';
 import { PostgresExtensionSchemaNode } from '../schema-ir/postgres-extension-schema-node';
@@ -86,8 +87,8 @@ function pruneTableLessNamespaces(
     namespaces,
     roles: [...expected.roles],
     extensions: [...expected.extensions],
-    existingSchemas: expected.existingSchemas.filter((s) => namespaces[s] !== undefined),
-    pgVersion: expected.pgVersion,
+    existingSchemas: expected.existingSchemas.filter((s) => ownEntry(namespaces, s) !== undefined),
+    serverVersionNumber: expected.serverVersionNumber,
   });
 }
 
@@ -165,7 +166,7 @@ export function diffPostgresSchema(input: {
     return owned.has(namespaceSegment);
   });
   const namespacePairs = Object.values(expected.namespaces).map((ns) => ({
-    actual: actual.namespaces[ns.schemaName],
+    actual: ownEntry(actual.namespaces, ns.schemaName),
   }));
   return {
     issues,
@@ -190,24 +191,23 @@ function padActualNamespaces(
   expected: PostgresDatabaseSchemaNode,
   actual: PostgresDatabaseSchemaNode,
 ): PostgresDatabaseSchemaNode {
-  const namespaces: Record<string, PostgresNamespaceSchemaNode> = { ...actual.namespaces };
-  let padded = false;
-  for (const schemaName of Object.keys(expected.namespaces)) {
-    if (namespaces[schemaName] === undefined) {
-      namespaces[schemaName] = new PostgresNamespaceSchemaNode({
-        schemaName,
-        tables: {},
-      });
-      padded = true;
-    }
-  }
-  if (!padded) return actual;
+  const missing = Object.keys(expected.namespaces).filter(
+    (schemaName) => ownEntry(actual.namespaces, schemaName) === undefined,
+  );
+  if (missing.length === 0) return actual;
+  const namespaces: Record<string, PostgresNamespaceSchemaNode> = Object.fromEntries([
+    ...Object.entries(actual.namespaces),
+    ...missing.map((schemaName) => [
+      schemaName,
+      new PostgresNamespaceSchemaNode({ schemaName, tables: {} }),
+    ]),
+  ]);
   return new PostgresDatabaseSchemaNode({
     namespaces,
     roles: [...actual.roles],
     extensions: [...actual.extensions],
     existingSchemas: [...actual.existingSchemas],
-    pgVersion: actual.pgVersion,
+    serverVersionNumber: actual.serverVersionNumber,
   });
 }
 

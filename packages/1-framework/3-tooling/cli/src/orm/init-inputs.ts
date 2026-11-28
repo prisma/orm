@@ -25,6 +25,7 @@ import {
   rejectSchemaPathNoModeTakes,
   resolveAuthoring,
   resolveTarget,
+  resolveTargetName,
   validateSchemaPath,
 } from '../commands/init/input-values';
 import { prisma6SideBySideSetup } from '../commands/init/prisma6-side-by-side';
@@ -40,9 +41,13 @@ import {
   findTargetByProvider,
   KNOWN_TARGET_PACKAGES,
   type KnownTarget,
+  listedTargetPackage,
+  PACKAGE_NAME_PLACEHOLDER,
+  type TargetPackage,
 } from '../commands/init/target-packages';
 import { defaultSchemaPath } from '../commands/init/templates/code-templates';
 import type { CheckPrisma7Source, Prisma7QuickReference } from './init-prisma7-check';
+import type { RequiredPeers } from './init-required-peers';
 import {
   CONFIG_FILE,
   generatedFilesInitReplaces,
@@ -104,7 +109,7 @@ export interface Prisma7SideBySidePlan {
 
 /** Every decision the scaffold phase operates on. */
 export interface ResolvedInitInputs {
-  readonly target: KnownTarget;
+  readonly target: TargetPackage;
   readonly contribution: InitContribution;
   /** `psl` on the Prisma 7 path: the schema is PSL, and no starter is written. */
   readonly authoring: ContractSourceFormat;
@@ -114,7 +119,8 @@ export interface ResolvedInitInputs {
   /** What detection and the Prisma 7 check could not do; reported, never fatal. */
   readonly warnings: readonly string[];
   readonly install: boolean;
-  /** Packages installed with the target package, so the install phase skips them. */
+  readonly requiredPeers: RequiredPeers;
+  /** Packages installed with the facade, so the install phase skips them. */
   readonly preinstalled: readonly string[];
   readonly writeEnv: boolean;
   readonly probeDb: boolean;
@@ -130,14 +136,14 @@ export interface ResolvedInitInputs {
 }
 
 /**
- * The install of the target package failed before anything was written. Carries what the output
+ * The install of the facade failed before anything was written. Carries what the output
  * document reports: on the starter path the authoring and schema path come from the flags, since
  * the questions that settle them come after the install.
  */
 export class InitInstallFailedBeforeWriting extends Error {
   constructor(
     readonly failure: TargetPackageInstallFailed['failure'],
-    readonly target: KnownTarget,
+    readonly target: TargetPackage,
     readonly authoring: ContractSourceFormat | 'prisma7',
     readonly schemaPath: string,
   ) {
@@ -148,12 +154,12 @@ export class InitInstallFailedBeforeWriting extends Error {
 
 async function prepareTarget(
   prepareTargetPackage: PrepareTargetPackage,
-  target: KnownTarget,
+  target: TargetPackage,
   report: { readonly authoring: ContractSourceFormat | 'prisma7'; readonly schemaPath: string },
   installReason: InstallReason,
 ): Promise<PreparedTargetPackage> {
   try {
-    return await prepareTargetPackage(target.packageName, target.peerPackages);
+    return await prepareTargetPackage(target);
   } catch (error) {
     if (error instanceof TargetPackageRefusedAfterInstall) {
       throw withPackagesAddedAction(error.cause, error.added, installReason);
@@ -206,16 +212,28 @@ export function consentToken(cwd: string): string {
   return name.length > 0 ? name : cwd.trim();
 }
 
-async function askTarget(prompt: PromptSurface): Promise<KnownTarget> {
-  const shortName = await prompt.select(
-    'What database are you using?',
-    KNOWN_TARGET_PACKAGES.map((entry) => ({ value: entry.shortName, label: entry.label })),
-  );
-  const chosen = KNOWN_TARGET_PACKAGES.find((entry) => entry.shortName === shortName);
+const ANOTHER_PACKAGE = 'another-package';
+
+/**
+ * The known facades, and a way to type another package's name, which then resolves as
+ * `--target <name>` does.
+ */
+async function askTarget(prompt: PromptSurface): Promise<TargetPackage> {
+  const answer = await prompt.select('What database are you using?', [
+    ...KNOWN_TARGET_PACKAGES.map((entry) => ({ value: entry.shortName, label: entry.label })),
+    { value: ANOTHER_PACKAGE, label: 'Another package' },
+  ]);
+  if (answer === ANOTHER_PACKAGE) {
+    const packageName = await prompt.text('Which package?', {
+      placeholder: PACKAGE_NAME_PLACEHOLDER,
+    });
+    return resolveTargetName(packageName.trim(), 'prompt');
+  }
+  const chosen = KNOWN_TARGET_PACKAGES.find((entry) => entry.shortName === answer);
   if (chosen === undefined) {
     throw errorInitUserAborted();
   }
-  return chosen;
+  return listedTargetPackage(chosen);
 }
 
 const AUTHORING_CHOICES: readonly {
@@ -226,7 +244,7 @@ const AUTHORING_CHOICES: readonly {
   { value: 'typescript', label: 'TypeScript (.ts)' },
 ];
 
-/** Asks only between the ways the target package offers; one way is taken without asking. */
+/** Asks only between the ways the facade offers; one way is taken without asking. */
 async function askAuthoring(
   prompt: PromptSurface,
   offered: readonly ContractSourceFormat[],
@@ -262,17 +280,17 @@ interface PreviousFacade {
 }
 
 /**
- * The target package a previous `init` installed for another target, when this
+ * The facade a previous `init` installed for another target, when this
  * run switches targets and one is still declared. Reads every name a previous
  * run could have written, because older versions scaffolded other names.
  */
-function previousFacade(cwd: string, target: KnownTarget): PreviousFacade | undefined {
+function previousFacade(cwd: string, target: TargetPackage): PreviousFacade | undefined {
   const manifestPath = join(cwd, 'package.json');
   if (!existsSync(manifestPath)) {
     return undefined;
   }
   const candidates = KNOWN_TARGET_PACKAGES.filter(
-    (entry) => entry.shortName !== target.shortName,
+    (entry) => entry.packageName !== target.packageName,
   ).flatMap((entry) =>
     [entry.packageName, entry.workspacePackageName].map((packageName) => ({
       target: entry,
@@ -295,7 +313,9 @@ function previousFacade(cwd: string, target: KnownTarget): PreviousFacade | unde
 
 async function resolveRemovePreviousFacade(ctx: {
   readonly cwd: string;
-  readonly target: KnownTarget;
+  readonly target: TargetPackage;
+  /** The label the facade's contribution gives itself. */
+  readonly label: string;
   readonly reinit: boolean;
   readonly keepPreviousFacade: boolean;
   readonly prompt: PromptSurface;
@@ -308,7 +328,7 @@ async function resolveRemovePreviousFacade(ctx: {
     return null;
   }
   const remove = await ctx.prompt.confirm(
-    `Switching from ${facade.target.label} to ${ctx.target.label} — remove ${facade.packageName} from package.json dependencies?`,
+    `Switching from ${facade.target.label} to ${ctx.label} — remove ${facade.packageName} from package.json dependencies?`,
     { default: true },
   );
   return remove ? facade.packageName : null;
@@ -358,18 +378,29 @@ function prisma7Question(detection: Prisma7Detection): string {
  * The Prisma 7 path is entered by the flag or by an explicit yes. The question
  * declares no default on purpose: a session that cannot ask (`--yes`, no
  * terminal) must run init as today rather than have the engine answer for the
- * user, so the engine's "cannot ask" is read as a no.
+ * user, so the engine's "cannot ask" is read as a no. An unlisted package
+ * cannot keep the schema, so it is not asked about, and the user is told why.
  */
 async function choosePrisma7Path(ctx: {
   readonly flags: InitFlagValues;
   readonly prompt: PromptSurface;
   readonly detection: Prisma7Detection;
-  readonly flagTarget: KnownTarget | undefined;
+  readonly flagTarget: TargetPackage | undefined;
+  readonly warn: (text: string) => void;
 }): Promise<boolean> {
   if (ctx.flags.fromPrisma7Schema !== undefined) {
     return true;
   }
   if (!looksLikePrisma7(ctx.detection)) {
+    return false;
+  }
+  if (ctx.flagTarget !== undefined && ctx.flagTarget.listed === undefined) {
+    ctx.warn(
+      freshInitWarning(
+        `${ctx.flagTarget.packageName} is not in the list of database packages that can keep a Prisma 7 schema`,
+        ctx.detection,
+      ),
+    );
     return false;
   }
   const { schema } = ctx.detection;
@@ -387,14 +418,25 @@ async function choosePrisma7Path(ctx: {
 }
 
 /**
- * The schema's provider names the target; `--target` may only agree with it,
- * or name the database when the provider is not a string literal.
+ * The schema's provider names the target through the list; `--target` may only agree with it,
+ * or name a listed database when the provider is not a string literal. An unlisted package takes
+ * no Prisma 7 schema.
  */
 function prisma7Target(
   schema: Extract<Prisma7SchemaDetection, { readonly kind: 'datasource' }>,
-  flagTarget: KnownTarget | undefined,
+  flagTargetPackage: TargetPackage | undefined,
   rawFlagTarget: string | undefined,
-): Result<KnownTarget, ReturnType<typeof errorInitPrisma7TargetMismatch>> {
+): Result<TargetPackage, ReturnType<typeof errorInitPrisma7TargetMismatch>> {
+  const flagTarget = flagTargetPackage?.listed;
+  if (flagTargetPackage !== undefined && flagTarget === undefined) {
+    return notOk(
+      errorInitPrisma7SourceUnavailable({
+        schemaPath: schema.path,
+        packageName: flagTargetPackage.packageName,
+        reason: 'unlisted',
+      }),
+    );
+  }
   const providerTarget =
     schema.provider === undefined ? undefined : findTargetByProvider(schema.provider);
   if (schema.provider !== undefined && providerTarget === undefined) {
@@ -418,14 +460,14 @@ function prisma7Target(
   const target = flagTarget ?? providerTarget;
   return target === undefined
     ? notOk(errorInitPrisma7ProviderUnsupported({ schemaPath: schema.path, provider: undefined }))
-    : ok(target);
+    : ok(listedTargetPackage(target));
 }
 
 /**
  * What a fresh init does to a Prisma 7 project, said before its questions: the user answered yes
  * to adopting the schema and is about to be asked something else.
  */
-function freshInitWarning(packageName: string, detection: Prisma7Detection): string {
+function freshInitWarning(cause: string, detection: Prisma7Detection): string {
   const { config, schema, cli } = detection;
   const effects = [
     ...(config.kind === 'prisma7' && config.path === CONFIG_FILE
@@ -434,7 +476,7 @@ function freshInitWarning(packageName: string, detection: Prisma7Detection): str
     ...(cli.kind === 'earlier' ? ['installs prisma@latest, which replaces the Prisma 7 CLI'] : []),
   ];
   const consequences = effects.length === 0 ? '' : ` It ${effects.join(', and it ')}.`;
-  return `${packageName} cannot read Prisma 7 schemas, so init sets up a fresh Prisma 8 project instead and leaves ${schema.path} alone.${consequences}`;
+  return `${cause}, so init sets up a fresh Prisma 8 project instead and leaves ${schema.path} alone.${consequences}`;
 }
 
 function sideBySidePlan(detection: Prisma7Detection): Prisma7SideBySidePlan | null {
@@ -491,8 +533,8 @@ async function askWriteEnv(flags: InitFlagValues, prompt: PromptSurface): Promis
 /**
  * The Prisma 7 path: every refusal comes before any consent, so a run that is
  * going to refuse never asks the user to type the consent token. That
- * includes the check that the target package can read the schema, which runs
- * as soon as the target is known. A target package without a Prisma 7
+ * includes the check that the facade can read the schema, which runs
+ * as soon as the target is known. A facade without a Prisma 7
  * source makes this a fresh init, unless the flag asked for the schema.
  * `prisma.config.ts` counts as a file to replace only when it is init's own; a
  * Prisma 7 config there is renamed under the side-by-side consent, and one
@@ -503,7 +545,7 @@ async function resolvePrisma7Inputs(ctx: {
   readonly flags: InitFlagValues;
   readonly prompt: PromptSurface;
   readonly detection: Prisma7Detection;
-  readonly flagTarget: KnownTarget | undefined;
+  readonly flagTarget: TargetPackage | undefined;
   readonly prepareTargetPackage: PrepareTargetPackage;
   readonly checkPrisma7Source: CheckPrisma7Source;
   readonly warn: (text: string) => void;
@@ -549,7 +591,7 @@ async function resolvePrisma7Inputs(ctx: {
       });
     }
     if (check.outcome === 'no-source') {
-      ctx.warn(freshInitWarning(target.packageName, detection));
+      ctx.warn(freshInitWarning(`${target.packageName} cannot read Prisma 7 schemas`, detection));
       return await resolveStarterInputs({
         cwd,
         flags,
@@ -598,7 +640,7 @@ async function confirmPrisma7Inputs(ctx: {
   readonly prompt: PromptSurface;
   readonly detection: Prisma7Detection;
   readonly schema: Extract<Prisma7SchemaDetection, { readonly kind: 'datasource' }>;
-  readonly target: KnownTarget;
+  readonly target: TargetPackage;
   readonly prepared: PreparedTargetPackage;
   readonly quickReference: Prisma7QuickReference;
 }): Promise<ResolvedInitInputs> {
@@ -626,6 +668,7 @@ async function confirmPrisma7Inputs(ctx: {
   const removePreviousFacade = await resolveRemovePreviousFacade({
     cwd,
     target,
+    label: prepared.contribution.label,
     reinit,
     keepPreviousFacade: flags.keepPreviousFacade,
     prompt,
@@ -646,6 +689,7 @@ async function confirmPrisma7Inputs(ctx: {
     sideBySide,
     warnings: [...detection.warnings, ...prepared.warnings],
     install: !flags.skipInstall,
+    requiredPeers: prepared.requiredPeers,
     preinstalled: prepared.installed,
     writeEnv,
     probeDb: flags.probeDb,
@@ -667,23 +711,23 @@ function missingFlags(
 }
 
 /**
- * A fresh init: the target package is installed and its contribution loaded first, since the
+ * A fresh init: the facade is installed and its contribution loaded first, since the
  * questions after the target, such as the ways to write the contract, come from it.
  */
 async function resolveStarterInputs(ctx: {
   readonly cwd: string;
   readonly flags: InitFlagValues;
   readonly prompt: PromptSurface;
-  readonly target: KnownTarget | undefined;
+  readonly target: TargetPackage | undefined;
   readonly flagAuthoring: ContractSourceFormat | undefined;
   readonly prisma7SchemaPath: string | undefined;
   readonly warnings: readonly string[];
-  /** The target package the Prisma 7 path already installed before it found no source. */
+  /** The facade the Prisma 7 path already installed before it found no source. */
   readonly prepared: PreparedTargetPackage | undefined;
   readonly prepareTargetPackage: PrepareTargetPackage;
 }): Promise<ResolvedInitInputs> {
   const { flags, prompt, flagAuthoring } = ctx;
-  let target: KnownTarget;
+  let target: TargetPackage;
   try {
     target = ctx.target ?? (await askTarget(prompt));
   } catch (error) {
@@ -729,12 +773,12 @@ async function resolveStarterInputs(ctx: {
   }
 }
 
-/** The questions of a fresh init, once the target package's contribution is loaded. */
+/** The questions of a fresh init, once the facade's contribution is loaded. */
 async function confirmStarterInputs(ctx: {
   readonly cwd: string;
   readonly flags: InitFlagValues;
   readonly prompt: PromptSurface;
-  readonly target: KnownTarget;
+  readonly target: TargetPackage;
   readonly flagAuthoring: ContractSourceFormat | undefined;
   readonly prisma7SchemaPath: string | undefined;
   readonly warnings: readonly string[];
@@ -779,6 +823,7 @@ async function confirmStarterInputs(ctx: {
   const removePreviousFacade = await resolveRemovePreviousFacade({
     cwd,
     target,
+    label: prepared.contribution.label,
     reinit,
     keepPreviousFacade: flags.keepPreviousFacade,
     prompt,
@@ -793,6 +838,7 @@ async function confirmStarterInputs(ctx: {
     sideBySide: null,
     warnings: [...ctx.warnings, ...prepared.warnings],
     install: !flags.skipInstall,
+    requiredPeers: prepared.requiredPeers,
     preinstalled: prepared.installed,
     writeEnv,
     probeDb: flags.probeDb,
@@ -822,6 +868,7 @@ function prisma6SchemaFound(
   detection: Prisma7Detection,
   { schema, target }: Prisma6Schema,
   packageManager: PackageManager,
+  requiredPeers: RequiredPeers,
 ) {
   const { config, cli } = detection;
   const ownConfigPath =
@@ -838,7 +885,7 @@ function prisma6SchemaFound(
       packageManager,
       cliVersion: cli.kind === 'earlier' ? cli.version : undefined,
       ownConfigPath,
-      targetPackage: target.packageName,
+      requiredPeers,
       peerPackages: target.peerPackages,
       targetConfigEntrypoint: `${target.packageName}/config`,
     }),
@@ -877,6 +924,8 @@ export async function resolveInitInputs(ctx: {
   readonly warn: (text: string) => void;
   /** The manager the printed Prisma 6 setup names in its commands. */
   readonly packageManager: PackageManager;
+  /** The required peers of a facade, for the printed Prisma 6 setup. */
+  readonly requiredPeersFor: (packageName: string) => Promise<RequiredPeers>;
 }): Promise<ResolvedInitInputs> {
   const { cwd, flags, prompt } = ctx;
 
@@ -898,9 +947,16 @@ export async function resolveInitInputs(ctx: {
     const detection = await detectPrisma7Project({ cwd, schemaPath: flags.fromPrisma7Schema });
     const prisma6 = prisma6Schema(detection.schema);
     if (prisma6 !== undefined) {
-      throw prisma6SchemaFound(detection, prisma6, ctx.packageManager);
+      const requiredPeers = await ctx.requiredPeersFor(prisma6.target.packageName);
+      for (const unread of requiredPeers.unread) {
+        ctx.warn(
+          `init could not read the peer dependencies of ${unread} from the registry, so the install command below leaves out the packages it needs as required peers. After installing ${unread}, add each package its package.json lists under peerDependencies, at the range listed there.`,
+        );
+      }
+      for (const warning of requiredPeers.warnings) ctx.warn(warning);
+      throw prisma6SchemaFound(detection, prisma6, ctx.packageManager, requiredPeers);
     }
-    if (await choosePrisma7Path({ flags, prompt, detection, flagTarget })) {
+    if (await choosePrisma7Path({ flags, prompt, detection, flagTarget, warn: ctx.warn })) {
       return resolvePrisma7Inputs({
         cwd,
         flags,

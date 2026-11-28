@@ -1,8 +1,8 @@
 # Definition of Done — overlays + validation gates
 
-Canonical DoD (the shape) lives in [`docs/drive/principles/definition-of-done.md`](https://github.com/prisma/ignite/blob/main/docs/drive/principles/definition-of-done.md). This file holds the **team's overlays + validation gates** — the concrete items the agile orchestrator checks at handoff time, in addition to the canonical items each scope already requires.
+Canonical DoD (the shape) lives in [`drive-build-workflow` § Post-flight: per-dispatch DoD](https://github.com/prisma/ignite/blob/main/skills/.pilot/drive-build-workflow/SKILL.md#4-post-flight-per-dispatch-dod-with-intent-validation). This file holds the **team's overlays + validation gates** — the concrete items the agile orchestrator checks at handoff time, in addition to the canonical items each scope already requires.
 
-> **Inherited by every project spec.** This file is the team's DoD floor; per [`drive-specify-project`](../../skills-contrib/drive-specify-project/SKILL.md), every project's `## Project Definition of Done` section inherits these items and adds project-specific conditions on top — it does not restate them.
+> **Inherited by every project spec.** This file is the team's DoD floor; per [`drive-specify-project`](https://github.com/prisma/ignite/blob/main/skills/.pilot/drive-specify-project/SKILL.md), every project's `## Project Definition of Done` section inherits these items and adds project-specific conditions on top — it does not restate them.
 
 Overlays grow by retro accretion (per [`README.md § Maintenance discipline`](./README.md#maintenance-discipline)): a retro reveals a handoff-time gap, the matching scope's overlay grows by one item. Never delete — overlay items become baseline.
 
@@ -26,6 +26,7 @@ pnpm lint:deps              # when imports/exports/architectural structure chang
 pnpm --filter <pkg> test    # each package whose source or tests changed
 # when changes affect PGlite / PG / mongo paths, the emit / migrate / run cycle, or a command's behaviour: the integration and e2e files that cover them (F44)
 pnpm fixtures:check         # when IR / emitter / serialiser changes
+pnpm --filter <pkg> test --coverage   # every package whose source or tests changed, shared ones included: CI's Coverage check enforces each package's own thresholds
 pnpm check:upgrade-coverage --mode pr --prev <PR base sha> --head HEAD   # when packages/3-extensions/** or examples/** change
 ```
 
@@ -59,6 +60,10 @@ A brief may add gates specific to the work:
 - [ ] If the dispatch renders SQL, lowers an AST, or validates user input, the reviewer brief grants an execution budget and names the three SQL probes from [`failure-modes.md § F34`](./failure-modes.md#f34-the-in-loop-reviewer-passes-sql-lowering-by-reading-it-a-review-that-runs-the-code-finds-injection-and-invalid-sql): a hostile value through every public entry point, the new construct compiled through every wrapper on its path and run on a database, and each cited database rule quoted and tested on both sides. "Trust the implementer's gates" never means "read only".
 - [ ] If the dispatch changes a codec (code that encodes and decodes stored values), the reviewer brief grants an execution budget and names the three codec probes from the same entry: build each value the way the driver produces it, write with the raw driver a stored document the codec must refuse and read it back, and remove the fix to show which test fails.
 - [ ] If the dispatch parses text the database reports back (defaults, type names, introspection output), the reviewer brief grants an execution budget and names the three probes from [`failure-modes.md § F35`](./failure-modes.md#f35-code-that-parses-database-reported-text-passes-review-by-reading-it-only-a-comparison-with-what-the-database-returns-finds-wrong-values): the real column created on PGlite and its reported text read back, each newly accepted value compared with what the database itself says about the same object (the stored value after `INSERT ... DEFAULT VALUES` for a default, a catalog query for a type name or other introspection output), and every check that compares the code with itself named along with the independent check that would fail. `db verify` agreeing with infer is not evidence of a correct value.
+- [ ] If the change alters the SQL of a write (adds a subquery, a join or a lock), the reviewer runs many concurrent writes through the ORM against each database it reaches and checks that none deadlocks. One-connection tests cannot show this. ([F58](./failure-modes.md#f58-a-rewrite-that-makes-a-write-statement-run-passes-every-single-connection-test-and-deadlocks-under-concurrent-writes))
+- [ ] If the change adds or edits an error message, the reviewer reads it as a user would: it says what the user has, what is wrong with it, and what to change, without our function names or internal terms. ([F59](./failure-modes.md#f59-a-user-facing-message-describes-the-problem-through-our-function-names-or-internals))
+- [ ] If the change adds a check on something the user supplies, the reviewer lists every way that thing can be supplied and confirms the check runs on each. Example: a contract given to the config as a file path was checked, and one given as an object was not.
+- [ ] If the change rewrites code samples in docs or READMEs, the reviewer checks that each rewritten sample still does what the old one did, because nothing type-checks them. Example: a sample was moved to a call that accepts the same plan but does not return its rows, and the code after it still read rows.
 
 ## Slice-DoD overlay
 
@@ -69,6 +74,7 @@ In addition to the canonical slice DoD:
 - If the slice touches `packages/3-*-extensions/**`, the slice plan must include a `pnpm fixtures:check` dispatch step.
 - If the slice touches package boundaries / imports, the slice plan must include `pnpm lint:deps`.
 - If the slice changes typed surfaces consumed elsewhere, the slice plan must include a downstream `pnpm typecheck` after the producing package's `pnpm build`.
+- If a slice adds a test that needs a database server or another service, the plan names the CI job that runs the test, that job starts the service, and the test fails in CI when the service is missing (it may skip locally). (Added 2026-11-19, MySQL proof of concept: four MySQL integration files skipped in CI for the whole project.)
 - If a dispatch adds a JavaScript or TypeScript file outside a package, `projects/` included, the checks include `pnpm lint:ratchets`: CI's Lint job runs it over those files too. (Added 2026-10-07, lsp-find-references: a QA driver under `projects/` failed CI's Lint job on a bare `throw new Error`.)
 
 ### PR-side items
@@ -82,14 +88,17 @@ In addition to the canonical slice DoD:
 
 - [ ] After merging `main`: if the merge resolved conflicts with a change `main` made to the same code, run a review round on `git diff <main commit> <merge commit>` before asking for review ([`failure-modes.md § F51`](./failure-modes.md#f51-a-merge-of-main-that-resolves-a-large-overlapping-change-goes-to-review-as-if-it-were-not-new-work)); if `main` had a release bump, `git diff <release commit> HEAD -- upgrade-instructions/releases/` is empty ([`F52`](./failure-modes.md#f52-a-release-bump-archives-pending-upgrade-instructions-and-the-branchs-later-edits-land-in-the-released-copy)). (Added 2026-10-28, datetime-convenience-types.)
 - [ ] If the slice changes what an existing type name means: every PSL and TypeScript source under `test/` and `examples/` that writes the name is checked, and the integration files that emit them are run ([`F53`](./failure-modes.md#f53-a-name-changes-meaning-and-a-hand-written-source-that-fixturescheck-does-not-emit-keeps-the-old-meaning)). (Added 2026-10-28, datetime-convenience-types.)
+- [ ] Before enabling auto-merge: the PR's head commit on GitHub is the commit just pushed (`gh pr view <n> --json headRefOid`), because the queue tests whatever head it sees when the PR enters. And if the slice changes the text of a message, `test/integration` has been searched for the old text and the files that assert it have been run. (Added 2026-11-20, scalar-convenience-types: the queue dropped the SQLite slice for a head it read ten seconds after the push, and for a value-object test that asserted a reworded decimal error.)
 - [ ] Before enabling auto-merge: every review thread on the PR is resolved, by a fix or by a reply that says why not; bot reviewers count. The command that lists open threads is in [`pr/README.md § Merge queue needs every review thread resolved`](../pr/README.md#merge-queue-needs-every-review-thread-resolved). (Added 2026-10-27, mongo-authoring-structure: slice 1 merged with four open CodeRabbit threads, found only at close-out.)
 - [ ] If the slice changes code that `defineContract`, a pack descriptor or the runtime reaches: run `pnpm size:build` in `examples/bundle-size` (it builds the workspace, then bundles) on the branch and on the PR base ref (`main`, or the base branch of a stacked PR), compare the metafiles, and explain any growth in the PR description before CI's size report asks. (Added 2026-10-27, mongo-authoring-structure: both slices grew a client bundle and the cause was traced only after CI reported it.)
+- [ ] A follow-up ticket is written after reading the code it names, not from the pull request's summary. Example: four tickets written from a summary named the wrong places or described a mechanism the code does not have, and each was rewritten.
 
 ### QA-side items
 
 - [ ] `drive-qa-plan` script exists + ≥1 `drive-qa-run` report exists.
 - [ ] No unresolved 🛑 Blocker findings.
 - [ ] Script names **both** consumer audiences (see [`patterns.md § Consumer audiences`](./patterns.md#consumer-audiences)) where relevant — OR explicit "N/A — no user-observable change" with a one-line rationale.
+- [ ] If the change affects what an editor shows, QA checks the editor itself, not only the language server's replies: the edit that was applied, where the cursor ends up, and the suggestions that follow, with any editor setting they need turned on.
 
 #### Slice-close ritual (added 2026-05-21 retro)
 
@@ -108,6 +117,12 @@ Beyond the canonical project DoD items:
 - [ ] `pnpm fixtures:check` clean.
 - [ ] If the project introduces a new package: `architecture.config.json` updated; `pnpm lint:deps` passes the new layering.
 - [ ] If the project ships a feature that changes the demo or examples: demo runs end-to-end against the new feature.
+
+### Reached the user
+
+- [ ] The spec's opening example has been run from published packages with no version forced, after the releases that carry the project, as written or with the closest stand-in a user can install when the example names a package we do not have; the close-out pull request says which. All slices merged is not this check: a change on `main` that no release carries has reached nobody. When users get the feature through the `prisma` CLI, two releases carry it: an ORM release, then a CLI release, because the CLI pins the toolchain to an exact version.
+- [ ] A report from the project's intended user during the project is answered, fixed or ticketed before close-out, because it is the only evidence that does not come from our own assumptions.
+- [ ] Upgrade instructions and release notes for a released version say only what its tag contains. Check the tag before writing that a release fixes something. (All three added 2026-11-24, external-target-integration: the project was reported finished with its changes merged and unreleased, and a release's upgrade guide described a fix the release did not carry.)
 
 ### Documentation & migration
 

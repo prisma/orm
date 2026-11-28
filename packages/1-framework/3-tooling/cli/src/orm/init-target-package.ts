@@ -3,26 +3,47 @@ import { ifDefined } from '@internal/utils/defined';
 import type { PackageOperations } from '@prisma/cli-engine';
 import { CliStructuredError } from '@prisma/cli-engine/protocol';
 import { type } from 'arktype';
-import { join } from 'pathe';
+import { join, relative } from 'pathe';
 import { buildCatalogWarnings } from '../commands/init/catalog-warnings';
 import {
   formatAddArgs,
+  formatInstallCommand,
   formatRemoveCommand,
   type PackageManager,
 } from '../commands/init/detect-package-manager';
 import {
   errorInitContributionUnavailable,
   errorInitInvalidManifest,
+  errorInitRequiredPeersAtAnotherVersion,
+  errorInitRequiredPeersNotInstalled,
   errorInitTargetPackageNotInstalled,
+  errorInitTargetPackageNotVerified,
   type InstallReason,
   type PackagesAdded,
   packagesAddedAction,
+  type RefusedPeerCase,
 } from '../commands/init/errors';
 import type { InitContribution } from '../commands/init/init-contribution';
+import {
+  firstInstallDrivers,
+  PRISMA_ORM_PACKAGE_KEYWORD,
+  type TargetPackage,
+} from '../commands/init/target-packages';
 import { chooseAction } from '../utils/next-actions';
-import { installProjectDependencies } from './init-packages';
+import { ENGINE_PACKAGE, installProjectDependencies } from './init-packages';
+import {
+  installedManifests,
+  type RequiredPeer,
+  type RequiredPeers,
+  requiredPeerSpecifier,
+  requirementSpecifier,
+  resolveRequiredPeers,
+} from './init-required-peers';
+import { exactVersionOf, requirementAdmits } from './init-version-lines';
 import { normalizeError } from './normalize-error';
-import { type ImportFromProject, isInstalledInProject } from './project-modules';
+import { keywordsOf } from './package-manifest';
+import { type ImportFromProject, installedManifest } from './project-modules';
+import type { LookUpRegistryKeywords, RegistryLookup } from './registry-keywords';
 
 const InitContributionSchema = type({
   label: 'string',
@@ -38,6 +59,7 @@ const InitContributionSchema = type({
   'serverRequirement?': { minVersion: 'string', checkCommand: 'string' },
   'probe?': 'Function',
   'prisma7QuickReference?': 'Function',
+  'contractEntry?': 'Function',
 });
 
 /**
@@ -87,9 +109,10 @@ export function installCommand(
   return [packageManager, ...formatAddArgs(packageManager, [...packages])].join(' ');
 }
 
-/** The target package and the contribution it exports, with what installing it changed. */
+/** The facade and the contribution it exports, with what installing it changed. */
 export interface PreparedTargetPackage {
   readonly contribution: InitContribution;
+  readonly requiredPeers: RequiredPeers;
   /** Every package the step installed or found in place, so the install phase skips them. */
   readonly installed: readonly string[];
   /** The installed packages the project did not declare before; `undefined` when there are none. */
@@ -97,14 +120,17 @@ export interface PreparedTargetPackage {
   readonly warnings: readonly string[];
 }
 
-/** Installs `packageName` with `dotenv` and `peerPackages`, then loads its init contribution. */
-export type PrepareTargetPackage = (
-  packageName: string,
-  peerPackages: readonly string[],
-) => Promise<PreparedTargetPackage>;
+/**
+ * Packages init installs another way, left out of the facade's required peers: the engine,
+ * which the CLI installs as a development dependency at the version `prisma` names.
+ */
+const INSTALLED_ELSEWHERE: ReadonlySet<string> = new Set([ENGINE_PACKAGE]);
+
+/** Installs the facade with `dotenv` and the drivers the list names, then loads its init contribution. */
+export type PrepareTargetPackage = (target: TargetPackage) => Promise<PreparedTargetPackage>;
 
 /**
- * The target package was installed, then could not be used. The caller adds the instruction to
+ * The facade was installed, then could not be used. The caller adds the instruction to
  * undo the install, because only it knows why it installed the package.
  */
 export class TargetPackageRefusedAfterInstall extends Error {
@@ -117,7 +143,7 @@ export class TargetPackageRefusedAfterInstall extends Error {
   }
 }
 
-/** The install of the target package failed; nothing else has happened yet. */
+/** The install of the facade failed; nothing else has happened yet. */
 export class TargetPackageInstallFailed extends Error {
   constructor(readonly failure: CliStructuredError) {
     super(failure.message);
@@ -126,35 +152,45 @@ export class TargetPackageInstallFailed extends Error {
 }
 
 /**
- * Installs the target package with `dotenv`, the package every init installs, and the driver
- * packages the caller names, leaving out those the project already declares, then loads the
- * package's init contribution from the project. Under `--skip-install` the package must already be
- * installed. Each refusal happens before any file is written.
+ * Installs the facade with `dotenv`, the package every init installs, and the driver
+ * packages its list entry names, leaving out those the project already declares, then loads the
+ * package's init contribution from the project. A package in no list must first list the Prisma 8
+ * keyword. Under `--skip-install` the package must already be installed. Each refusal happens
+ * before any file is written.
  */
 export function createTargetPackagePreparation(ctx: {
   readonly cwd: string;
+  readonly env: Readonly<Record<string, string | undefined>>;
   readonly packages: PackageOperations;
   readonly packageManager: PackageManager;
   readonly install: boolean;
   readonly importFromProject: ImportFromProject;
+  readonly lookUpRegistryKeywords: LookUpRegistryKeywords;
+  readonly signal: AbortSignal;
 }): PrepareTargetPackage {
-  return async (packageName, peerPackages) => {
+  return async (target) => {
+    const { packageName } = target;
+    const drivers = firstInstallDrivers(target);
     rejectUnparseableManifest(ctx.cwd);
+    const declaredBefore = declaredPackages(ctx.cwd);
+    const manifestPath = installedManifest(ctx.cwd, packageName);
+    // Asking again for a package the project declares rewrites its declared range, which a
+    // refusal later would leave behind; the later install puts those in place instead. The
+    // facade is left out only when it is also on disk, since init loads it now.
+    const targetInPlace = manifestPath !== undefined && declaredBefore.has(packageName);
+    const installsTarget = ctx.install && !targetInPlace;
+    if (target.listed === undefined) {
+      await checkTargetPackageKeyword(ctx, packageName, { manifestPath, installsTarget });
+    }
     const warnings: string[] = [];
     let installed: readonly string[] = [];
     let added: PackagesAdded | undefined;
     let ranCommand: string | undefined;
 
     if (ctx.install) {
-      const declaredBefore = declaredPackages(ctx.cwd);
-      // Asking again for a package the project declares rewrites its declared range, which a
-      // refusal later would leave behind; the later install puts those in place instead. The
-      // target package is left out only when it is also on disk, since init loads it now.
-      const targetInPlace =
-        declaredBefore.has(packageName) && isInstalledInProject(ctx.cwd, packageName);
       const deps = [
-        ...(targetInPlace ? [] : [packageName]),
-        ...['dotenv', ...peerPackages].filter((dep) => !declaredBefore.has(dep)),
+        ...(installsTarget ? [packageName] : []),
+        ...['dotenv', ...drivers].filter((dep) => !declaredBefore.has(dep)),
       ];
       const installFailure = await installProjectDependencies({
         packages: ctx.packages,
@@ -168,20 +204,230 @@ export function createTargetPackagePreparation(ctx: {
       if (ctx.packageManager === 'pnpm') {
         warnings.push(...buildCatalogWarnings(ctx.cwd, deps));
       }
-      // A target package already in place counts as installed, so the later install leaves it
+      // A facade already in place counts as installed, so the later install leaves it
       // alone too and the project keeps the version it has.
-      installed = targetInPlace ? [packageName, ...deps] : deps;
+      installed = installsTarget ? deps : [packageName, ...deps];
       ranCommand = deps.length === 0 ? undefined : installCommand(ctx.packageManager, deps);
+    }
+
+    const manifests = installedManifests(ctx.cwd, packageName);
+    const requiredPeers = await resolveRequiredPeers({
+      packageName,
+      read: manifests.read,
+      installedVersion: manifests.installedVersion,
+      facadeLine: declaredBefore.has(packageName) ? 'keep' : installsTarget ? 'write' : 'report',
+      installedElsewhere: INSTALLED_ELSEWHERE,
+      declared: () => declaredPackages(ctx.cwd),
+      install: ctx.install
+        ? (specifiers) =>
+            installProjectDependencies({
+              packages: ctx.packages,
+              cwd: ctx.cwd,
+              deps: specifiers,
+              devDeps: [],
+            })
+        : undefined,
+    });
+    if (requiredPeers instanceof CliStructuredError) {
+      const addedBeforeFailure = manifestChanges(
+        ctx.packageManager,
+        declaredBefore,
+        declaredPackages(ctx.cwd),
+      );
+      throw addedBeforeFailure === undefined
+        ? new TargetPackageInstallFailed(requiredPeers)
+        : new TargetPackageRefusedAfterInstall(requiredPeers, addedBeforeFailure);
+    }
+    warnings.push(...requiredPeers.warnings);
+    if (ctx.install) {
+      installed = [
+        ...new Set([
+          ...installed,
+          requiredPeers.facade,
+          ...requiredPeers.packages.flatMap((peer) => [peer.name, requiredPeerSpecifier(peer)]),
+        ]),
+      ];
       added = manifestChanges(ctx.packageManager, declaredBefore, declaredPackages(ctx.cwd));
     }
 
+    const missing = requiredPeers.packages.filter(
+      (peer) => manifests.installedVersion(peer.name) === undefined,
+    );
+    if (!ctx.install && missing.length > 0) {
+      const declared = declaredPackages(ctx.cwd);
+      const toAdd = missing.filter((peer) => !declared.has(peer.name));
+      throw errorInitRequiredPeersNotInstalled({
+        packageName,
+        missing: missing.map((peer) => peer.name),
+        installCommand:
+          toAdd.length === 0
+            ? undefined
+            : installCommand(ctx.packageManager, toAdd.map(requirementSpecifier)),
+        listedMissing: missing.filter((peer) => declared.has(peer.name)).map((peer) => peer.name),
+        restoreCommand: formatInstallCommand(ctx.packageManager),
+      });
+    }
+    if (!ctx.install) {
+      refuseRequiredPeersAtAnotherVersion(ctx, packageName, requiredPeers.packages, (name) =>
+        manifests.installedVersion(name),
+      );
+    }
+
     try {
-      const contribution = await loadContribution(ctx, packageName, peerPackages, ranCommand);
-      return { contribution, installed, added, warnings };
+      const contribution = await loadContribution(ctx, target, ranCommand, missing);
+      return {
+        contribution,
+        requiredPeers,
+        installed,
+        added,
+        warnings,
+      };
     } catch (error) {
       throw added === undefined ? error : new TargetPackageRefusedAfterInstall(error, added);
     }
   };
+}
+
+/**
+ * Under `--skip-install`, a required peer installed at a version its requirement does not admit
+ * cannot be corrected, and its own peers stay unknown, so init stops before it writes anything.
+ */
+function refuseRequiredPeersAtAnotherVersion(
+  ctx: { readonly cwd: string; readonly packageManager: PackageManager },
+  packageName: string,
+  peers: readonly RequiredPeer[],
+  installedVersion: (name: string) => string | undefined,
+): void {
+  const declared = declaredPackages(ctx.cwd);
+  const wrong = peers.flatMap((peer) => {
+    const found = installedVersion(peer.name);
+    const required = exactVersionOf(peer.requirement) ?? peer.requirement;
+    const checked =
+      exactVersionOf(peer.requirement) !== undefined || peer.name.startsWith('@prisma/orm-');
+    return found === undefined || !checked || requirementAdmits(peer.requirement, found) !== false
+      ? []
+      : [{ peer, found, required }];
+  });
+  if (wrong.length === 0) return;
+  throw errorInitRequiredPeersAtAnotherVersion({
+    packageName,
+    packages: wrong.map(({ peer, found, required }) => {
+      const line = declared.get(peer.name);
+      const fix = refusedPeerCase(peer, line, found);
+      return {
+        name: peer.name,
+        found,
+        required,
+        listed: fix.case === 'add' || fix.case === 'install' ? undefined : line,
+        fix,
+      };
+    }),
+    listedAtRequired: wrong
+      .filter(({ peer }) => peer.outcome === 'already-listed')
+      .map(({ peer }) => peer.name),
+    packageManager: ctx.packageManager,
+  });
+}
+
+function refusedPeerCase(
+  peer: RequiredPeer,
+  line: string | undefined,
+  found: string,
+): RefusedPeerCase {
+  if (line === undefined) return { case: 'add', specifier: requirementSpecifier(peer) };
+  const admits = requirementAdmits(line, found);
+  if (peer.outcome === 'already-listed' && admits === false) return { case: 'install' };
+  if (exactVersionOf(line) !== undefined) return { case: 'change-exact' };
+  if (admits === undefined && POINTS_ELSEWHERE.test(line.trim())) return { case: 'resolve' };
+  return { case: 'change-range', specifier: requirementSpecifier(peer) };
+}
+
+/** A line whose version is set somewhere else: a catalog, a workspace package, a path or an alias. */
+const POINTS_ELSEWHERE = /^(?:catalog|workspace|link|file|portal|npm):/;
+
+/**
+ * Installing a package runs its install scripts, so a name that is not meant for Prisma 8, such as
+ * a mistyped short name, is refused before anything is installed. The copy checked is the one init
+ * will use: the installed one when init will not install the package, otherwise the registry's.
+ * Under `--skip-install` a package that is not installed is left to the "not installed" refusal.
+ */
+async function checkTargetPackageKeyword(
+  ctx: {
+    readonly cwd: string;
+    readonly env: Readonly<Record<string, string | undefined>>;
+    readonly packageManager: PackageManager;
+    readonly install: boolean;
+    readonly lookUpRegistryKeywords: LookUpRegistryKeywords;
+    readonly signal: AbortSignal;
+  },
+  packageName: string,
+  copy: {
+    /** The installed `package.json`, when the project has the package on disk. */
+    readonly manifestPath: string | undefined;
+    /** Whether init's first install installs the package, so the registry's copy is the one used. */
+    readonly installsTarget: boolean;
+  },
+): Promise<void> {
+  const { manifestPath } = copy;
+  if (!ctx.install && manifestPath === undefined) {
+    return;
+  }
+  const lookup: KeywordLookup =
+    manifestPath === undefined || copy.installsTarget
+      ? await ctx.lookUpRegistryKeywords(packageName, { env: ctx.env, signal: ctx.signal })
+      : installedKeywords(ctx.cwd, manifestPath);
+  const refusal = {
+    packageName,
+    installCommand: installCommand(ctx.packageManager, [packageName]),
+    updateCommand: installCommand(ctx.packageManager, [`${packageName}@latest`]),
+  };
+  switch (lookup.kind) {
+    case 'read':
+      if (!lookup.keywords.includes(PRISMA_ORM_PACKAGE_KEYWORD)) {
+        throw errorInitTargetPackageNotVerified({
+          ...refusal,
+          reason: 'keyword-missing',
+          registry: lookup.registry,
+        });
+      }
+      return;
+    case 'not-found':
+      throw errorInitTargetPackageNotVerified({
+        ...refusal,
+        reason: 'not-found',
+        registry: lookup.registry,
+      });
+    case 'lookup-failed':
+      throw errorInitTargetPackageNotVerified({
+        ...refusal,
+        reason: 'lookup-failed',
+        registry: lookup.registry,
+        cause: lookup.cause,
+      });
+  }
+}
+
+/** A registry lookup, or the read of the installed copy, which has no registry. */
+type KeywordLookup =
+  | RegistryLookup
+  | { readonly kind: 'read'; readonly registry: undefined; readonly keywords: readonly string[] }
+  | { readonly kind: 'lookup-failed'; readonly registry: undefined; readonly cause: string };
+
+function installedKeywords(cwd: string, manifestPath: string): KeywordLookup {
+  try {
+    return {
+      kind: 'read',
+      registry: undefined,
+      keywords: keywordsOf(JSON.parse(readFileSync(manifestPath, 'utf-8'))),
+    };
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    return {
+      kind: 'lookup-failed',
+      registry: undefined,
+      cause: `${relative(cwd, manifestPath)} cannot be read as JSON: ${reason}`,
+    };
+  }
 }
 
 async function loadContribution(
@@ -191,30 +437,47 @@ async function loadContribution(
     readonly install: boolean;
     readonly importFromProject: ImportFromProject;
   },
-  packageName: string,
-  peerPackages: readonly string[],
+  target: TargetPackage,
   /** The install command init ran and that exited successfully; `undefined` under `--skip-install`. */
   ranCommand: string | undefined,
+  /** Required peers of the facade that are not installed, which a failed load names. */
+  missing: readonly RequiredPeer[],
 ): Promise<InitContribution> {
+  const { packageName } = target;
+  const unlisted = target.listed === undefined;
   const entrypoint = await ctx.importFromProject(ctx.cwd, `${packageName}/init`);
   switch (entrypoint.kind) {
     case 'not-installed':
       throw errorInitTargetPackageNotInstalled({
         packageName,
-        installCommand: installCommand(ctx.packageManager, [packageName, ...peerPackages]),
+        installCommand: installCommand(ctx.packageManager, [
+          packageName,
+          ...firstInstallDrivers(target),
+        ]),
         ranCommand,
+        unlisted,
+        packageManager: ctx.packageManager,
       });
     case 'not-exported':
       throw errorInitContributionUnavailable({
         packageName,
         reason: 'no-entrypoint',
         detail: undefined,
+        unlisted,
+        missingPeers: [],
+        missingPeersCommand: undefined,
       });
     case 'unloadable':
       throw errorInitContributionUnavailable({
         packageName,
         reason: 'unloadable',
         detail: causeMessage(entrypoint.cause),
+        unlisted,
+        missingPeers: missing.map((peer) => peer.name),
+        missingPeersCommand:
+          missing.length === 0
+            ? undefined
+            : installCommand(ctx.packageManager, missing.map(requirementSpecifier)),
       });
     case 'loaded':
       break;
@@ -225,6 +488,9 @@ async function loadContribution(
       packageName,
       reason: 'invalid-shape',
       detail: contributionProblems(contribution),
+      unlisted,
+      missingPeers: [],
+      missingPeersCommand: undefined,
     });
   }
   return contribution;

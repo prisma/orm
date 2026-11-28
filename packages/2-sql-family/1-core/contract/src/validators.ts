@@ -1,5 +1,9 @@
 import { ContractValidationError } from '@internal/contract/contract-validation-error';
 import {
+  carriesFormatVersion,
+  convertContractDocument,
+} from '@internal/contract/internal/format-version';
+import {
   type Contract,
   ContractExecutionSectionSchema,
   ContractFieldTypeSchema,
@@ -59,6 +63,7 @@ import type {
 
 const ControlPolicySchema = type("'managed' | 'tolerated' | 'external' | 'observed'");
 const DomainEnumRefSchema = type({
+  '+': 'reject',
   plane: "'domain'",
   namespaceId: 'string',
   entityKind: "'enum'",
@@ -79,7 +84,8 @@ const StorageTypeInstanceSchema = type
     codecId: 'string',
     dataType: DATA_TYPE_ID_PATTERN,
     'typeParams?': 'Record<string, unknown>',
-  });
+  })
+  .onUndeclaredKey('reject');
 
 /** Document-scoped `storage.types`: codec triples only. */
 const DocumentScopedStorageTypeSchema = StorageTypeInstanceSchema;
@@ -92,6 +98,7 @@ export const ContractEnumSchema = type({
   '+': 'reject',
   codecId: 'string',
   members: type({
+    '+': 'reject',
     name: 'string',
     value: 'string | number | boolean | null | unknown[] | Record<string, unknown>',
   })
@@ -148,10 +155,16 @@ export function createNamespaceEntrySchema(
         Type<unknown>,
         'knownKinds.has(key) guarantees schemas.get(key) is defined'
       >(schemas.get(key));
-      for (const [, value] of Object.entries(innerMap)) {
+      for (const [name, value] of Object.entries(innerMap)) {
         const parsed = entrySchema(value);
         if (parsed instanceof type.errors) {
-          return ctx.reject({ expected: parsed.summary });
+          for (const problem of parsed) {
+            ctx.reject({
+              relativePath: ['entries', key, name, ...problem.path],
+              problem: problem.problem,
+            });
+          }
+          return false;
         }
       }
     }
@@ -464,12 +477,14 @@ const ModelFieldSchema = type({
 });
 
 const ModelStorageFieldSchema = type({
+  '+': 'reject',
   column: 'string',
   'codecId?': 'string',
   'nullable?': 'boolean',
 });
 
 const ModelStorageSchema = type({
+  '+': 'reject',
   table: 'string',
   namespaceId: 'string',
   fields: type({ '[string]': ModelStorageFieldSchema }),
@@ -526,10 +541,11 @@ const ContractEmbedRelationSchema = type({
 const ContractRelationSchema = ContractReferenceRelationSchema.or(ContractEmbedRelationSchema);
 
 const ModelSchema = type({
+  '+': 'reject',
   storage: ModelStorageSchema,
   'fields?': type({ '[string]': ModelFieldSchema }),
   'relations?': type({ '[string]': ContractRelationSchema }),
-  'discriminator?': type({ field: 'string' }),
+  'discriminator?': type({ '+': 'reject', field: 'string' }),
   'variants?': type({ '[string]': CrossReferenceSchema }),
   'base?': CrossReferenceSchema,
   'owner?': 'string',
@@ -560,8 +576,10 @@ export function createSqlContractSchema(
     'defaultControlPolicy?': ControlPolicySchema,
     'roots?': type({ '[string]': CrossReferenceSchema }),
     domain: type({
+      '+': 'reject',
       namespaces: type({
         '[string]': type({
+          '+': 'reject',
           models: type({ '[string]': ModelSchema }),
           'enum?': type({ '[string]': ContractEnumSchema }),
         }),
@@ -868,8 +886,8 @@ export function validateModelStorageReferences(contract: Contract<SqlStorage>): 
       }
 
       const storageTable = modelStorage.table;
-      const storageNs = contract.storage.namespaces[storageNamespaceId];
-      const rawTable = storageNs?.entries.table?.[storageTable];
+      const storageNs = ownEntry(contract.storage.namespaces, storageNamespaceId);
+      const rawTable = ownEntry(storageNs?.entries.table, storageTable);
       if (rawTable === undefined) {
         throw new ContractValidationError(
           `Model "${qualifiedName}" references non-existent table "${storageNamespaceId}.${storageTable}"`,
@@ -1080,8 +1098,8 @@ export function validateSqlStorageConsistency(contract: Contract<SqlStorage>): v
       }
 
       if (fk.target.spaceId === undefined) {
-        const targetNamespace = contract.storage.namespaces[fk.target.namespaceId];
-        const referencedRaw = targetNamespace?.entries.table?.[fk.target.tableName];
+        const targetNamespace = ownEntry(contract.storage.namespaces, fk.target.namespaceId);
+        const referencedRaw = ownEntry(targetNamespace?.entries.table, fk.target.tableName);
         if (referencedRaw === undefined) {
           throw new ContractValidationError(
             `Namespace "${namespaceId}" table "${tableName}" foreignKey references non-existent table "${fk.target.namespaceId}.${fk.target.tableName}"`,
@@ -1134,6 +1152,8 @@ export interface ValidateSqlContractFullyOptions {
  * `ContractValidationError` on the first failure. Returns the
  * validated flat-data shape; IR class hydration happens in the SPI
  * base on top of this helper.
+ *
+ * A value that carries `formatVersion` or the old `schemaVersion` is a stored file: it is read through its format version, and converted to the newest one, before it is validated. A value with neither is an in-memory contract.
  */
 export function validateSqlContractFully<T extends Contract<SqlStorage>>(
   value: unknown,
@@ -1143,13 +1163,15 @@ export function validateSqlContractFully<T extends Contract<SqlStorage>>(
     typeof value === 'object' && value !== null
       ? (() => {
           const {
-            schemaVersion: _,
+            formatVersion: _,
             _generated: _g,
             ...rest
-          } = blindCast<
-            Record<string, unknown>,
-            'non-null object read only to omit wire metadata before structural validation'
-          >(value);
+          } = carriesFormatVersion(value)
+            ? convertContractDocument(value)
+            : blindCast<
+                Record<string, unknown>,
+                'non-null object read only to omit wire metadata before structural validation'
+              >(value);
           return rest;
         })()
       : value;
@@ -1221,6 +1243,13 @@ function validateToOneRelationNullabilityAgainstStorage(contract: Contract<SqlSt
   }
 }
 
+function ownEntry<Entry>(
+  entries: Readonly<Record<string, Entry>> | undefined,
+  name: string,
+): Entry | undefined {
+  return entries !== undefined && Object.hasOwn(entries, name) ? entries[name] : undefined;
+}
+
 /** Storage column lookup for through-consistency validation. */
 function lookupStorageColumn(
   contract: Contract<SqlStorage>,
@@ -1228,12 +1257,15 @@ function lookupStorageColumn(
   tableName: string,
   columnName: string,
 ): StorageColumn | undefined {
-  const rawTable = contract.storage.namespaces[namespaceId]?.entries.table?.[tableName];
+  const rawTable = ownEntry(
+    ownEntry(contract.storage.namespaces, namespaceId)?.entries.table,
+    tableName,
+  );
   if (rawTable === undefined) {
     return undefined;
   }
   const table = blindCast<StorageTable, 'structurally validated storage table'>(rawTable);
-  return table.columns[columnName];
+  return ownEntry(table.columns, columnName);
 }
 
 function describeColumnType(column: StorageColumn): string {

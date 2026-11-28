@@ -10,7 +10,9 @@ import type {
   ControlExtensionDescriptor,
   ControlFamilyInstance,
   DatabasePolicies,
+  MigrationAccessChange,
   MigrationOperationPolicy,
+  MigrationOperationSubject,
   MigrationPlanOperation,
   TargetMigrationsCapability,
 } from '@internal/framework-components/control';
@@ -30,6 +32,7 @@ import {
 import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import type { SnapshotContentVerifier } from '@internal/migration-tools/contract-snapshot-store';
 import { isGraphNode } from '@internal/migration-tools/migration-graph';
+import type { NamedRef } from '@internal/migration-tools/refs';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import { notOk, ok, type Result } from '@internal/utils/result';
@@ -40,11 +43,21 @@ import {
   type CliStructuredError,
   errorMigrationHasUnfilledPlaceholders,
   errorPathUnreachable,
+  type PathUnreachable,
+  type PathUnreachableMeta,
+  planThenApply,
 } from '../../utils/cli-errors';
+import {
+  errorExtensionNeverPlanned,
+  errorExtensionPathUnreachable,
+} from '../../utils/extension-path-failure';
 import { errorMarkerMismatch, readLedgerQuietly } from '../../utils/marker-mismatch';
 import { migrateRunnerFailureError } from '../../utils/migrate-failure';
+import type { DataProtectionRefusedOperation } from '../../utils/policy-errors';
 import { declaredSettingsText, errorPermitPolicyChangeNeedsRef } from '../../utils/policy-errors';
 import type { CliInvocation } from '../../utils/printed-command';
+import type { FailedMigrationOnDisk } from '../../utils/runner-failure-advice';
+import { subjectText } from '../statements/plan-questions';
 import type {
   MigratePathDecision,
   MigrateResult,
@@ -52,17 +65,31 @@ import type {
   MigrateTarget,
   OnControlProgress,
   PerSpaceExecutionEntry,
+  UnrecordedSnapshotListener,
 } from '../types';
 import {
   type BuildAggregateInputs,
   buildContractSpaceAggregate,
 } from './contract-space-aggregate-loader';
 import {
+  type CheckedDatabasePolicies,
   checkRunPolicies,
   type DatabasePoliciesToWrite,
   databasePoliciesInForce,
+  forbiddingSettingsOfRun,
+  refuseForbiddenChanges,
 } from './database-policies';
 import { noInvariantPathError } from './no-invariant-path';
+import {
+  appSpaceOf,
+  type DatabasePosition,
+  databasePositionOf,
+  type MigrationPlanArguments,
+  migrationPlanArguments,
+  migrationPlanReplacing,
+  type PlanEnd,
+  type PlanSpace,
+} from './plan-arguments';
 import {
   buildPerSpaceBreakdown,
   collectOrdered,
@@ -70,6 +97,7 @@ import {
   runnerFailureFacts,
 } from './run-migration';
 import { migrationWithUnfilledPlaceholders } from './unfilled-placeholders';
+import { reportUnrecordedSnapshots } from './unrecorded-snapshots';
 
 /**
  * Inputs for the aggregate-walking `migrate` control-api
@@ -80,7 +108,8 @@ import { migrationWithUnfilledPlaceholders } from './unfilled-placeholders';
  * is the single descriptor-free seam between the CLI and the
  * aggregate runtime.
  */
-export interface ExecuteMigrateOptions<TFamilyId extends string, TTargetId extends string> {
+export interface ExecuteMigrateOptions<TFamilyId extends string, TTargetId extends string>
+  extends UnrecordedSnapshotListener {
   readonly driver: ControlDriverInstance<TFamilyId, TTargetId>;
   readonly familyInstance: ControlFamilyInstance<TFamilyId, unknown>;
   /** Already-validated app contract (the canonical "where we are heading" hash). */
@@ -195,6 +224,7 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
       refName: ref?.name,
     },
     storageNameOf: (operation) => familyInstance.storageNameOf(operation),
+    accessChangesOf: (operations) => familyInstance.accessChangesOf(operations),
     migrationsDir,
     invocation: options.invocation,
     readLedger: (spaceId) => familyInstance.readLedger({ driver, space: spaceId }),
@@ -207,7 +237,8 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
   // recovery the change policy permits.
   const checkedPolicies = checkRunPolicies({
     command: 'db migrate',
-    appSpaceId: aggregate.app.spaceId,
+    app: appSpaceOf(aggregate),
+    markers: markerRows,
     inForce,
     ref,
     permitPolicyChange: options.permitPolicyChange ?? false,
@@ -216,6 +247,16 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
   });
   if (!checkedPolicies.ok) {
     return notOk(checkedPolicies.failure);
+  }
+  const forbidden = refuseForbiddenMigrations({
+    appSpaceId: aggregate.app.spaceId,
+    checked: checkedPolicies.value,
+    ref,
+    outcomes: planned.value,
+    invocation: options.invocation,
+  });
+  if (forbidden !== undefined) {
+    return notOk(forbidden);
   }
   const policiesToWrite = checkedPolicies.value.toWrite;
   const allSpaces: ReadonlyArray<AggregateContractSpace> = [aggregate.app, ...aggregate.extensions];
@@ -235,11 +276,32 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
       continue;
     }
     if (outcome.kind === 'never-planned') {
-      return notOk(buildNeverPlannedFailure(outcome.spaceId, outcome.targetHash, migrationsDir));
+      return notOk(
+        neverPlannedSpaceFailure(outcome, {
+          appSpaceId: aggregate.app.spaceId,
+          appSpace: appSpaceOf(aggregate),
+          migrationsDir,
+          target,
+          invocation: options.invocation,
+        }),
+      );
     }
     if (outcome.kind === 'unreachable') {
       return notOk(
-        buildPathNotFoundFailure(outcome.spaceId, outcome.liveMarker, outcome.targetHash),
+        unreachableSpaceFailure(
+          {
+            spaceId: outcome.spaceId,
+            fromHash: contractHashAtMarker(outcome.liveMarker),
+            targetHash: outcome.targetHash,
+            position: databasePositionOf(outcome.liveMarker?.storageHash),
+          },
+          {
+            appSpaceId: aggregate.app.spaceId,
+            appSpace: appSpaceOf(aggregate),
+            target,
+            invocation: options.invocation,
+          },
+        ),
       );
     }
     if (outcome.kind === 'unsatisfiable') {
@@ -330,6 +392,12 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
     return notOk(errorMigrationHasUnfilledPlaceholders(unfilled, options.invocation));
   }
 
+  await reportUnrecordedSnapshots(
+    collectOrdered(applyOrder, perSpacePlans),
+    migrationsDir,
+    options.verifySnapshotContent,
+    options.onUnrecordedSnapshot,
+  );
   const applied = await runMigration({
     aggregate,
     perSpacePlans,
@@ -355,7 +423,7 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
         facts,
         facts.failedMigration === undefined
           ? undefined
-          : failedMigrationOnDisk(facts.failedMigration, migrationsDir),
+          : failedMigrationOnDisk(facts.failedMigration, migrationsDir, aggregate.app),
         options.invocation,
       ),
     );
@@ -404,6 +472,70 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
       summary,
     }),
     ...ifDefined('databasePoliciesUpdated', policiesToWrite?.differences),
+  });
+}
+
+/** The migration of `edges` that holds the operation at `operationIndex` of their joined operations. */
+function migrationAt(
+  edges: readonly AggregateMigrationEdgeRef[],
+  operationIndex: number,
+): string | undefined {
+  let start = 0;
+  for (const edge of edges) {
+    if (operationIndex < start + edge.operationCount) return edge.dirName;
+    start += edge.operationCount;
+  }
+  return undefined;
+}
+
+function recordedOperations(
+  spaceId: string,
+  entry: PerSpacePlan,
+  subjects: readonly MigrationOperationSubject[],
+): readonly DataProtectionRefusedOperation[] {
+  return subjects.map(({ operationIndex, subject }) => {
+    const operation = entry.displayOps[operationIndex];
+    if (operation === undefined) {
+      throw new InternalError(
+        `Unreachable: space "${spaceId}" names operation ${operationIndex}, which its plan does not hold`,
+      );
+    }
+    return {
+      spaceId,
+      ...ifDefined('migration', migrationAt(entry.migrationEdges, operationIndex)),
+      operationId: operation.id,
+      subject: subjectText(subject, { origin: entry.destinationContract, statements: [] }),
+      label: operation.label,
+    };
+  });
+}
+
+/**
+ * Refuses a run whose pending migrations, in any space, lose data or change who can read or write
+ * data where the run's data protection policy forbids it. `db migrate`, `db migrate --show` and the
+ * control API's `migrate` all decide it here.
+ */
+export function refuseForbiddenMigrations(args: {
+  readonly appSpaceId: string;
+  readonly checked: CheckedDatabasePolicies;
+  readonly ref: NamedRef | undefined;
+  readonly outcomes: ReadonlyMap<string, PlannedSpaceOutcome>;
+  readonly invocation: CliInvocation;
+}): CliStructuredError | undefined {
+  const pending = [...args.outcomes].flatMap(([spaceId, outcome]) =>
+    outcome.kind === 'ok' ? [{ spaceId, entry: outcome.plan }] : [],
+  );
+  return refuseForbiddenChanges({
+    appSpaceId: args.appSpaceId,
+    command: 'db migrate',
+    invocation: args.invocation,
+    forbidden: forbiddingSettingsOfRun(args.checked, args.ref),
+    dataLoss: pending.flatMap(({ spaceId, entry }) =>
+      recordedOperations(spaceId, entry, entry.dataLoss),
+    ),
+    accessChanges: pending.flatMap(({ spaceId, entry }) =>
+      recordedOperations(spaceId, entry, entry.accessChanges),
+    ),
   });
 }
 
@@ -481,7 +613,12 @@ async function runPolicyOnly<TFamilyId extends string, TTargetId extends string>
 export type SpacePathOutcome =
   | { readonly kind: 'ok'; readonly plan: PerSpacePlan }
   | { readonly kind: 'at-head'; readonly plan: PerSpacePlan }
-  | { readonly kind: 'never-planned'; readonly spaceId: string; readonly targetHash: string }
+  | {
+      readonly kind: 'never-planned';
+      readonly spaceId: string;
+      readonly liveMarker: ContractMarkerRecordLike | null;
+      readonly targetHash: string;
+    }
   | MarkerOutsideGraphOutcome
   | {
       readonly kind: 'unreachable';
@@ -524,6 +661,7 @@ export function planSpacePath({
   liveMarker,
   refName,
   storageNameOf,
+  accessChangesOf,
 }: {
   readonly space: AggregateContractSpace;
   readonly aggregate: Pick<ContractSpaceAggregate, 'targetId' | 'app'>;
@@ -532,6 +670,9 @@ export function planSpacePath({
   readonly liveMarker: ContractMarkerRecordLike | null;
   readonly refName?: string;
   readonly storageNameOf: (operation: MigrationPlanOperation) => string;
+  readonly accessChangesOf: (
+    operations: readonly MigrationPlanOperation[],
+  ) => readonly MigrationAccessChange[];
 }): SpacePathOutcome {
   const isAppSpace = space.spaceId === aggregate.app.spaceId;
   const headRef = requireHeadRef(space);
@@ -598,7 +739,7 @@ export function planSpacePath({
         }),
       };
     }
-    return { kind: 'never-planned', spaceId: space.spaceId, targetHash };
+    return { kind: 'never-planned', spaceId: space.spaceId, liveMarker, targetHash };
   }
 
   const targetInvariants =
@@ -614,6 +755,7 @@ export function planSpacePath({
     currentMarker: liveMarker,
     ...(isAppSpace && refName !== undefined ? { refName } : {}),
     storageNameOf,
+    accessChangesOf,
   });
 
   if (walked.kind === 'unreachable') {
@@ -660,6 +802,9 @@ interface PlanSpacesInputs {
     readonly refName: string | undefined;
   };
   readonly storageNameOf: (operation: MigrationPlanOperation) => string;
+  readonly accessChangesOf: (
+    operations: readonly MigrationPlanOperation[],
+  ) => readonly MigrationAccessChange[];
 }
 
 /** Every contract space's outcome, keyed by space, the application space first. */
@@ -676,6 +821,7 @@ export function planSpaces(args: PlanSpacesInputs): ReadonlyMap<string, SpacePat
         liveMarker: args.markers.get(space.spaceId) ?? null,
         ...(isAppSpace ? ifDefined('refName', appTarget.refName) : {}),
         storageNameOf: args.storageNameOf,
+        accessChangesOf: args.accessChangesOf,
       });
       return [space.spaceId, outcome] as const;
     }),
@@ -858,12 +1004,102 @@ function buildSuccess(args: BuildSuccessArgs): MigrateSuccess {
 }
 
 /**
+ * `MIGRATION.PATH_UNREACHABLE` for a space with managed storage and no migrations. The application
+ * space is advised to plan its first migration; an extension space's advice is to install a version
+ * of the extension that ships them.
+ */
+export function neverPlannedSpaceFailure(
+  space: {
+    readonly spaceId: string;
+    readonly liveMarker: ContractMarkerRecordLike | null;
+    readonly targetHash: string;
+  },
+  run: {
+    readonly appSpaceId: string;
+    readonly appSpace: PlanSpace;
+    readonly migrationsDir: string;
+    readonly target: MigrateTarget | undefined;
+    readonly invocation: CliInvocation;
+  },
+): CliStructuredError {
+  if (space.spaceId === run.appSpaceId) {
+    return buildNeverPlannedFailure(
+      space.spaceId,
+      space.targetHash,
+      run.migrationsDir,
+      migrationPlanArguments(
+        run.appSpace,
+        databasePositionOf(space.liveMarker?.storageHash),
+        planEndOf(run.target),
+      ),
+      run.invocation,
+    );
+  }
+  return errorExtensionNeverPlanned({
+    spaceId: space.spaceId,
+    targetHash: space.targetHash,
+    command: 'db migrate',
+    invocation: run.invocation,
+  });
+}
+
+/**
+ * `MIGRATION.PATH_UNREACHABLE` for a space with no path from its marker to its target. The
+ * application space is advised to plan the missing migration; an extension space's migrations come
+ * with the extension, so its advice is to install a version that has them. `fromHash` is the
+ * contract the path would start from: the one the marker names, or an offline `--from`.
+ */
+export function unreachableSpaceFailure(
+  space: {
+    readonly spaceId: string;
+    readonly fromHash: string;
+    readonly targetHash: string;
+    readonly position?: DatabasePosition;
+  },
+  run: {
+    readonly appSpaceId: string;
+    readonly appSpace: PlanSpace;
+    readonly target: MigrateTarget | undefined;
+    readonly invocation: CliInvocation;
+  },
+): CliStructuredError {
+  if (space.spaceId === run.appSpaceId) {
+    return buildPathNotFoundFailure(
+      space.spaceId,
+      space.fromHash,
+      space.targetHash,
+      migrationPlanArguments(
+        run.appSpace,
+        space.position ?? databasePositionOf(space.fromHash),
+        planEndOf(run.target),
+      ),
+      run.invocation,
+    );
+  }
+  return errorExtensionPathUnreachable({
+    spaceId: space.spaceId,
+    fromHash: space.fromHash,
+    targetHash: space.targetHash,
+    command: 'db migrate',
+    invocation: run.invocation,
+  });
+}
+
+/** Where `db migrate` goes, as `migration plan` would end there: the emitted contract when it was given no other target. */
+export function planEndOf(target: MigrateTarget | undefined): PlanEnd {
+  if (target === undefined) return { kind: 'emitted' };
+  return target.kind === 'ref'
+    ? { kind: 'ref', name: target.ref.name }
+    : { kind: 'contract', hash: target.hash };
+}
+
+/**
  * Build the `neverPlanned` failure raised when a contract space that
  * declares managed storage elements has no on-disk migration graph but
  * migrate was asked to reach a target hash. All-external spaces never reach
  * this: they resolve declaratively (marker advances to the head ref with
  * zero operations). The `why` states only the condition; the recovery
- * sequence is composed by `errorPathUnreachable`'s `fix`.
+ * sequence is `planThenApply`'s.
  *
  * @internal Exported for testing only.
  */
@@ -871,12 +1107,18 @@ export function buildNeverPlannedFailure(
   spaceId: string,
   targetHash: string,
   migrationsDir: string,
+  plan: MigrationPlanArguments,
+  invocation: CliInvocation,
 ): CliStructuredError {
-  return errorPathUnreachable({
-    summary: `No on-disk migrations for contract space "${spaceId}"`,
-    why: `migrate is replay-only: a contract space that declares managed storage elements must have an authored migration graph on disk. Space "${spaceId}" has no migrations under \`${migrationsDir}/${spaceId}/\` but its head ref targets "${targetHash}".`,
-    meta: { spaceId, targetHash, kind: 'neverPlanned' },
-  });
+  const meta: PathUnreachableMeta = { spaceId, targetHash, kind: 'neverPlanned' };
+  return errorPathUnreachable(
+    {
+      summary: `No on-disk migrations for contract space "${spaceId}"`,
+      why: `migrate is replay-only: a contract space that declares managed storage elements must have an authored migration graph on disk. Space "${spaceId}" has no migrations under \`${migrationsDir}/${spaceId}/\` but its head ref targets "${targetHash}".`,
+      meta,
+    },
+    planThenApply(plan, invocation),
+  );
 }
 
 /**
@@ -884,39 +1126,42 @@ export function buildNeverPlannedFailure(
  * on-disk migration edge from the current marker to the target. The `why`
  * states only the condition (no edge between the two named states, and migrate
  * replays edges rather than inventing them); the recovery sequence — plan the
- * edge, then re-apply — is composed by `errorPathUnreachable`'s `fix`, so the
+ * edge, then re-apply — is `planThenApply`'s, so the
  * two read as one non-redundant plan-then-apply story.
  *
  * @internal Exported for testing only.
  */
 export function buildPathNotFoundFailure(
   spaceId: string,
-  marker: ContractMarkerRecordLike | null,
+  fromHash: string,
   targetHash: string,
+  plan: MigrationPlanArguments,
+  invocation: CliInvocation,
 ): CliStructuredError {
-  const fromHash = marker?.storageHash ?? EMPTY_CONTRACT_HASH;
-  const fromText = marker === null ? 'the empty contract' : `the current state "${fromHash}"`;
-  // The app-case phrasing names the user-visible condition (a
-  // contract has been emitted that no on-disk migration reaches) so
-  // the error reads naturally for the app space. Extension spaces
-  // see the same condition expressed against the offending space.
-  const summary =
-    spaceId === 'app'
-      ? 'Current contract has no planned migration path'
-      : `Current contract has no planned migration path for contract space "${spaceId}"`;
-  return errorPathUnreachable({
-    summary,
+  const failure = pathNotFound(spaceId, fromHash, targetHash);
+  return errorPathUnreachable(failure, planThenApply(plan, invocation));
+}
+
+function pathNotFound(spaceId: string, fromHash: string, targetHash: string): PathUnreachable {
+  const fromText = fromHash === EMPTY_CONTRACT_HASH ? 'the empty contract' : `"${fromHash}"`;
+  return {
+    summary: 'Current contract has no planned migration path',
     why: `No migration edge connects ${fromText} to the target "${targetHash}" in contract space "${spaceId}". The on-disk migration graph does not join the two, and migrate replays existing edges — it never invents one.`,
     meta: { spaceId, fromHash, targetHash, kind: 'pathUnreachable' },
-  });
+  };
 }
 
 function failedMigrationOnDisk(
   failed: { readonly spaceId: string; readonly edge: AggregateMigrationEdgeRef },
   migrationsDir: string,
-): { readonly directory: string; readonly from: string } {
+  app: AggregateContractSpace,
+): FailedMigrationOnDisk {
   return {
     directory: join(migrationsDir, failed.spaceId, failed.edge.dirName),
-    from: failed.edge.from,
+    replanFrom: migrationPlanReplacing(
+      { graph: app.graph(), refs: app.refs, packages: app.packages },
+      failed.edge,
+    ),
+    ...(failed.spaceId === app.spaceId ? {} : { extensionSpaceId: failed.spaceId }),
   };
 }

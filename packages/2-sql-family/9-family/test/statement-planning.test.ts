@@ -172,6 +172,7 @@ describe('planStatements', () => {
         { namespaceId: 'app', from: 'Post', to: 'Article' },
       ],
       columnRenames: [],
+      alreadyRenamedTables: [],
       plannedStatements: [
         {
           statement: renameModel('Profile', 'User'),
@@ -196,6 +197,7 @@ describe('planStatements', () => {
     expect(planned(result)).toMatchObject({
       calls: [],
       tableRenames: [],
+      alreadyRenamedTables: [],
       plannedStatements: [{ operations: { kind: 'planned', operationIndexes: [] } }],
     });
   });

@@ -1,10 +1,10 @@
 import { existsSync } from 'node:fs';
-import { readFile, rm } from 'node:fs/promises';
+import { mkdir, readFile, rm, symlink } from 'node:fs/promises';
 import { contractSnapshotDir } from '@internal/migration-tools/contract-snapshot-store';
 import { errorInvalidRefName, MigrationToolsError } from '@internal/migration-tools/errors';
 import { readRef, writeRef } from '@internal/migration-tools/refs';
 import { notOk, ok } from '@internal/utils/result';
-import { join } from 'pathe';
+import { dirname, join } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   advanceRefSafely,
@@ -13,6 +13,7 @@ import {
   computeRefAdvancementName,
   executeRefAdvancement,
   preflightRefAdvancement,
+  writeAdvancedRef,
 } from '../../src/control-api/operations/ref-advancement';
 import type { RenderContractDtsResult } from '../../src/control-api/render-contract-dts';
 import { createTestProjectDir } from '../utils/test-project-dir';
@@ -23,7 +24,7 @@ const PROFILE_HASH = `${'c'.repeat(64)}`;
 function sampleContractIR(storageHash: string = HASH_A): ContractIR {
   return {
     contract: {
-      schemaVersion: '1',
+      formatVersion: 1,
       targetFamily: 'sql',
       target: 'postgres',
       profileHash: PROFILE_HASH,
@@ -257,6 +258,31 @@ describe('preflightRefAdvancement', () => {
     }
   });
 
+  it('advises a stored snapshot the family rejects as a snapshot, not by emitting the contract', async () => {
+    const client = fakeClient(
+      notOk({
+        code: 'CONTRACT_VALIDATION_FAILED',
+        summary: 'Contract validation failed',
+        why: 'zzz must be removed',
+      }),
+    );
+
+    const result = await preflightRefAdvancement({
+      name: 'db',
+      contractJson,
+      contractJsonPath,
+      config,
+      client,
+      snapshot: { rewrittenBy: undefined },
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.failure.fix).toContain('follow the app upgrade instructions');
+      expect(result.failure.fix).not.toContain('contract emit');
+    }
+  });
+
   it('reports a contract the emitter refuses with a contract emit fix', async () => {
     const client = fakeClient(
       notOk({
@@ -397,5 +423,32 @@ describe('advanceRefSafely', () => {
       expect(result.failure.toEnvelope()).toEqual(errorInvalidRefName('').toEnvelope());
     }
     expect(existsSync(contractSnapshotDir(migrationsDir, HASH_A))).toBe(false);
+  });
+});
+
+describe('writeAdvancedRef', () => {
+  it('reports a failed store check as such, without writing the pointer', async () => {
+    const migrationsDir = createTestProjectDir('write-advanced-ref');
+    const looping = contractSnapshotDir(migrationsDir, HASH_A);
+    await mkdir(dirname(looping), { recursive: true });
+    await symlink(looping, looping);
+    const writePointer = vi.fn();
+
+    const written = await writeAdvancedRef(
+      {
+        refsDir: join(migrationsDir, 'app', 'refs'),
+        migrationsDir,
+        name: 'db',
+        hash: HASH_A,
+        snapshot: { kind: 'stored' },
+      },
+      writePointer,
+    ).finally(() => rm(migrationsDir, { recursive: true, force: true }));
+
+    expect(written).toMatchObject({
+      ok: false,
+      failure: { causeCode: 'ELOOP', failedAt: 'store-check' },
+    });
+    expect(writePointer).not.toHaveBeenCalled();
   });
 });

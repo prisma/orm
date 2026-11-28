@@ -2,10 +2,13 @@ import type {
   BlockingObject,
   MigrationRunnerFailure,
 } from '@internal/framework-components/control';
-import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import type { NextAction } from '@prisma/cli-engine/protocol';
 import { basename, join } from 'pathe';
-import { statementFlag } from '../control-api/statements/statement-flag';
+import type {
+  MigrationPlanArgument,
+  MigrationPlanArguments,
+} from '../control-api/operations/plan-arguments';
+import { shellQuoted, statementFlag } from '../control-api/statements/statement-flag';
 import type {
   FailedTypeChangeReport,
   RowsFailingCheckReport,
@@ -17,21 +20,31 @@ import { migrateFailedPrecheckAdvice } from './failed-precheck-advice';
 import { chooseAction, editFileAction } from './next-actions';
 import {
   type CliInvocation,
+  CONTRACT_PLACEHOLDER,
   cliCommand,
   dbMigrateRerun,
+  dbMigrateToEmitted,
   dbUpdateRerun,
+  type PrintedPlan,
   printedPath,
-  printedPlanCommand,
+  printedPlan,
+  printedWayToTarget,
+  quotedPlan,
   selfEmitCommand,
   writtenMigrationRunCommand,
 } from './printed-command';
 import type { RunnerAdvice } from './runner-advice';
 import { schemaCheckIssues } from './schema-check-issues';
 
-/** The written migration of the failed operation: its directory, and the contract it starts from. */
+/**
+ * The written migration of the failed operation: its directory, the contract it starts from, and,
+ * when an extension ships it, the extension's contract space.
+ */
 export interface FailedMigrationOnDisk {
   readonly directory: string;
-  readonly from: string;
+  /** The `--from` that plans it again once its directory is deleted. */
+  readonly replanFrom: MigrationPlanArgument;
+  readonly extensionSpaceId?: string;
 }
 
 /** What a runner failure says of a type change that failed: who converted the values, and how it failed. */
@@ -55,24 +68,35 @@ function quoted(command: string): string {
   return `\`${command}\``;
 }
 
-/** A `db migrate` command as advice prints it, for a migration that is not the one the user ran. */
-function dbMigrateCommand(invocation: CliInvocation): string {
-  return quoted(cliCommand(invocation, 'db migrate'));
-}
-
 /** The `db migrate` the user ran, as advice that repeats it prints it. */
 function dbMigrateAgain(invocation: CliInvocation): string {
   return quoted(dbMigrateRerun(invocation));
 }
 
-/** The steps after filling the migration.ts a `migration plan` wrote with no placeholders: run it, which writes its operations, and apply it. */
+/**
+ * Applying a migration planned after a change of the contract source, which ends at the new emitted
+ * contract: the ref the run's `--to` named still names the contract the failed migration went to.
+ */
+function applyToEmitted(invocation: CliInvocation): string {
+  const apply = quoted(dbMigrateToEmitted(invocation));
+  const ref = invocation.targetRef;
+  if (ref === undefined) return apply;
+  const refSet = quoted(
+    cliCommand(invocation, 'migration ref set', [shellQuoted(ref), CONTRACT_PLACEHOLDER]),
+  );
+  return `${apply}, which goes to the new migration's contract and not to \`${ref}\`; \`${ref}\` still names the contract the failed migration went to, so if it should name the new one, run ${refSet} with the contract the new migration ends at`;
+}
+
+/**
+ * The steps after filling the migration.ts a `migration plan` wrote with no placeholders, after a
+ * change of the contract source: run it, which writes its operations, and apply it.
+ */
 export function runWrittenFile(invocation: CliInvocation): string {
-  return `run ${quoted(writtenMigrationRunCommand(invocation))} for the directory it writes, and apply it with ${dbMigrateCommand(invocation)}`;
+  return `run ${quoted(writtenMigrationRunCommand(invocation))} for the directory it writes, and apply it with ${applyToEmitted(invocation)}`;
 }
 
 /** The step between filling a planned migration.ts and applying it, which writes its operations. */
-export const RUN_PLANNED_FILE =
-  'run that migration.ts with the `node` command `migration plan` prints';
+const RUN_PLANNED_FILE = 'run that migration.ts with the `node` command `migration plan` prints';
 
 /** What advice that plans a migration again says of the statements it was planned with, which the CLI does not store. */
 const OTHER_STATEMENTS = 'adding any other statements you planned it with';
@@ -101,35 +125,52 @@ function changeValueAdvice(change: FailedTypeChangeReport, rerun: string): Runne
 /** The way out of a failed cast for `db update`, which plans and applies in one step. */
 export function dbUpdateFailedTypeChangeAdvice(
   change: FailedTypeChangeReport,
-  databaseStorageHash: string | undefined,
+  migrationPlan: MigrationPlanArguments,
   invocation: CliInvocation,
 ): RunnerAdvice {
-  const plan = printedPlanCommand(invocation, databaseStorageHash, [
+  const changeValue = changeValueAdvice(change, quoted(dbUpdateRerun(invocation)));
+  const plan = printedWayToTarget(invocation, migrationPlan, [
     statementFlag({ verb: 'convert', text: change.field }),
   ]);
+  if (plan.kind === 'on-disk') {
+    return [chooseAction(`${failedTypeChangeText(change)} ${plan.text}`), ...changeValue];
+  }
+  if (plan.kind === 'none' || plan.kind === 'at-target') {
+    return [
+      chooseAction(
+        `${failedTypeChangeText(change)} No migration can be planned for the change. ${plan.reason}`,
+      ),
+      ...changeValue,
+    ];
+  }
   return [
     chooseAction(
-      `${failedTypeChangeText(change)} Plan the change with ${quoted(plan)}, write the conversion in the migration.ts it writes, ${RUN_PLANNED_FILE}, and apply it with ${dbMigrateCommand(invocation)}`,
+      `${failedTypeChangeText(change)} Plan the change with ${quotedPlan(plan)}, write the conversion in the migration.ts it writes, ${plan.afterPlan}`,
     ),
-    ...changeValueAdvice(change, quoted(dbUpdateRerun(invocation))),
+    ...changeValue,
   ];
 }
 
 /** The way out of rows without a value for `db update`, which plans and applies in one step. */
 export function dbUpdateRowsWithoutValueAdvice(
   reports: readonly RowsWithoutValueReport[],
-  databaseStorageHash: string | undefined,
+  migrationPlan: MigrationPlanArguments,
   invocation: CliInvocation,
 ): RunnerAdvice {
   const flags = backfillFlags(reports);
+  const plan = printedWayToTarget(invocation, migrationPlan, flags);
   const planned =
     flags.length === 0
       ? []
-      : [
-          chooseAction(
-            `Plan it with ${quoted(printedPlanCommand(invocation, databaseStorageHash, flags))}, fill the backfill steps in the migration.ts it writes, ${RUN_PLANNED_FILE}, and apply it with ${dbMigrateCommand(invocation)}`,
-          ),
-        ];
+      : plan.kind === 'on-disk'
+        ? [chooseAction(plan.text)]
+        : plan.kind === 'none' || plan.kind === 'at-target'
+          ? [chooseAction(`No migration can be planned to backfill those rows. ${plan.reason}`)]
+          : [
+              chooseAction(
+                `Plan it with ${quotedPlan(plan)}, fill the backfill steps in the migration.ts it writes, ${plan.afterPlan}`,
+              ),
+            ];
   const [first] = reports;
   if (first?.reason === 'nullValues') {
     const keep = optionalFields([first], 'the field');
@@ -241,7 +282,7 @@ function storedValuesText(reports: readonly RowsHoldingValueReport[]): string {
 /** The way out when the data of required columns holds stored values `db update` removes. */
 export function dbUpdateRowsHoldingValueAdvice(
   reports: readonly RowsHoldingValueReport[],
-  databaseStorageHash: string | undefined,
+  migrationPlan: MigrationPlanArguments,
   invocation: CliInvocation,
 ): RunnerAdvice {
   const others = otherStatements(invocation, reports);
@@ -249,21 +290,22 @@ export function dbUpdateRowsHoldingValueAdvice(
   const rename = chooseAction(
     `${newMember(reports, invocation)}, then run ${quoted(cliCommand(invocation, 'db update', [...others, ...renameFlags(reports)]))}`,
   );
-  if (databaseStorageHash === undefined) {
+  const plan = printedWayToTarget(invocation, migrationPlan, [...others, ...deletes]);
+  if (plan.kind === 'on-disk') return [rename, chooseAction(plan.text)];
+  if (plan.kind === 'none' || plan.kind === 'at-target') {
     return [
       rename,
       chooseAction(
-        `To keep that data under another stored value, change ${storedValuesText(reports)} in the database yourself, then re-run ${quoted(dbUpdateRerun(invocation, [...others, ...deletes]))}`,
+        `No migration can be planned to keep that data. ${plan.reason}. To keep that data under another stored value, change ${storedValuesText(reports)} in the database yourself, then re-run ${quoted(dbUpdateRerun(invocation, [...others, ...deletes]))}`,
       ),
     ];
   }
   const swaps = swapCalls(reports);
   if (swaps === undefined) return [rename];
-  const plan = printedPlanCommand(invocation, databaseStorageHash, [...others, ...deletes]);
   return [
     rename,
     chooseAction(
-      `To keep that data by hand, plan the change with ${quoted(plan)}, make the edits below in the migration.ts it writes, ${KEPT_VALUE}, ${runWrittenFile(invocation)}.\n${swaps}`,
+      `To keep that data by hand, plan the change with ${quotedPlan(plan)}, make the edits below in the migration.ts it writes, ${KEPT_VALUE}, ${plan.afterPlan}.\n${swaps}`,
     ),
   ];
 }
@@ -284,6 +326,14 @@ function migrateRowsHoldingValueAdvice(
           ),
         ];
   if (failedMigration === undefined) return byHand;
+  const inPlace =
+    swaps === undefined && replacingPlan(failedMigration, renameFlags(reports)).kind === 'none'
+      ? [
+          editFileAction(
+            `To keep that data, add an operation to ${file} that updates the rows holding ${storedValuesList(reports)} to a stored value the enum keeps, before the operation that removes it, ${run}, and re-run ${dbMigrateAgain(invocation)}`,
+          ),
+        ]
+      : [];
   return [
     replan(
       `${newMember(reports, invocation)}, delete`,
@@ -295,7 +345,12 @@ function migrateRowsHoldingValueAdvice(
       `put any code you copied into the migration.ts it writes, ${runWrittenFile(invocation)}`,
     ),
     ...byHand,
+    ...inPlace,
   ];
+}
+
+function storedValuesList(reports: readonly RowsHoldingValueReport[]): string {
+  return distinct(reports.map(({ value }) => JSON.stringify(value))).join(' or ');
 }
 
 /** Where the operation that updates the rows goes among the operations of a migration.ts that replaces a check. */
@@ -316,24 +371,25 @@ function fixRowsFirst(report: RowsFailingCheckReport, rerun: string): NextAction
 /** The way out when existing rows fail a check `db update` adds: it cannot keep the data while the check it replaces holds. */
 export function dbUpdateRowsFailingCheckAdvice(
   report: RowsFailingCheckReport,
-  databaseStorageHash: string | undefined,
+  migrationPlan: MigrationPlanArguments,
   invocation: CliInvocation,
 ): RunnerAdvice {
   const update = dbUpdateRerun(invocation);
   const { replacedCheck } = report;
   if (replacedCheck === undefined) return [fixRowsFirst(report, update)];
   const cannotKeep = `${quoted(cliCommand(invocation, 'db update'))} cannot keep this data`;
-  if (databaseStorageHash === undefined) {
+  const plan = printedWayToTarget(invocation, migrationPlan, invocation.statementArgs ?? []);
+  if (plan.kind === 'on-disk') return [chooseAction(`${cannotKeep}. ${plan.text}`)];
+  if (plan.kind === 'none' || plan.kind === 'at-target') {
     return [
       chooseAction(
-        `${cannotKeep}, and no migration ends at the contract the database is at, so ${quoted(cliCommand(invocation, 'migration plan'))} cannot plan from it. Drop check "${replacedCheck}" in the database yourself, update those rows to fit check "${report.check}", then re-run ${quoted(update)}`,
+        `${cannotKeep}, and no migration can be planned for it. ${plan.reason}. Drop check "${replacedCheck}" in the database yourself, update those rows to fit check "${report.check}", then re-run ${quoted(update)}`,
       ),
     ];
   }
-  const plan = printedPlanCommand(invocation, databaseStorageHash, invocation.statementArgs ?? []);
   return [
     chooseAction(
-      `${cannotKeep}. Plan the change with ${quoted(plan)}, add ${updateOperation(report)} to the migration.ts it writes, ${betweenTheChecks(report, replacedCheck)}, ${runWrittenFile(invocation)}`,
+      `${cannotKeep}. Plan the change with ${quotedPlan(plan)}, add ${updateOperation(report)} to the migration.ts it writes, ${betweenTheChecks(report, replacedCheck)}, ${plan.afterPlan}`,
     ),
   ];
 }
@@ -380,8 +436,8 @@ export function dbInitRowsWithoutValueAdvice(
 interface FailedMigrationText {
   readonly directory: string;
   readonly name: string;
-  /** The contract the migration starts from, or `undefined` for the empty contract, which `migration plan` takes as its default origin and does not accept as `--from`. */
-  readonly from: string | undefined;
+  /** The `--from` that plans the migration again once its directory is deleted. */
+  readonly replanFrom: MigrationPlanArgument;
   readonly nodeCommand: string;
   readonly invocation: CliInvocation;
 }
@@ -395,15 +451,31 @@ function failedMigrationText(
   return {
     directory,
     name: dirName.slice(dirName.indexOf('_') + 1),
-    from: failed.from === EMPTY_CONTRACT_HASH ? undefined : failed.from,
+    replanFrom: failed.replanFrom,
     nodeCommand: selfEmitCommand(invocation, join(failed.directory, 'migration.ts')),
     invocation,
   };
 }
 
+/** The `migration plan` that replaces the failed migration once its directory is deleted. */
+function replacingPlan(failed: FailedMigrationText, flags: readonly string[]): PrintedPlan {
+  return printedPlan(failed.invocation, { from: failed.replanFrom }, [
+    '--name',
+    failed.name,
+    ...flags,
+  ]);
+}
+
+function keepFailedMigration(failed: FailedMigrationText, reason: string): NextAction {
+  return chooseAction(
+    `Keep \`${failed.directory}\`: no migration plan can replace it once it is deleted. ${reason}`,
+  );
+}
+
 /**
  * Planning the failed migration again with `flags`. `opening` is the words before the directory,
- * so the sentence can start the advice or follow why it is needed.
+ * so the sentence can start the advice or follow why it is needed. When no plan can replace the
+ * migration, the advice is to keep it.
  */
 function replan(
   opening: string,
@@ -412,15 +484,12 @@ function replan(
   except: string | undefined = undefined,
   afterPlan = `fill in the migration.ts it writes, ${RUN_PLANNED_FILE}, and run ${dbMigrateAgain(failed.invocation)}`,
 ): NextAction {
+  const plan = replacingPlan(failed, flags);
+  if (plan.kind === 'none') return keepFailedMigration(failed, plan.reason);
   const others =
     except === undefined ? OTHER_STATEMENTS : `${OTHER_STATEMENTS} except any ${except}`;
-  const plan = printedPlanCommand(failed.invocation, failed.from, [
-    '--name',
-    failed.name,
-    ...flags,
-  ]);
   return chooseAction(
-    `${opening} \`${failed.directory}\` (copy any code you wrote in its migration.ts first), plan it again with ${quoted(plan)}, ${others}, ${afterPlan}`,
+    `${opening} \`${failed.directory}\` (copy any code you wrote in its migration.ts first), plan it again with ${quotedPlan(plan)}, ${others}, ${afterPlan}`,
   );
 }
 
@@ -459,7 +528,7 @@ function migrateFailedTypeChangeAdvice(
   if (failedMigration === undefined) {
     return [
       chooseAction(
-        `${changeText} Plan the type change again with ${quoted(printedPlanCommand(invocation, undefined, [convert]))}, write the conversion in the migration.ts it writes, ${RUN_PLANNED_FILE}, and apply it with ${dbMigrateAgain(invocation)}`,
+        `${changeText} Find the migration that changes field "${change.field}" with ${quoted(cliCommand(invocation, 'migration list'))}, delete its directory (copy any code you wrote in its migration.ts first), plan it again from the contract it starts from with \`${convert}\`, write the conversion in the migration.ts it writes, ${RUN_PLANNED_FILE}, and apply it with ${dbMigrateAgain(invocation)}`,
       ),
       ...changeValueAdvice(change, dbMigrateAgain(invocation)),
     ];
@@ -501,6 +570,8 @@ function migrateRowsWithoutValueAdvice(
     flags.length === 0 || failedMigration === undefined
       ? undefined
       : replan(opening, flags, failedMigration);
+  const replaceable =
+    failedMigration !== undefined && replacingPlan(failedMigration, flags).kind !== 'none';
   const one = reports.length === 1;
   if (reports.every(({ reason }) => reason === 'nullValues')) {
     const rerun = chooseAction(
@@ -519,30 +590,49 @@ function migrateRowsWithoutValueAdvice(
                   `Keep ${fields.text} optional in the contract source, and plan the migration again`,
                 )
               : keepOptional(fields.text, fields.one ? 'it' : 'them', failedMigration, invocation),
-          ];
+          ].filter((action) => action !== undefined);
     return [rerun, ...(backfill === undefined ? [] : [backfill]), ...keep];
   }
+  const unreplaceable = failedMigration !== undefined && !replaceable;
   if (first?.reason === 'nullValues') {
     const notEnough =
       'The migration also adds a required field the existing rows have no value for, so setting values is not enough.';
     const backfill = again(`${notEnough} Delete`);
-    if (backfill !== undefined) {
+    if (backfill !== undefined && replaceable) {
       return [backfill];
+    }
+    if (unreplaceable) {
+      const newFields = reports.filter(({ reason }) => reason === 'newField');
+      return [
+        ...(backfill === undefined ? [] : [backfill]),
+        editFileAction(
+          `${notEnough} Set a value in the rows that hold NULL, and ${fillInPlace(newFields, failedMigration, invocation)}`,
+        ),
+      ];
     }
     const newFields = optionalFields(
       reports.filter(({ reason }) => reason === 'newField'),
       'the new fields',
     );
-    return newFields === undefined
-      ? [resolveTheCause(invocation)]
-      : [
-          editFileAction(
+    return [
+      ...(backfill === undefined ? [] : [backfill]),
+      newFields === undefined
+        ? resolveTheCause(invocation)
+        : editFileAction(
             `${notEnough} Make ${newFields.text} optional in the contract source, and plan the migration again`,
           ),
-        ];
+    ];
   }
   const fields = theFields(reports);
   const required = again(`To keep ${fields} required, delete`);
+  if (unreplaceable && required !== undefined) {
+    return [
+      required,
+      editFileAction(
+        `To keep ${fields} required, ${fillInPlace(reports, failedMigration, invocation)}`,
+      ),
+    ];
+  }
   const optional = optionalFields(reports, fields);
   if (required === undefined) {
     return [
@@ -565,24 +655,54 @@ function migrateRowsWithoutValueAdvice(
   ];
 }
 
+/**
+ * Giving the rows of new required fields a value in the failed migration itself, for when no plan
+ * can replace it: the shape `migration plan --backfill` writes, made by hand.
+ */
+function fillInPlace(
+  reports: readonly RowsWithoutValueReport[],
+  failedMigration: FailedMigrationText,
+  invocation: CliInvocation,
+): string {
+  const { file, run } = failedMigrationFile(failedMigration);
+  const flags = backfillFlags(reports)
+    .map((flag) => `\`${flag}\``)
+    .join(' ');
+  const shape = flags === '' ? '`migration plan --backfill`' : `\`migration plan\` with ${flags}`;
+  const field = reports.length === 1 ? 'the field' : 'each field';
+  return `give the existing rows a value for ${fieldList(reports)} in the migration itself, in the shape ${shape} writes: add ${field} as optional, fill it with a data transform, and only then make it required. Make that change in ${file}, ${run}, and re-run ${dbMigrateAgain(invocation)}`;
+}
+
+/**
+ * The way out of a failed migration an extension ships: its migrations come with the extension, and
+ * `migration plan` plans only the application's contract space.
+ */
+function extensionMigrationAdvice(spaceId: string, invocation: CliInvocation): RunnerAdvice {
+  return [
+    resolveTheCause(invocation),
+    chooseAction(
+      `The failed migration belongs to extension space "${spaceId}", whose migrations come with the extension and \`migration plan\` does not plan, so do not edit or plan it again; ask the extension's author for a version whose migrations apply to this database`,
+    ),
+  ];
+}
+
 function resolveTheCause(invocation: CliInvocation): NextAction {
   return chooseAction(
     `Resolve the cause the failure names, then re-run ${dbMigrateAgain(invocation)}`,
   );
 }
 
+/** Keeping `fields` optional by planning the failed migration again; none when no plan can replace it. */
 function keepOptional(
   fields: string,
   pronoun: string,
   failedMigration: FailedMigrationText,
   invocation: CliInvocation,
-): NextAction {
-  const plan = printedPlanCommand(invocation, failedMigration.from, [
-    '--name',
-    failedMigration.name,
-  ]);
+): NextAction | undefined {
+  const plan = replacingPlan(failedMigration, []);
+  if (plan.kind === 'none') return undefined;
   return editFileAction(
-    `Keep ${fields} optional: make ${pronoun} optional in the contract source again, delete \`${failedMigration.directory}\` (copy any code you wrote in its migration.ts first), and plan it again with ${quoted(plan)}, ${OTHER_STATEMENTS}, put back any code you copied, ${RUN_PLANNED_FILE}, and apply it with ${dbMigrateCommand(invocation)}`,
+    `Keep ${fields} optional: make ${pronoun} optional in the contract source again, delete \`${failedMigration.directory}\` (copy any code you wrote in its migration.ts first), and plan it again with ${quotedPlan(plan)}, ${OTHER_STATEMENTS}, put back any code you copied, ${RUN_PLANNED_FILE}, and apply it with ${applyToEmitted(invocation)}`,
   );
 }
 
@@ -602,23 +722,30 @@ function migrateSchemaCheckAdvice(
   invocation: CliInvocation,
 ): RunnerAdvice {
   const emit = quoted(cliCommand(invocation, 'contract emit'));
-  const plan = printedPlanCommand(
-    invocation,
-    failedMigration?.from,
-    failedMigration === undefined ? [] : ['--name', failedMigration.name],
-  );
-  const directory =
-    failedMigration === undefined
-      ? "the failed migration's directory"
-      : `\`${failedMigration.directory}\``;
+  if (failedMigration === undefined) {
+    const editedByHand = editFileAction(
+      `If a migration you edited by hand does not reach its destination contract, find it with ${quoted(cliCommand(invocation, 'migration list'))}, change its operations to resolve the issues listed, run its migration.ts with \`node\`, and run ${dbMigrateAgain(invocation)}`,
+    );
+    if (invocation.rerunArgs?.includes('--to') === true) return [editedByHand];
+    return [
+      editFileAction(
+        `If the contract source does not describe the schema you want, change it to resolve the issues listed, re-run ${emit}, and run ${quoted(cliCommand(invocation, 'migration status'))}. If it prints a \`migration plan\`, run it, ${RUN_PLANNED_FILE}, and run ${dbMigrateAgain(invocation)}; otherwise run the command it prints`,
+      ),
+      editedByHand,
+    ];
+  }
   const { file, run } = failedMigrationFile(failedMigration);
+  const fixMigration = editFileAction(
+    `If ${file} does not reach its destination contract, for example after a hand edit, change its operations to resolve the issues listed, ${run}, and run ${dbMigrateAgain(invocation)}`,
+  );
+  const plan = replacingPlan(failedMigration, []);
+  if (plan.kind === 'none')
+    return [keepFailedMigration(failedMigration, plan.reason), fixMigration];
   return [
     editFileAction(
-      `If the contract source does not describe the schema you want, change it to resolve the issues listed, re-run ${emit}, delete ${directory} (copy any code you wrote in its migration.ts first), plan it again with ${quoted(plan)}, put any code you copied into the migration.ts it writes, ${RUN_PLANNED_FILE}, and run ${dbMigrateCommand(invocation)}`,
+      `If the contract source does not describe the schema you want, change it to resolve the issues listed, re-run ${emit}, delete \`${failedMigration.directory}\` (copy any code you wrote in its migration.ts first), plan it again with ${quotedPlan(plan)}, put any code you copied into the migration.ts it writes, ${RUN_PLANNED_FILE}, and run ${applyToEmitted(invocation)}`,
     ),
-    editFileAction(
-      `If ${file} does not reach its destination contract, for example after a hand edit, change its operations to resolve the issues listed, ${run}, and run ${dbMigrateAgain(invocation)}`,
-    ),
+    fixMigration,
   ];
 }
 
@@ -636,6 +763,13 @@ export function blockingObjectsAdvice(
 }
 
 /**
+ * Whether the runner refused the database because it does not provide what the contract requires. Its message already says what to do, and no command can change the server, so such a failure gets no advice.
+ */
+export function refusedForDatabaseCapabilities(failure: MigrationRunnerFailure): boolean {
+  return failure.meta.databaseCapabilitiesNotProvided !== undefined;
+}
+
+/**
  * The way out of a failed `db migrate` apply: every path and command it prints works from where the
  * CLI ran, with the `--config` it was given.
  */
@@ -645,11 +779,15 @@ export function migrateAdvice(
   failedOnDisk: FailedMigrationOnDisk | undefined,
   invocation: CliInvocation,
 ): RunnerAdvice {
+  if (refusedForDatabaseCapabilities(failure)) return [];
   const failedMigration =
     failedOnDisk === undefined ? undefined : failedMigrationText(failedOnDisk, invocation);
   const { blockingObjects } = failure.meta;
   if (blockingObjects !== undefined) {
     return blockingObjectsAdvice(blockingObjects, dbMigrateRerun(invocation));
+  }
+  if (failedOnDisk?.extensionSpaceId !== undefined) {
+    return extensionMigrationAdvice(failedOnDisk.extensionSpaceId, invocation);
   }
   if (facts.failedTypeChange !== undefined) {
     return migrateFailedTypeChangeAdvice(facts.failedTypeChange, failedMigration, invocation);

@@ -36,10 +36,12 @@ import type { AggregateMigrationEdgeRef } from '@internal/migration-tools/aggreg
 import type { NamedRef } from '@internal/migration-tools/refs';
 import type { Result } from '@internal/utils/result';
 import type { CliStructuredError } from '../utils/cli-errors';
+import type { DataProtectionKey } from '../utils/policy-settings';
 import type { CliInvocation } from '../utils/printed-command';
 import type { ChangedStorageEntity } from './operations/changed-storage-entities';
 import type { ExecuteDbSignResult } from './operations/db-sign';
 import type { ExecuteDbVerifyResult } from './operations/db-verify';
+import type { MigrationPlanArguments } from './operations/plan-arguments';
 import type { RenderContractDtsOptions, RenderContractDtsResult } from './render-contract-dts';
 import type { AnswerPlanQuestions } from './statements/plan-questions';
 import type { AppliedStatementReport } from './statements/report-applied-statements';
@@ -188,10 +190,24 @@ export interface PlannerWarningsListener {
   readonly onPlannerWarnings?: (warnings: readonly MigrationPlannerConflict[]) => void;
 }
 
+/** A migration a run applies whose contract snapshot is present but cannot be read, and why. */
+export interface UnrecordedSnapshot {
+  readonly spaceId: string;
+  readonly dirName: string;
+  readonly path: string;
+  readonly reason: string;
+}
+
+/** Receives the migrations a run is about to apply without recording their contract. */
+export interface UnrecordedSnapshotListener {
+  /** Called before a run applies anything, once for each migration it applies whose contract snapshot is present but cannot be read: the database records no contract for that migration. */
+  readonly onUnrecordedSnapshot?: (unrecorded: UnrecordedSnapshot) => void;
+}
+
 /**
  * Options for the dbInit operation.
  */
-export interface DbInitOptions extends PlannerWarningsListener {
+export interface DbInitOptions extends PlannerWarningsListener, UnrecordedSnapshotListener {
   /** The command line the advice of a failure repeats: its directory, `--config` and whether `--db` was given. */
   readonly invocation: CliInvocation;
   /** Contract or unvalidated JSON - validated at runtime via familyInstance.deserializeContract() */
@@ -219,10 +235,18 @@ export interface DbInitOptions extends PlannerWarningsListener {
   readonly onProgress?: OnControlProgress;
 }
 
+/** A stored file a run could not read and went on without, and why. */
+export interface UnreadableStoredFile {
+  readonly path: string;
+  readonly reason: string;
+}
+
 /**
  * Options for the dbUpdate operation.
  */
-export interface DbUpdateOptions extends PlannerWarningsListener {
+export interface DbUpdateOptions extends PlannerWarningsListener, UnrecordedSnapshotListener {
+  /** Called when the contract snapshot the database's marker names cannot be read: the run plans on without the contract the database is at. */
+  readonly onUnreadableOrigin?: (unreadable: UnreadableStoredFile) => void;
   /** The command line the advice of a failure repeats: its directory, `--config` and whether `--db` was given. */
   readonly invocation: CliInvocation;
   /** Contract or unvalidated JSON - validated at runtime via familyInstance.deserializeContract() */
@@ -250,6 +274,12 @@ export interface DbUpdateOptions extends PlannerWarningsListener {
   readonly ref?: NamedRef;
   /** Consents to writing the ref's declared policies into the database when they differ from those in force. */
   readonly permitPolicyChange?: boolean;
+  /**
+   * The storage hash of the emitted contract, the one at the config's contract path that
+   * `migration new` writes to. It differs from `contract` when `ref` names another contract. When
+   * absent, failure advice takes `contract` as the emitted one without `ref`, and as unknown with it.
+   */
+  readonly emittedContractHash?: string;
   /**
    * On-disk migrations directory. Always required — every `db update`
    * routes through the per-space flow, which reads on-disk
@@ -508,15 +538,27 @@ export interface DbUpdateSuccess
   /** The statements the application space's plan applied, in order; empty when none were given. */
   readonly appliedStatements: readonly AppliedStatementReport[];
   /**
-   * The storage hash of the contract the database was at before the run, when a migration of the
-   * graph ends at it: the origin a `migration plan` for this database starts from.
+   * The storage hash of the contract the database was at before the run, when a migration records
+   * it.
+   *
+   * @deprecated Use `migrationPlan.from`, which says what `migration plan --from` takes in every
+   * case this field leaves out.
    */
   readonly databaseStorageHash?: string;
+  /**
+   * The `--from` and `--to` of a `migration plan` that takes this database, as it was before the
+   * run, where the run went. Each is a contract reference, the default, or why no `migration plan`
+   * can start or end there; `--from` can also be a choice for the user. Its `migrationsToTarget`
+   * exists for the CLI's own advice only, and its shape may change in any release without notice.
+   */
+  readonly migrationPlan?: MigrationPlanArguments;
   /** The storage entities that changed, when the run signed the database with a changed contract and ran no operation. */
   readonly changedStorageEntities?: readonly ChangedStorageEntity[];
   readonly summary: string;
   /** The settings the run recorded as the database's policies, with the values they replaced. Present only when it recorded some. */
   readonly databasePoliciesUpdated?: readonly DatabasePolicyDifference[];
+  /** The data protection settings at their `permitted` level, so an apply asks nothing about the operations they cover. Present only when some are. */
+  readonly permitted?: readonly DataProtectionKey[];
 }
 
 /**
@@ -660,7 +702,7 @@ export type MigrateTarget =
  * just resolves the descriptor surface (config, refs, contract
  * envelope, app-space migration packages) and hands the inputs in.
  */
-export interface MigrateOptions {
+export interface MigrateOptions extends UnrecordedSnapshotListener {
   /** The command line the advice of a failure repeats: its directory, `--config` and whether `--db` was given. */
   readonly invocation: CliInvocation;
   /** Already-validated app contract (the canonical "where we are heading" hash). */

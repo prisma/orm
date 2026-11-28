@@ -136,7 +136,7 @@ function actualSchema(
     },
     roles: [],
     existingSchemas: ['public'],
-    pgVersion: 'unknown',
+    serverVersionNumber: undefined,
   });
 }
 

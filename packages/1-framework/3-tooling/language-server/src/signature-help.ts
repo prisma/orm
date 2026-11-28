@@ -70,7 +70,7 @@ function signatureHelp(
   const matched = signatures.findIndex(
     ({ signature, index }) => index >= 0 && index < (signature.parameters?.length ?? 0),
   );
-  const activeSignature = matched < 0 ? 0 : matched;
+  const activeSignature = Math.max(matched, 0);
   const activeParameter = signatures[activeSignature]?.index;
   return {
     signatures: signatures.map(({ signature }) => signature),

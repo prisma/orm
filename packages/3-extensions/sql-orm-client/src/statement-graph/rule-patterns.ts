@@ -57,16 +57,17 @@ export function readsTableAsFound(
   );
 }
 
+/** A builder marks a write's condition as its `Find`'s by giving both the same object; equal but separate conditions are not merged. */
 export function foldsIntoCondition(
   graph: Graph,
   { id, find }: FindAt,
   where: AnyExpression | undefined,
 ): boolean {
-  const { filter, requires } = graph.inputsOf(id);
+  const { filter, link, requires } = graph.inputsOf(id);
   return (
     find.ast.where === where &&
     rowsOfConditionReadOf(find.ast) !== undefined &&
-    [filter ?? [], requires ?? []].flat().length === 0
+    [filter ?? [], link ?? [], requires ?? []].flat().length === 0
   );
 }
 

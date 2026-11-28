@@ -36,6 +36,7 @@ import {
   codecRefFor,
   codecRefOf,
   combineWhereExprs,
+  ownScopeField,
 } from './builder-base';
 import { createFieldProxy } from './field-proxy';
 
@@ -68,6 +69,16 @@ export type UpdateSetCallback = (
   fns: ReturnType<typeof createFunctions>,
 ) => Record<string, Expression<ScopeField> | undefined>;
 
+/** Stores `value` as an own key of `target`, so a key named `__proto__` is a key rather than the prototype. */
+function defineOwn<Value>(target: Record<string, Value>, key: string, value: Value): void {
+  Object.defineProperty(target, key, {
+    value,
+    enumerable: true,
+    writable: true,
+    configurable: true,
+  });
+}
+
 export function buildParamValues(
   values: Record<string, unknown>,
   namespaceId: string,
@@ -78,9 +89,10 @@ export function buildParamValues(
 ): Record<string, ParamRef> {
   const params: Record<string, ParamRef> = {};
   for (const [col, value] of Object.entries(values)) {
-    const column = table.columns[col];
-    const codec = column ? codecRefFor(ctx, namespaceId, tableName, col) : undefined;
-    params[col] = ParamRef.of(value, codec ? { codec } : undefined);
+    const codec = Object.hasOwn(table.columns, col)
+      ? codecRefFor(ctx, namespaceId, tableName, col)
+      : undefined;
+    defineOwn(params, col, ParamRef.of(value, codec ? { codec } : undefined));
   }
   for (const def of ctx.applyMutationDefaults({
     op,
@@ -88,9 +100,10 @@ export function buildParamValues(
     entry: tableName,
     values,
   })) {
-    const column = table.columns[def.field];
-    const codec = column ? codecRefFor(ctx, namespaceId, tableName, def.field) : undefined;
-    params[def.field] = ParamRef.of(def.value, codec ? { codec } : undefined);
+    const codec = Object.hasOwn(table.columns, def.field)
+      ? codecRefFor(ctx, namespaceId, tableName, def.field)
+      : undefined;
+    defineOwn(params, def.field, ParamRef.of(def.value, codec ? { codec } : undefined));
   }
   return params;
 }
@@ -102,7 +115,7 @@ function buildReturningProjections(
   ctx: BuilderContext,
 ): ProjectionItem[] {
   return columns.map((col) => {
-    const field = rowFields[col];
+    const field = Object.hasOwn(rowFields, col) ? rowFields[col] : undefined;
     return ProjectionItem.of(
       col,
       ColumnRef.of(tableName, col),
@@ -135,7 +148,7 @@ export function evaluateUpdateCallback(
   const set: Record<string, AstExpression> = {};
   for (const [col, expr] of Object.entries(result)) {
     if (expr !== undefined) {
-      set[col] = expr.buildAst();
+      defineOwn(set, col, expr.buildAst());
     }
   }
   return set;
@@ -156,10 +169,11 @@ export function buildSetExpressions(
     entry: tableName,
     values: exprs,
   })) {
-    if (!(def.field in set)) {
-      const column = table.columns[def.field];
-      const codec = column ? codecRefFor(ctx, namespaceId, tableName, def.field) : undefined;
-      set[def.field] = ParamRef.of(def.value, ifDefined('codec', codec));
+    if (!Object.hasOwn(set, def.field)) {
+      const codec = Object.hasOwn(table.columns, def.field)
+        ? codecRefFor(ctx, namespaceId, tableName, def.field)
+        : undefined;
+      defineOwn(set, def.field, ParamRef.of(def.value, ifDefined('codec', codec)));
     }
   }
   return set;
@@ -212,7 +226,7 @@ export class InsertQueryImpl<
     (...columns: string[]) => {
       const newRowFields: Record<string, ScopeField> = {};
       for (const col of columns) {
-        const field = this.#scope.topLevel[col];
+        const field = ownScopeField(this.#scope.topLevel, col);
         if (!field)
           throw structuredError('ORM.COLUMN_UNKNOWN', `Column "${col}" not found in scope`, {
             meta: { column: col },
@@ -357,7 +371,7 @@ export class UpdateQueryImpl<
     (...columns: string[]) => {
       const newRowFields: Record<string, ScopeField> = {};
       for (const col of columns) {
-        const field = this.#scope.topLevel[col];
+        const field = ownScopeField(this.#scope.topLevel, col);
         if (!field)
           throw structuredError('ORM.COLUMN_UNKNOWN', `Column "${col}" not found in scope`, {
             meta: { column: col },
@@ -475,7 +489,7 @@ export class DeleteQueryImpl<
     (...columns: string[]) => {
       const newRowFields: Record<string, ScopeField> = {};
       for (const col of columns) {
-        const field = this.#scope.topLevel[col];
+        const field = ownScopeField(this.#scope.topLevel, col);
         if (!field)
           throw structuredError('ORM.COLUMN_UNKNOWN', `Column "${col}" not found in scope`, {
             meta: { column: col },

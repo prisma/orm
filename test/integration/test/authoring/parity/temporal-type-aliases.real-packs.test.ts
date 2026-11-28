@@ -2,7 +2,7 @@ import postgresAdapter from '@internal/adapter-postgres/control';
 import sqliteAdapter from '@internal/adapter-sqlite/control';
 import sqlFamilyControl from '@internal/family-sql/control';
 import { createControlStack } from '@internal/framework-components/control';
-import { defineContract } from '@internal/postgres/contract-builder';
+import { defineContract, postgres18, postgresDriver } from '@internal/postgres/contract-builder';
 import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
 import { bindPslSchema, contractSourceContextFromControlStack } from '@internal/psl-parser/test';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
@@ -15,6 +15,7 @@ import sqliteControl from '@internal/target-sqlite/control';
 import sqlitePack from '@internal/target-sqlite/pack';
 import { sqliteCreateNamespace } from '@internal/target-sqlite/types';
 import { describe, expect, it } from 'vitest';
+import { postgresPslContext } from '../../utils/postgres-psl-context';
 
 const postgresStack = createControlStack({
   family: sqlFamilyControl,
@@ -31,7 +32,7 @@ const sqliteStack = createControlStack({
 function interpretPostgres(schema: string) {
   const bound = bindPslSchema(schema, {
     sourceId: 'temporal-type-aliases.prisma',
-    context: contractSourceContextFromControlStack(postgresStack),
+    context: postgresPslContext(postgresStack),
   });
   return withSeedDiagnostics(
     interpretPslDocumentToSqlContract({
@@ -117,28 +118,34 @@ describe('the temporal type aliases with real packs', () => {
   });
 
   it('give the TypeScript builder on Postgres what DateTime with the matching generators gives it', () => {
-    const throughAliases = defineContract({}, ({ type, field, model }) => ({
-      models: {
-        Event: model('Event', {
-          fields: {
-            id: field.column(type.Int()).id(),
-            createdAt: field.column(type.temporal.CreatedAt()),
-            updatedAt: field.column(type.temporal.UpdatedAt()),
-          },
-        }).sql({ table: 'Event' }),
-      },
-    }));
-    const throughGenerators = defineContract({}, ({ type, field, model, gen }) => ({
-      models: {
-        Event: model('Event', {
-          fields: {
-            id: field.column(type.Int()).id(),
-            createdAt: field.column(type.DateTime()).onCreate(gen.now()),
-            updatedAt: field.column(type.DateTime()).onCreate(gen.now()).onUpdate(gen.now()),
-          },
-        }).sql({ table: 'Event' }),
-      },
-    }));
+    const throughAliases = defineContract(
+      { requiredCapabilities: [...postgres18, ...postgresDriver] },
+      ({ type, field, model }) => ({
+        models: {
+          Event: model('Event', {
+            fields: {
+              id: field.column(type.Int()).id(),
+              createdAt: field.column(type.temporal.CreatedAt()),
+              updatedAt: field.column(type.temporal.UpdatedAt()),
+            },
+          }).sql({ table: 'Event' }),
+        },
+      }),
+    );
+    const throughGenerators = defineContract(
+      { requiredCapabilities: [...postgres18, ...postgresDriver] },
+      ({ type, field, model, gen }) => ({
+        models: {
+          Event: model('Event', {
+            fields: {
+              id: field.column(type.Int()).id(),
+              createdAt: field.column(type.DateTime()).onCreate(gen.now()),
+              updatedAt: field.column(type.DateTime()).onCreate(gen.now()).onUpdate(gen.now()),
+            },
+          }).sql({ table: 'Event' }),
+        },
+      }),
+    );
     expect(throughAliases).toEqual(throughGenerators);
     expect(throughAliases).toEqual(
       succeeded(

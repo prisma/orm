@@ -74,7 +74,7 @@ Framework code that needs target-specific behaviour calls a method on the `Adapt
 
 ## Related rules
 
-- [`.cursor/rules/no-target-branches.mdc`](../../../.cursor/rules/no-target-branches.mdc) — the tactical enforcement: never branch on target string in core code; route the variation through an adapter call. The pattern entry is the structural rationale this rule encodes.
+- [`.agents/rules/no-target-branches.mdc`](../../../.agents/rules/no-target-branches.mdc) — the tactical enforcement: never branch on target string in core code; route the variation through an adapter call. The pattern entry is the structural rationale this rule encodes.
 
 ## Cautions / common mistakes
 

@@ -31,7 +31,9 @@ import { errorFromCaught } from '../../control-api/operations/caught-errors';
 import {
   buildReadAggregate,
   loadContractRawSafely,
-  refusePackageCorruptionOnAggregate,
+  mapIntegrityViolations,
+  unreadableFiles,
+  unreadableRefNamed,
 } from '../../control-api/operations/contract-space-aggregate-loader';
 import { hasMigrationPath } from '../../control-api/operations/graph-queries';
 import {
@@ -49,11 +51,15 @@ import {
   statusForMigrationHash,
 } from '../../control-api/operations/migration-status-overlay';
 import {
+  databasePositionOf,
+  migrationPlanArguments,
+  type PlanEnd,
+} from '../../control-api/operations/plan-arguments';
+import {
   liveMarkerUse,
   requireDatabaseForLiveMarkerUse,
   resolveContractRef,
 } from '../../control-api/operations/ref-resolution';
-import { readMigrationRefs } from '../../control-api/operations/refs';
 import { shellQuoted } from '../../control-api/statements/statement-flag';
 import { closeQuietly, maskConnectionUrl, readContractEnvelope } from '../../utils/command-helpers';
 import { ALL_CONTRACT_REF_FORMS } from '../../utils/contract-ref-forms';
@@ -68,18 +74,26 @@ import { createToneMigrationListStyler } from '../../utils/formatters/migration-
 import type { MigrationListEntry } from '../../utils/formatters/migration-list-types';
 import { toneDrawing } from '../../utils/formatters/tone-markup';
 import type { GlyphMode } from '../../utils/glyph-mode';
+import {
+  cliCommand,
+  cliInvocation,
+  type PrintedPlan,
+  printedPlan,
+} from '../../utils/printed-command';
 import { dataLine } from '../data-lines';
 import { defineOrmCommand } from '../define-command';
 import { dbFlag } from '../flags';
 import { normalizeError } from '../normalize-error';
-import { appRefsDirFor, contractPathFor, displayPath, migrationsDirFor } from './paths';
+import { contractPathFor, displayPath, migrationsDirFor } from './paths';
 import {
   contractUnreadableFinding,
   markerNotInHistoryFinding,
   markerPoliciesUnreadableFinding,
   missingInvariantsFinding,
   type StatusFinding,
+  unreadableFileFinding,
 } from './status-findings';
+import { unreadableFileDiagnostics } from './unreadable-files';
 
 const SHORT_HASH_LENGTH = 12;
 
@@ -151,34 +165,77 @@ function describeOrigin(origin: StatusOrigin): string {
     : 'the database state';
 }
 
-/** What a status path aims at: the app space's target, which `--to` may name, or an extension space's head. */
+/**
+ * What a status path aims at: the app space's target, which `--to` may name, with the
+ * `migration plan` that authors the missing path, or an extension space's head.
+ */
 export type StatusTarget =
   | {
       readonly kind: 'app';
       readonly explicitTarget: boolean;
       readonly refName: string | undefined;
+      readonly plan: PrintedPlan;
+      readonly listCommand: string;
     }
   | { readonly kind: 'extension'; readonly spaceId: string };
+
+/** Where `migration status` aims, as `migration plan` would end there: a ref, or a contract by its hash. */
+function statusPlanEnd(refName: string | undefined, targetHash: string): PlanEnd {
+  return refName === undefined
+    ? { kind: 'contract', hash: targetHash }
+    : { kind: 'ref', name: refName };
+}
+
+/** The summary with no migrations: the `migration plan` that writes the first, or why none can. */
+function firstPlanText(plan: PrintedPlan | undefined): string {
+  if (plan === undefined) return 'No migrations found';
+  switch (plan.kind) {
+    case 'runs':
+      return `No migrations found. Run \`${plan.command}\` to author the first.`;
+    case 'fill':
+      return `No migrations found. Run \`${plan.command}\` to author the first. ${plan.fill}.`;
+    case 'none':
+      return `No migrations found, and no migration plan can author the first. ${plan.reason}.`;
+  }
+}
+
+/** How the summary says to author the missing path, or why no `migration plan` can. */
+function authorText(target: { readonly plan: PrintedPlan; readonly listCommand: string }): string {
+  const { plan } = target;
+  switch (plan.kind) {
+    case 'runs':
+      return `Run \`${plan.command}\` to author one`;
+    case 'fill':
+      return `Run \`${plan.command}\` to author one. ${plan.fill}`;
+    case 'none':
+      return `No migration plan can author one. ${plan.reason}. Inspect the graph with \`${target.listCommand}\``;
+  }
+}
 
 export function buildNoPathSummary(args: {
   readonly origin: StatusOrigin;
   readonly targetHash: string;
   readonly target: StatusTarget;
+  /** Whether a migration of the space could not be read: the path may be in it, so no migration is advised. */
+  readonly migrationsLeftOut?: boolean;
 }): string {
   const markerPart = describeOrigin(args.origin);
   const targetShort = shortDisplayHash(args.targetHash);
   const { target } = args;
+  if (args.migrationsLeftOut === true) {
+    return `No migration path from ${markerPart} to ${shortDisplayHash(args.targetHash)} among the migrations that could be read. A migration that could not be read may hold the path, so repair it first, as its warning says.`;
+  }
   if (target.kind === 'extension') {
     return `No migration path from ${markerPart} to the head of extension space \`${target.spaceId}\` (${targetShort}).`;
   }
   if (!target.explicitTarget) {
-    return `No migration path from ${markerPart} to the application's contract (${targetShort}). Run \`{bin} migration plan --name <name>\` to author one.`;
+    return `No migration path from ${markerPart} to the application's contract (${targetShort}). ${authorText(target)}.`;
   }
   const targetLabel =
     target.refName !== undefined
       ? `the target (${targetShort} via \`${target.refName}\`)`
       : `the target (${targetShort})`;
-  return `No migration path from ${markerPart} to ${targetLabel}. Run \`{bin} migration plan --name <name>\` to author one, or pass \`--to <contract>\` to pick a reachable target.`;
+  return `No migration path from ${markerPart} to ${targetLabel}. ${authorText(target)}, or pass \`--to <contract>\` to pick a reachable target.`;
 }
 
 export function buildStatusHeadline(args: {
@@ -346,40 +403,62 @@ export const migrationStatusCommand = defineOrmCommand({
       return notOk(normalizeError(missingDb));
     }
 
-    const refsResult = await readMigrationRefs(appRefsDirFor(ctx.config));
-    if (!refsResult.ok) {
-      return notOk(normalizeError(refsResult.failure));
-    }
-    const refs: Refs = refsResult.value;
-
     const findings: StatusFinding[] = [];
 
-    const loaded = await buildReadAggregate(ctx.config, { migrationsDir });
+    const loaded = await buildReadAggregate(ctx.config, {
+      migrationsDir,
+      whenFileUnreadable: 'report',
+    });
     if (!loaded.ok) {
       return notOk(normalizeError(loaded.failure));
     }
-    const { aggregate, contractHash, markerLocation } = loaded.value;
+    const { aggregate, contractHash, markerLocation, contractRefusal } = loaded.value;
+    const refs: Refs = aggregate.app.refs;
+    findings.push(
+      ...unreadableFileDiagnostics(aggregate, migrationsDir, ctx.cwd).map(unreadableFileFinding),
+    );
 
     const contractConfig = {
       contract: ifDefined('output', contractPathFor(ctx.config)),
     };
     try {
       await readContractEnvelope(contractConfig);
+      if (contractRefusal !== undefined) findings.push(contractUnreadableFinding(contractRefusal));
     } catch (error) {
       findings.push(
-        contractUnreadableFinding(error instanceof Error ? error.message : 'unknown error'),
+        contractUnreadableFinding(
+          contractRefusal ?? (error instanceof Error ? error.message : 'unknown error'),
+        ),
       );
     }
 
     if ((await loadContractRawSafely(contractConfig)) !== null) {
-      const corruption = refusePackageCorruptionOnAggregate(aggregate, migrationsDir);
+      const corruption = mapIntegrityViolations(
+        aggregate
+          .checkIntegrity()
+          .filter(
+            (violation) =>
+              violation.kind === 'hashMismatch' || violation.kind === 'providedInvariantsMismatch',
+          ),
+        migrationsDir,
+      );
       if (corruption) {
         return notOk(normalizeError(corruption));
       }
     }
 
     const appGraph = aggregate.app.graph();
+    const invocation = cliInvocation(ctx, undefined);
     const refContext = { graph: appGraph, refs, contractHash };
+
+    for (const name of [liveTarget ? undefined : to, liveOrigin ? undefined : from]) {
+      if (name === undefined) continue;
+      const unreadable = unreadableRefNamed(aggregate, aggregate.app.spaceId, name);
+      if (unreadable !== undefined) {
+        const refusal = mapIntegrityViolations([unreadable], migrationsDir);
+        if (refusal !== null) return notOk(normalizeError(refusal));
+      }
+    }
 
     let toRef: ContractRef | undefined;
     if (to !== undefined && !liveTarget) {
@@ -455,13 +534,8 @@ export const migrationStatusCommand = defineOrmCommand({
       [];
     const emptySpaces: string[] = [];
     let divergedMarker: { readonly space: string; readonly markerHash: string } | undefined;
-    let noPath:
-      | {
-          readonly origin: StatusOrigin;
-          readonly targetHash: string;
-          readonly target: StatusTarget;
-        }
-      | undefined;
+    let noPath: Parameters<typeof buildNoPathSummary>[0] | undefined;
+    let firstPlan: PrintedPlan | undefined;
     let headlineTargetHash = activeRefHash ?? contractHash;
     let totalPending = 0;
 
@@ -490,6 +564,7 @@ export const migrationStatusCommand = defineOrmCommand({
         continue;
       }
       const graph = space.graph();
+      const planSpace = { graph, refs: space.refs, emittedHash: contractHash };
       const spaceContractHash = space.contract().storage.storageHash;
       const isAppSpace = entry.space === aggregate.app.spaceId;
       const targetHash = isAppSpace ? (activeRefHash ?? spaceContractHash) : spaceContractHash;
@@ -503,6 +578,23 @@ export const migrationStatusCommand = defineOrmCommand({
           ? { kind: 'offline', hash: fromOverrideHash }
           : undefined;
       const originHash = originHashOf(origin);
+      const appPlan = () =>
+        printedPlan(
+          invocation,
+          migrationPlanArguments(
+            planSpace,
+            origin === undefined
+              ? { kind: 'unknown', reason: 'migration status read no database to find where it is' }
+              : databasePositionOf(
+                  origin.kind === 'offline' ? origin.hash : origin.marker?.storageHash,
+                ),
+            statusPlanEnd(activeRefName, targetHash),
+          ),
+          ['--name', '<name>'],
+        );
+      if (isAppSpace && originHash !== targetHash && graph.nodes.size === 0) {
+        firstPlan = appPlan();
+      }
       const markerRead = origin?.kind === 'database' || (isAppSpace && liveTarget);
       const readMarker =
         origin?.kind === 'database' ? origin.marker : markerRead ? appMarker : undefined;
@@ -524,8 +616,17 @@ export const migrationStatusCommand = defineOrmCommand({
         noPath = {
           origin,
           targetHash,
+          migrationsLeftOut: unreadableFiles(aggregate).some(
+            (file) => file.kind === 'packageUnloadable' && file.spaceId === entry.space,
+          ),
           target: isAppSpace
-            ? { kind: 'app', explicitTarget: to !== undefined, refName: activeRefName }
+            ? {
+                kind: 'app',
+                explicitTarget: to !== undefined,
+                refName: activeRefName,
+                plan: appPlan(),
+                listCommand: cliCommand(invocation, 'migration list'),
+              }
             : { kind: 'extension', spaceId: entry.space },
         };
       }
@@ -615,7 +716,7 @@ export const migrationStatusCommand = defineOrmCommand({
 
     const everySpaceEmpty = scopedSpaces.every((entry) => entry.migrations.length === 0);
     const pathSummary = everySpaceEmpty
-      ? 'No migrations found'
+      ? firstPlanText(firstPlan)
       : noPath !== undefined
         ? buildNoPathSummary(noPath)
         : buildStatusHeadline({

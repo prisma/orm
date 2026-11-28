@@ -1,5 +1,5 @@
+import { UPGRADE_GUIDES_URL } from '@internal/utils/upgrade-guides';
 import { CliStructuredError } from './control';
-import { UPGRADE_GUIDES_URL } from './upgrade-guides';
 
 // ============================================================================
 // Migration Errors (MIGRATION.*)

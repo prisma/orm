@@ -34,12 +34,12 @@ describe('the MySQL target descriptor', () => {
   it('maps String to varchar(191) and DatetimeJsDate, a bare DateTime, to datetime(3)', () => {
     const types = mysqlTargetDescriptorMeta.authoring.type;
     expect([
-      types.String.output,
+      types.String.choices[0],
       types.DateTime.choices[0],
       types.DatetimeJsDate.output,
-      types.Int.output,
+      types.Int4.output,
     ]).toEqual([
-      { codecId: 'sql/varchar@1', typeParams: { length: 191 } },
+      { when: { storage: 'varchar' }, type: 'Varchar', defaults: { length: 191 } },
       {
         when: { as: 'jsDate', storage: 'datetime' },
         type: 'DatetimeJsDate',

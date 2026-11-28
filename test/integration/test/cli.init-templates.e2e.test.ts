@@ -6,10 +6,12 @@ import { promisify } from 'node:util';
 import type { InitContribution } from '@internal/cli/init-contribution';
 import type { ContractSourceFormat } from '@internal/config/config-types';
 import mongoContribution from '@internal/mongo/init';
+import mysqlContribution from '@internal/mysql/init';
 import postgresContribution from '@internal/postgres/init';
+import sqliteContribution from '@internal/sqlite/init';
 import { timeouts } from '@repo/test-utils';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { configFile } from '../../../packages/1-framework/3-tooling/cli/src/commands/init/templates/code-templates';
+import { initConfigFile } from '../../../packages/1-framework/3-tooling/cli/src/commands/init/contract-entry';
 import {
   defaultTsConfig,
   mergeTsConfig,
@@ -20,12 +22,14 @@ import { createIntegrationTestDir } from './utils/cli-test-helpers';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const execFileAsync = promisify(execFile);
 
-type TargetId = 'postgres' | 'mongo';
+type TargetId = 'postgres' | 'mongo' | 'sqlite' | 'mysql';
 type AuthoringId = ContractSourceFormat;
 
 const CONTRIBUTIONS: Record<TargetId, InitContribution> = {
   postgres: postgresContribution,
   mongo: mongoContribution,
+  sqlite: sqliteContribution,
+  mysql: mysqlContribution,
 };
 const tscPath = resolve(__dirname, '../node_modules/.bin/tsc');
 
@@ -54,7 +58,16 @@ function writeInitFiles(
   writeFileSync(join(testDir, schemaPath), contribution.starterContract(authoring), 'utf-8');
 
   const configPath = join(testDir, 'prisma.config.ts');
-  writeFileSync(configPath, configFile(`./${schemaPath}`, contribution.configModule), 'utf-8');
+  writeFileSync(
+    configPath,
+    initConfigFile({
+      contribution,
+      input: { kind: 'starter', mode: authoring, path: `./${schemaPath}` },
+      owner: { packageName: target, unlisted: false },
+      output: undefined,
+    }),
+    'utf-8',
+  );
 
   writeFileSync(join(testDir, schemaDir, 'db.ts'), contribution.databaseFile(), 'utf-8');
   writeFileSync(join(testDir, 'tsconfig.json'), tsconfig, 'utf-8');
@@ -117,6 +130,8 @@ interface ContractHashes {
 
 const POSTGRES_PROFILE_HASH = '3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2';
 const MONGO_PROFILE_HASH = '251b3ce23f6c9f561892e7c1af9d2cc941a13d64ba1aa7226b90036b09568cc3';
+const SQLITE_PROFILE_HASH = '260b8608d1aacaf1f690779a6cff39a12947c599597c5ba464ca75b9e775df53';
+const MYSQL_PROFILE_HASH = '5212eb1a1220f2d24de13f4efadd4c703f3a1098a5f57e09da0dc26ebb7201d0';
 
 /** The hashes of each starter's contract. A template change that changes a starter's contract changes them. */
 const CELLS: ReadonlyArray<{
@@ -158,6 +173,42 @@ const CELLS: ReadonlyArray<{
       profileHash: MONGO_PROFILE_HASH,
     },
   },
+  {
+    target: 'sqlite',
+    authoring: 'psl',
+    hashes: {
+      storageHash: '057e2e5025d03e9bad7973158b5e0d195d824c0e11f6518cd68a049d84af8b2a',
+      executionHash: '6a55777d5f51e57189d17f214f1decf0d1ee4cff0fd12c141707cf7fd5e37dda',
+      profileHash: SQLITE_PROFILE_HASH,
+    },
+  },
+  {
+    target: 'sqlite',
+    authoring: 'typescript',
+    hashes: {
+      storageHash: 'e8c6b55da273ae62cd82898bbba8dc818a79eebd2b45639c364a977cf600de52',
+      executionHash: '3c0829282bfb14800598318a98f795990cdff27501ab82540adfb6334939ac6c',
+      profileHash: SQLITE_PROFILE_HASH,
+    },
+  },
+  {
+    target: 'mysql',
+    authoring: 'psl',
+    hashes: {
+      storageHash: 'b79a338d0cb4947e5e5196dccfc66056c75df0047d50d30c73d247c55d98ea65',
+      executionHash: 'cd95b7242e7b62e7ae3034802f0768b948cfaf9c4a6f2a6d78614cc2311d0362',
+      profileHash: MYSQL_PROFILE_HASH,
+    },
+  },
+  {
+    target: 'mysql',
+    authoring: 'typescript',
+    hashes: {
+      storageHash: '40b2792d6591923f25adbc1f9841f0fc2247514ee51862885acaa86201912452',
+      executionHash: '85d521eeef0d411b07dde5cb23f035535f9033ded707549052b29a30402e03b9',
+      profileHash: MYSQL_PROFILE_HASH,
+    },
+  },
 ];
 
 function emittedHashes(testDir: string): ContractHashes {
@@ -197,7 +248,7 @@ describe('init generates a typecheckable project', () => {
     }
   });
 
-  // FR2.3: a freshly-initialised project typechecks across all four
+  // FR2.3: a freshly-initialised project typechecks across every
   // (target × authoring) cells. Each cell is the full chain `init` users
   // see: scaffolded contract source + `prisma.config.ts` (with the
   // `import 'dotenv/config'` and `process.env['DATABASE_URL']!` shape that

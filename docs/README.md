@@ -7,6 +7,7 @@ This directory contains the primary documentation for the repository.
 - [Architecture Overview](./Architecture%20Overview.md) — high-level design and layering
 - [Getting Started](./onboarding/Getting-Started.md) — build, test, and run the demo
 - [Testing Guide](./Testing%20Guide.md) — testing philosophy and commands
+- [Public API compatibility checks](./Public%20API%20Compatibility.md) — what CI checks against the last release, and how to record a deliberate break
 
 ## Deploying
 
@@ -33,6 +34,7 @@ This directory contains the primary documentation for the repository.
 - [Codec authoring guide](./reference/codec-authoring-guide.md) — class-based codecs (`CodecImpl`, `CodecDescriptorImpl`) and column helpers
 - [Scalar types](./reference/scalar-types.md) — every scalar type per target (PSL name, TS helper, codec, storage and application type) and a cross-target concept table with the Prisma 6/7 names
 - [Integer representation types](./reference/integer-representation-types.md) — choosing `BigInt`, `BigInt(as: number)`, or `BigInt(storage: numeric)` by target, storage, application value, and aggregate behavior
+- [How MySQL and MariaDB store, report and compare scalar columns](./reference/mysql-mariadb-scalar-column-behaviour.md) — measured wire values, catalog text, defaults, comparisons, include JSON and aggregate result types for each scalar column type on MySQL 8.4 and MariaDB 10.11
 - [Aggregate descriptor guide](./reference/aggregate-descriptor-guide.md) — how a target or extension declares aggregate operations and their result codecs (`SqlAggregateDescriptor` on `types.aggregateDescriptors`)
 - [PSL editor tooling for tagged literals](./reference/psl-editor-tooling-tagged-literals.md) — what the language server, formatter and highlighting do for `` sql`...` `` and `` json`...` `` literals, and what is not done yet
 - [TypeScript module settings for Prisma 8 projects](./reference/typescript-module-settings.md) — the `tsconfig.json` settings a Prisma 8 project needs, which fit which kind of project, and what `prisma orm init` writes
@@ -51,7 +53,8 @@ This directory contains the primary documentation for the repository.
 - [OSS posture overview](./oss/README.md) — index of governance, supply-chain, and contribution policies
 - [Governance](./oss/governance.md) — maintainer team, decision-making, DCO basis
 - [Supply chain](./oss/supply-chain.md) — license validation, NOTICE audit, npm provenance, Dependabot cooldown
-- [Versioning](./oss/versioning.md) — source of truth, lockstep, dist-tag convention, release procedure
+- [Versions and support](./oss/versioning.md) — which versions are supported, what a version number means, what stays compatible, how to upgrade
+- [Releasing](./oss/releasing.md) — who can publish, how a release is published, the procedures
 - [Supported Versions](./Supported%20Versions.md) — minimum Node, TypeScript, PostgreSQL, MongoDB, Bun, Deno versions
 - [Telemetry](./Telemetry.md) — what the CLI collects, the user-level config file, env-var opt-outs, the `init` consent prompt, agent detection
 

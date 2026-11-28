@@ -3,9 +3,10 @@ import type { PrismaConfig } from '@internal/config/config-types';
 import type { Contract } from '@internal/contract/types';
 import type {
   ControlExtensionDescriptor,
+  MigrationAccessChange,
   MigrationPlanOperation,
 } from '@internal/framework-components/control';
-import { createControlStack } from '@internal/framework-components/control';
+import { APP_SPACE_ID, createControlStack } from '@internal/framework-components/control';
 import type {
   ContractSpaceAggregate,
   DeclaredExtensionEntry,
@@ -15,15 +16,19 @@ import type {
 import { loadContractSpaceAggregate } from '@internal/migration-tools/aggregate';
 import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import type { SnapshotContentVerifier } from '@internal/migration-tools/contract-snapshot-store';
+import { contractSnapshotDir } from '@internal/migration-tools/contract-snapshot-store';
 import { errorInvalidRefFile } from '@internal/migration-tools/errors';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
+import { isInternalError } from '@internal/utils/internal-error';
 import { notOk, ok, type Result } from '@internal/utils/result';
+import { join, relative } from 'pathe';
 import { CliStructuredError } from '../../utils/cli-errors';
 import { readContractEnvelope, resolveContractPath } from '../../utils/command-helpers';
 import { toDeclaredExtensionsFromRaw } from '../../utils/extension-pack-inputs';
+import { migrationTsKeepsItsHash } from '../../utils/next-actions';
 import { snapshotVerifierFor } from '../../utils/snapshot-content-verification';
-import { errorFromCaught } from './caught-errors';
+import { errorFromCaught, formatVersionFailure } from './caught-errors';
 
 const CONTRACT_SPACES_DOCS_URL = 'https://pris.ly/contract-spaces';
 
@@ -115,7 +120,7 @@ function layoutFix(
   const spaceDir = `\`${migrationsDir}/<space>/\``;
   return [
     layout.some((v) => v.kind === 'declaredButUnmigrated')
-      ? `Run \`prisma contract emit\` or \`prisma migration plan\` to write the pinned files of each declared extension pack under ${spaceDir}.`
+      ? `Run \`{bin} contract emit\` to write the pinned files of each declared extension pack under ${spaceDir}.`
       : [],
     layout.some((v) => v.kind === 'orphanSpaceDir')
       ? `For a directory no extension declares, declare its extension in \`extensions\` or remove ${spaceDir}.`
@@ -176,7 +181,7 @@ export function mapIntegrityViolations(
       `Contract-space contract validation failed for "${contractUnreadable.spaceId}"`,
       {
         why: contractUnreadable.detail,
-        fix: 'Re-emit the extension contract with `{bin} contract emit`, or fix the extension pack descriptor producing the invalid contract.',
+        fix: extensionHeadSnapshotFix(migrationsDir, contractUnreadable.hash),
         violations: [contractUnreadable],
       },
     );
@@ -198,9 +203,62 @@ export function mapIntegrityViolations(
   const spaceId = 'spaceId' in structural ? structural.spaceId : '*';
   return contractSpaceViolationError(`Contract-space integrity failure for "${spaceId}"`, {
     why: describeIntegrityViolation(structural),
-    fix: `Re-emit the affected migration package(s) or restore the on-disk \`${migrationsDir}\` directory from version control.`,
+    fix:
+      structural.kind === 'hashMismatch' ||
+      structural.kind === 'providedInvariantsMismatch' ||
+      structural.kind === 'packageUnloadable'
+        ? migrationPackageRepairText(migrationsDir, structural.spaceId, structural.dirName)
+        : `Restore the on-disk \`${migrationsDir}\` directory from version control.`,
     violations: [structural],
   });
+}
+
+function extensionHeadSnapshotFix(migrationsDir: string, hash: string | undefined): string {
+  return hash === undefined
+    ? 'Run `{bin} contract emit`, which emits contract.json from the contract source and writes the head ref and the head snapshot of each extension from the installed extension.'
+    : `If the file was edited by hand, restore it from version control. Or delete ${relative(process.cwd(), contractSnapshotDir(migrationsDir, hash))} and run \`{bin} contract emit\`, which emits contract.json from the contract source and writes the snapshot again from the installed extension.`;
+}
+
+function migrationPackageRepairText(
+  migrationsDir: string,
+  spaceId: string,
+  dirName: string,
+): string {
+  const absolutePackageDir = join(migrationsDir, spaceId, dirName);
+  const packageDir = relative(process.cwd(), absolutePackageDir);
+  if (spaceId !== APP_SPACE_ID) {
+    return `Restore the migration package from version control, or delete the folder ${packageDir} and run \`{bin} contract emit\`, which emits contract.json from the contract source and writes the folder again from the installed extension when that version of the extension ships this migration; otherwise install a version of the extension that ships its migrations.`;
+  }
+  return migrationTsKeepsItsHash(absolutePackageDir)
+    ? `Restore the migration package from version control, or write its migration.json and ops.json again by running \`node "${join(packageDir, 'migration.ts')}"\`.`
+    : `Restore the migration package from version control. If no database has applied this migration, you can instead delete its migration.json if there is one and run \`node "${join(packageDir, 'migration.ts')}"\`, which writes migration.json and ops.json again with a new creation time, so the migration gets a new hash.`;
+}
+
+/** A stored file of the migrations directory the aggregate could not read: a ref, or a migration's `migration.json`. */
+export type UnreadableFile = Extract<
+  IntegrityViolation,
+  { readonly kind: 'refUnreadable' | 'packageUnloadable' }
+>;
+
+/** Every ref and migration the aggregate left out because it could not read the file. */
+export function unreadableFiles(aggregate: ContractSpaceAggregate): readonly UnreadableFile[] {
+  return aggregate
+    .checkIntegrity()
+    .filter(
+      (violation): violation is UnreadableFile =>
+        violation.kind === 'refUnreadable' || violation.kind === 'packageUnloadable',
+    );
+}
+
+/** The unreadable ref of `spaceId` that `name` names, when there is one: a command that resolves the name refuses with it, never calling the ref unknown. */
+export function unreadableRefNamed(
+  aggregate: ContractSpaceAggregate,
+  spaceId: string,
+  name: string,
+): UnreadableFile | undefined {
+  return unreadableFiles(aggregate).find(
+    (file) => file.kind === 'refUnreadable' && file.spaceId === spaceId && file.refName === name,
+  );
 }
 
 /**
@@ -222,6 +280,10 @@ export interface BuildAggregateInputs<TFamilyId extends string, TTargetId extend
    * target's canonicalization hooks.
    */
   readonly verifySnapshotContent?: SnapshotContentVerifier;
+  /**
+   * What the load does with a ref or migration whose file it could not read: refuse (the default), or keep the aggregate without the file, for a command that only lists and reports each one with {@link unreadableFiles}. A command that acts on the migrations refuses, so a file it could not read is never silently left out.
+   */
+  readonly whenFileUnreadable?: 'refuse' | 'report';
 }
 
 function declaredExtensionsFromInputs(
@@ -269,6 +331,10 @@ export async function loadContractSpaceAggregateForCli<
     appContract: inputs.appContract,
     ...ifDefined('verifySnapshotContent', inputs.verifySnapshotContent),
   });
+  if (inputs.whenFileUnreadable !== 'report') {
+    const refusal = mapIntegrityViolations(unreadableFiles(aggregate), inputs.migrationsDir);
+    if (refusal !== null) return notOk(refusal);
+  }
   return ok(aggregate);
 }
 
@@ -291,11 +357,7 @@ const PACKAGE_CORRUPTION_KINDS = new Set<IntegrityViolation['kind']>([
   'packageUnloadable',
 ]);
 
-/**
- * Reader-subset integrity refusal for `migration status`: package
- * corruptions only (`hashMismatch`, `providedInvariantsMismatch`,
- * `packageUnloadable`).
- */
+/** Refuses a migration package whose files are corrupt (`hashMismatch`, `providedInvariantsMismatch`, `packageUnloadable`), for a command such as `migration new` that reads the graph but not the contracts of extension spaces. */
 export function refusePackageCorruptionOnAggregate(
   aggregate: ContractSpaceAggregate,
   migrationsDir: string,
@@ -357,7 +419,6 @@ export function appContractStandInFromIdentity(args: {
     'read-aggregate consumers query only storage.storageHash and target; empty models stand in for an unreadable contract.json'
   >({
     storage: { storageHash: args.contractHash },
-    schemaVersion: '0.0.0',
     target: args.targetId,
     targetFamily: args.targetFamily,
     models: {},
@@ -391,6 +452,7 @@ export async function buildReadAggregate(
     readonly migrationsDir: string;
     /** Command-scoped verifier to share the verified-hash memo; defaults to one built from `config`. */
     readonly verifySnapshotContent?: SnapshotContentVerifier;
+    readonly whenFileUnreadable?: 'refuse' | 'report';
   },
 ): Promise<
   Result<
@@ -398,18 +460,35 @@ export async function buildReadAggregate(
       readonly aggregate: ContractSpaceAggregate;
       readonly contractHash: string;
       readonly storageNameOf: (operation: MigrationPlanOperation) => string;
+      readonly accessChangesOf: (
+        operations: readonly MigrationPlanOperation[],
+      ) => readonly MigrationAccessChange[];
       /** Where the family keeps its markers, which an unreadable marker's error names. */
       readonly markerLocation: string;
+      /** The family's contract reader, for a command that reads a stored contract it holds. */
+      readonly deserializeContract: (contractJson: unknown) => Contract;
+      /** Why the family refused `contract.json`, when it did; the aggregate then holds a stand-in with only its hash. */
+      readonly contractRefusal: string | undefined;
     },
     CliStructuredError
   >
 > {
   let contractHash: string = EMPTY_CONTRACT_HASH;
+  let envelopeRefusal: string | undefined;
   try {
     const envelope = await readContractEnvelope(config);
     contractHash = envelope.storageHash;
-  } catch {
-    // Contract unreadable — marker uses EMPTY_CONTRACT_HASH
+  } catch (error) {
+    const formatFailure = formatVersionFailure(error);
+    if (formatFailure !== undefined) return notOk(formatFailure);
+    if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) {
+      envelopeRefusal =
+        error instanceof SyntaxError
+          ? `${resolveContractPath(config)} is not valid JSON: ${error.message}`
+          : error instanceof Error
+            ? error.message
+            : String(error);
+    }
   }
 
   try {
@@ -423,11 +502,15 @@ export async function buildReadAggregate(
       targetId: config.target.id,
       targetFamily: config.target.familyId,
     });
+    let contractRefusal = envelopeRefusal;
     if (contractRawForAggregate !== null) {
       try {
         appContractForLoad = deserializeContract(contractRawForAggregate);
-      } catch {
-        // Deserialization failed — identity-only stand-in fallback
+      } catch (error) {
+        const formatFailure = formatVersionFailure(error, resolveContractPath(config));
+        if (formatFailure !== undefined) return notOk(formatFailure);
+        if (isInternalError(error)) throw error;
+        contractRefusal = `${resolveContractPath(config)}: ${error instanceof Error ? error.message : String(error)}`;
       }
     }
 
@@ -441,6 +524,7 @@ export async function buildReadAggregate(
         'verifySnapshotContent',
         options.verifySnapshotContent ?? snapshotVerifierFor(config),
       ),
+      ...ifDefined('whenFileUnreadable', options.whenFileUnreadable),
     });
     if (!loaded.ok) {
       return loaded;
@@ -449,7 +533,11 @@ export async function buildReadAggregate(
       aggregate: loaded.value,
       contractHash,
       storageNameOf: (operation: MigrationPlanOperation) => familyInstance.storageNameOf(operation),
+      accessChangesOf: (operations: readonly MigrationPlanOperation[]) =>
+        familyInstance.accessChangesOf(operations),
       markerLocation: familyInstance.markerLocation,
+      deserializeContract,
+      contractRefusal,
     });
   } catch (error) {
     return notOk(

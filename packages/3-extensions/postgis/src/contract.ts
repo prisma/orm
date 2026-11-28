@@ -36,7 +36,13 @@
  */
 
 import { assembleDataTypes } from '@internal/framework-components/codec';
-import { defineContract, extension, unbound } from '@internal/postgres/contract-builder';
+import {
+  defineContract,
+  extension,
+  postgres15,
+  postgresDriver,
+  unbound,
+} from '@internal/postgres/contract-builder';
 import { assemblePostgresCodecRegistryWithBuiltins } from '@internal/target-postgres/codecs';
 import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import { POSTGIS_GEOMETRY_CODEC_ID } from './core/constants';
@@ -53,16 +59,19 @@ const codecLookup = assemblePostgresCodecRegistryWithBuiltins(
   dataTypeLookup,
 );
 
-export const contract = defineContract({ codecLookup, dataTypeLookup }, () => ({
-  databaseTypes: {
-    [POSTGIS_NATIVE_TYPE]: {
-      kind: 'codec-instance',
-      codecId: POSTGIS_GEOMETRY_CODEC_ID,
-      typeParams: {},
+export const contract = defineContract(
+  { requiredCapabilities: [...postgres15, ...postgresDriver], codecLookup, dataTypeLookup },
+  () => ({
+    databaseTypes: {
+      [POSTGIS_NATIVE_TYPE]: {
+        kind: 'codec-instance',
+        codecId: POSTGIS_GEOMETRY_CODEC_ID,
+        typeParams: {},
+      },
     },
-  },
-  models: {},
-  entities: [extension(POSTGIS_EXTENSION_NAME, { namespace: unbound })],
-}));
+    models: {},
+    entities: [extension(POSTGIS_EXTENSION_NAME, { namespace: unbound })],
+  }),
+);
 
 export default contract;

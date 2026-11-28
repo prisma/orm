@@ -37,7 +37,7 @@ Because a migration is an edge, `db migrate` can run it on any database whose ma
 
 ### Refs — version-controlled pointers
 
-A ref is a small committed file, `migrations/<space>/refs/<name>.json` (for your app: `migrations/app/refs/<name>.json`), containing `{ hash, invariants }`. Two roles, by convention:
+A ref is a small committed file, `migrations/<space>/refs/<name>.json` (for your app: `migrations/app/refs/<name>.json`), containing `{ hash, invariants }` and, optionally, `policies`: the change policy and data protection policy its database should have (`references/migrations.md` § *Policies*). Two roles, by convention:
 
 - **The `db` ref** records which contract hash the project's dev database has been brought to. It is a **checkpoint, not a promise**: dev commands write it after the fact so the offline planner knows where dev iteration left off, without opening a database connection.
 - **Environment refs** (`staging`, `production`, …) name **the contract CD will migrate that environment to** — a forward promise the repo makes, consumed at deploy time. See `references/migration-review.md` for the deploy-side workflows.
@@ -52,6 +52,8 @@ pnpm prisma migration ref list
 pnpm prisma migration ref delete <name>
 ```
 
+A ref's `policies` are read and written with `migration ref policy show`, `set` and `delete`; `references/migrations.md` § *Policies* says what each does.
+
 `migration ref set` requires the target to be the `to` hash of an on-disk migration. A hash outside the graph is refused (`MIGRATION.HASH_NOT_IN_GRAPH`); a hash that appears in the graph only as a `from` — no bundle produces it — is refused too (`MIGRATION.REF_SET_BUNDLE_NOT_FOUND`). Find node hashes with `migration list`.
 
 ### Who advances refs
@@ -60,8 +62,7 @@ pnpm prisma migration ref delete <name>
 |---|---|
 | `db init` / `db update` (default URL) | Implicitly advance `db` (override the name with `--advance-ref <name>`; suppressed whenever `--db` is passed without `--advance-ref`, regardless of the URL — even `--db $DATABASE_URL` pointing at the default database) |
 | `db sign` | Advances `db` after a successful signature (override the name with `--advance-ref <name>`; `--no-advance-ref` skips it, writing no ref and no snapshot); an existing ref is overwritten and the previous hash is reported in the human output (the JSON `advancedRefs` lists `{ space, name, hash }` for each contract space it advanced). `--db` does **not** suppress it, unlike init/update: sign never mutates the schema, and adoption is normally done via `--db` |
-| `db migrate --advance-ref <name>` | The **only** apply-time advancement |
-| plain `db migrate` | **Never advances anything** — deliberate: deploy and CI applies must not infer dev intent |
+| `db migrate` | Advances `db` after a successful apply when the connection comes from `prisma.config.ts` and the CLI does not detect CI. Never with `--db`, and never in CI (unless the `CI` environment variable is `false`, which turns detection off whatever else is set, the CLI detects CI when `CI` is set or when a variable that CI services set is present, such as `BUILD_NUMBER`, `BUILD_ID` or `GITHUB_ACTIONS`; the run then reports `MIGRATION.REF_NOT_ADVANCED_IN_CI`), so deploys and pipelines write no ref. `--advance-ref <name>` advances that ref instead, in every case; `--no-advance-ref` advances none. A run that ends at the empty contract, which a ref cannot name, leaves `db` unchanged and, when `db` exists and the run passes neither `--db` nor `--no-advance-ref`, warns (`MIGRATION.REF_NOT_ADVANCED_TO_EMPTY`; when that database is your development database, remove the stale ref with `migration ref delete db`), and refuses an explicit `--advance-ref` before applying. A ref that cannot be written is a warning (`MIGRATION.REF_NOT_WRITTEN`), not a failure: the migrations have already applied |
 | `migration plan` | Never advances anything — chaining discipline is yours |
 | deploys (Composer / CD) | Write the database's marker; structurally cannot and do not touch repo refs |
 
@@ -87,7 +88,7 @@ The human output names the resolved origin on its `from:` line. **`from: (baseli
 
 **A plan whose origin is the empty contract while migrations already exist on disk is almost always a mistake.** A full-create migration cannot do what you meant: a database that has the prior migrations applied refuses it (`MIGRATION.PATH_UNREACHABLE` — no path from its marker to the new plan's destination), and running its create statements against any populated schema fails outright. The CLI refuses this at plan time: when origin resolution falls all the way through (no `--from`, no `db` ref) and migrations exist, `migration plan` stops with `MIGRATION.PLAN_ORIGIN_UNKNOWN` instead of writing the package — the error's suggestions are the three exits below; do not reflexively take the `--from @empty` one, pick by intent.
 
-How the fall-through happens: a project that never runs `db init` / `db update` / `db sign` (the deploy-first path below) never acquires a `db` ref, so *every* default plan resolves to the empty origin. Running the dev loop with an explicit `--db` has the same effect: `db init` / `db update` with that flag never advance the ref, whatever URL it carries (`db sign` is the exception — it advances the ref with or without `--db`). The first time that is correct (it is the baseline; an empty migration graph plans with only the muted notice); every later time it is the trap the refusal catches.
+How the fall-through happens: a project whose only commands run in CI or deploys (the deploy-first path below) never acquires a `db` ref, so *every* default plan resolves to the empty origin. Running the dev loop with an explicit `--db` has the same effect: `db init`, `db update` and `db migrate` with that flag never advance the ref, whatever URL it carries (`db sign` is the exception — it advances the ref with or without `--db`). The first time that is correct (it is the baseline; an empty migration graph plans with only the muted notice); every later time it is the trap the refusal catches.
 
 **Recognize a from-empty plan** that was produced anyway (an explicit `--from @empty`, or an older CLI without the refusal), at either layer:
 
@@ -103,20 +104,20 @@ How the fall-through happens: a project that never runs `db init` / `db update` 
 
 ## Workflow — the dev loop
 
-The concept: while the schema is in flux, iterate the dev database with `db init` / `db update` — they apply the contract *and* keep the `db` ref current. When the shape settles, plan: the plan chains from the ref, and the auto-baseline covers the case where the graph is still empty.
+The concept: while the schema is in flux, iterate the dev database with `db init` / `db update` — they apply the contract *and* keep the `db` ref current. When the shape settles, plan and apply: the plan chains from the ref, the auto-baseline covers the case where the graph is still empty, and `db migrate` on the config's database moves the ref to what it applied.
 
 ```bash
 pnpm prisma db init                                     # once; advances the db ref
 pnpm prisma contract emit && pnpm prisma db update      # iterate; each advances the db ref
 pnpm prisma contract emit && pnpm prisma migration plan --name <slug>
-pnpm prisma db migrate --db $DATABASE_URL
+pnpm prisma db migrate                                  # applies it; advances the db ref
 ```
 
-After a plain `db migrate` the marker advances but the ref lags; refresh with `db update` (no-op on the DB when already current) or apply with `db migrate --advance-ref db` in the first place. Full mechanics, refusals, and recovery: `references/migrations.md` § *Dev → ship transition*.
+Full mechanics, refusals, and recovery: `references/migrations.md` § *Dev → ship transition*.
 
 ## Workflow — the deploy-first loop (Composer / CD-managed databases)
 
-The concept: the deploy pipeline owns the databases, so `db init` / `db update` never run and nothing ever advances a `db` ref for you. Deploys replay each database from its marker to the contract emitted at build time; they never write to `migrations/app/refs/`. Two disciplines keep this loop safe:
+The concept: the deploy pipeline owns the databases, so `db init` / `db update` never run, `db migrate` runs only in CI or with `--db`, and nothing ever advances a `db` ref for you. Deploys replay each database from its marker to the contract emitted at build time; they never write to `migrations/app/refs/`. Two disciplines keep this loop safe:
 
 **Author the baseline before the first deploy.** Before anything is deployed:
 
@@ -161,11 +162,11 @@ The concept: the database exists and its marker is accurate (hash **M**) — it 
 ## Common Pitfalls
 
 1. **Assuming `migration plan` or `migration new` chains from the newest migration on disk.** Neither does. The origin is `--from`, else the `db` ref. With neither, only an empty graph plans from scratch (with the muted `No db ref set` notice); once migrations exist, both commands refuse with `MIGRATION.PLAN_ORIGIN_UNKNOWN`.
-2. **Expecting `migration plan` or plain `db migrate` to keep the `db` ref current.** Neither touches refs. Only `db init` / `db update` / `db sign` advance implicitly, and only `--advance-ref` advances at apply time.
+2. **Expecting `migration plan`, or `db migrate` with `--db` or in CI, to keep the `db` ref current.** None of them touches refs. `db init`, `db update` and `db migrate` advance `db` only when the connection comes from `prisma.config.ts` (and, for `db migrate`, outside CI); `db sign` advances it even with `--db`. Elsewhere, pass `--advance-ref db`.
 3. **Expecting a deploy to update refs.** Deploys write the database's marker; the files under `migrations/app/refs/` only change when you change them.
 4. **Reading `from: (baseline)` as informational.** Over a non-empty migrations directory it is the trap announcing itself. Stop and pick an exit before applying or committing.
 5. **`migration ref set` with a hash no on-disk migration produces.** A ref target must be the `to` hash of an on-disk migration bundle. A hash outside the graph is refused (`MIGRATION.HASH_NOT_IN_GRAPH`); a from-only graph node is refused with `MIGRATION.REF_SET_BUNDLE_NOT_FOUND`, whose fix text points at fixtures and is unhelpful here. Either way: plan the edge whose `to` is the hash first (baseline or delta), then set the ref.
-6. **Treating `db` as reserved.** It's a naming default. Setting it yourself is fine and sometimes exactly right (deploy-first chaining, retrofit); just expect dev commands on the default URL to overwrite it.
+6. **Treating `db` as reserved.** It's a naming default. Setting it yourself is fine and sometimes exactly right (deploy-first chaining, retrofit); just expect dev commands on the config's database (`db init`, `db update`, and `db migrate` outside CI) to overwrite it.
 7. **Authoring the first migration after the first deploy.** Then no graph node corresponds to what shipped, and every incremental path needs the retrofit. Baseline before the first deploy — it's one command.
 
 ## What Prisma 8 doesn't do yet
@@ -179,5 +180,5 @@ The concept: the database exists and its marker is accurate (hash **M**) — it 
 - [ ] In a deploy-first project: baseline authored and committed before the first deploy; every later plan chained via the `db` ref or `--from`.
 - [ ] After each plan in a loop where nothing advances refs: advanced the `db` ref (`migration ref set db <to-hash>`) or resolved to pass `--from` next time.
 - [ ] For a marked database with no on-disk migrations: made the graph reach the marker's hash (auto-baseline via `db update` or `db sign`, or an offline baseline plan) before planning deltas.
-- [ ] Did NOT expect plain `db migrate`, `migration plan`, or a deploy to advance any ref.
+- [ ] Expected plain `db migrate` to advance `db` only when its connection comes from `prisma.config.ts`, the CLI does not detect CI and neither `--advance-ref` nor `--no-advance-ref` is passed; did NOT expect `migration plan`, `db migrate --db`, or a deploy in CI to advance any ref.
 - [ ] Did NOT apply or commit a `from: (baseline)` plan without confirming the empty origin was the intent.

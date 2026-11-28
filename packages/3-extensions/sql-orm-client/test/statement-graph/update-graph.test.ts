@@ -101,6 +101,39 @@ describe('updateFirstGraph with relation operations', () => {
         ].join('\n'),
       );
     });
+
+    it('unlinks the parent on disconnect with criteria only when the linked row matches one', () => {
+      expect(
+        printUpdate({
+          invitedBy: (inviter: Mutator) => inviter.disconnect([{ id: 2 }, { email: 'g@h.io' }]),
+        }),
+      ).toBe(
+        [
+          'n1 Find users where id = 1',
+          'n2 Update users set invited_by_id = null where invited_by_id in (select id from users where id = 2) <- FilterData n1 (id->id)',
+          "n3 Update users set invited_by_id = null where invited_by_id in (select id from users where email = 'g@h.io') <- FilterData n1 (id->id)",
+          'n4 Find users <- FilterData n1 (id->id)',
+          'result: n4',
+        ].join('\n'),
+      );
+    });
+
+    it('unlinks the parent on disconnect with criteria after its own Update', () => {
+      expect(
+        printUpdate(
+          { invitedBy: (inviter: Mutator) => inviter.disconnect([{ id: 2 }]) },
+          { name: 'Ada' },
+        ),
+      ).toBe(
+        [
+          'n1 Find users where id = 1',
+          "n2 Update users set name = 'Ada' where id = 1",
+          'n3 Update users set invited_by_id = null where invited_by_id in (select id from users where id = 2) <- FilterData n2 (id->id)',
+          'n4 Find users <- FilterData n2 (id->id)',
+          'result: n4',
+        ].join('\n'),
+      );
+    });
   });
 
   describe('a relation the child holds the key for', () => {
@@ -125,6 +158,12 @@ describe('updateFirstGraph with relation operations', () => {
           'n2 Update posts set nothing where id = 10 <- PayloadData n1 (id->user_id)',
           'result: n1',
         ].join('\n'),
+      );
+    });
+
+    it('adds no Update for an explicit empty list of criteria', () => {
+      expect(printUpdate({ invitedUsers: (invited: Mutator) => invited.disconnect([]) })).toBe(
+        ['n1 Find users where id = 1', 'result: n1'].join('\n'),
       );
     });
 

@@ -16,8 +16,8 @@ export function describeOrmWrites(server: LiveServer): void {
   describe(`${server.displayName} writes through the ORM`, {
     timeout: timeouts.databaseOperation,
   }, () => {
-    it('creates a row and reads it back by the id the database generated', async (test) => {
-      await withSeededDatabase(test, server, exampleTablesDdl, async (url) => {
+    it('creates a row and reads it back by the id the database generated', async () => {
+      await withSeededDatabase(server, exampleTablesDdl, async (url) => {
         const statements: string[] = [];
         await using db = server.client({
           url,
@@ -36,8 +36,8 @@ export function describeOrmWrites(server: LiveServer): void {
       });
     });
 
-    it('creates a row with an explicit id of 0, as Postgres stores it', async (test) => {
-      await withSeededDatabase(test, server, exampleTablesDdl, async (url) => {
+    it('creates a row with an explicit id of 0, as Postgres stores it', async () => {
+      await withSeededDatabase(server, exampleTablesDdl, async (url) => {
         await using db = server.client({ url, verifyMarker: false });
         expect(
           await db.orm.User.create({ id: 0, email: 'zero@example.com', role: 'USER' }),
@@ -49,8 +49,8 @@ export function describeOrmWrites(server: LiveServer): void {
       });
     });
 
-    it('creates rows with and without generated ids, and refuses to return several generated ids', async (test) => {
-      await withSeededDatabase(test, server, exampleTablesDdl, async (url) => {
+    it('creates rows with and without generated ids, and refuses to return several generated ids', async () => {
+      await withSeededDatabase(server, exampleTablesDdl, async (url) => {
         await using db = server.client({ url, verifyMarker: false });
         const rows = [
           { email: 'a@example.com', role: 'USER' },
@@ -77,8 +77,8 @@ export function describeOrmWrites(server: LiveServer): void {
       });
     });
 
-    it('createAll returns the rows it was given, in any order', async (test) => {
-      await withSeededDatabase(test, server, exampleTablesDdl, async (url) => {
+    it('createAll returns the rows it was given, in any order', async () => {
+      await withSeededDatabase(server, exampleTablesDdl, async (url) => {
         await using db = server.client({ url, verifyMarker: false });
         expect(
           (
@@ -94,11 +94,11 @@ export function describeOrmWrites(server: LiveServer): void {
       });
     });
 
-    it('createAll returns rows keyed by a DATETIME(3) with milliseconds, in any order', async (test) => {
+    it('createAll returns rows keyed by a DATETIME(3) with milliseconds, in any order', async () => {
       const seeded = [
         'CREATE TABLE `Tick` (`at` datetime(3) NOT NULL, `label` varchar(191) NOT NULL, PRIMARY KEY (`at`))',
       ];
-      await withSeededDatabase(test, server, seeded, async (url) => {
+      await withSeededDatabase(server, seeded, async (url) => {
         await using db = server.client({ url, verifyMarker: false });
         const later = new Date('2024-01-02T03:04:05.678Z');
         const earlier = new Date('2024-01-02T03:04:05.123Z');
@@ -113,8 +113,8 @@ export function describeOrmWrites(server: LiveServer): void {
       });
     });
 
-    it('an upsert whose conflict value differs from the stored row only in letter case returns that row', async (test) => {
-      await withSeededDatabase(test, server, exampleDatabase, async (url) => {
+    it('an upsert whose conflict value differs from the stored row only in letter case returns that row', async () => {
+      await withSeededDatabase(server, exampleDatabase, async (url) => {
         await using db = server.client({ url, verifyMarker: false });
         expect(
           await db.orm.User.upsert({
@@ -126,8 +126,8 @@ export function describeOrmWrites(server: LiveServer): void {
       });
     });
 
-    it('createAll reads back more rows than one statement takes, in any order', async (test) => {
-      await withSeededDatabase(test, server, exampleTablesDdl, async (url) => {
+    it('createAll reads back more rows than one statement takes, in any order', async () => {
+      await withSeededDatabase(server, exampleTablesDdl, async (url) => {
         await using db = server.client({ url, verifyMarker: false });
         const users = Array.from({ length: 1200 }, (_, index) => ({
           id: 1200 - index,
@@ -141,8 +141,8 @@ export function describeOrmWrites(server: LiveServer): void {
       });
     });
 
-    it('creates a user with posts, passing the generated id to them', async (test) => {
-      await withSeededDatabase(test, server, exampleTablesDdl, async (url) => {
+    it('creates a user with posts, passing the generated id to them', async () => {
+      await withSeededDatabase(server, exampleTablesDdl, async (url) => {
         await using db = server.client({ url, verifyMarker: false });
         expect(
           await db.orm.User.include('posts', (post) =>
@@ -167,8 +167,8 @@ export function describeOrmWrites(server: LiveServer): void {
       });
     });
 
-    it('updates, upserts and deletes users, writing the upsert the server takes', async (test) => {
-      await withSeededDatabase(test, server, exampleTablesDdl, async (url) => {
+    it('updates, upserts and deletes users, writing the upsert the server takes', async () => {
+      await withSeededDatabase(server, exampleTablesDdl, async (url) => {
         const statements: string[] = [];
         await using db = server.client({
           url,
@@ -213,8 +213,8 @@ export function describeOrmWrites(server: LiveServer): void {
       });
     });
 
-    it('updates and deletes every matching row and returns them', async (test) => {
-      await withSeededDatabase(test, server, exampleDatabase, async (url) => {
+    it('updates and deletes every matching row and returns them', async () => {
+      await withSeededDatabase(server, exampleDatabase, async (url) => {
         await using db = server.client({ url, verifyMarker: false });
         expect({
           updated: await db.orm.Post.where({ authorId: 1 })
@@ -240,8 +240,8 @@ export function describeOrmWrites(server: LiveServer): void {
       });
     });
 
-    it('updateAll does not overwrite a row another writer moved out of its filter after it selected the rows', async (test) => {
-      await withSeededDatabase(test, server, exampleDatabase, async (url, other) => {
+    it('updateAll does not overwrite a row another writer moved out of its filter after it selected the rows', async () => {
+      await withSeededDatabase(server, exampleDatabase, async (url, other) => {
         const movesPostOneFirst: SqlMiddleware = {
           name: 'concurrent-writer',
           intercept: {
@@ -280,8 +280,8 @@ export function describeOrmWrites(server: LiveServer): void {
       });
     });
 
-    it('reads back, at READ COMMITTED, a value another session committed after the transaction first read', async (test) => {
-      await withSeededDatabase(test, server, exampleDatabase, async (url, other) => {
+    it('reads back, at READ COMMITTED, a value another session committed after the transaction first read', async () => {
+      await withSeededDatabase(server, exampleDatabase, async (url, other) => {
         const otherSessionSetsAdmin: SqlMiddleware = {
           name: 'concurrent-writer',
           intercept: {
@@ -306,13 +306,13 @@ export function describeOrmWrites(server: LiveServer): void {
       });
     });
 
-    it('an upsert that collides on a unique index the contract does not list, while no row has the conflict values, fails and rolls back', async (test) => {
+    it('an upsert that collides on a unique index the contract does not list, while no row has the conflict values, fails and rolls back', async () => {
       const seeded = [
         ...exampleTablesDdl,
         "INSERT INTO `User` (`id`, `email`, `role`) VALUES (1, 'a@example.com', 'USER')",
         'CREATE UNIQUE INDEX `User_role_key` ON `User` (`role`)',
       ];
-      await withSeededDatabase(test, server, seeded, async (url) => {
+      await withSeededDatabase(server, seeded, async (url) => {
         await using db = server.client({ url, verifyMarker: false });
         await expect(
           db.orm.User.upsert({
@@ -328,7 +328,7 @@ export function describeOrmWrites(server: LiveServer): void {
       });
     });
 
-    it('known gap: an upsert that collides on an unlisted unique index while a row has the conflict values updates the other row and succeeds', async (test) => {
+    it('known gap: an upsert that collides on an unlisted unique index while a row has the conflict values updates the other row and succeeds', async () => {
       const seeded = [
         `CREATE TABLE \`User\` (
           \`id\` int NOT NULL AUTO_INCREMENT,
@@ -341,7 +341,7 @@ export function describeOrmWrites(server: LiveServer): void {
         )`,
         "INSERT INTO `User` (`id`, `handle`, `email`, `role`) VALUES (1, 'h', 'a@example.com', 'USER'), (2, 'other', 'b@example.com', 'USER')",
       ];
-      await withSeededDatabase(test, server, seeded, async (url) => {
+      await withSeededDatabase(server, seeded, async (url) => {
         await using db = server.client({ url, verifyMarker: false });
         expect({
           returned: await db.orm.User.upsert({
@@ -360,7 +360,7 @@ export function describeOrmWrites(server: LiveServer): void {
       });
     });
 
-    it('a create fails with ORM.MUTATION_ROW_MISSING and rolls back when a middleware answers its insert without an insert id', async (test) => {
+    it('a create fails with ORM.MUTATION_ROW_MISSING and rolls back when a middleware answers its insert without an insert id', async () => {
       const answersPostInserts: SqlMiddleware = {
         name: 'answers-post-inserts',
         intercept: {
@@ -371,7 +371,7 @@ export function describeOrmWrites(server: LiveServer): void {
           },
         },
       };
-      await withSeededDatabase(test, server, exampleTablesDdl, async (url) => {
+      await withSeededDatabase(server, exampleTablesDdl, async (url) => {
         await using db = server.client({
           url,
           verifyMarker: false,

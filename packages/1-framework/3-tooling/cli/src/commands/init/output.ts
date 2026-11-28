@@ -1,14 +1,14 @@
 import { type } from 'arktype';
-import { TARGET_SHORT_NAMES, type TargetShortName } from './target-packages';
 
 /**
  * arktype schema for the structured success document `init --json` writes
  * to stdout (FR1.5). The same shape backs the human-readable outro
  * renderer (FR10), so the two output modes carry identical information.
  *
- * `target` is the short name of the target package, the value `--target`
- * takes, so consumers can round-trip the document straight into a
- * follow-up `--target` invocation.
+ * `target` is the value `--target` takes for the facade: its short
+ * name when it is listed, otherwise its package name, so consumers can
+ * round-trip the document straight into a follow-up `--target` invocation.
+ * `package` is the name of the facade.
  *
  * The `ok: true` literal is the documented success/error discriminator —
  * see [Style Guide § JSON Semantics](../../../../../../../docs/CLI%20Style%20Guide.md#json-semantics).
@@ -17,7 +17,8 @@ import { TARGET_SHORT_NAMES, type TargetShortName } from './target-packages';
  */
 export const InitOutputSchema = type({
   ok: 'true',
-  target: type.enumerated(...TARGET_SHORT_NAMES),
+  target: 'string',
+  package: 'string',
   /** `prisma7` when an existing Prisma 7 schema is the contract source. */
   authoring: "'psl'|'typescript'|'prisma7'",
   /** The starter schema init wrote, or the Prisma 7 schema it points the config at. */
@@ -39,11 +40,24 @@ export const InitOutputSchema = type({
    * `devDeps` list what was installed: under `skipped`, and under a `failed`
    * first install, both are empty; when a later install fails, `deps` holds
    * what the first install, before the questions, put in place.
+   * `requiredPeers` says, for each required peer of the facade (the
+   * `@prisma/orm-*` packages it names as peers, directly or through another,
+   * and the other required peers those name, such as `temporal-polyfill`),
+   * what init did:
+   * installed it at `version`, the line it writes in `package.json` (a version
+   * or a range), found it already listed at that line, left it at another
+   * version (and warned), or, under `--skip-install`, left it for the
+   * application to install.
    */
   packagesInstalled: {
     status: "'installed'|'skipped'|'failed'",
     deps: 'string[]',
     devDeps: 'string[]',
+    requiredPeers: type({
+      name: 'string',
+      version: 'string',
+      outcome: "'installed'|'already-listed'|'left-at-another-version'|'to-install'",
+    }).array(),
   },
   contractEmitted: 'boolean',
   /**
@@ -88,7 +102,7 @@ export function formatInitJson(output: InitOutput): string {
  * since copy may evolve.
  */
 export function buildNextSteps(options: {
-  readonly target: TargetShortName;
+  readonly target: string;
   /**
    * A project whose dependencies are not installed cannot emit or run,
    * whether the install was skipped or attempted and failed. Both states put

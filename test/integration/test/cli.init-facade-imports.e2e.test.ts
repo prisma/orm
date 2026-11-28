@@ -5,18 +5,22 @@ import { fileURLToPath } from 'node:url';
 import type { InitContribution } from '@internal/cli/init-contribution';
 import type { ContractSourceFormat } from '@internal/config/config-types';
 import mongoContribution from '@internal/mongo/init';
+import mysqlContribution from '@internal/mysql/init';
 import postgresContribution from '@internal/postgres/init';
+import sqliteContribution from '@internal/sqlite/init';
 import { normalize as portablePath, relative as portableRelative } from 'pathe';
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
-import { configFile } from '../../../packages/1-framework/3-tooling/cli/src/commands/init/templates/code-templates';
+import { initConfigFile } from '../../../packages/1-framework/3-tooling/cli/src/commands/init/contract-entry';
 
-type TargetId = 'postgres' | 'mongo';
+type TargetId = 'postgres' | 'mongo' | 'sqlite' | 'mysql';
 type AuthoringId = ContractSourceFormat;
 
 const CONTRIBUTIONS: Record<TargetId, InitContribution> = {
   postgres: postgresContribution,
   mongo: mongoContribution,
+  sqlite: sqliteContribution,
+  mysql: mysqlContribution,
 };
 
 /**
@@ -54,6 +58,14 @@ const FACADE_FOR_TARGET: Record<TargetId, FacadeInfo> = {
     packageName: '@internal/mongo',
     packageJsonPath: resolve(REPO_ROOT, 'packages/3-targets/mongo/9-facade/package.json'),
   },
+  sqlite: {
+    packageName: '@internal/sqlite',
+    packageJsonPath: resolve(REPO_ROOT, 'packages/3-targets/sqlite/9-facade/package.json'),
+  },
+  mysql: {
+    packageName: '@internal/mysql',
+    packageJsonPath: resolve(REPO_ROOT, 'packages/3-targets/mysql/1-mysql/9-facade/package.json'),
+  },
 };
 
 const CELLS: ReadonlyArray<{ readonly target: TargetId; readonly authoring: AuthoringId }> = [
@@ -61,6 +73,10 @@ const CELLS: ReadonlyArray<{ readonly target: TargetId; readonly authoring: Auth
   { target: 'postgres', authoring: 'typescript' },
   { target: 'mongo', authoring: 'psl' },
   { target: 'mongo', authoring: 'typescript' },
+  { target: 'sqlite', authoring: 'psl' },
+  { target: 'sqlite', authoring: 'typescript' },
+  { target: 'mysql', authoring: 'psl' },
+  { target: 'mysql', authoring: 'typescript' },
 ];
 
 interface FacadeExports {
@@ -89,7 +105,12 @@ function templateSources(target: TargetId, authoring: AuthoringId): readonly str
   return [
     contribution.starterContract(authoring),
     contribution.databaseFile(),
-    configFile(`./${schemaPath}`, contribution.configModule),
+    initConfigFile({
+      contribution,
+      input: { kind: 'starter', mode: authoring, path: `./${schemaPath}` },
+      owner: { packageName: target, unlisted: false },
+      output: undefined,
+    }),
   ];
 }
 
@@ -195,13 +216,25 @@ function isOurs(specifier: string): boolean {
   );
 }
 
+/** A module a file imports by package name, and the file it resolves to. */
+interface PackageImport {
+  readonly specifier: string;
+  readonly file: string;
+}
+
 /**
  * Every workspace file a built entrypoint loads, following its own and its workspace
- * dependencies' imports, as repository-relative paths. Third-party and Node modules are leaves.
+ * dependencies' imports, as repository-relative paths, with the modules it imports by package
+ * name. Third-party and Node modules are leaves.
  */
-function workspaceModulesLoadedBy(entry: string): { files: string[]; specifiers: string[] } {
+function workspaceModulesLoadedBy(entry: string): {
+  files: string[];
+  specifiers: string[];
+  packageImports: PackageImport[];
+} {
   const files: string[] = [];
   const specifiers: string[] = [];
+  const packageImports: PackageImport[] = [];
   const pending = [realpathSync(entry)];
   while (pending.length > 0) {
     const file = pending.pop();
@@ -211,18 +244,82 @@ function workspaceModulesLoadedBy(entry: string): { files: string[]; specifiers:
       specifiers.push(specifier);
       if (!isOurs(specifier)) continue;
       const resolved = realpathSync(createRequire(file).resolve(specifier));
-      if (!portablePath(resolved).includes('/node_modules/')) pending.push(resolved);
+      if (portablePath(resolved).includes('/node_modules/')) continue;
+      if (!specifier.startsWith('.')) packageImports.push({ specifier, file: resolved });
+      pending.push(resolved);
     }
   }
-  return { files, specifiers };
+  return { files, specifiers, packageImports };
 }
 
-describe('the init entrypoints import no framework code that runs', () => {
+function isFrameworkFile(file: string): boolean {
+  return FRAMEWORK_LOCATIONS.some((location) => file.startsWith(location));
+}
+
+/**
+ * The framework modules an init entrypoint may load. A facade builds the config's contract entry as a `TsExpression` node, as migration files are written, so its init entrypoint loads `ts-render`, the stateless helpers of `@internal/utils` and `@internal/contract` that `ts-render` imports, and `InternalError` for a config module that lacks an export the entry imports. The CLI calls the node's methods and recognises errors by their shape, never by class, so it does not matter that these come from another installed copy of the framework.
+ */
+const RENDERING_MODULES = [
+  '@internal/contract/hashing-utils',
+  '@internal/ts-render',
+  '@internal/utils/internal-error',
+  '@internal/utils/structured-error',
+];
+const PUBLIC_RENDERING_MODULES = [
+  '@prisma/orm-framework/ts-render',
+  '@prisma/orm-framework/utils/internal-error',
+];
+
+describe('the init entrypoints import no framework code that runs, but what renders TypeScript', () => {
   const entrypoints = [
-    { name: '@internal/postgres/init', dir: 'packages/3-targets/postgres/9-facade' },
-    { name: '@internal/mongo/init', dir: 'packages/3-targets/mongo/9-facade' },
-    { name: '@prisma/orm-postgres/init', dir: 'packages/9-public/@prisma/orm-postgres' },
-    { name: '@prisma/orm-mongo/init', dir: 'packages/9-public/@prisma/orm-mongo' },
+    {
+      name: '@internal/postgres/init',
+      dir: 'packages/3-targets/postgres/9-facade',
+      statesServerVersion: true,
+      frameworkModules: RENDERING_MODULES,
+    },
+    {
+      name: '@internal/mongo/init',
+      dir: 'packages/3-targets/mongo/9-facade',
+      statesServerVersion: true,
+      frameworkModules: [],
+    },
+    {
+      name: '@internal/sqlite/init',
+      dir: 'packages/3-targets/sqlite/9-facade',
+      statesServerVersion: false,
+      frameworkModules: [],
+    },
+    {
+      name: '@internal/mysql/init',
+      dir: 'packages/3-targets/mysql/1-mysql/9-facade',
+      statesServerVersion: false,
+      frameworkModules: [],
+    },
+    {
+      name: '@prisma/orm-postgres/init',
+      dir: 'packages/9-public/@prisma/orm-postgres',
+      statesServerVersion: true,
+      frameworkModules: PUBLIC_RENDERING_MODULES,
+    },
+    {
+      name: '@prisma/orm-mongo/init',
+      dir: 'packages/9-public/@prisma/orm-mongo',
+      statesServerVersion: true,
+      frameworkModules: [],
+    },
+    {
+      name: '@prisma/orm-sqlite/init',
+      dir: 'packages/9-public/@prisma/orm-sqlite',
+      statesServerVersion: false,
+      frameworkModules: [],
+    },
+    {
+      name: '@prisma/orm-mysql/init',
+      dir: 'packages/9-public/@prisma/orm-mysql',
+      statesServerVersion: false,
+      frameworkModules: [],
+    },
   ];
 
   it('finds a framework module that a built file imports', () => {
@@ -234,27 +331,40 @@ describe('the init entrypoints import no framework code that runs', () => {
         'const text = `import "./not-an-import.js"`;\nexport * as casts from "@internal/utils/casts";\n',
       );
 
-      const { files, specifiers } = workspaceModulesLoadedBy(entry);
+      const { files, specifiers, packageImports } = workspaceModulesLoadedBy(entry);
 
       expect(specifiers[0]).toBe('@internal/utils/casts');
       expect(specifiers).not.toContain('./not-an-import.js');
       expect(files.some((file) => file.startsWith('packages/1-framework/'))).toBe(true);
+      expect(packageImports.map((imported) => imported.specifier)).toContain(
+        '@internal/utils/casts',
+      );
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
   });
 
-  for (const { name, dir } of entrypoints) {
-    it(`${name} loads only target and third-party modules`, () => {
-      const { files, specifiers } = workspaceModulesLoadedBy(
-        resolve(REPO_ROOT, dir, 'dist/init.mjs'),
+  for (const { name, dir, statesServerVersion, frameworkModules } of entrypoints) {
+    it(`${name} loads only target and third-party modules, and the framework modules that render TypeScript`, () => {
+      const entry = resolve(REPO_ROOT, dir, 'dist/init.mjs');
+      const { files, specifiers, packageImports } = workspaceModulesLoadedBy(entry);
+      const frameworkImports = packageImports.filter((imported) =>
+        isFrameworkFile(portableRelative(REPO_ROOT, imported.file)),
+      );
+      const allowed = new Set(
+        frameworkImports
+          .filter((imported) => frameworkModules.includes(imported.specifier))
+          .flatMap((imported) => workspaceModulesLoadedBy(imported.file).files),
       );
 
       expect(specifiers).toContain('pathe');
-      expect(specifiers.some((specifier) => specifier.endsWith('/server-version'))).toBe(true);
-      expect(
-        files.filter((file) => FRAMEWORK_LOCATIONS.some((location) => file.startsWith(location))),
-      ).toEqual([]);
+      expect(specifiers.some((specifier) => /\/server-version(-range)?$/.test(specifier))).toBe(
+        statesServerVersion,
+      );
+      expect([...new Set(frameworkImports.map((imported) => imported.specifier))].sort()).toEqual(
+        frameworkModules,
+      );
+      expect(files.filter((file) => isFrameworkFile(file) && !allowed.has(file))).toEqual([]);
     });
   }
 });

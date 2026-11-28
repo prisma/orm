@@ -42,7 +42,7 @@ function databaseWith(installed: Readonly<Record<string, string>>): PostgresData
         }),
     ),
     existingSchemas: ['public'],
-    pgVersion: 'unknown',
+    serverVersionNumber: undefined,
   });
 }
 

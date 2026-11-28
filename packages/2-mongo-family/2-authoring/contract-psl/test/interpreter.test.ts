@@ -2009,6 +2009,25 @@ model Item {
       expect(indexes![0]!['wildcardProjection']).toEqual({ metadata: 1, 'nested.path': 1 });
     });
 
+    it.each(['include', 'exclude'])('refuses an %s path named __proto__', (option) => {
+      const result = interpret(`
+        model Events {
+          id       ObjectId @id @map("_id")
+          metadata String
+          @@index([wildcard()], ${option}: ["__proto__", "metadata"])
+        }
+      `);
+      expect(
+        result.ok ? [] : result.failure.diagnostics.map(({ code, message }) => ({ code, message })),
+      ).toEqual([
+        {
+          code: 'PSL_INVALID_INDEX',
+          message:
+            'A wildcard index cannot include or exclude the path "__proto__", which JavaScript reads as the prototype of an object rather than as a key',
+        },
+      ]);
+    });
+
     it('rejects a non-list projection at the attribute boundary', () => {
       const result = interpret(`
         model Events {

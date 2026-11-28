@@ -7,6 +7,7 @@ import type { MigrationMetadata } from '@internal/migration-tools/metadata';
 import { writeRef } from '@internal/migration-tools/refs';
 import { ok } from '@internal/utils/result';
 import { join } from 'pathe';
+import stripAnsi from 'strip-ansi';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ControlClient } from '../../src/control-api/types';
 import { BIN_GROUPS, createBinCommands } from '../../src/orm/cli';
@@ -22,6 +23,7 @@ import { createTestProjectDir, writeProjectManifest } from '../utils/test-projec
 
 const mocks = {
   connect: vi.fn(),
+  readMarker: vi.fn(),
   dbUpdate: vi.fn(),
   renderContractDts: vi.fn(),
   close: vi.fn(),
@@ -31,6 +33,7 @@ const commands = createBinCommands(
   () =>
     ({
       connect: mocks.connect,
+      readMarker: mocks.readMarker,
       dbUpdate: mocks.dbUpdate,
       renderContractDts: mocks.renderContractDts,
       close: mocks.close,
@@ -54,6 +57,7 @@ afterEach(async () => {
 beforeEach(() => {
   mocks.connect.mockReset().mockResolvedValue(undefined);
   mocks.close.mockReset().mockResolvedValue(undefined);
+  mocks.readMarker.mockReset().mockResolvedValue(null);
   mocks.dbUpdate.mockReset();
   mocks.renderContractDts
     .mockReset()
@@ -72,7 +76,7 @@ async function setupFixture(): Promise<Fixture> {
   writeProjectManifest(cwd);
   const endContract = {
     storage: { storageHash: HASH_B },
-    schemaVersion: '1.0.0',
+    formatVersion: 1,
     target: 'postgres',
     targetFamily: 'sql',
   };
@@ -80,7 +84,7 @@ async function setupFixture(): Promise<Fixture> {
     join(cwd, 'contract.json'),
     JSON.stringify({
       storage: { storageHash: HASH_A },
-      schemaVersion: '1.0.0',
+      formatVersion: 1,
       target: 'postgres',
       targetFamily: 'sql',
     }),
@@ -351,6 +355,32 @@ describe('db update --to bundle resolution', () => {
     ]);
   });
 
+  it('hands the client the emitted contract hash, not the hash of the contract --to names', async () => {
+    const { cwd } = await setupFixture();
+    await writeRef(join(cwd, 'migrations', 'app', 'refs'), 'production', {
+      hash: HASH_B,
+      invariants: [],
+    });
+    mocks.dbUpdate.mockResolvedValue(
+      ok({
+        ok: true,
+        mode: 'plan',
+        plan: { operations: [], preview: undefined },
+        destination: { storageHash: HASH_B },
+        appliedStatements: [],
+        dataLoss: [],
+        accessChanges: [],
+        summary: 'Plan ready',
+      }),
+    );
+
+    await harness(cwd).run(['db', 'update', '--to', 'production', '--dry-run', '--json'], { cwd });
+
+    const [options] = mocks.dbUpdate.mock.calls[0]!;
+    expect(options.contract.storage.storageHash).toBe(HASH_B);
+    expect(options.emittedContractHash).toBe(HASH_A);
+  });
+
   it('hands the client the whole ref --to names, and no ref for a migration name', async () => {
     const { cwd, dirNext } = await setupFixture();
     const policies = { change: ['migrate'] } as const;
@@ -443,5 +473,69 @@ describe('db update --permit-policy-change without a ref', () => {
         },
       },
     });
+  });
+});
+
+describe('db update --to <ref> --backfill', () => {
+  const HASH_C = `${'c'.repeat(64)}`;
+
+  /** A migration from A to C, so a database at C has no migration that leads to B. */
+  async function besideTheHistory(cwd: string): Promise<void> {
+    const metadataBase: Omit<MigrationMetadata, 'migrationHash'> = {
+      from: HASH_A,
+      to: HASH_C,
+      providedInvariants: [],
+      createdAt: '2026-01-03T10:00:00.000Z',
+    };
+    await writeMigrationPackage(
+      join(
+        cwd,
+        'migrations',
+        'app',
+        formatMigrationDirName(new Date('2026-01-03T10:00:00Z'), 'other'),
+      ),
+      { ...metadataBase, migrationHash: computeMigrationHash(metadataBase, [ADDITIVE_OP]) },
+      [ADDITIVE_OP],
+    );
+  }
+
+  it('plans to the ref from where the database is', async () => {
+    const { cwd } = await setupFixture();
+    await besideTheHistory(cwd);
+    await writeRef(join(cwd, 'migrations', 'app', 'refs'), 'production', {
+      hash: HASH_B,
+      invariants: [],
+    });
+    mocks.readMarker.mockResolvedValue({ storageHash: HASH_C, invariants: [] });
+
+    const run = await harness(cwd).run(
+      ['db', 'update', '--to', 'production', '--permit-policy-change', '--backfill', 'User.email'],
+      { cwd },
+    );
+
+    expect(stripAnsi(run.stderr)).toContain(
+      `prisma-test migration plan --from ${HASH_C} --to production --backfill User.email`,
+    );
+    expect(mocks.dbUpdate).not.toHaveBeenCalled();
+  });
+
+  it('applies the migration on disk that leads to the ref, and plans none beside it', async () => {
+    const { cwd } = await setupFixture();
+    await writeRef(join(cwd, 'migrations', 'app', 'refs'), 'production', {
+      hash: HASH_B,
+      invariants: [],
+    });
+    mocks.readMarker.mockResolvedValue({ storageHash: HASH_A, invariants: [] });
+
+    const run = await harness(cwd).run(
+      ['db', 'update', '--to', 'production', '--permit-policy-change', '--backfill', 'User.email'],
+      { cwd },
+    );
+
+    const output = stripAnsi(run.stderr);
+    expect(output).not.toContain('prisma-test migration plan');
+    expect(output).toContain(
+      'Then apply the migrations on disk: prisma-test db migrate --to production --permit-policy-change',
+    );
   });
 });

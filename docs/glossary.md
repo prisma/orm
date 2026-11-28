@@ -67,7 +67,7 @@ The compiled form of a query. Before anything touches the database, Prisma 8 com
 
 ### Adapter
 
-The piece that connects Prisma 8 to a specific database. For SQL targets, the adapter translates queries into the correct dialect. For MongoDB, the adapter dispatches commands to the `mongodb` Node.js driver. Adapters also report what features the database supports, so Prisma 8 can check at startup whether your contract's requirements are met.
+The piece that connects Prisma 8 to a specific database. For SQL targets, the adapter translates queries into the correct dialect. For MongoDB, the adapter dispatches commands to the `mongodb` Node.js driver. On PostgreSQL the adapter provides no [capabilities](#capability): the target says what each database version provides, and the driver what its connection provides. The other databases' adapters still declare a fixed list.
 
 ### Driver
 
@@ -75,15 +75,51 @@ The library that handles the actual network connection to your database. A drive
 
 ### Target
 
-Which specific database you're using — Postgres, MySQL, MongoDB, etc. Each target belongs to a family (e.g., Postgres is a SQL target; MongoDB is a Mongo target) and supports a specific set of capabilities.
+The component of the Prisma ORM stack that provides support for one database — Postgres, MySQL, MongoDB, etc. Its npm package is the [target package](#target-package). Each target belongs to a family (e.g., Postgres is a SQL target; MongoDB is a Mongo target) and supports a specific set of capabilities.
 
 ### Target package
 
-The package an application installs to use a target, such as `@prisma/orm-postgres`. Its `defineConfig` assembles the family, target, adapter and driver, and it exports everything the application imports. ADR 242 and some older code call it a *facade*.
+The npm package that provides a target, such as `@prisma/orm-target-postgres`. It is one of the platform packages. An application does not import from it; it lists it so that it holds one copy ([ADR 329](architecture%20docs/adrs/ADR%20329%20-%20An%20application%20lists%20the%20platform%20packages%20and%20our%20packages%20name%20each%20other%20as%20peers.md)).
+
+### Facade
+
+The package an application's code imports Prisma from, named after the facade design pattern. There is one for each database, such as `@prisma/orm-postgres` for PostgreSQL.
+
+A facade puts the framework, the family, the target, the adapter and the driver together, so that an application starts with one call, and it re-exports everything application code imports. It is not a [target package](#target-package).
+
+An application's `package.json` lists the facade and, beside it, the [platform packages](#platform-package) the facade is built from ([ADR 329](architecture%20docs/adrs/ADR%20329%20-%20An%20application%20lists%20the%20platform%20packages%20and%20our%20packages%20name%20each%20other%20as%20peers.md)).
+
+### Platform package
+
+One of the packages extension authors build against: `@prisma/orm-framework`, `@prisma/orm-toolchain`, `@prisma/orm-family-*` and `@prisma/orm-target-*`. An application lists the ones its facade names as peer dependencies, so it holds one copy of each (a monorepo whose applications are on different Prisma versions can still get two; see [ADR 329](architecture%20docs/adrs/ADR%20329%20-%20An%20application%20lists%20the%20platform%20packages%20and%20our%20packages%20name%20each%20other%20as%20peers.md#consequences)), but application code imports from the facade and the extensions, not from a platform package.
+
+### Maturity level
+
+How finished a package or a function is. There are four levels: Early Access, Preview, Release Candidate and Generally Available (GA). "Below GA" means any of the first three. Only what is GA is kept compatible within a major version.
+
+A package's level shows in its version. `8.3.0` is GA. `8.3.0-ea.0`, `8.3.0-preview.0` and `8.3.0-rc.0` are below GA.
+
+A function that is below its package's level has the level at the start of its name: `ea_search`, `preview_search`, `rc_search`.
+
+No other word, such as "experimental" or "unstable", is used for something that is not finished. See [Versions and support](oss/versioning.md#maturity-levels) and [ADR 330](architecture%20docs/adrs/ADR%20330%20-%20A%20maturity%20level%20is%20written%20in%20a%20package's%20version%20and%20an%20API's%20name.md).
+
+### Release number
+
+The first two parts of a version, which every package of one release shares. Release `8.3` publishes every package at `8.3`, and the last part of the version belongs to each package: `8.3.1` for one, `8.3.0-ea.2` for another. `@prisma/orm-extension-paradedb` is the one package with version numbers of its own. See [Versions and support](oss/versioning.md#version-numbers).
+
+### Root version
+
+The `version` in the repository's root `package.json`. It names the release a commit belongs to, and it decides what the publish workflow publishes.
+
+- Until release 8.0 it is `8.0.0-rc.N`.
+- For release 8.0 it is `8.0.1`.
+- After that it is the [release number](#release-number) with patch 0, such as `8.3.0`.
+
+It is not the version of every published package. Those come from the release plan. See [Releasing](oss/releasing.md#the-root-version-decides-what-is-published).
 
 ### Init contribution
 
-What a target package tells `prisma orm init`: the default export of its `init` entrypoint, typed `InitContribution`. It holds the starter contract, the `db.ts` and `.env.example` text, the driver packages, the quick reference and an optional server probe. Unlike a descriptor's contributions, no stack aggregates it; `init` loads it from the one target package the user chose. See [ADR 325](architecture%20docs/adrs/ADR%20325%20-%20init%20gets%20everything%20about%20a%20target%20from%20the%20target%20package.md).
+What a facade tells `prisma orm init`: the default export of its `init` entrypoint, typed `InitContribution`. It holds the starter contract, the `db.ts` and `.env.example` text, the driver packages, the quick reference and an optional server probe. Unlike a descriptor's contributions, no stack aggregates it; `init` loads it from the one facade the user chose. See [ADR 325](architecture%20docs/adrs/ADR%20325%20-%20init%20gets%20everything%20about%20a%20database%20from%20its%20facade.md).
 
 ### Family
 
@@ -217,7 +253,7 @@ Each plane has its own stack type:
 
 ### Capability
 
-A specific feature that a database may or may not support (e.g., `RETURNING` clauses, vector indexes). Your contract declares which capabilities it needs; the adapter reports which ones the database provides. Prisma 8 checks these match at startup, so you find out about missing features immediately rather than at query time.
+A specific feature that a database version or a connection **provides** and a contract **requires** (e.g., `RETURNING` clauses, interactive transactions). Capabilities are your contract's dependencies. You write the list where you write the contract, from the sets Prisma exports: `requiredCapabilities: [...postgres17, ...postgresDriver]` on PostgreSQL; other databases' contracts take a fixed list from their adapter. Signing a database checks that it provides the database capabilities the contract requires, and creating a client checks that its connection provides the rest, so you find out about a missing capability before any query runs. A feature whose capability your contract does not require is unavailable until you add it to the list. A database that lacks a capability is not drift: no change to its tables can add it, so it is reported as its own failure, with no advice to update the database.
 
 ### Codec
 
@@ -241,7 +277,7 @@ The strategies a database may be changed by, recorded in its [marker](#marker): 
 
 ### Data Protection Policy
 
-Whether a change to a database may lose data or widen who can read or write rows, recorded in its [marker](#marker) as two settings: `dataLoss` (`data-loss-forbidden`, `data-loss-with-consent`, `data-loss-permitted`) and `accessWidening` (`access-widening-forbidden`, `access-widening-with-consent`, `access-widening-permitted`). `with-consent` is the default and is today's behaviour: `db update` asks before a loss, and a migration carries the consent given when it was planned. No command enforces the data protection settings yet: they are recorded and compared with a ref's, and `forbidden` and `permitted` behave as `with-consent` until enforcement is in place. A [ref](#ref-contract-ref) declares the policies its database should have; `db migrate --to <ref>` and `db update --to <ref>` fail with `MIGRATION.POLICY_MISMATCH` when they differ from the database's, and write the ref's policies into the marker only when given `--permit-policy-change`. See [ADR 320](architecture%20docs/adrs/ADR%20320%20-%20Databases%20record%20a%20change%20policy%20and%20a%20data%20protection%20policy.md).
+Whether a change to a database may lose data or widen who can read or write rows, recorded in its [marker](#marker) as two settings: `dataLoss` (`data-loss-forbidden`, `data-loss-with-consent`, `data-loss-permitted`) and `accessWidening` (`access-widening-forbidden`, `access-widening-with-consent`, `access-widening-permitted`). `with-consent` is the default and is today's behaviour: `db update` asks before a loss, and a migration carries the consent given when it was planned. Under `forbidden`, `db update` refuses the change even with `--delete` or `--allow`, `db migrate` refuses a run containing a migration that does it, and `migration plan --to <ref>` refuses to write one when the ref declares it; each fails with `MIGRATION.DATA_PROTECTION_FORBIDS` before anything runs. Under `permitted`, `db update` does not ask. A loss is an operation whose class is `destructive`; an access change in a recorded migration is recognised by the target from the operation's structure, so one written as raw SQL is not seen. A [ref](#ref-contract-ref) declares the policies its database should have; `db migrate --to <ref>` and `db update --to <ref>` fail with `MIGRATION.POLICY_MISMATCH` when they differ from the database's, and write the ref's policies into the marker only when given `--permit-policy-change`. See [ADR 320](architecture%20docs/adrs/ADR%20320%20-%20Databases%20record%20a%20change%20policy%20and%20a%20data%20protection%20policy.md).
 
 ### Namespace
 
@@ -287,7 +323,7 @@ The directed graph of contracts (nodes) connected by migrations (edges). Built b
 
 ### Ref (Contract Ref)
 
-A named pointer at a contract, stored as `migrations/<space>/refs/<name>.json` (`{hash, invariants}`, plus an optional `policies` declaring the [change policy](#change-policy) and [data protection policy](#data-protection-policy) its database should have); the contract it names resolves through the shared content-addressed store at `migrations/snapshots/<hex>/contract.json` by that hash. Refs are environment-named (`production`, `staging`) and describe *where CD will `migrate --to` next* in that environment. The default `db` ref records dev-database checkpoint state for offline planning; it is written by `db init`, `db update`, and `db sign`. Managed via `prisma migration ref set|list|delete`. See [ADR 218 — Refs with paired contract snapshots](architecture%20docs/adrs/ADR%20218%20-%20Refs%20with%20paired%20contract%20snapshots%20and%20universal%20graph-node%20invariant.md) (paired-snapshot part superseded — see its Status note) and [ADR 240 — Contract snapshots live in a content-addressed store](architecture%20docs/adrs/ADR%20240%20-%20Contract%20snapshots%20live%20in%20a%20content-addressed%20store.md).
+A named pointer at a contract, stored as `migrations/<space>/refs/<name>.json` (`{hash, invariants}`, plus an optional `policies` declaring the [change policy](#change-policy) and [data protection policy](#data-protection-policy) its database should have); the contract it names resolves through the shared content-addressed store at `migrations/snapshots/<hex>/contract.json` by that hash. Refs are environment-named (`production`, `staging`) and describe *where CD will `migrate --to` next* in that environment. The default `db` ref records dev-database checkpoint state for offline planning; it is written by `db init`, `db update`, and `db sign`. Managed via `prisma migration ref set|list|delete`; its `policies` are read and written with `prisma migration ref policy show|set|delete` or by editing the file, and change a database only when its owner applies them in a deploy ([ADR 334](architecture%20docs/adrs/ADR%20334%20-%20A%20person%20changes%20the%20policies%20a%20ref%20declares%20by%20hand%20or%20with%20migration%20ref%20policy.md)). See [ADR 218 — Refs with paired contract snapshots](architecture%20docs/adrs/ADR%20218%20-%20Refs%20with%20paired%20contract%20snapshots%20and%20universal%20graph-node%20invariant.md) (paired-snapshot part superseded — see its Status note) and [ADR 240 — Contract snapshots live in a content-addressed store](architecture%20docs/adrs/ADR%20240%20-%20Contract%20snapshots%20live%20in%20a%20content-addressed%20store.md).
 
 A ref is a specific kind of [contract reference](#contract-reference) — the named, file-backed, persistent kind.
 
@@ -297,11 +333,11 @@ An append-only audit log of executed migrations, per database. The ledger record
 
 ### Drift
 
-Divergence between contract and database. Taxonomy includes marker-level (missing, corrupt, stale, hash mismatch), schema-level (manual DDL, partial execution, concurrent execution), graph-level (orphan database, no path, path breakage, cycle), capability (missing, downgrade, profile mismatch), transactional, cache/replica freshness, and canonicalization drift.
+Divergence between contract and database. Taxonomy includes marker-level (missing, corrupt, stale, hash mismatch), schema-level (manual DDL, partial execution, concurrent execution), graph-level (orphan database, no path, path breakage, cycle), transactional, cache/replica freshness, and canonicalization drift.
 
 ### Storage Hash
 
-The deterministic hash over a contract's storage-affecting parts (`schemaVersion`, `targetFamily`, `target`, `storage`). The identity of a *contract* in the migration graph; when the CLI says "hash" without qualification, this is what it means. Formerly `coreHash`.
+The deterministic hash over a contract's storage-affecting parts (`targetFamily`, `target`, `storage`, and the fixed entry `"schemaVersion": "1"`). The identity of a *contract* in the migration graph; when the CLI says "hash" without qualification, this is what it means. Formerly `coreHash`.
 
 ### Migration Hash
 

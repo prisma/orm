@@ -27,27 +27,38 @@ const Author = model('Author', {
 const Article = model('Article', {
   fields: {
     id: field.column(integerNumberColumn).id(),
+    title: field.column(textColumn).optional(),
     authorId: field.column(integerNumberColumn).column('author_id').optional(),
     updatedAt: field.column(datetimeColumn).column('updated_at').onUpdate(gen.now()),
   },
   relations: { author: rel.belongsTo(Author, { from: 'authorId', to: 'id' }).sql({ fk: {} }) },
 }).sql({ table: 'articles' });
 
-const contract = defineContract({ models: { Author, Article } });
+const contract = defineContract({
+  models: {
+    Author: Author.relations({ articles: rel.hasMany(() => Article, { by: 'authorId' }) }).sql({
+      table: 'authors',
+    }),
+    Article,
+  },
+});
 
 const seeded = new Date('2020-01-01T00:00:00.000Z');
 
 type Articles = Collection<typeof contract, 'Article'>;
+type Authors = Collection<typeof contract, 'Author'>;
 
-async function withArticles(fn: (articles: Articles) => Promise<void>): Promise<void> {
+async function withArticles(
+  fn: (articles: Articles, authors: Authors) => Promise<void>,
+): Promise<void> {
   const directory = mkdtempSync(join(tmpdir(), 'orm-nested-update-defaults-'));
   const path = join(directory, 'test.db');
   const database = new DatabaseSync(path);
   database.exec(`
     create table authors (id integer primary key, name text not null);
-    create table articles (id integer primary key, author_id integer, updated_at text not null);
+    create table articles (id integer primary key, title text, author_id integer, updated_at text not null);
     insert into authors values (1, 'Ada'), (2, 'Grace');
-    insert into articles values (10, 1, '${seeded.toISOString()}');
+    insert into articles (id, author_id, updated_at) values (10, 1, '${seeded.toISOString()}');
   `);
   database.close();
 
@@ -64,10 +75,10 @@ async function withArticles(fn: (articles: Articles) => Promise<void>): Promise<
   await driver.connect({ kind: 'path', path });
   const runtime = new SqliteRuntimeImpl({ context, adapter, driver, closeRefusal: undefined });
   try {
+    const namespaceId = soleDomainNamespaceId(contract.domain);
     await fn(
-      new Collection({ runtime, context }, 'Article', {
-        namespaceId: soleDomainNamespaceId(contract.domain),
-      }),
+      new Collection({ runtime, context }, 'Article', { namespaceId }),
+      new Collection({ runtime, context }, 'Author', { namespaceId }),
     );
   } finally {
     await runtime.close();
@@ -128,6 +139,52 @@ describe('integration/update() with a relation the parent holds the key for on S
           .update({ author: (author) => author.disconnect() });
 
         await expectAdvanced(articles, updated, null);
+      });
+    },
+    timeouts.databaseOperation,
+  );
+  it(
+    'advances the update default when the only change is a disconnect whose criteria match the linked row',
+    async () => {
+      await withArticles(async (articles) => {
+        const updated = await articles
+          .select('id', 'authorId', 'updatedAt')
+          .where({ id: 10 })
+          .update({ author: (author) => author.disconnect([{ id: 1 }]) });
+
+        await expectAdvanced(articles, updated, null);
+      });
+    },
+    timeouts.databaseOperation,
+  );
+
+  it(
+    'keeps an update default the update sets itself when a disconnect whose criteria match unlinks the row',
+    async () => {
+      await withArticles(async (articles) => {
+        const explicit = new Date('2021-06-01T00:00:00.000Z');
+        const updated = await articles
+          .select('id', 'authorId', 'updatedAt')
+          .where({ id: 10 })
+          .update({ updatedAt: explicit, author: (author) => author.disconnect([{ id: 1 }]) });
+
+        expect(updated).toEqual({ id: 10, authorId: null, updatedAt: explicit });
+      });
+    },
+    timeouts.databaseOperation,
+  );
+
+  it(
+    'advances the update default of the child that where().update() changes on a relation the child holds the key for',
+    async () => {
+      await withArticles(async (articles, authors) => {
+        await authors
+          .where({ id: 1 })
+          .update({ articles: (list) => list.where({ id: 10 }).update({ title: 'New' }) });
+        const updated = await articles.select('id', 'title', 'updatedAt').where({ id: 10 }).first();
+
+        expect(updated).toEqual({ id: 10, title: 'New', updatedAt: expect.any(Date) });
+        expect(updated?.updatedAt.getTime()).toBeGreaterThan(seeded.getTime());
       });
     },
     timeouts.databaseOperation,

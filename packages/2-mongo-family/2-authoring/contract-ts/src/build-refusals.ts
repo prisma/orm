@@ -38,6 +38,17 @@ export type CollectionSettingsKey = Extract<RefusalKey, { readonly kind: 'collec
 /** What a variant's restatement of a base field changes, which the collection's validator, written from the base, would refuse. */
 export type RestatedFieldDifference = 'storedName' | 'type' | 'nullable' | 'many';
 
+/** What a definition names with a name that cannot be an object's own key. */
+export type UnsupportedNameSubject =
+  | 'model'
+  | 'valueObject'
+  | 'enum'
+  | 'collection'
+  | 'root'
+  | 'field'
+  | 'valueObjectField'
+  | 'relation';
+
 export type CollectionSetting = 'indexes' | 'collectionOptions' | 'controlPolicy';
 
 export type IndexShapeRule =
@@ -53,7 +64,23 @@ export type IndexShapeRule =
 export type BuildRefusal =
   | { readonly kind: 'duplicateModel'; readonly key: ModelKey }
   | { readonly kind: 'duplicateValueObject'; readonly key: ValueObjectKey }
-  | { readonly kind: 'storedNameUnsupported'; readonly key: FieldKey; readonly reason: string }
+  | {
+      readonly kind: 'storedNameUnsupported';
+      readonly key: FieldKey | RelationKey;
+      readonly reason: string;
+    }
+  | {
+      readonly kind: 'nameUnsupported';
+      readonly key:
+        | ModelKey
+        | ValueObjectKey
+        | EnumKey
+        | CollectionSettingsKey
+        | FieldKey
+        | RelationKey;
+      readonly subject: UnsupportedNameSubject;
+      readonly name: string;
+    }
   | {
       readonly kind: 'storedNameDuplicate';
       readonly key: FieldKey;

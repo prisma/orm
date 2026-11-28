@@ -72,9 +72,8 @@ describe('errors.ts — converted factories carry typed nextActions', () => {
         reason: 'Graph nodes: (none).',
       },
       {
-        kind: 'run-command',
-        label: 'Introduce "abc123" by planning a migration for it',
-        command: '{bin} migration plan',
+        kind: 'user-choice',
+        label: 'Or introduce "abc123" by planning a migration that ends at it',
       },
     ]);
   });
@@ -82,11 +81,14 @@ describe('errors.ts — converted factories carry typed nextActions', () => {
   it('errorContractSnapshotMissing', () => {
     const error = errorContractSnapshotMissing('abc123', 'migrations/snapshots/abc123.json');
 
+    expect(error.fix).toContain(
+      'then delete the new migration directory it writes, which repeats the existing migration; the snapshot stays',
+    );
     expect(error.nextActions).toEqual([
       {
-        kind: 'run-command',
-        label: 'Re-emit the snapshot for an app-space migration',
-        command: '{bin} migration plan',
+        kind: 'user-choice',
+        label:
+          'For an app-space migration planned to the emitted contract, emit that contract again and re-run the migration plan that wrote the migration ending at that contract, with its --from and no --to, to re-emit the snapshot. Then delete the new migration directory it writes, which repeats the existing migration; the snapshot stays. A plan with --to reads the snapshot, so it cannot re-emit it',
       },
       {
         kind: 'user-choice',

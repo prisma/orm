@@ -152,8 +152,8 @@ async function ledgerLength(family: SqlControlFamilyInstance, driver: MysqlContr
 }
 
 describe('MySQL database policies', { timeout: timeouts.databaseOperation }, () => {
-  it('records the policies with the marker and keeps them through a later run without them', async (test) => {
-    await withMysqlDatabase(test, ({ url }) =>
+  it('records the policies with the marker and keeps them through a later run without them', async () => {
+    await withMysqlDatabase(({ url }) =>
       withDriver(url, async (driver, family) => {
         await applyContract(family, driver, MIGRATE_ONLY);
         const recorded = await recordedPolicies(family, driver);
@@ -179,8 +179,8 @@ describe('MySQL database policies', { timeout: timeouts.databaseOperation }, () 
     );
   });
 
-  it('writes the marker and no ledger entry for a run with no migrations', async (test) => {
-    await withMysqlDatabase(test, ({ url }) =>
+  it('writes the marker and no ledger entry for a run with no migrations', async () => {
+    await withMysqlDatabase(({ url }) =>
       withDriver(url, async (driver, family) => {
         await applyContract(family, driver);
         const ledgerBefore = await ledgerLength(family, driver);
@@ -200,8 +200,8 @@ describe('MySQL database policies', { timeout: timeouts.databaseOperation }, () 
     );
   });
 
-  it('leaves the policies unchanged when the run fails', async (test) => {
-    await withMysqlDatabase(test, ({ url }) =>
+  it('leaves the policies unchanged when the run fails', async () => {
+    await withMysqlDatabase(({ url }) =>
       withDriver(url, async (driver, family) => {
         await applyContract(family, driver, MIGRATE_ONLY);
 
@@ -219,8 +219,8 @@ describe('MySQL database policies', { timeout: timeouts.databaseOperation }, () 
     );
   });
 
-  it('records the policies and writes no ledger entry for a db update that changes nothing', async (test) => {
-    await withMysqlDatabase(test, ({ url }) =>
+  it('records the policies and writes no ledger entry for a db update that changes nothing', async () => {
+    await withMysqlDatabase(({ url }) =>
       withDriver(url, async (driver, family) => {
         await applyContract(family, driver);
         const ledgerBefore = await ledgerLength(family, driver);
@@ -253,8 +253,8 @@ describe('MySQL database policies', { timeout: timeouts.databaseOperation }, () 
     );
   });
 
-  it('fails as a concurrent change, before any extension DDL, when the policies moved after the caller checked them', async (test) => {
-    await withMysqlDatabase(test, ({ url }) =>
+  it('fails as a concurrent change, before any extension DDL, when the policies moved after the caller checked them', async () => {
+    await withMysqlDatabase(({ url }) =>
       withDriver(url, async (driver, family) => {
         await applyContract(family, driver, MIGRATE_ONLY);
         const extension = createMigrationPlan<MysqlPlanTargetDetails>({
@@ -314,8 +314,8 @@ describe('MySQL database policies', { timeout: timeouts.databaseOperation }, () 
     );
   });
 
-  it('reports policies it cannot read under the marker lock as a corrupt marker, keeping the row', async (test) => {
-    await withMysqlDatabase(test, ({ url }) =>
+  it('reports policies it cannot read under the marker lock as a corrupt marker, keeping the row', async () => {
+    await withMysqlDatabase(({ url }) =>
       withDriver(url, async (driver, family) => {
         await applyContract(family, driver);
         await driver.query(

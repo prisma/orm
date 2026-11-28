@@ -88,6 +88,7 @@ describe('defineConfig for MariaDB', () => {
           defaultInInsert: true,
           enums: true,
           foreignKeys: true,
+          interactiveTransactions: true,
           jsonAgg: true,
           limit: true,
           orderBy: true,

@@ -56,9 +56,15 @@ export type StorageTableToScopeTable<T extends StorageTable, ColumnInputs> = {
   >;
 };
 
+type NamespaceColumnNames<S extends Scope> = {
+  [Namespace in keyof S['namespaces']]: keyof S['namespaces'][Namespace];
+}[keyof S['namespaces']];
+
+/** A name stays top-level only while exactly one table in the merged scope has it. */
 export type MergeScopes<A extends Scope, B extends Scope> = {
   topLevel: Expand<
-    Omit<A['topLevel'], keyof B['topLevel']> & Omit<B['topLevel'], keyof A['topLevel']>
+    Omit<A['topLevel'], keyof B['topLevel'] | NamespaceColumnNames<B>> &
+      Omit<B['topLevel'], keyof A['topLevel'] | NamespaceColumnNames<A>>
   >;
   namespaces: Expand<A['namespaces'] & B['namespaces']>;
 };

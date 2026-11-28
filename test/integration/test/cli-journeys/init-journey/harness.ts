@@ -71,7 +71,7 @@ const JOURNEY_CACHE_ROOT = join(homedir(), '.cache', 'pn-journey');
 const TARBALL_CACHE_DIR = join(JOURNEY_CACHE_ROOT, 'tarballs');
 const PNPM_STORE_DIR = join(JOURNEY_CACHE_ROOT, 'pnpm-store');
 
-export type Target = 'postgres' | 'mongo';
+export type Target = 'postgres' | 'mongo' | 'sqlite';
 export type Authoring = 'psl' | 'typescript';
 
 export interface CellId {
@@ -79,16 +79,29 @@ export interface CellId {
   readonly authoring: Authoring;
 }
 
-/**
- * Every (target × authoring) cell. Mirrors the existing
- * `cli.init-facade-imports.e2e.test.ts` cell set.
- */
+/** Every (target × authoring) cell. SQLite is in no list, so init takes it by its package name. */
 export const ALL_CELLS: readonly CellId[] = [
   { target: 'postgres', authoring: 'typescript' },
   { target: 'postgres', authoring: 'psl' },
   { target: 'mongo', authoring: 'typescript' },
   { target: 'mongo', authoring: 'psl' },
+  { target: 'sqlite', authoring: 'typescript' },
+  { target: 'sqlite', authoring: 'psl' },
 ];
+
+/** The one facade a project scaffolded for the target depends on. */
+export const FACADE_FOR_TARGET: Readonly<Record<Target, string>> = {
+  postgres: '@prisma/orm-postgres',
+  mongo: '@prisma/orm-mongo',
+  sqlite: '@prisma/orm-sqlite',
+};
+
+/** What the journey passes as `--target`: a short name from the list, or a package name. */
+const TARGET_FLAG: Readonly<Record<Target, string>> = {
+  postgres: 'postgres',
+  mongo: 'mongodb',
+  sqlite: '@prisma/orm-sqlite',
+};
 
 export function cellLabel(cell: CellId): string {
   return `${cell.target} × ${cell.authoring}`;
@@ -153,14 +166,13 @@ export async function createJourneyProject(cell: CellId): Promise<JourneyProject
     const installResult = await runPnpm(['install', '--no-frozen-lockfile'], dir);
     writeFileSync(join(dir, PROJECT_CLI_FILE), PROJECT_CLI_SOURCE, 'utf-8');
 
-    const target = cell.target === 'mongo' ? 'mongodb' : 'postgres';
     const initResult = await runNode(
       [
         WORKSPACE_CLI_BIN,
         'orm',
         'init',
         '--target',
-        target,
+        TARGET_FLAG[cell.target],
         '--authoring',
         cell.authoring,
         '--yes',
@@ -457,30 +469,9 @@ function rewritePackageJsonForTarballs(dir: string, cell: CellId, tarballs: Pack
     pnpm?: { overrides?: Record<string, string> };
   };
 
-  const facade = cell.target === 'mongo' ? '@prisma/orm-mongo' : '@prisma/orm-postgres';
+  const facade = FACADE_FOR_TARGET[cell.target];
   const facadeTarball = requireTarball(tarballs, facade);
 
-  // The framework-emitted `migration.ts` imports the target package
-  // directly rather than through the user-facing facade. Under
-  // `node-linker=isolated` (the layout this journey deliberately uses to
-  // catch TML-2485-class bugs) that is only reachable when declared as a
-  // direct dep. The init scaffold itself does not currently declare it, so
-  // a real user running `tsx migrations/.../migration.ts emit` under
-  // isolated linking would hit `ERR_MODULE_NOT_FOUND` — a real scaffold
-  // seam worth filing separately. Add it here so the journey can complete
-  // end-to-end; the scaffold gap is a follow-up.
-  const migrationDeps =
-    cell.target === 'mongo' ? ['@prisma/orm-target-mongo'] : ['@prisma/orm-target-postgres'];
-  const migrationDepEntries = Object.fromEntries(
-    migrationDeps.map((name) => [name, `file:${requireTarball(tarballs, name)}`]),
-  );
-
-  pkg.dependencies = {
-    ...(pkg.dependencies ?? {}),
-    [facade]: `file:${facadeTarball}`,
-    ...migrationDepEntries,
-    dotenv: '^16.4.5',
-  };
   // `@prisma/orm-toolchain` is what the project's `prisma` command
   // (`PROJECT_CLI_FILE`) runs the CLI from. `@prisma/cli-engine` is the
   // scaffolded prisma.config.ts's definePrismaConfig import, installed from the registry exactly as
@@ -492,6 +483,23 @@ function rewritePackageJsonForTarballs(dir: string, cell: CellId, tarballs: Pack
     '@prisma/orm-toolchain': `file:${requireTarball(tarballs, '@prisma/orm-toolchain')}`,
     '@types/node': '^24.10.4',
     typescript: '^5.9.3',
+  };
+  const devDependencies = pkg.devDependencies;
+
+  // The application lists every package the facade names as a peer, as
+  // `init` does: pnpm resolves an unlisted peer through the registry, not
+  // through the tarball overrides.
+  const platformEntries = Object.fromEntries(
+    platformPackagesOf(facade)
+      .filter((name) => devDependencies[name] === undefined)
+      .map((name) => [name, `file:${requireTarball(tarballs, name)}`]),
+  );
+
+  pkg.dependencies = {
+    ...(pkg.dependencies ?? {}),
+    [facade]: `file:${facadeTarball}`,
+    ...platformEntries,
+    dotenv: '^16.4.5',
   };
 
   // Every workspace `@internal/*` package becomes a pnpm override pointing
@@ -507,6 +515,24 @@ function rewritePackageJsonForTarballs(dir: string, cell: CellId, tarballs: Pack
   pkg.pnpm = { ...(pkg.pnpm ?? {}), overrides };
 
   writeFileSync(pkgJsonPath, `${JSON.stringify(pkg, null, 2)}\n`, 'utf-8');
+}
+
+/** The `@prisma/orm-*` packages `name` names as peers in the workspace, followed through their peers. */
+function platformPackagesOf(name: string): string[] {
+  const found = new Set<string>();
+  const pending = [name];
+  for (let next = pending.pop(); next !== undefined; next = pending.pop()) {
+    const manifest = JSON.parse(
+      readFileSync(join(WORKSPACE_ROOT, 'packages/9-public', next, 'package.json'), 'utf-8'),
+    ) as { peerDependencies?: Record<string, string> };
+    for (const peer of Object.keys(manifest.peerDependencies ?? {})) {
+      if (peer.startsWith('@prisma/orm-') && peer !== name && !found.has(peer)) {
+        found.add(peer);
+        pending.push(peer);
+      }
+    }
+  }
+  return [...found];
 }
 
 function requireTarball(tarballs: PackedTarballs, name: string): string {

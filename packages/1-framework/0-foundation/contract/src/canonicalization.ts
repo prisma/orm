@@ -65,7 +65,7 @@ const STORAGE_NAMESPACE_ENTRIES_PATTERN = [
 ] as const satisfies PathPattern;
 
 const TOP_LEVEL_ORDER = [
-  'schemaVersion',
+  'formatVersion',
   'canonicalVersion',
   'targetFamily',
   'target',
@@ -173,10 +173,20 @@ function omitDefaults(
       }
     }
 
-    result[key] = omitDefaults(value, currentPath, shouldPreserveEmpty);
+    defineOwn(result, key, omitDefaults(value, currentPath, shouldPreserveEmpty));
   }
 
   return result;
+}
+
+/** Stores `value` as an own key of `target`, so a key named `__proto__` is a key rather than the prototype. */
+function defineOwn(target: Record<string, unknown>, key: string, value: unknown): void {
+  Object.defineProperty(target, key, {
+    value,
+    enumerable: true,
+    writable: true,
+    configurable: true,
+  });
 }
 
 function sortObjectKeys(obj: unknown): unknown {
@@ -191,8 +201,12 @@ function sortObjectKeys(obj: unknown): unknown {
   const sorted: Record<string, unknown> = {};
   const keys = Object.keys(obj).sort();
   for (const key of keys) {
-    sorted[key] = sortObjectKeys(
-      blindCast<Record<string, unknown>, 'non-array object narrowed above'>(obj)[key],
+    defineOwn(
+      sorted,
+      key,
+      sortObjectKeys(
+        blindCast<Record<string, unknown>, 'non-array object narrowed above'>(obj)[key],
+      ),
     );
   }
 
@@ -218,7 +232,6 @@ export function orderTopLevel(obj: Record<string, unknown>): Record<string, unkn
 }
 
 export interface CanonicalizeContractOptions {
-  readonly schemaVersion?: string;
   /**
    * Per-target hook that converts the in-memory contract (which may
    * carry class-instance IR nodes) into a plain JsonObject before the
@@ -258,7 +271,7 @@ export function canonicalizeContractToObject(
 ): Record<string, unknown> {
   const serialized = options.serializeContract(contract);
   const normalized: Record<string, unknown> = {
-    ...ifDefined('schemaVersion', options.schemaVersion),
+    ...ifDefined('formatVersion', serialized['formatVersion']),
     targetFamily: serialized['targetFamily'],
     target: serialized['target'],
     profileHash: serialized['profileHash'],

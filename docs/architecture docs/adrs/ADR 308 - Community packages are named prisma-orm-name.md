@@ -49,8 +49,8 @@ A package that provides only a driver for a database Prisma 8 already supports i
 ## Consequences
 
 - A listing site or search tool finds community packages by the `prisma-orm-extension` keyword. It cannot tell a database package from middleware or data types without reading the package itself.
-- Prisma's own extension packages, `@prisma/orm-extension-<name>`, list the keyword too, so the search finds them beside the community ones. Prisma's database packages, such as `@prisma/orm-postgres`, do not, and neither does `@prisma/orm-extension-paradedb`, which is a proof of concept.
-- The convention is guidance in the docs, not a check anywhere in Prisma 8. A package that ignores it still works.
+- Prisma's own extension packages, `@prisma/orm-extension-<name>`, list the keyword too, so the search finds them beside the community ones. So do Prisma's database packages, such as `@prisma/orm-postgres`. So does `@prisma/orm-better-auth`, which integrates an outside library. `@prisma/orm-extension-paradedb`, which is a proof of concept, does not.
+- The name is guidance in the docs, and nothing reads it. One command reads the keyword: `prisma orm init --target` installs a package that is not in its list only when the package lists `prisma-orm-extension` ([ADR 325](ADR%20325%20-%20init%20gets%20everything%20about%20a%20database%20from%20its%20facade.md)). A target package without the keyword still works with a `prisma.config.ts` written by hand.
 - No revisit-if condition is recorded.
 
 ## Alternatives considered

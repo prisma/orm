@@ -2,10 +2,13 @@ import { describe, expect, it } from 'vitest';
 import {
   afterHookNames,
   createSetup,
+  finalized,
   type HookEvent,
   names,
   rawPlan,
+  rejectsWith,
   type SetupOptions,
+  transactionIds,
 } from './transaction-activity-fixtures';
 
 async function begin(options: SetupOptions = {}) {
@@ -23,18 +26,6 @@ const driverCalls = (events: readonly HookEvent[]) =>
   names(events)
     .filter((name) => /^(SAVEPOINT|RELEASE|ROLLBACK|begin|commit|rollback)/.test(name))
     .join(', ');
-
-const finalized = (events: readonly HookEvent[]) =>
-  names(events)
-    .filter((name) => name.startsWith('finalized:'))
-    .map((name) => name.slice('finalized:'.length))
-    .join(', ');
-
-const transactionIds = (events: readonly HookEvent[]) =>
-  events.filter((event) => event.name === 'started:transaction').map((e) => e.activity?.id);
-
-const rejectsWith = (work: Promise<unknown>, code: string) =>
-  expect(work).rejects.toMatchObject({ code: `RUNTIME.${code}` });
 
 describe('RuntimeTransaction.transaction()', () => {
   it.each([

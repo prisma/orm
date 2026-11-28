@@ -17,6 +17,7 @@ import type {
   BindSiteParams,
   Declaration,
   ExecutionContext,
+  InteractiveTransactionsListed,
   ParamsFromDeclaration,
   Runtime,
   SqlExecutionStackWithDriver,
@@ -25,11 +26,13 @@ import type {
 } from '@internal/sql-runtime';
 import {
   activitySource,
+  assertInteractiveTransactionsListed,
   delegatingActivitySource,
   delegatingRuntime,
   withTransaction,
   withTransactionMembers,
 } from '@internal/sql-runtime';
+import postgresTarget from '@internal/target-postgres/runtime';
 import { ifDefined } from '@internal/utils/defined';
 import type { PostgresStaticContext } from '../static/postgres-static';
 import type { NamespacedNativeEnums } from './native-enums';
@@ -60,6 +63,9 @@ export interface PostgresTransactionContext<
     PostgresQueryMembers<TContract, TCollections> {
   readonly enums: NamespacedEnums<TContract>;
   readonly nativeEnums: NamespacedNativeEnums<TContract>;
+  transaction<R>(
+    fn: (tx: PostgresTransactionContext<TContract, TCollections>) => PromiseLike<R>,
+  ): Promise<R>;
 }
 
 export interface PostgresQueryMembersOptions<
@@ -120,10 +126,18 @@ export interface PostgresRuntimeBoundMembers<
   readonly orm: OrmClient<TContract, TCollections>;
   runtime(): Runtime;
   transaction<R>(
-    fn: (tx: PostgresTransactionContext<TContract, TCollections>) => PromiseLike<R>,
+    fn: PostgresTransactionCallback<TContract, TCollections, R>,
     options?: PostgresTransactionOptions,
   ): Promise<R>;
 }
+
+/** The callback `transaction()` runs. For a contract that does not list interactive transactions, and that no release candidate emitted, no callback satisfies it, and the type error names the capability. Prisma 8.0 removes the exemption for release candidate contracts. */
+export type PostgresTransactionCallback<
+  TContract extends Contract<SqlStorage>,
+  TCollections extends CollectionClasses,
+  R,
+> = ((tx: PostgresTransactionContext<TContract, TCollections>) => PromiseLike<R>) &
+  InteractiveTransactionsListed<TContract, (typeof postgresTarget)['retiredCapabilities']>;
 
 export interface PostgresLifecycleMembers {
   close(): Promise<void>;
@@ -185,6 +199,22 @@ export function buildPostgresRuntimeBoundMembers<
     return prepareQuery<D, Q, CT>(workRuntime, declaration, callback);
   }
 
+  function buildTransactionContext(
+    txCtx: TransactionContext,
+  ): PostgresTransactionContext<TContract, TCollections> {
+    return withTransactionMembers(txCtx, {
+      ...buildPostgresQueryMembers(
+        { context, collections, sql, raw, toSql, prepareRuntime: workRuntime },
+        txCtx,
+      ),
+      enums,
+      nativeEnums,
+      transaction: <R>(
+        fn: (tx: PostgresTransactionContext<TContract, TCollections>) => PromiseLike<R>,
+      ) => txCtx.transaction((nested) => fn(buildTransactionContext(nested))),
+    });
+  }
+
   return {
     orm,
 
@@ -202,31 +232,17 @@ export function buildPostgresRuntimeBoundMembers<
       fn: (tx: PostgresTransactionContext<TContract, TCollections>) => PromiseLike<R>,
       localOptions?: PostgresTransactionOptions,
     ): Promise<R> {
+      assertInteractiveTransactionsListed(context.contract, postgresTarget.retiredCapabilities);
       const local = validateTransactionOptions(localOptions);
       const isolationLevel =
         local?.isolationLevel !== undefined
           ? local.isolationLevel
           : transactionOptions?.isolationLevel;
       const timeout = local?.timeout !== undefined ? local.timeout : transactionOptions?.timeout;
-      return withTransaction(
-        workRuntime,
-        (txCtx) => {
-          const tx: PostgresTransactionContext<TContract, TCollections> = withTransactionMembers(
-            txCtx,
-            {
-              ...buildPostgresQueryMembers(
-                { context, collections, sql, raw, toSql, prepareRuntime: workRuntime },
-                txCtx,
-              ),
-              enums,
-              nativeEnums,
-            },
-          );
-
-          return fn(tx);
-        },
-        { isolationLevel, timeout },
-      );
+      return withTransaction(workRuntime, (txCtx) => fn(buildTransactionContext(txCtx)), {
+        isolationLevel,
+        timeout,
+      });
     },
   };
 }

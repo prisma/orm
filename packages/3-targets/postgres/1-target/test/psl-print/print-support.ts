@@ -132,7 +132,9 @@ export function buildModels(input: {
     input.execution === undefined
       ? createSqlContract(overrides)
       : createSqlContract({ ...overrides, execution: input.execution });
-  const contract = new PostgresContractSerializer().deserializeContract(json);
+  const contract = new PostgresContractSerializer().deserializeContract(
+    JSON.parse(JSON.stringify({ formatVersion: 1, ...json })),
+  );
   const ast = buildPostgresPslContract(
     blindCast<Contract<SqlStorage>, 'the Postgres serializer yields a SQL contract'>(contract),
     input.context ?? testBuildContext(),

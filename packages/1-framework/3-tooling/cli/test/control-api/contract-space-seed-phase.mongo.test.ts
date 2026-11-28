@@ -135,7 +135,7 @@ describe('runContractSpaceSeedPhase (Mongo-shaped contract)', () => {
         {
           id: EXT_SPACE,
           contractSpace: {
-            contractJson: contract,
+            contractJson: Object.assign(contract, { formatVersion: 1 }),
             headRef: { hash: headHash, invariants },
             migrations: [],
           },
@@ -200,7 +200,7 @@ describe('runContractSpaceSeedPhase (Mongo-shaped contract)', () => {
         {
           id: EXT_SPACE,
           contractSpace: {
-            contractJson: contract,
+            contractJson: Object.assign(contract, { formatVersion: 1 }),
             headRef: { hash: headHash, invariants },
             migrations: [],
           },

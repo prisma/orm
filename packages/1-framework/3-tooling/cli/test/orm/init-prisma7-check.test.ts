@@ -12,14 +12,19 @@ import { createTestCli } from '@prisma/cli-engine/testing';
 import { timeouts } from '@repo/test-utils';
 import { basename, join } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type {
+  ContractEntryInput,
+  InitContribution,
+} from '../../src/commands/init/init-contribution';
 import { BIN_COMMANDS, BIN_GROUPS } from '../../src/orm/cli';
 import { createInitCommand } from '../../src/orm/init';
 import { type ImportFromProject, importFromProject } from '../../src/orm/project-modules';
 import { declareAddedPackages, withoutFakeAdditions } from '../utils/fake-package-manager';
+import { noRegistryLookup, noRegistryPeersLookup } from '../utils/registry-keywords';
 import { createTestProjectDir, fixtureAppDir } from '../utils/test-project-dir';
 
 const FIXTURE = join(fixtureAppDir, 'fixtures/prisma7-project');
-// The config module the installed target package names. The fixture app installs the workspace
+// The config module the installed facade names. The fixture app installs the workspace
 // build, which names its workspace package; the published build names @prisma/orm-postgres.
 const TARGET_CONFIG = '@internal/postgres/config';
 const VIEW_DIAGNOSTIC = {
@@ -64,6 +69,8 @@ function harness(packageManager?: PackageManagerId) {
       emitScaffoldedContract: vi.fn().mockResolvedValue(undefined),
       importFromProject: (cwd, specifier) =>
         specifier.endsWith('/init') ? loadInit(cwd, specifier) : loadTargetConfig(cwd, specifier),
+      lookUpRegistryKeywords: noRegistryLookup,
+      lookUpRegistryPeers: noRegistryPeersLookup,
     }),
   };
   return createTestCli({
@@ -96,7 +103,7 @@ function fixtureFile(relative: string): string {
   return readFileSync(join(FIXTURE, relative), 'utf-8');
 }
 
-/** The target package's real `defineConfig`, with `prisma7Schema` replaced or removed. */
+/** The facade's real `defineConfig`, with `prisma7Schema` replaced or removed. */
 async function targetConfigWith(
   prisma7Schema: ((schemaPath: string) => unknown) | undefined,
 ): Promise<ImportFromProject> {
@@ -106,6 +113,32 @@ async function targetConfigWith(
     kind: 'loaded',
     module: { defineConfig, ...(prisma7Schema === undefined ? {} : { prisma7Schema }) },
   });
+}
+
+/** The facade's real init contribution, whose Prisma 7 contract entry builds `contractValue(schemaPath)`. */
+function initWithContractValue(contractValue: (schemaPath: string) => unknown): ImportFromProject {
+  return async (cwd, specifier) => {
+    const real = await importFromProject(cwd, specifier);
+    if (real.kind !== 'loaded') return real;
+    const contribution = real.module['default'] as InitContribution;
+    return {
+      kind: 'loaded',
+      module: {
+        ...real.module,
+        default: {
+          ...contribution,
+          contractEntry: (input: ContractEntryInput) => {
+            const entry = contribution.contractEntry?.(input);
+            return {
+              renderTypeScript: () => entry?.renderTypeScript() ?? '',
+              importRequirements: () => entry?.importRequirements() ?? [],
+              contractValue: () => contractValue(input.path),
+            };
+          },
+        },
+      },
+    };
+  };
 }
 
 function refusingSource(schemaPath: string) {
@@ -159,7 +192,7 @@ describe('the Prisma 7 check before init changes the project', () => {
     'refuses with the source diagnostics and leaves the project unchanged',
     async () => {
       copyFixture();
-      loadTargetConfig = await targetConfigWith(refusingSource);
+      loadInit = initWithContractValue(refusingSource);
 
       const run = await harness().run([...prisma7Argv(), '--json'], { cwd: projectDir });
 
@@ -199,7 +232,7 @@ describe('the Prisma 7 check before init changes the project', () => {
       const manifest = JSON.parse(projectFile('package.json'));
       manifest.dependencies = { ...manifest.dependencies, dotenv: '^17.0.0' };
       writeFileSync(join(projectDir, 'package.json'), `${JSON.stringify(manifest, null, 2)}\n`);
-      loadTargetConfig = await targetConfigWith(refusingSource);
+      loadInit = initWithContractValue(refusingSource);
 
       const run = await harness().run([...prisma7Argv(), '--json'], { cwd: projectDir });
 
@@ -223,7 +256,7 @@ describe('the Prisma 7 check before init changes the project', () => {
   );
 
   it(
-    'refuses --from-prisma7-schema when the target package has no Prisma 7 source',
+    'refuses --from-prisma7-schema when the facade has no Prisma 7 source',
     async () => {
       copyFixture();
       loadTargetConfig = await targetConfigWith(undefined);
@@ -249,7 +282,7 @@ describe('the Prisma 7 check before init changes the project', () => {
   );
 
   it(
-    'runs a fresh init after a yes to the question when the target package has no Prisma 7 source',
+    'runs a fresh init after a yes to the question when the facade has no Prisma 7 source',
     async () => {
       copyFixture();
       loadTargetConfig = await targetConfigWith(undefined);
@@ -346,7 +379,7 @@ describe('the Prisma 7 check before init changes the project', () => {
       'the source throws',
       'CONTRACT.SOURCE_LOAD_FAILED',
       () =>
-        targetConfigWith((schemaPath) => ({
+        initWithContractValue((schemaPath) => ({
           source: {
             format: 'psl',
             inputs: [schemaPath],
@@ -360,7 +393,7 @@ describe('the Prisma 7 check before init changes the project', () => {
     'names the packages it installed when %s',
     async (_case, code, loader) => {
       copyFixture();
-      loadTargetConfig = await loader();
+      loadInit = loader();
 
       const run = await harness().run([...prisma7Argv(), '--json'], { cwd: projectDir });
 
@@ -407,7 +440,7 @@ describe('the Prisma 7 check before init changes the project', () => {
     async () => {
       copyFixture();
       writeFileSync(join(projectDir, 'pnpm-lock.yaml'), "lockfileVersion: '9.0'\n");
-      loadTargetConfig = await targetConfigWith(refusingSource);
+      loadInit = initWithContractValue(refusingSource);
 
       const run = await harness('pnpm').run([...prisma7Argv(), '--json'], { cwd: projectDir });
 
@@ -426,7 +459,7 @@ describe('the Prisma 7 check before init changes the project', () => {
   );
 
   it(
-    'says the target package could not be loaded when it was installed but does not resolve',
+    'says the facade could not be loaded when it was installed but does not resolve',
     async () => {
       copyFixture();
       loadTargetConfig = async () => ({ kind: 'not-installed' });
@@ -453,7 +486,7 @@ describe('the Prisma 7 check before init changes the project', () => {
   );
 
   it(
-    'refuses --skip-install with nothing changed when the target package is not installed',
+    'refuses --skip-install with nothing changed when the facade is not installed',
     async () => {
       copyFixture();
       loadInit = async () => ({ kind: 'not-installed' });
@@ -557,7 +590,7 @@ describe('the Prisma 7 check before init changes the project', () => {
   );
 
   it(
-    'checks the installed target package under --skip-install without installing anything',
+    'checks the installed facade under --skip-install without installing anything',
     async () => {
       copyFixture();
 

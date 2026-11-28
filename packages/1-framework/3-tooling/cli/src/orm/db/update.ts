@@ -4,7 +4,11 @@ import {
   type MigrationPlannerConflict,
   migrationSubjectJson,
 } from '@internal/framework-components/control';
-import { readMigrationsDir } from '@internal/migration-tools/io';
+import { MigrationToolsError } from '@internal/migration-tools/errors';
+import { readMigrationPackage, readMigrationsDir } from '@internal/migration-tools/io';
+import { reconstructGraph } from '@internal/migration-tools/migration-graph';
+import { readRefs } from '@internal/migration-tools/refs';
+import { spaceMigrationDirectory, spaceRefsDirectory } from '@internal/migration-tools/spaces';
 import { ifDefined } from '@internal/utils/defined';
 import { isStructuredError } from '@internal/utils/structured-error';
 import type { Block, Presentations } from '@prisma/cli-engine';
@@ -14,13 +18,23 @@ import {
   notOk,
   ok,
 } from '@prisma/cli-engine/protocol';
-import { join } from 'pathe';
-import { createControlClient } from '../../control-api/client';
+import { dirname, join, relative } from 'pathe';
 import { errorFromCaught } from '../../control-api/operations/caught-errors';
 import {
   type ResolveContractRefToSnapshotSuccess,
   resolveContractRefToSnapshot,
 } from '../../control-api/operations/contract-snapshot-resolution';
+import {
+  type DatabasePosition,
+  databasePositionOf,
+  type MigrationPlanArguments,
+  migrationPlanArguments,
+  migrationPlanChoice,
+  migrationPlanForDatabase,
+  migrationPlanTo,
+  type PlanEnd,
+  type PlanSpace,
+} from '../../control-api/operations/plan-arguments';
 import {
   buildRefAdvancementFields,
   type ContractIR,
@@ -51,6 +65,7 @@ import type {
   MigrationCommandResult,
   RemovedNamespaceJson,
 } from '../../utils/formatters/migrations';
+import { snapshotRewriteAt } from '../../utils/next-actions';
 import { errorPermitPolicyChangeNeedsRef } from '../../utils/policy-errors';
 import {
   type CliInvocation,
@@ -60,7 +75,7 @@ import {
 } from '../../utils/printed-command';
 import { defineOrmCommand } from '../define-command';
 import { dbFlag, permitPolicyChangeFlag } from '../flags';
-import { migrationsDirFor } from '../migration/paths';
+import { displayPath, migrationsDirFor } from '../migration/paths';
 import { normalizeError } from '../normalize-error';
 import { promptPlanQuestions } from '../plan-question-prompt';
 import { controlProgressReporter } from '../progress';
@@ -68,13 +83,14 @@ import { dbUpdateStatementVerbs } from '../statement-verbs';
 import { migrationResultBlocks, migrationResultNextActions } from './migration-blocks';
 import { plannerWarningsCollector } from './planner-warnings';
 import { prepareMigrationRun } from './prepare';
+import { unrecordedSnapshotWarning } from './unrecorded-snapshots';
 
 function updatePresentations(inputs: {
   readonly document: MigrationCommandResult;
   /** Where the CLI ran and the `--config`, `--db` and other flags it was given, which printed commands repeat. */
   readonly invocation: CliInvocation;
-  /** The contract the database was at before the run, when a migration on disk ends at it. */
-  readonly databaseStorageHash: string | undefined;
+  /** The `migration plan` that takes the database, as it was before the run, where the run went. */
+  readonly migrationPlan: MigrationPlanArguments | undefined;
   readonly contractPath: string;
   readonly database: string | undefined;
   readonly to: string | undefined;
@@ -97,7 +113,7 @@ function updatePresentations(inputs: {
           ...(dryRun ? [{ label: 'mode', value: 'dry run' }] : []),
         ],
       },
-      ...migrationResultBlocks(document, inputs.invocation, inputs.databaseStorageHash),
+      ...migrationResultBlocks(document, inputs.invocation, inputs.migrationPlan),
     ],
     json: () => document,
     next: () =>
@@ -135,12 +151,17 @@ interface ConsentStatement {
   readonly text: string;
 }
 
-function subjectEntryJson(entry: AskedSubject, answeredBy: ConsentStatement | undefined) {
+/** An entry a dry run lists: answered by a flag, or by a data protection setting that permits it. */
+function subjectEntryJson(
+  entry: AskedSubject,
+  answeredBy: ConsentStatement | undefined,
+  permitted: boolean,
+) {
   return {
     operationIndex: entry.operationIndex,
     subject: migrationSubjectJson(entry.subject),
     text: entry.text,
-    answered: answeredBy !== undefined,
+    answered: permitted || answeredBy !== undefined,
     ...ifDefined('answeredBy', answeredBy),
     ...ifDefined('removedNamespace', entry.removedNamespace),
   };
@@ -164,18 +185,26 @@ function removedNamespacesJson(
 }
 
 /** The data-loss entries a dry run lists, each with how it loses data and whether a flag answers it. */
-function dataLossEntriesJson(entries: readonly AskedDataLoss[], given: readonly StatementText[]) {
+function dataLossEntriesJson(
+  entries: readonly AskedDataLoss[],
+  given: readonly StatementText[],
+  permitted: boolean,
+) {
   const answered = answeredByFlags(entries, 'delete', given);
   return entries.map((entry, index) => ({
-    ...subjectEntryJson(entry, answered[index]),
+    ...subjectEntryJson(entry, answered[index], permitted),
     ...ifDefined('loss', entry.loss),
   }));
 }
 
 /** The access entries a dry run lists, each marked answered when an `--allow` it was given answers it. */
-function accessEntriesJson(entries: readonly AskedSubject[], given: readonly StatementText[]) {
+function accessEntriesJson(
+  entries: readonly AskedSubject[],
+  given: readonly StatementText[],
+  permitted: boolean,
+) {
   const answered = answeredByFlags(entries, 'allow', given);
-  return entries.map((entry, index) => subjectEntryJson(entry, answered[index]));
+  return entries.map((entry, index) => subjectEntryJson(entry, answered[index], permitted));
 }
 
 function updateDocument(inputs: {
@@ -224,12 +253,21 @@ function updateDocument(inputs: {
     ...ifDefined('perSpace', value.perSpace),
     ...ifDefined('changedStorageEntities', value.changedStorageEntities),
     ...ifDefined('databasePoliciesUpdated', value.databasePoliciesUpdated),
+    ...ifDefined('permitted', value.permitted),
     appliedStatements: value.appliedStatements,
     temporaryValues: value.temporaryValues,
     ...(value.mode === 'plan'
       ? {
-          dataLoss: dataLossEntriesJson(value.dataLoss, inputs.statements),
-          accessChanges: accessEntriesJson(value.accessChanges, inputs.statements),
+          dataLoss: dataLossEntriesJson(
+            value.dataLoss,
+            inputs.statements,
+            value.permitted?.includes('dataLoss') === true,
+          ),
+          accessChanges: accessEntriesJson(
+            value.accessChanges,
+            inputs.statements,
+            value.permitted?.includes('accessWidening') === true,
+          ),
           removedNamespaces: removedNamespacesJson(value, inputs.statements),
           addedNamespaces: value.namespaces?.added ?? [],
         }
@@ -301,21 +339,41 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
       const cannotBeVariantConverts = fieldStatements.filter(
         ({ verb, text }) => verb === 'backfill' || text.split('.').length === 3,
       );
-      if (cannotBeVariantConverts.length > 0) {
-        const databaseStorageHash = await databaseContractIfReachable({
+      let destination: ResolveContractRefToSnapshotSuccess | undefined;
+      if (args.flags.to !== undefined) {
+        const resolved = await resolveContractRefToSnapshot({
           config: ctx.config,
-          cwd: ctx.cwd,
-          db: args.flags.db,
-          commandName: 'db update',
-          createClient,
+          migrationsDir: migrationsDirFor(ctx.config),
+          refInput: args.flags.to,
+          argument: '--to',
+          fallbackToEmitted: false,
         });
+        if (!resolved.ok) {
+          return notOk(normalizeError(resolved.failure));
+        }
+        destination = resolved.value;
+      }
+      if (cannotBeVariantConverts.length > 0) {
+        const migrationPlan = await migrationPlanIfReachable(
+          {
+            config: ctx.config,
+            cwd: ctx.cwd,
+            db: args.flags.db,
+            commandName: 'db update',
+            createClient,
+          },
+          destination,
+        );
         return notOk(
           normalizeError(
             errorStatementNeedsMigrationFile(
               given,
               cannotBeVariantConverts,
-              cliInvocation(ctx, args.flags.db),
-              databaseStorageHash,
+              {
+                ...cliInvocation(ctx, args.flags.db),
+                rerunArgs: rerunFlags({ ...args.flags, noAdvanceRef: undefined }),
+              },
+              migrationPlan,
             ),
           ),
         );
@@ -332,20 +390,6 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
             ...ctx.statements.take('allow').map(({ text }) => ({ verb: 'allow' as const, text })),
           ]
         : [];
-      let destination: ResolveContractRefToSnapshotSuccess | undefined;
-      if (args.flags.to !== undefined) {
-        const resolved = await resolveContractRefToSnapshot({
-          config: ctx.config,
-          migrationsDir: migrationsDirFor(ctx.config),
-          refInput: args.flags.to,
-          argument: '--to',
-          fallbackToEmitted: false,
-        });
-        if (!resolved.ok) {
-          return notOk(normalizeError(resolved.failure));
-        }
-        destination = resolved.value;
-      }
       if (args.flags.permitPolicyChange === true && destination?.ref === undefined) {
         return notOk(
           normalizeError(
@@ -364,7 +408,7 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
           retryCommandFor({
             commandName: args.flags.dryRun ? 'db update --dry-run' : 'db update',
             rerunArgs: [
-              ...rerunFlags(args.flags),
+              ...rerunFlags({ ...args.flags, noAdvanceRef: undefined }),
               ...[...planned, ...previewConsents, ...unansweredConsents(ctx.statements)].map(
                 statementFlag,
               ),
@@ -378,6 +422,18 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
       const { client, contractPath, dbConnection, migrationsDir, refsDir } = prepared.value;
       const contractJson = destination?.contractJson ?? prepared.value.contractJson;
       const snapshotContractPath = destination?.contractJsonPath ?? contractPath;
+      const destinationRewrite =
+        destination?.source === 'snapshot' &&
+        destination.hash === storageHashOf(prepared.value.contractJson)
+          ? snapshotRewriteAt(
+              {
+                spaceId: APP_SPACE_ID,
+                reachedByMigration: true,
+              },
+              relative(process.cwd(), dirname(destination.contractJsonPath)),
+              cliInvocation(ctx, args.flags.db),
+            )
+          : undefined;
 
       const refName = computeRefAdvancementName({
         ...ifDefined('advanceRef', args.flags.advanceRef),
@@ -391,6 +447,9 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
           contractJsonPath: snapshotContractPath,
           config: ctx.config,
           client,
+          ...(destination?.source === 'snapshot'
+            ? { snapshot: { rewrittenBy: destinationRewrite } }
+            : {}),
         });
         if (!preflight.ok) {
           return notOk(normalizeError(preflight.failure));
@@ -400,7 +459,7 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
 
       const mode = args.flags.dryRun ? 'plan' : 'apply';
       let document: MigrationCommandResult;
-      let databaseStorageHash: string | undefined;
+      let migrationPlan: MigrationPlanArguments | undefined;
       try {
         await client.connect(dbConnection);
 
@@ -411,6 +470,7 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
           ...unansweredConsents(ctx.statements),
         ].map(statementFlag);
         const result = await client.dbUpdate({
+          onUnrecordedSnapshot: unrecordedSnapshotWarning(ctx.report, 'db update', ctx.cwd),
           contract: contractJson,
           mode,
           migrationsDir,
@@ -420,10 +480,17 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
           answerQuestions: promptPlanQuestions(ctx.prompt, ctx.statements),
           invocation: {
             ...cliInvocation(ctx, args.flags.db),
-            rerunArgs: rerunFlags(args.flags),
+            rerunArgs: rerunFlags({ ...args.flags, noAdvanceRef: undefined }),
             statementArgs,
           },
+          ...ifDefined('emittedContractHash', storageHashOf(prepared.value.contractJson)),
           onPlannerWarnings: plannerWarnings.onPlannerWarnings,
+          onUnreadableOrigin: ({ path, reason }) =>
+            ctx.report({
+              kind: 'message',
+              severity: 'warn',
+              text: `Could not read the contract snapshot ${displayPath(path, ctx.cwd)}, which holds the contract the database is at: ${reason}. db update plans without it, so the questions about data it would lose name what they remove by its storage name, and a rename statement cannot be resolved.`,
+            }),
           onProgress: controlProgressReporter(ctx.report),
         });
         if (!result.ok) {
@@ -450,7 +517,7 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
           return notOk(normalizeError(advanced.failure));
         }
 
-        databaseStorageHash = result.value.databaseStorageHash;
+        migrationPlan = result.value.migrationPlan;
         document = updateDocument({
           value: result.value,
           targetId: ctx.config.target.targetId,
@@ -474,10 +541,19 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
         ) {
           return notOk(
             normalizeError(
-              errorContractValidationFailed(`Contract validation failed: ${error.message}`, {
-                where: { path: contractPath },
-                meta: contractValidationMeta(error),
-              }),
+              errorContractValidationFailed(
+                `Contract at ${snapshotContractPath} failed to deserialize: ${error.message}`,
+                {
+                  where: { path: snapshotContractPath },
+                  meta: contractValidationMeta(error),
+                  ...(destination?.source === 'snapshot'
+                    ? {
+                        artifact: 'snapshot' as const,
+                        ...ifDefined('rewrittenBy', destinationRewrite),
+                      }
+                    : {}),
+                },
+              ),
             ),
           );
         }
@@ -503,8 +579,11 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
           { data: document },
           updatePresentations({
             document,
-            invocation: { ...cliInvocation(ctx, args.flags.db), rerunArgs: rerunFlags(args.flags) },
-            databaseStorageHash,
+            invocation: {
+              ...cliInvocation(ctx, args.flags.db),
+              rerunArgs: rerunFlags({ ...args.flags, noAdvanceRef: undefined }),
+            },
+            migrationPlan,
             contractPath: prepared.value.contractDisplayPath,
             database: prepared.value.database,
             to: args.flags.to,
@@ -517,41 +596,100 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
   });
 }
 
-export const dbUpdateCommand = createDbUpdateCommand(createControlClient);
-
 /**
- * The storage hash of the contract the database is at, when the database already exists and can be
- * reached and a migration of the application space ends at that contract, so that `migration plan
- * --from` resolves it. Anything else gives undefined: this only adds `--from` to a refusal, and it
- * never creates a database to read the marker.
+ * The `migration plan` that takes the database where `db update` goes: to `destination`, the
+ * contract `--to` named, or else the emitted contract. The migrations and refs are read offline;
+ * when the database cannot be read, the user chooses where the plan starts, told why.
  */
-async function databaseContractIfReachable(
+async function migrationPlanIfReachable(
   inputs: Parameters<typeof prepareMigrationRun>[0],
-): Promise<string | undefined> {
+  destination: ResolveContractRefToSnapshotSuccess | undefined,
+): Promise<MigrationPlanArguments> {
+  const end: PlanEnd =
+    destination === undefined
+      ? { kind: 'emitted' }
+      : destination.ref !== undefined
+        ? { kind: 'ref', name: destination.ref.name }
+        : { kind: 'contract', hash: destination.hash };
   const prepared = await prepareMigrationRun(inputs);
-  if (!prepared.ok) return undefined;
+  if (!prepared.ok) {
+    return {
+      from: migrationPlanChoice(
+        undefined,
+        'The CLI could not prepare a connection to the database from the config',
+      ),
+      to: migrationPlanTo(NO_MIGRATIONS, end),
+    };
+  }
   const { client, dbConnection, migrationsDir } = prepared.value;
-  const read = async (): Promise<string | undefined> => {
+  const emittedHash = storageHashOf(prepared.value.contractJson);
+  const space = await readPlanSpace(migrationsDir, emittedHash).catch(
+    (error: unknown) =>
+      `The CLI could not read the migrations: ${MigrationToolsError.is(error) ? error.why : causeText(error)}`,
+  );
+  const readMarker = async () => {
     await client.connect(dbConnection, {
       existingDatabaseOnly: true,
       connectTimeoutMs: MARKER_READ_TIMEOUT_MS,
     });
-    const marker = await client.readMarker();
-    if (marker === null) return undefined;
-    const { packages } = await readMigrationsDir(join(migrationsDir, APP_SPACE_ID), {
-      migrationsDir,
-    });
-    return packages.some(({ metadata }) => metadata.to === marker.storageHash)
-      ? marker.storageHash
-      : undefined;
+    return { kind: 'read', marker: await client.readMarker() } as const;
   };
-  const settled = read()
-    .catch(() => undefined)
+  const settled = readMarker()
+    .catch((error: unknown) => ({ kind: 'failed', cause: causeText(error) }) as const)
     .finally(() => closeQuietly(client));
-  return settledWithin(settled, MARKER_READ_TIMEOUT_MS);
+  const read = await settledWithin(settled, MARKER_READ_TIMEOUT_MS);
+  const position: DatabasePosition =
+    read === undefined
+      ? {
+          kind: 'unknown',
+          reason: `The CLI could not read the database within ${MARKER_READ_TIMEOUT_MS / 1000} seconds to find the contract it is at`,
+        }
+      : read.kind === 'failed'
+        ? { kind: 'unknown', reason: `The CLI could not read the database: ${read.cause}` }
+        : databasePositionOf(read.marker?.storageHash);
+  if (typeof space !== 'string') {
+    return read?.kind === 'read'
+      ? migrationPlanForDatabase(space, read.marker, end)
+      : migrationPlanArguments(space, position, end);
+  }
+  return {
+    from: migrationPlanChoice(undefined, space),
+    to: migrationPlanTo({ ...NO_MIGRATIONS, ...ifDefined('emittedHash', emittedHash) }, end),
+  };
 }
 
-/** How long the refusal waits for the marker before it refuses without `--from`. */
+/** A space read as having no migrations and no refs, for when the migrations cannot be read. */
+const NO_MIGRATIONS: PlanSpace = { graph: reconstructGraph([]), refs: {} };
+
+function storageHashOf(contractJson: Record<string, unknown>): string | undefined {
+  const storage = contractJson['storage'];
+  if (typeof storage !== 'object' || storage === null) return undefined;
+  const hash = 'storageHash' in storage ? storage.storageHash : undefined;
+  return typeof hash === 'string' ? hash : undefined;
+}
+
+function causeText(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+async function readPlanSpace(
+  migrationsDir: string,
+  emittedHash: string | undefined,
+): Promise<PlanSpace> {
+  const appDir = spaceMigrationDirectory(migrationsDir, APP_SPACE_ID);
+  const { packages, problems } = await readMigrationsDir(appDir, { migrationsDir });
+  const [problem] = problems;
+  if (problem !== undefined) {
+    await readMigrationPackage(join(appDir, problem.dirName), { migrationsDir });
+  }
+  return {
+    graph: reconstructGraph(packages),
+    refs: await readRefs(spaceRefsDirectory(appDir)),
+    ...ifDefined('emittedHash', emittedHash),
+  };
+}
+
+/** How long the refusal waits for the database before it leaves the plan's origin to the user. */
 const MARKER_READ_TIMEOUT_MS = 3000;
 
 function settledWithin<T>(promise: Promise<T>, ms: number): Promise<T | undefined> {

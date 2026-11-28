@@ -39,7 +39,7 @@ Reference the appropriate JSON schema in your `contract.json` files to enable ID
 ```json
 {
   "$schema": "node_modules/@internal/contract/schemas/data-contract-document-v1.json",
-  "schemaVersion": "1",
+  "formatVersion": 1,
   "target": "mongodb",
   "targetFamily": "document",
   "storageHash": "..."

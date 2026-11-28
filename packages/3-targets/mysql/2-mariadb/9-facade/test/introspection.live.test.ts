@@ -95,10 +95,9 @@ const columnKindsDdl = `CREATE TABLE \`Kinds\` (
 describe('introspecting a MariaDB database made by hand', {
   timeout: timeouts.databaseOperation,
 }, () => {
-  it('verifies the example contract against tables MariaDB reports as int(11), with a current_timestamp(3) default MariaDB does not mark as generated', async (test) => {
+  it('verifies the example contract against tables MariaDB reports as int(11), with a current_timestamp(3) default MariaDB does not mark as generated', async () => {
     const { contract } = await emitFixture('example');
     await withMysqlDatabase(
-      test,
       ({ url }) =>
         withTables(url, exampleTablesDdl, async (driver) => {
           const actual = await introspect(driver, contract);
@@ -116,9 +115,8 @@ describe('introspecting a MariaDB database made by hand', {
     );
   });
 
-  it('reads each column type and default as MySQL 8.4 reports it, though MariaDB keeps display widths, quotes literals and reports no default as the text NULL', async (test) => {
+  it('reads each column type and default as MySQL 8.4 reports it, though MariaDB keeps display widths, quotes literals and reports no default as the text NULL', async () => {
     await withMysqlDatabase(
-      test,
       ({ url }) =>
         withTables(url, [columnKindsDdl], async (driver) => {
           const columns = (await introspect(driver)).tables['Kinds']?.columns ?? {};
@@ -169,7 +167,156 @@ describe('introspecting a MariaDB database made by hand', {
     );
   });
 
-  it('reads literal defaults through the codecs of the columns a contract declares', async (test) => {
+  it('verifies a table made by hand with a column of each scalar convenience type and its default', async () => {
+    const { contract } = await emitFixture('scalar-types');
+    const measureDdl = `CREATE TABLE \`Measure\` (
+      \`id\` int(11) NOT NULL,
+      \`count\` bigint(20) NOT NULL DEFAULT 7,
+      \`ratio\` double NOT NULL DEFAULT 0.25,
+      \`amount\` decimal(65,30) NOT NULL DEFAULT 1.5,
+      \`price\` decimal(10,2) NOT NULL DEFAULT '-0.5',
+      \`label\` text DEFAULT NULL,
+      \`name\` varchar(40) NOT NULL DEFAULT 'it''s',
+      \`on\` tinyint(1) NOT NULL DEFAULT 1,
+      \`data\` longblob NOT NULL DEFAULT X'00ff',
+      \`doc\` json NOT NULL DEFAULT '{"a": "it''s", "b": [1, null]}',
+      \`extra\` longtext COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(\`extra\`)),
+      PRIMARY KEY (\`id\`)
+    )`;
+    await withMysqlDatabase(
+      ({ url }) =>
+        withTables(url, [measureDdl], async (driver) => {
+          const actual = await introspect(driver, contract);
+          const measure = actual.tables['Measure']?.columns ?? {};
+          expect({
+            amount: measure['amount']?.resolvedDefault,
+            price: measure['price']?.resolvedDefault,
+            ratio: measure['ratio']?.resolvedDefault,
+            on: measure['on']?.resolvedDefault,
+            data: measure['data']?.resolvedDefault,
+            doc: measure['doc']?.resolvedDefault,
+            types: ['on', 'data', 'doc', 'extra'].map((name) => measure[name]?.typeText),
+            issues: mariadb.diffSchema({ contract, schema: actual, frameworkComponents }).issues,
+          }).toEqual({
+            amount: { kind: 'literal', value: `1.5${'0'.repeat(29)}` },
+            price: { kind: 'literal', value: '-0.50' },
+            ratio: { kind: 'literal', value: 0.25 },
+            on: { kind: 'literal', value: true },
+            data: { kind: 'literal', value: '00FF' },
+            doc: { kind: 'literal', value: { a: "it's", b: [1, null] } },
+            types: ['tinyint(1)', 'longblob', 'json', 'json'],
+            issues: [],
+          });
+        }),
+      SERVER,
+    );
+  });
+
+  it.for([
+    ["'abcd'", '61626364'],
+    ["('abcd')", '61626364'],
+    ["('é€')", 'C3A9E282AC'],
+    ["''", ''],
+    ["X''", ''],
+    ["X'00FF'", '00FF'],
+    ["_binary'ab'", '6162'],
+  ])(
+    'reads the default %s on a longblob column as the bytes a row of it holds',
+    async ([written, rowHex]) => {
+      const { contract } = await emitFixture('scalar-types');
+      const ddl = `CREATE TABLE \`Measure\` (
+      \`id\` int NOT NULL,
+      \`data\` longblob NOT NULL DEFAULT ${written},
+      PRIMARY KEY (\`id\`)
+    )`;
+      await withMysqlDatabase(
+        ({ url }) =>
+          withTables(url, [ddl], async (driver) => {
+            const data = (await introspect(driver, contract)).tables['Measure']?.columns['data'];
+            await driver.query('INSERT INTO `Measure` (`id`) VALUES (1)');
+            const { rows } = await driver.query<{ hex: string }>(
+              'SELECT HEX(`data`) AS hex FROM `Measure`',
+            );
+            expect({
+              row: rows[0]?.hex,
+              resolvedDefault: data?.resolvedDefault,
+              unreadable: data?.defaultUnreadable,
+            }).toEqual({
+              row: rowHex,
+              resolvedDefault: { kind: 'literal', value: rowHex },
+              unreadable: undefined,
+            });
+          }),
+        SERVER,
+      );
+    },
+  );
+
+  it('keeps a binary and varbinary default as MariaDB reports it, since it shows a byte that is not UTF-8 as a question mark', async () => {
+    const ddl = `CREATE TABLE \`Fixed\` (
+      \`id\` int NOT NULL,
+      \`b\` binary(4) NOT NULL DEFAULT 0x61,
+      \`vb\` varbinary(8) NOT NULL DEFAULT 0x00ff,
+      PRIMARY KEY (\`id\`)
+    )`;
+    await withMysqlDatabase(
+      ({ url }) =>
+        withTables(url, [ddl], async (driver) => {
+          const columns = (await introspect(driver)).tables['Fixed']?.columns ?? {};
+          await driver.query('INSERT INTO `Fixed` (`id`) VALUES (1)');
+          const { rows } = await driver.query<{ b: string; vb: string }>(
+            'SELECT HEX(`b`) AS b, HEX(`vb`) AS vb FROM `Fixed`',
+          );
+          expect({
+            row: rows[0],
+            b: columns['b']?.resolvedDefault,
+            vb: columns['vb']?.resolvedDefault,
+          }).toEqual({
+            row: { b: '61000000', vb: '00FF' },
+            b: { kind: 'function', expression: "'a\\0\\0\\0'" },
+            vb: { kind: 'function', expression: "'\\0?'" },
+          });
+        }),
+      SERVER,
+    );
+  });
+
+  it('reads a longtext column as json only when MariaDB gave it the column check json_valid makes', async () => {
+    const ddl = `CREATE TABLE \`Docs\` (
+      \`id\` int NOT NULL,
+      \`doc\` json,
+      \`plain\` longtext,
+      \`binCollated\` longtext COLLATE utf8mb4_bin,
+      \`tableChecked\` longtext,
+      \`otherCheck\` longtext CHECK (octet_length(\`otherCheck\`) < 100),
+      PRIMARY KEY (\`id\`),
+      CONSTRAINT \`docs_json\` CHECK (json_valid(\`tableChecked\`))
+    )`;
+    await withMysqlDatabase(
+      ({ url }) =>
+        withTables(url, [ddl], async (driver) => {
+          const columns = (await introspect(driver)).tables['Docs']?.columns ?? {};
+          expect(
+            Object.fromEntries(
+              Object.entries(columns).map(([name, column]) => [
+                name,
+                [column.typeText, column.storedType?.id],
+              ]),
+            ),
+          ).toEqual({
+            id: ['int', 'mysql/int'],
+            doc: ['json', 'mysql/json'],
+            plain: ['longtext', undefined],
+            binCollated: ['longtext', undefined],
+            tableChecked: ['longtext', undefined],
+            otherCheck: ['longtext', undefined],
+          });
+        }),
+      SERVER,
+    );
+  });
+
+  it('reads literal defaults through the codecs of the columns a contract declares', async () => {
     const { contract } = await emitFixture('defaults');
     const itemDdl = `CREATE TABLE \`Item\` (
       \`id\` int(11) NOT NULL,
@@ -183,7 +330,6 @@ describe('introspecting a MariaDB database made by hand', {
       PRIMARY KEY (\`id\`)
     )`;
     await withMysqlDatabase(
-      test,
       ({ url }) =>
         withTables(url, [itemDdl], async (driver) => {
           const actual = await introspect(driver, contract);

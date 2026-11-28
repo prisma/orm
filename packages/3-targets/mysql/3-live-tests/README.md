@@ -12,11 +12,11 @@ MariaDB runs MySQL's runtime under its own target id, so every ORM read and writ
 
 ## Responsibilities
 
-- **Suites** (`test/suites/`): reads, includes, writes, writes whose filter reads the written table (which MySQL refuses and MariaDB runs), raw SQL and transaction ownership. Each suite takes a `LiveServer` (`test/live-server.ts`) and names no database: where the servers differ, the suite reads the expectation from `server.expected`, which the server's definition states.
+- **Suites** (`test/suites/`): reads, includes, writes, writes whose filter reads the written table (which MySQL refuses and MariaDB runs), raw SQL, transaction ownership, and the scalar convenience types (`orm-scalar-types.ts`), each written, read, filtered and read through an include. Each suite takes a `LiveServer` (`test/live-server.ts`) and names no database: where the servers differ, the suite reads the expectation from `server.expected`, which the server's definition states.
 - **Servers** (`test/mysql/server.ts`, `test/mariadb/server.ts`): a client of each, its control components, and what differs on it. Each folder runs every suite against its server.
 - **One schema for both** (`test/fixtures/contract.prisma`): emitted for each target by `pnpm emit` into `test/fixtures/<target>/generated/`. The suites are typechecked twice, once against each target's emitted types (`tsconfig.json` for MySQL, `tsconfig.mariadb.json` for MariaDB, which map `#live-types` to `test/types/<target>.ts`), so no MariaDB contract is typed as MySQL's. `test/contracts-agree.test.ts` checks that the two contracts have the same models and tables, and type their fields, columns and aggregates alike.
 - **Rendered SQL** (`test/rendered-statements.test.ts`): the SQL MySQL is sent for the suites' queries as they stood when the renderer became a class, replayed against a driver that answers without a database. It is a copy kept by hand.
 
 ## Testing
 
-The live tests need `MYSQL_URL` and `MARIADB_URL` and skip a server whose URL is not set, except in CI, where `test/live-server.test.ts` fails without both. `docker compose up mysql mariadb` starts both servers.
+The live tests need both servers and fail when `MYSQL_URL` or `MARIADB_URL` is not set. `docker compose up -d --wait mysql mariadb` at the repository root starts both servers.

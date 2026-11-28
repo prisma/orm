@@ -26,10 +26,12 @@ import {
   CollModCall,
   CreateCollectionCall,
   CreateIndexCall,
+  callInSentence,
   DropCollectionCall,
   DropIndexCall,
   MIGRATION_MODULE,
   RenameCollectionCall,
+  ReplaceStoredValueCall,
 } from '../src/core/migrations/op-factory-call';
 
 describe('Mongo call classes', () => {
@@ -263,5 +265,20 @@ describe('Mongo call classes', () => {
         'collMod("users", { validator: { $jsonSchema: { type: "object" } } }, { label: "Tighten", operationClass: "widening" })',
       );
     });
+  });
+});
+
+describe('callInSentence', () => {
+  it('writes a __proto__ key as a computed key', () => {
+    const call = new ReplaceStoredValueCall({
+      collection: 'tasks',
+      field: 'meta',
+      from: 'issue',
+      to: { $literal: Object.fromEntries([['__proto__', 1]]) },
+    });
+    const source = callInSentence(call);
+    expect(source).toBe(
+      'replaceStoredValue({ collection: "tasks", field: "meta", from: "issue", to: { $literal: { ["__proto__"]: 1 } } })',
+    );
   });
 });

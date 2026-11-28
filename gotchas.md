@@ -8,7 +8,7 @@ Each entry should also be filed as a Triage-state Linear ticket in the matching 
 - Prisma Compute → [`compute-gotchas`](https://linear.app/prisma-company/project/compute-gotchas-dd3ac34b5ad4/overview)
 - Prisma Postgres → [`ppg-gotchas`](https://linear.app/prisma-company/project/ppg-gotchas-afe77336f696/overview)
 
-The capture workflow is documented in [`.claude/skills/record-gotchas/SKILL.md`](.claude/skills/record-gotchas/SKILL.md).
+The capture workflow is documented in [`skills-contrib/record-gotcha/SKILL.md`](skills-contrib/record-gotcha/SKILL.md).
 
 ---
 
@@ -43,7 +43,7 @@ $ pnpm prisma-next migrate --to prod --db $DB --config fixtures/diamond/prisma.c
        execution.mutations.defaults[0].ref.namespace must be a string (was missing)
 ```
 
-**Cause.** The contract serialization format moved under the fixtures (e.g. the database→namespace→table diff-tree restructure, #894), and the fixtures' committed predecessor contract snapshot in `migrations/snapshots/<hex>/contract.json` was emitted with the older shape. Offline commands (`migration graph`, `list`, `show`, `check`) never deserialize predecessor contracts, so the drift is invisible until someone runs `migrate` or `migration status` against a database.
+**Cause.** The contract serialization format moved under the fixtures (e.g. the database→namespace→table diff-tree restructure, #894), and the fixtures' committed predecessor contract snapshot in `migrations/snapshots/<hex>/contract.json` was emitted with the older shape. `migration graph`, `list` and `show` never deserialize predecessor contracts, so they still render the fixtures. `migration check` reads strictly the snapshot each ref names, the snapshot at the head, and each one no migration starts from, so it now reports `MIGRATION.CHECK_SNAPSHOT_UNPARSEABLE` for six of the seven fixtures (all but `skip-rollback`). No CI job runs `migration check` on them, and no script regenerates them: `scripts/regen-example-migrations.mjs` covers `examples/prisma-8-demo/migrations/app`, not `fixtures/`.
 
 **Workaround.** Treat the fixtures as offline-only (graph rendering) for now. For a live apply walkthrough, create a fresh fixture with the current CLI (`contract emit` + `migration plan`) instead of reusing the committed ones.
 
@@ -71,7 +71,7 @@ $ pnpm prisma-next migrate --to prod --db $DB --config fixtures/diamond/prisma.c
 
 **Workaround.** Either apply with `prisma-next migrate --advance-ref db` from the start, or always pass `--from <latest-migration-dir>`. A CLI warning when the graph is non-empty but planning resolves to greenfield would remove the trap entirely.
 
-**Resolved.** `migration plan` now refuses this case instead of planning: when default origin resolution finds no `--from` and no `db` ref while migrations exist on disk, it fails with `MIGRATION.PLAN_ORIGIN_UNKNOWN` and names the three exits — set the `db` ref (`migration ref set db <contract>`, or advance it via `db update`), pass `--from <contract>`, or pass `--from @empty` to plan from an empty database deliberately. The first plan of a fresh project (empty graph) stays silently greenfield.
+**Resolved.** `migration plan` now refuses this case instead of planning: when default origin resolution finds no `--from` and no `db` ref while migrations exist on disk, it fails with `MIGRATION.PLAN_ORIGIN_UNKNOWN` and names the three exits — set the `db` ref (`migration ref set db <contract>`, or advance it via `db update`), pass `--from <contract>`, or pass `--from @empty` to plan from an empty database deliberately. The first plan of a fresh project (empty graph) stays silently greenfield. `db migrate` now also advances the `db` ref when its connection comes from `prisma.config.ts` and the CLI does not detect CI ([ADR 327](docs/architecture%20docs/adrs/ADR%20327%20-%20db%20migrate%20advances%20the%20db%20ref%20when%20the%20connection%20comes%20from%20the%20config.md)), so step 1 of the reproduction leaves a `db` ref and step 3 plans the one-column delta.
 
 **Reproduction.**
 1. Fresh project: `contract emit`, `migration plan --name init`, `migrate` (no `--advance-ref`).

@@ -1,3 +1,5 @@
+import { isFormatVersionError } from '@internal/contract/format-version';
+import { formatVersionErrorAt } from '@internal/contract/internal/format-version';
 import type { Contract, StorageNamespace } from '@internal/contract/types';
 import type { SchemaEntityCoordinate } from '@internal/framework-components/control';
 import { coordinateKey, elementCoordinates } from '@internal/framework-components/ir';
@@ -39,6 +41,9 @@ function deserializeContractAtPath(
   try {
     return deserializeContract(contractJson);
   } catch (error) {
+    if (isFormatVersionError(error)) {
+      throw formatVersionErrorAt(error, filePath);
+    }
     if (MigrationToolsError.is(error)) {
       throw error;
     }
@@ -280,14 +285,14 @@ export function collectAggregateNamespaces(
     ...aggregate.spaces().map((space) => space.contract()),
     ...(originContract === null ? [] : [originContract]),
   ];
-  const merged: Record<string, StorageNamespace> = {};
+  const merged = new Map<string, StorageNamespace>();
   for (const contract of contracts) {
     for (const [key, ns] of Object.entries(contract.storage.namespaces)) {
-      const existing = merged[key];
-      merged[key] = existing === undefined ? ns : mergeNamespaceEntries(existing, ns);
+      const existing = merged.get(key);
+      merged.set(key, existing === undefined ? ns : mergeNamespaceEntries(existing, ns));
     }
   }
-  return { storage: { namespaces: merged }, contracts };
+  return { storage: { namespaces: Object.fromEntries(merged) }, contracts };
 }
 
 /**

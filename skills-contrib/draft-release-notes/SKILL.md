@@ -119,7 +119,8 @@ Write the entries under the fixed section order from [`docs/releases/README.md`]
 1. **Breaking changes** — API removals/renames, semantic changes to existing APIs, contract-format changes. Say what the reader must *do*, not just what changed.
 2. **Features** — new capabilities.
 3. **Fixes** — bug fixes.
-4. **New contributors** — first-time contributors, with the PR that welcomed them.
+4. **Known problems** — defects the release is known to ship with and does not fix; most releases have none.
+5. **New contributors** — first-time contributors, with the PR that welcomed them.
 
 Breaking changes lead because they are what a reader scanning the notes most needs to see. Every line links its PR as an **absolute markdown link** — `[#NNN](https://github.com/prisma/orm/pull/NNN)`, never bare `#NNN`. Bare references only autolink inside the GitHub Release body; they render as plain text when the committed `docs/releases/v<version>.md` is read as a repo file or in PR review, so the explicit link form is what makes every reference work in every context.
 
@@ -209,6 +210,10 @@ Fill the [`docs/releases/README.md`](../../docs/releases/README.md) template int
 
 - <bug fix>. ([#<pr>](https://github.com/prisma/orm/pull/<pr>))
 
+## Known problems
+
+- <a defect this release ships with: what the reader sees, and what to do>.
+
 ## New contributors
 
 - [@<handle>](https://github.com/<handle>) made their first contribution in [#<pr>](https://github.com/prisma/orm/pull/<pr>)
@@ -237,7 +242,7 @@ Control then returns to `publish-npm-version` for the push + PR-open steps.
 ## Out of scope
 
 - **The publish-time presence gate and `--notes-file` wiring** (`scripts/check-release-notes.mjs`, `.github/workflows/`). This skill *produces* the file; the gate and workflow *consume* it.
-- **Wiring this skill into `publish-npm-version`** and updating `docs/oss/versioning.md` — handled separately; this file is the authoring logic only.
+- **Wiring this skill into `publish-npm-version`** and updating `docs/oss/releasing.md` — handled separately; this file is the authoring logic only.
 - **Dev/beta release notes.** Those builds create no GitHub Release.
 - **Backfilling notes for already-shipped releases.**
 - **A `.github/release.yml` label config or any third-party release-notes tool.** Categorization is done here, by reasoning over the diff + Linear context — not from PR labels or an external generator.
@@ -301,5 +306,5 @@ Contract deserialization gains an explicit adapter seam, and queries can now eag
 - [`record-upgrade-instructions`](../record-upgrade-instructions/SKILL.md) — per-PR pending-fragment authoring and validation.
 - [Upgrade instruction lifecycle](../../upgrade-instructions/README.md) — assembly, archives, and checks for the published guides linked from notes.
 - [`scripts/check-upgrade-coverage.mjs`](../../scripts/check-upgrade-coverage.mjs) — declaration coverage and release completeness.
-- [`docs/oss/versioning.md`](../../docs/oss/versioning.md) — the version contract and release procedure these notes are part of.
+- [`docs/oss/releasing.md`](../../docs/oss/releasing.md) — the release procedure these notes are part of.
 - Linear ticket: [TML-2758](https://linear.app/prisma-company/issue/TML-2758).

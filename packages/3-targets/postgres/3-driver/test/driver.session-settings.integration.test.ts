@@ -4,20 +4,26 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { createBoundDriverFromBinding } from '../src/postgres-driver';
 import { queryRows } from './sql-queryable-test-utils';
 
-const SESSION_SETTINGS = { DateStyle: 'ISO', lc_monetary: 'C' } as const;
-const OTHER_SETTINGS = ["SET DateStyle TO 'German, DMY'", "SET lc_monetary TO 'POSIX'"];
+const SESSION_SETTINGS = { DateStyle: 'ISO', IntervalStyle: 'iso_8601' } as const;
+const OTHER_SETTINGS = ["SET DateStyle TO 'German, DMY'", "SET IntervalStyle TO 'sql_standard'"];
 
 type Queryable = Parameters<typeof queryRows>[0];
 
 async function settingsOf(
   queryable: Queryable,
-): Promise<{ DateStyle: string; lc_monetary: string }> {
+): Promise<{ DateStyle: string; IntervalStyle: string }> {
   const [dateStyle] = await queryRows<{ DateStyle: string }>(queryable, 'SHOW DateStyle');
-  const [lcMonetary] = await queryRows<{ lc_monetary: string }>(queryable, 'SHOW lc_monetary');
-  return { DateStyle: dateStyle?.DateStyle ?? '', lc_monetary: lcMonetary?.lc_monetary ?? '' };
+  const [intervalStyle] = await queryRows<{ IntervalStyle: string }>(
+    queryable,
+    'SHOW IntervalStyle',
+  );
+  return {
+    DateStyle: dateStyle?.DateStyle ?? '',
+    IntervalStyle: intervalStyle?.IntervalStyle ?? '',
+  };
 }
 
-const APPLIED = { DateStyle: expect.stringMatching(/^ISO/), lc_monetary: 'C' };
+const APPLIED = { DateStyle: expect.stringMatching(/^ISO/), IntervalStyle: 'iso_8601' };
 
 describe('the session settings on a connection the application supplies', () => {
   const cleanups: (() => Promise<void>)[] = [];

@@ -7,6 +7,7 @@ import type {
 import { asNamespaceId, profileHash, type StorageHashBase } from '@internal/contract/types';
 import { SqlStorage, StorageTable, StorageValueSet } from '@internal/sql-contract/types';
 import { createTestSqlNamespace } from '../../1-core/contract/test/test-support';
+import { exactName } from '../src/core/migrations/model-storage';
 import type { SchemaTables } from '../src/core/migrations/schema-tables';
 
 export type ValueObjectFieldSpec =
@@ -162,6 +163,7 @@ export function contractWith(options: {
 
 export function allTables(): SchemaTables {
   return {
+    sameName: exactName,
     hasTable: () => true,
     hasColumn: () => true,
     tablesNamed: () => [],

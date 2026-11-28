@@ -1,6 +1,6 @@
 {
   "name": "@internal/publish-surface",
-  "version": "8.0.0-rc.24",
+  "version": "8.0.0-rc.25",
   "private": true,
   "license": "Apache-2.0",
   "type": "module",
@@ -16,7 +16,7 @@
     "clean": "rm -rf dist dist-tsc dist-tsc-prod coverage .tmp-output"
   },
   "devDependencies": {
-    "@repo/tsconfig": "workspace:8.0.0-rc.24",
+    "@repo/tsconfig": "workspace:8.0.0-rc.25",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
@@ -34,7 +34,9 @@
     "src"
   ],
   "exports": {
+    "./levels": "./dist/levels.mjs",
     "./platform-entrypoints": "./dist/platform-entrypoints.mjs",
+    "./release-plan": "./dist/release-plan.mjs",
     "./shells": "./dist/shells.mjs",
     "./package.json": "./package.json"
   },

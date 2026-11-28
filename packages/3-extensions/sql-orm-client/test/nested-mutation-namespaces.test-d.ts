@@ -69,3 +69,50 @@ describe('nested mutations when two namespaces declare the parent model with rel
     void [inPublic, inShadow, createdInShadow];
   });
 });
+
+type ShadowTaskWithoutReporter = Omit<
+  PublicModels['Task'],
+  'discriminator' | 'variants' | 'fields'
+> & {
+  readonly fields: Omit<PublicModels['Task']['fields'], 'reporterId'>;
+};
+
+type ShadowedWithoutReporter = Omit<Contract, 'domain'> & {
+  readonly domain: Omit<Contract['domain'], 'namespaces'> & {
+    readonly namespaces: Contract['domain']['namespaces'] & {
+      readonly shadow: Omit<PublicNamespace, 'models'> & {
+        readonly models: {
+          readonly Project: ShadowProject;
+          readonly Task: ShadowTaskWithoutReporter;
+        };
+      };
+    };
+  };
+};
+
+describe('nested create options when two namespaces declare the target model with different fields', () => {
+  test('conflictOn takes the fields of the target model in the namespace of the relation', () => {
+    const inPublic: MutationUpdateInput<ShadowedWithoutReporter, 'Project', 'public'> = {
+      tasks: (tasks) =>
+        tasks
+          .variant('bug')
+          .create({ title: 'Crash' }, { onConflict: 'skip', conflictOn: ['reporterId'] }),
+    };
+    const inShadow: MutationUpdateInput<ShadowedWithoutReporter, 'Project', 'shadow'> = {
+      tasks: (tasks) =>
+        tasks.create(
+          { id: 1, title: 'Crash', type: 'bug' },
+          { onConflict: 'skip', conflictOn: ['title'] },
+        ),
+    };
+    const reporterInShadow: MutationUpdateInput<ShadowedWithoutReporter, 'Project', 'shadow'> = {
+      tasks: (tasks) =>
+        // @ts-expect-error
+        tasks.create(
+          { id: 1, title: 'Crash', type: 'bug' },
+          { onConflict: 'skip', conflictOn: ['reporterId'] },
+        ),
+    };
+    void [inPublic, inShadow, reporterInShadow];
+  });
+});

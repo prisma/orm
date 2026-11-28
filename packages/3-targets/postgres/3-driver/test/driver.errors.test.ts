@@ -1,10 +1,10 @@
 import { SqlQueryError } from '@internal/sql-errors';
 import { timeouts } from '@repo/test-utils';
 import type { Client, Pool } from 'pg';
-import { newDb } from 'pg-mem';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import postgresRuntimeDriverDescriptor from '../src/exports/runtime';
 import { createBoundDriverFromBinding } from '../src/postgres-driver';
+import { memPgPool } from './pg-mem-pool';
 import { queryRows } from './sql-queryable-test-utils';
 
 describe('@internal/driver-postgres', () => {
@@ -19,15 +19,14 @@ describe('@internal/driver-postgres', () => {
   it(
     'handles query errors',
     async () => {
-      const db = newDb();
-      const { Pool } = db.adapters.createPg();
-      const pool = new Pool();
       const driver = postgresRuntimeDriverDescriptor.create({ cursor: { disabled: true } });
       cleanups.push(async () => {
         await driver.close();
       });
-      await driver.connect({ kind: 'pgPool', pool: pool as unknown as Pool, ownedByDriver: true });
-      await expect(queryRows(driver, 'select * from nonexistent_table')).rejects.toThrow();
+      await driver.connect({ kind: 'pgPool', pool: memPgPool(), ownedByDriver: true });
+      await expect(queryRows(driver, 'select * from nonexistent_table')).rejects.toThrow(
+        'relation "nonexistent_table" does not exist',
+      );
     },
     timeouts.spinUpPpgDev,
   );

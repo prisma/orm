@@ -5,6 +5,7 @@ import type { RuntimeDriverDescriptor } from '@internal/framework-components/exe
 import type { MysqlClient, MysqlOptions } from '@internal/mysql/runtime';
 import type { SqlControlDriverInstance } from '@internal/sql-contract/types';
 import type { NoCollectionClasses } from '@internal/sql-orm-client';
+import type { MysqlServerVariable } from '@repo/test-utils/mysql-database';
 import type { LiveContract, LiveTargetId } from '#live-types';
 
 /** The options a live test passes when it creates a client: all but the contract, which the server supplies. */
@@ -25,6 +26,8 @@ export interface LiveExpectations {
   readonly havingAboveExactMean: 'drops the group' | 'keeps the group';
   /** What an update or delete whose filter reads the table it writes does: the renderer refuses it, or the server runs it. */
   readonly writeReadingWrittenTable: 'refused' | 'runs';
+  /** What a decimal `sum` in an include over several parents gives when the total needs more digits than the widest decimal holds: the exact total, or the largest value of its type, with no error or warning, which the server gives when it groups the rows through a temporary table. */
+  readonly sumPastWidestDecimalIncludedForSeveralParents: 'exact' | 'the largest value';
 }
 
 /**
@@ -32,7 +35,7 @@ export interface LiveExpectations {
  */
 export interface LiveServer {
   readonly displayName: string;
-  readonly urlVariable: string;
+  readonly urlVariable: MysqlServerVariable;
   readonly contract: LiveContract;
   readonly client: (options: LiveClientOptions) => LiveClient;
   readonly controlAdapter: () => SqlControlAdapter<LiveTargetId>;

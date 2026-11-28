@@ -17,7 +17,13 @@ import { errorPermitPolicyChangeNeedsRef } from '../../utils/policy-errors';
 import type { CliInvocation } from '../../utils/printed-command';
 import type { AnswerPlanQuestions } from '../statements/plan-questions';
 import type { StatementText } from '../statements/statement-text';
-import type { DbUpdateResult, OnControlProgress, PlannerWarningsListener } from '../types';
+import type {
+  DbUpdateResult,
+  OnControlProgress,
+  PlannerWarningsListener,
+  UnreadableStoredFile,
+  UnrecordedSnapshotListener,
+} from '../types';
 import { executeRun } from './db-run';
 import { DB_UPDATE_POLICY } from './db-update-policy';
 
@@ -30,7 +36,8 @@ import { DB_UPDATE_POLICY } from './db-update-policy';
  * whether each that would change access may run, before it applies anything.
  */
 export interface ExecuteDbUpdateOptions<TFamilyId extends string, TTargetId extends string>
-  extends PlannerWarningsListener {
+  extends PlannerWarningsListener,
+    UnrecordedSnapshotListener {
   readonly driver: ControlDriverInstance<TFamilyId, TTargetId>;
   readonly adapter: ControlAdapterInstance<TFamilyId, TTargetId>;
   readonly familyInstance: ControlFamilyInstance<TFamilyId, unknown>;
@@ -50,6 +57,8 @@ export interface ExecuteDbUpdateOptions<TFamilyId extends string, TTargetId exte
   readonly ref?: NamedRef;
   /** See {@link DbUpdateOptions.permitPolicyChange}. */
   readonly permitPolicyChange?: boolean;
+  /** See {@link DbUpdateOptions.emittedContractHash}. */
+  readonly emittedContractHash?: string;
   readonly migrationsDir: string;
   readonly targetId: TTargetId;
   readonly extensions?: ReadonlyArray<ControlExtensionDescriptor<TFamilyId, TTargetId>>;
@@ -67,6 +76,8 @@ export interface ExecuteDbUpdateOptions<TFamilyId extends string, TTargetId exte
   /** The command line the advice of a failure repeats. */
   readonly invocation: CliInvocation;
   readonly onProgress?: OnControlProgress;
+  /** Called when the contract snapshot the database's marker names cannot be read: the run plans on without the contract the database is at. */
+  readonly onUnreadableOrigin?: (unreadable: UnreadableStoredFile) => void;
 }
 
 /** Execute `db update` against the configured contract. */
@@ -112,8 +123,11 @@ export async function executeDbUpdate<TFamilyId extends string, TTargetId extend
     acceptAccessChanges: options.acceptAccessChanges ?? false,
     ...ifDefined('ref', options.ref),
     permitPolicyChange: options.permitPolicyChange ?? false,
+    ...ifDefined('emittedContractHash', options.emittedContractHash),
     ...ifDefined('verifySnapshotContent', options.verifySnapshotContent),
     ...ifDefined('onPlannerWarnings', options.onPlannerWarnings),
+    ...ifDefined('onUnrecordedSnapshot', options.onUnrecordedSnapshot),
+    ...ifDefined('onUnreadableOrigin', options.onUnreadableOrigin),
     ...ifDefined('onProgress', options.onProgress),
   })) as DbUpdateResult;
 }

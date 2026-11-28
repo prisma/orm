@@ -10,12 +10,24 @@ import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import { computeMigrationHash } from '@internal/migration-tools/hash';
 import { writeMigrationPackage } from '@internal/migration-tools/io';
 import type { MigrationMetadata } from '@internal/migration-tools/metadata';
+import { reconstructGraph } from '@internal/migration-tools/migration-graph';
+import type { NamedRef } from '@internal/migration-tools/refs';
 import { blindCast } from '@internal/utils/casts';
 import { createSqlContract } from '@repo/test-utils';
 import { join } from 'pathe';
 import { afterEach, describe, expect, it } from 'vitest';
-import { buildPathNotFoundFailure, executeMigrate } from '../../src/control-api/operations/migrate';
+import {
+  buildPathNotFoundFailure,
+  executeMigrate,
+  neverPlannedSpaceFailure,
+  planEndOf,
+  unreachableSpaceFailure,
+} from '../../src/control-api/operations/migrate';
+import type { CliInvocation } from '../../src/utils/printed-command';
+import { reference } from '../utils/plan-origins';
 import { createTestProjectDir } from '../utils/test-project-dir';
+
+const DEFAULT = { kind: 'default' } as const;
 
 const APP_CONTRACT: Contract = createSqlContract();
 const APP_HEAD = APP_CONTRACT.storage.storageHash;
@@ -34,14 +46,14 @@ afterEach(async () => {
   await Promise.all(projectDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
-/** A project whose app space carries one migration ∅ → APP_HEAD; returns its directory. */
-async function projectWithOneAppEdge(): Promise<string> {
+/** A project whose app space carries one migration ∅ → `to`; returns its directory. */
+async function projectWithOneAppEdge(to: string = APP_HEAD): Promise<string> {
   const projectDir = createTestProjectDir('migrate-no-path');
   projectDirs.push(projectDir);
   const ops = [CREATE_TABLE];
   const base: Omit<MigrationMetadata, 'migrationHash'> = {
     from: EMPTY_CONTRACT_HASH,
-    to: APP_HEAD,
+    to,
     providedInvariants: [],
     createdAt: '2026-01-01T00:00:00.000Z',
   };
@@ -98,18 +110,23 @@ function fakeFamily(args: {
   >(used);
 }
 
+function invocationIn(projectDir: string): CliInvocation {
+  return { cwd: projectDir, configPath: undefined, dbGiven: true };
+}
+
 function migrate(args: {
   readonly projectDir: string;
   readonly markers: ReadonlyMap<string, ContractMarkerRecord>;
   readonly ledger?: readonly LedgerEntryRecord[];
   readonly refHash?: string;
+  readonly ref?: NamedRef;
 }) {
   return executeMigrate({
     driver: blindCast<
       ControlDriverInstance<'sql', 'postgres'>,
       'no path is found, so nothing reaches the driver'
     >({ familyId: 'sql', targetId: 'postgres', close: async () => {} }),
-    invocation: { cwd: args.projectDir, configPath: undefined, dbGiven: true },
+    invocation: invocationIn(args.projectDir),
     familyInstance: fakeFamily({ markers: args.markers, ledger: args.ledger ?? [] }),
     contract: APP_CONTRACT,
     migrations: blindCast<
@@ -121,6 +138,7 @@ function migrate(args: {
     extensions: [],
     targetId: 'postgres',
     ...(args.refHash === undefined ? {} : { target: { kind: 'hash', hash: args.refHash } }),
+    ...(args.ref === undefined ? {} : { target: { kind: 'ref', ref: args.ref } }),
   });
 }
 
@@ -214,7 +232,7 @@ describe('executeMigrate with no path to the target', () => {
     });
   });
 
-  it('reports PATH_UNREACHABLE when the marker is in the graph and the target is not reachable', async () => {
+  it('advises no plan when the target is a hash no migration names and not the emitted contract', async () => {
     const projectDir = await projectWithOneAppEdge();
 
     const result = await migrate({
@@ -223,18 +241,266 @@ describe('executeMigrate with no path to the target', () => {
       refHash: ELSEWHERE,
     });
 
+    const envelope = result.ok ? undefined : result.failure.toEnvelope();
+    expect(envelope?.code).toBe('MIGRATION.PATH_UNREACHABLE');
+    expect(envelope?.nextActions).toEqual([
+      {
+        kind: 'user-choice',
+        label: `No migration records contract ${ELSEWHERE}, and \`migration plan --to\` ends only at a contract a migration records, a ref, or the emitted contract`,
+      },
+      {
+        kind: 'run-command',
+        label: 'Inspect the on-disk graph',
+        command: '{bin} migration list',
+      },
+    ]);
+  });
+
+  it('advises planning without --to when the unreachable target is the emitted contract', async () => {
+    const projectDir = await projectWithOneAppEdge(ELSEWHERE);
+
+    const result = await migrate({ projectDir, markers: new Map([['app', markerAt(ELSEWHERE)]]) });
+
     expect(result.ok ? undefined : result.failure.toEnvelope()).toEqual(
-      buildPathNotFoundFailure('app', markerAt(APP_HEAD), ELSEWHERE).toEnvelope(),
+      buildPathNotFoundFailure(
+        'app',
+        ELSEWHERE,
+        APP_HEAD,
+        { from: reference(ELSEWHERE), to: DEFAULT },
+        invocationIn(projectDir),
+      ).toEnvelope(),
     );
   });
 
-  it('reports PATH_UNREACHABLE from the empty contract when the database has no marker', async () => {
+  it('advises naming a ref target by its name', async () => {
     const projectDir = await projectWithOneAppEdge();
 
-    const result = await migrate({ projectDir, markers: new Map(), refHash: ELSEWHERE });
+    const result = await migrate({
+      projectDir,
+      markers: new Map([['app', markerAt(APP_HEAD)]]),
+      ref: { name: 'production', hash: ELSEWHERE, invariants: [] },
+    });
 
     expect(result.ok ? undefined : result.failure.toEnvelope()).toEqual(
-      buildPathNotFoundFailure('app', null, ELSEWHERE).toEnvelope(),
+      buildPathNotFoundFailure(
+        'app',
+        APP_HEAD,
+        ELSEWHERE,
+        { from: reference(APP_HEAD), to: reference('production') },
+        invocationIn(projectDir),
+      ).toEnvelope(),
     );
+  });
+
+  it('advises planning from where the history ends when the database has no marker', async () => {
+    const projectDir = await projectWithOneAppEdge(ELSEWHERE);
+
+    const result = await migrate({ projectDir, markers: new Map() });
+
+    expect(result.ok ? undefined : result.failure.toEnvelope()).toEqual(
+      buildPathNotFoundFailure(
+        'app',
+        EMPTY_CONTRACT_HASH,
+        APP_HEAD,
+        { from: reference(ELSEWHERE), to: DEFAULT },
+        invocationIn(projectDir),
+      ).toEnvelope(),
+    );
+  });
+
+  it('advises installing another version of the extension when an extension space has no path', () => {
+    const failure = unreachableSpaceFailure(
+      { spaceId: 'pgvector', fromHash: DELETED, targetHash: ELSEWHERE },
+      {
+        appSpaceId: 'app',
+        appSpace: { graph: reconstructGraph([]), refs: {} },
+        target: undefined,
+        invocation: {
+          ...invocationIn('/project'),
+          rerunArgs: ['--to', 'production', '--advance-ref', 'production'],
+        },
+      },
+    );
+
+    expect(failure.toEnvelope()).toMatchObject({
+      code: 'MIGRATION.PATH_UNREACHABLE',
+      nextActions: [
+        {
+          kind: 'user-choice',
+          label:
+            'Install a version of the extension whose migrations start from the contract the database is at',
+        },
+        {
+          kind: 'run-command',
+          label: 'List the migrations of extension space "pgvector"',
+          command: '{bin} migration list --space pgvector',
+        },
+        {
+          kind: 'run-command',
+          label: 'Run db migrate again',
+          command: '{bin} db migrate --to production --advance-ref production --db <url>',
+        },
+      ],
+      meta: {
+        kind: 'pathUnreachable',
+        spaceId: 'pgvector',
+        fromHash: DELETED,
+        targetHash: ELSEWHERE,
+      },
+    });
+  });
+
+  it('advises installing a version that ships migrations when an extension space has none', () => {
+    const failure = neverPlannedSpaceFailure(
+      { spaceId: 'pgvector', liveMarker: null, targetHash: ELSEWHERE },
+      {
+        appSpaceId: 'app',
+        appSpace: { graph: reconstructGraph([]), refs: {} },
+        migrationsDir: 'migrations',
+        target: undefined,
+        invocation: invocationIn('/project'),
+      },
+    );
+
+    expect(failure.toEnvelope()).toMatchObject({
+      code: 'MIGRATION.PATH_UNREACHABLE',
+      summary: 'No on-disk migrations for extension space "pgvector"',
+      nextActions: [
+        {
+          kind: 'user-choice',
+          label: 'Install a version of the extension that ships its migrations',
+        },
+        {
+          kind: 'run-command',
+          label: 'List the migrations of extension space "pgvector"',
+          command: '{bin} migration list --space pgvector',
+        },
+        {
+          kind: 'run-command',
+          label: 'Run db migrate again',
+          command: '{bin} db migrate --db <url>',
+        },
+      ],
+      meta: { kind: 'neverPlanned', spaceId: 'pgvector', targetHash: ELSEWHERE },
+    });
+  });
+
+  it('advises the first migration as a choice for an empty database when the application space has none and the database no marker', () => {
+    const failure = neverPlannedSpaceFailure(
+      { spaceId: 'app', liveMarker: null, targetHash: ELSEWHERE },
+      {
+        appSpaceId: 'app',
+        appSpace: { graph: reconstructGraph([]), refs: {} },
+        migrationsDir: 'migrations',
+        target: undefined,
+        invocation: invocationIn('/project'),
+      },
+    );
+
+    expect(failure.toEnvelope()).toMatchObject({
+      nextActions: expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'user-choice',
+          label: expect.stringContaining(
+            'Plan the missing edge with `{bin} migration plan --from @empty`. The database has no marker',
+          ),
+        }),
+      ]),
+      meta: { kind: 'neverPlanned', spaceId: 'app', targetHash: ELSEWHERE },
+    });
+  });
+
+  it('plans to the ref db migrate was given when the application space has no migrations', () => {
+    const failure = neverPlannedSpaceFailure(
+      { spaceId: 'app', liveMarker: null, targetHash: ELSEWHERE },
+      {
+        appSpaceId: 'app',
+        appSpace: { graph: reconstructGraph([]), refs: {}, emittedHash: APP_HEAD },
+        migrationsDir: 'migrations',
+        target: { kind: 'ref', ref: { name: 'production', hash: ELSEWHERE, invariants: [] } },
+        invocation: { ...invocationIn('/project'), rerunArgs: ['--to', 'production'] },
+      },
+    );
+
+    expect(JSON.stringify(failure.toEnvelope().nextActions)).toContain(
+      '{bin} migration plan --from @empty --to production',
+    );
+    expect(failure.toEnvelope().nextActions).toContainEqual(
+      expect.objectContaining({
+        label: expect.stringContaining('`{bin} db migrate --to production --db <url>`'),
+      }),
+    );
+  });
+
+  it('prints no plan when db migrate was given a contract no migration records and the application space has none', () => {
+    const failure = neverPlannedSpaceFailure(
+      { spaceId: 'app', liveMarker: null, targetHash: ELSEWHERE },
+      {
+        appSpaceId: 'app',
+        appSpace: { graph: reconstructGraph([]), refs: {}, emittedHash: APP_HEAD },
+        migrationsDir: 'migrations',
+        target: { kind: 'hash', hash: ELSEWHERE },
+        invocation: invocationIn('/project'),
+      },
+    );
+
+    const envelope = failure.toEnvelope();
+    expect(JSON.stringify(envelope)).not.toContain('{bin} migration plan');
+    expect(envelope.nextActions).toEqual([
+      {
+        kind: 'user-choice',
+        label: `No migration records contract ${ELSEWHERE}, and \`migration plan --to\` ends only at a contract a migration records, a ref, or the emitted contract`,
+      },
+      { kind: 'run-command', label: 'Inspect the on-disk graph', command: '{bin} migration list' },
+    ]);
+  });
+
+  it('maps the target db migrate was given to where migration plan ends', () => {
+    expect([
+      planEndOf({ kind: 'hash', hash: APP_HEAD }),
+      planEndOf({ kind: 'ref', ref: { name: 'production', hash: APP_HEAD, invariants: [] } }),
+      planEndOf(undefined),
+    ]).toEqual([
+      { kind: 'contract', hash: APP_HEAD },
+      { kind: 'ref', name: 'production' },
+      { kind: 'emitted' },
+    ]);
+  });
+
+  describe('when no migration plan can author the path', () => {
+    const graph = reconstructGraph([
+      {
+        dirName: '20260101T0000_initial',
+        dirPath: '/project/migrations/app/20260101T0000_initial',
+        metadata: {
+          migrationHash: 'sha256:initial',
+          from: EMPTY_CONTRACT_HASH,
+          to: APP_HEAD,
+          providedInvariants: [],
+          createdAt: '2026-01-01T00:00:00.000Z',
+        },
+        ops: [CREATE_TABLE],
+      },
+    ]);
+    const commandsOf = (from: string, target: string) =>
+      unreachableSpaceFailure(
+        { spaceId: 'app', fromHash: from, targetHash: target },
+        {
+          appSpaceId: 'app',
+          appSpace: { graph, refs: {} },
+          target: target === APP_HEAD ? undefined : { kind: 'hash', hash: target },
+          invocation: invocationIn('/p'),
+        },
+      )
+        .toEnvelope()
+        .nextActions?.flatMap((action) => ('command' in action ? [action.command] : []));
+
+    it('prints no plan from a contract no migration records', () => {
+      expect(commandsOf(ELSEWHERE, APP_HEAD)).toEqual(['{bin} migration list']);
+    });
+
+    it('prints no plan to the empty contract', () => {
+      expect(commandsOf(APP_HEAD, EMPTY_CONTRACT_HASH)).toEqual(['{bin} migration list']);
+    });
   });
 });

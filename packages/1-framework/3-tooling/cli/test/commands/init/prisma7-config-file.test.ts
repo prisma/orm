@@ -1,7 +1,18 @@
 import { timeouts } from '@repo/test-utils';
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
-import { prisma7ConfigFile } from '../../../src/commands/init/templates/code-templates';
+import {
+  configFile,
+  defaultContractEntry,
+} from '../../../src/commands/init/templates/code-templates';
+
+function prisma7ConfigFile(schemaPath: string, outputDir: string, configModule: string): string {
+  return configFile({
+    configModule,
+    contract: defaultContractEntry(configModule, { kind: 'prisma7-schema', path: schemaPath }),
+    output: outputDir,
+  });
+}
 
 function syntaxErrors(source: string): readonly string[] {
   const { diagnostics = [] } = ts.transpileModule(source, { reportDiagnostics: true });
@@ -46,7 +57,7 @@ function configLiterals(source: string): {
   };
 }
 
-describe('prisma7ConfigFile', { timeout: timeouts.typeScriptCompilation }, () => {
+describe('the default Prisma 7 config', { timeout: timeouts.typeScriptCompilation }, () => {
   it.each([
     ['a plain path', 'prisma/schema.prisma', 'src/prisma'],
     ['a single quote', "prisma/O'Reilly/schema.prisma", "src/O'Reilly"],
@@ -63,7 +74,7 @@ describe('prisma7ConfigFile', { timeout: timeouts.typeScriptCompilation }, () =>
 });
 
 describe('the Prisma 7 config text', () => {
-  it('is the config init has always written, around the module the target package names', () => {
+  it('is the config init has always written, around the module the facade names', () => {
     expect(
       prisma7ConfigFile('prisma/schema.prisma', 'src/prisma', '@prisma/orm-postgres/config'),
     ).toBe(

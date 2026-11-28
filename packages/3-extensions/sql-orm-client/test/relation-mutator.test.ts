@@ -29,10 +29,23 @@ interface PolymorphicMutator {
     create(data: object | readonly object[]): unknown;
     connect(criteria: object | readonly object[]): unknown;
     disconnect(criteria?: readonly object[]): unknown;
-    where(filter: object): { updateAll(data: object): unknown; deleteAll(): unknown };
+    where(filter: object): {
+      updateAll(data: object): unknown;
+      deleteAll(): unknown;
+      update(data: object): unknown;
+      delete(): unknown;
+    };
     updateAll(data: object): unknown;
     deleteAll(): unknown;
+    update(data: object): unknown;
+    delete(): unknown;
   };
+}
+
+interface SingleRowMutator {
+  update(data: object): unknown;
+  delete(): unknown;
+  where(filter: object): SingleRowMutator;
 }
 
 function variantOf(related: RelationCollection<Contract<SqlStorage>, string>, value: string) {
@@ -68,10 +81,36 @@ describe('relation-mutator', () => {
     });
   });
 
-  it('where() returns a mutator narrowed to where, updateAll and deleteAll', () => {
+  it('where() returns a mutator narrowed to where, update, delete, updateAll and deleteAll', () => {
     const narrowed = createRelationMutator(posts).where({ id: 1 });
 
-    expect(Object.keys(narrowed).sort()).toEqual(['deleteAll', 'updateAll', 'where']);
+    expect(Object.keys(narrowed).sort()).toEqual([
+      'delete',
+      'deleteAll',
+      'update',
+      'updateAll',
+      'where',
+    ]);
+  });
+
+  it('update() and delete() carry the state of the related collection every preceding where() filtered', () => {
+    const mutator = createRelationMutator(posts) as unknown as SingleRowMutator;
+
+    expect(mutator.update({ title: 'A' })).toEqual({
+      kind: 'update',
+      state: posts.state,
+      data: { title: 'A' },
+    });
+    expect(mutator.delete()).toEqual({ kind: 'delete', state: posts.state });
+    expect(mutator.where({ id: 1 }).update({ title: 'A' })).toEqual({
+      kind: 'update',
+      state: posts.where({ id: 1 }).state,
+      data: { title: 'A' },
+    });
+    expect(mutator.where({ id: 1 }).where({ title: 'B' }).delete()).toEqual({
+      kind: 'delete',
+      state: posts.where({ id: 1 }).where({ title: 'B' }).state,
+    });
   });
 
   it('updateAll() and deleteAll() carry the state of the related collection every preceding where() filtered', () => {
@@ -112,8 +151,10 @@ describe('relation-mutator', () => {
     expect(Object.keys(bugs).sort()).toEqual([
       'connect',
       'create',
+      'delete',
       'deleteAll',
       'disconnect',
+      'update',
       'updateAll',
       'where',
     ]);
@@ -161,6 +202,12 @@ describe('relation-mutator', () => {
       kind: 'deleteAll',
       state: variantTasks.where({ title: 'Crash' }).state,
     });
+    expect(bugs.where({ title: 'Crash' }).update({ title: 'Seen' })).toEqual({
+      kind: 'update',
+      state: variantTasks.where({ title: 'Crash' }).state,
+      data: { title: 'Seen' },
+    });
+    expect(bugs.delete()).toEqual({ kind: 'delete', state: variantTasks.state });
   });
 
   it('descriptor and callback guards validate mutation values', () => {
@@ -168,6 +215,14 @@ describe('relation-mutator', () => {
       true,
     );
     expect(isRelationMutationDescriptor({ kind: 'deleteAll', state: posts.state })).toBe(true);
+    expect(isRelationMutationDescriptor({ kind: 'update', state: posts.state, data: {} })).toBe(
+      true,
+    );
+    expect(isRelationMutationDescriptor({ kind: 'delete', state: posts.state })).toBe(true);
+    expect(isRelationMutationDescriptor({ kind: 'delete' })).toBe(false);
+    expect(isRelationMutationDescriptor({ kind: 'delete', state: {} })).toBe(false);
+    expect(isRelationMutationDescriptor({ kind: 'update', state: posts.state })).toBe(false);
+    expect(isRelationMutationDescriptor({ kind: 'update', data: {} })).toBe(false);
     expect(isRelationMutationDescriptor(createRelationMutator(posts).where({ id: 1 }))).toBe(false);
     expect(isRelationMutationDescriptor(null)).toBe(false);
     expect(isRelationMutationDescriptor({ kind: 'unknown' })).toBe(false);

@@ -1,7 +1,7 @@
 {
   "name": "@internal/contract",
   "private": true,
-  "version": "8.0.0-rc.24",
+  "version": "8.0.0-rc.25",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
@@ -16,13 +16,13 @@
     "clean": "rm -rf dist dist-tsc dist-tsc-prod coverage .tmp-output"
   },
   "dependencies": {
-    "@internal/utils": "workspace:8.0.0-rc.24",
+    "@internal/utils": "workspace:8.0.0-rc.25",
     "@standard-schema/spec": "^1.1.0",
     "arktype": "catalog:"
   },
   "devDependencies": {
-    "@repo/tsconfig": "workspace:8.0.0-rc.24",
-    "@repo/tsdown": "workspace:8.0.0-rc.24",
+    "@repo/tsconfig": "workspace:8.0.0-rc.25",
+    "@repo/tsdown": "workspace:8.0.0-rc.25",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
@@ -45,8 +45,10 @@
     "./contract-validation-error": "./dist/contract-validation-error.mjs",
     "./default-namespace": "./dist/default-namespace.mjs",
     "./enum-accessor": "./dist/enum-accessor.mjs",
+    "./format-version": "./dist/format-version.mjs",
     "./hashing": "./dist/hashing.mjs",
     "./hashing-utils": "./dist/hashing-utils.mjs",
+    "./internal/format-version": "./dist/internal/format-version.mjs",
     "./is-plain-record": "./dist/is-plain-record.mjs",
     "./resolve-domain-model": "./dist/resolve-domain-model.mjs",
     "./types": "./dist/types.mjs",

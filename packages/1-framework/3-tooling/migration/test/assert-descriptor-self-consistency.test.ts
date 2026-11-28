@@ -47,9 +47,7 @@ describe('assertDescriptorSelfConsistency', () => {
     expect(() =>
       assertDescriptorSelfConsistency({
         extensionId: 'test-extension',
-        target: TARGET,
-        targetFamily: FAMILY,
-        storage: STORAGE,
+        contractJson: { formatVersion: 1, target: TARGET, targetFamily: FAMILY, storage: STORAGE },
         headRefHash: REAL_HASH,
         ...SQL_HOOKS,
       }),
@@ -61,9 +59,7 @@ describe('assertDescriptorSelfConsistency', () => {
     try {
       assertDescriptorSelfConsistency({
         extensionId: 'cipherstash',
-        target: TARGET,
-        targetFamily: FAMILY,
-        storage: STORAGE,
+        contractJson: { formatVersion: 1, target: TARGET, targetFamily: FAMILY, storage: STORAGE },
         headRefHash: 'stale-hash',
         ...SQL_HOOKS,
       });
@@ -89,9 +85,12 @@ describe('assertDescriptorSelfConsistency', () => {
     expect(() =>
       assertDescriptorSelfConsistency({
         extensionId: 'test-extension',
-        target: TARGET,
-        targetFamily: FAMILY,
-        storage: reorderedStorage,
+        contractJson: {
+          formatVersion: 1,
+          target: TARGET,
+          targetFamily: FAMILY,
+          storage: reorderedStorage,
+        },
         headRefHash: REAL_HASH,
         ...SQL_HOOKS,
       }),
@@ -102,9 +101,12 @@ describe('assertDescriptorSelfConsistency', () => {
     expect(() =>
       assertDescriptorSelfConsistency({
         extensionId: 'test-extension',
-        target: TARGET,
-        targetFamily: FAMILY,
-        storage: { ...STORAGE_BODY, storageHash: REAL_HASH },
+        contractJson: {
+          formatVersion: 1,
+          target: TARGET,
+          targetFamily: FAMILY,
+          storage: { ...STORAGE_BODY, storageHash: REAL_HASH },
+        },
         headRefHash: REAL_HASH,
         ...SQL_HOOKS,
       }),
@@ -112,9 +114,12 @@ describe('assertDescriptorSelfConsistency', () => {
     expect(() =>
       assertDescriptorSelfConsistency({
         extensionId: 'test-extension',
-        target: TARGET,
-        targetFamily: FAMILY,
-        storage: STORAGE_BODY,
+        contractJson: {
+          formatVersion: 1,
+          target: TARGET,
+          targetFamily: FAMILY,
+          storage: STORAGE_BODY,
+        },
         headRefHash: REAL_HASH,
         ...SQL_HOOKS,
       }),
@@ -154,12 +159,68 @@ describe('assertDescriptorSelfConsistency', () => {
     expect(() =>
       assertDescriptorSelfConsistency({
         extensionId: 'test-extension',
-        target: TARGET,
-        targetFamily: FAMILY,
-        storage: onDiskStorage,
+        contractJson: {
+          formatVersion: 1,
+          target: TARGET,
+          targetFamily: FAMILY,
+          storage: onDiskStorage,
+        },
         headRefHash: namespacedHash,
         ...SQL_HOOKS,
       }),
     ).not.toThrow();
+  });
+
+  it('reads the contract format version first and refuses one written by a newer release', () => {
+    expect(() =>
+      assertDescriptorSelfConsistency({
+        extensionId: 'test-extension',
+        contractJson: { formatVersion: 2, target: TARGET, targetFamily: FAMILY, storage: STORAGE },
+        headRefHash: REAL_HASH,
+        ...SQL_HOOKS,
+      }),
+    ).toThrowError(
+      expect.objectContaining({ code: 'CONTRACT.FORMAT_VERSION_NEWER' }) as unknown as Error,
+    );
+  });
+
+  it('accepts a bundled contract a release candidate wrote, whose hash covers no version field', () => {
+    expect(() =>
+      assertDescriptorSelfConsistency({
+        extensionId: 'test-extension',
+        contractJson: {
+          schemaVersion: '1',
+          target: TARGET,
+          targetFamily: FAMILY,
+          storage: STORAGE,
+        },
+        headRefHash: REAL_HASH,
+        ...SQL_HOOKS,
+      }),
+    ).not.toThrow();
+  });
+
+  it('refuses a bundled contract with no version field at all', () => {
+    expect(() =>
+      assertDescriptorSelfConsistency({
+        extensionId: 'test-extension',
+        contractJson: {
+          target: TARGET,
+          targetFamily: FAMILY,
+          storage: STORAGE,
+        },
+        headRefHash: REAL_HASH,
+        ...SQL_HOOKS,
+      }),
+    ).toThrowError(
+      expect.objectContaining({
+        code: 'CONTRACT.FORMAT_VERSION_MISSING',
+        message:
+          'The contract file "contract.json" of the extension "test-extension" has no format version',
+        fix: expect.stringContaining(
+          'Upgrade the extension to a release built for this release of Prisma',
+        ),
+      }) as unknown as Error,
+    );
   });
 });

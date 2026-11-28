@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BIN_COMMANDS, BIN_GROUPS } from '../../src/orm/cli';
 import { createInitCommand } from '../../src/orm/init';
 import { importFromProject } from '../../src/orm/project-modules';
+import { noRegistryLookup, noRegistryPeersLookup } from '../utils/registry-keywords';
 import { createTestProjectDir, fixtureAppDir } from '../utils/test-project-dir';
 
 const FIXTURE = join(fixtureAppDir, 'fixtures/prisma7-project');
@@ -16,6 +17,8 @@ const commands: MountedTree = {
   'orm init': createInitCommand({
     emitScaffoldedContract: emit,
     importFromProject,
+    lookUpRegistryKeywords: noRegistryLookup,
+    lookUpRegistryPeers: noRegistryPeersLookup,
   }),
 };
 
@@ -90,6 +93,7 @@ describe('the Prisma 7 result document', () => {
       expect(run.presented?.presentation.json).toEqual({
         ok: true,
         target: 'postgres',
+        package: '@prisma/orm-postgres',
         authoring: 'prisma7',
         schemaPath: 'prisma/schema.prisma',
         filesWritten: [
@@ -104,7 +108,7 @@ describe('the Prisma 7 result document', () => {
         ],
         filesDeleted: [],
         filesRenamed: [{ from: 'prisma.config.ts', to: 'prisma7.config.ts' }],
-        packagesInstalled: { status: 'skipped', deps: [], devDeps: [] },
+        packagesInstalled: { status: 'skipped', deps: [], devDeps: [], requiredPeers: [] },
         contractEmitted: false,
         prisma7: {
           schemaPath: 'prisma/schema.prisma',

@@ -1,5 +1,6 @@
 import { MigrationToolsError } from '@internal/migration-tools/errors';
 import { notOk, type Result } from '@internal/utils/result';
+import { dirname, relative } from 'pathe';
 import {
   CliStructuredError,
   errorContractValidationFailed,
@@ -8,11 +9,29 @@ import {
   errorUnexpected,
 } from '../../utils/cli-errors';
 import { contractValidationMeta } from '../../utils/contract-validation-meta';
+import { type SnapshotHead, snapshotRewriteAt } from '../../utils/next-actions';
+import type { CliInvocation } from '../../utils/printed-command';
 
 export function mapContractAtError(
   error: unknown,
-  options?: { readonly artifactRole?: 'from' | 'to' },
+  options?: {
+    readonly artifactRole?: 'from' | 'to';
+    /** The space whose head the snapshot is at, when it is: a command writes that snapshot again once it is deleted. */
+    readonly atHeadOf?: SnapshotHead;
+    /** The command line whose `--config` and `--db` the advice repeats. */
+    readonly invocation?: CliInvocation;
+  },
 ): Result<never, CliStructuredError> {
+  const rewrittenBy = (filePath: string) =>
+    options?.atHeadOf === undefined || filePath === 'unknown'
+      ? {}
+      : {
+          rewrittenBy: snapshotRewriteAt(
+            options.atHeadOf,
+            relative(process.cwd(), dirname(filePath)),
+            options.invocation,
+          ),
+        };
   if (MigrationToolsError.is(error)) {
     switch (error.code) {
       case 'MIGRATION.REF_NOT_RESOLVABLE': {
@@ -29,10 +48,17 @@ export function mapContractAtError(
           typeof error.meta?.['filePath'] === 'string' ? error.meta['filePath'] : 'unknown';
         const message =
           typeof error.meta?.['message'] === 'string' ? error.meta['message'] : error.message;
+        const role = options?.artifactRole ?? 'from';
         return notOk(
           errorContractValidationFailed(
-            `Predecessor contract at ${filePath} failed to deserialize: ${message}`,
-            { where: { path: filePath }, cause: error, meta: contractValidationMeta(error) },
+            `${role === 'to' ? 'Target' : 'Predecessor'} contract at ${filePath} failed to deserialize: ${message}`,
+            {
+              where: { path: filePath },
+              cause: error,
+              meta: contractValidationMeta(error),
+              artifact: 'snapshot',
+              ...rewrittenBy(filePath),
+            },
           ),
         );
       }
@@ -47,7 +73,12 @@ export function mapContractAtError(
             role === 'to'
               ? `Target contract at ${filePath} failed to deserialize: ${message}`
               : `Predecessor contract at ${filePath} failed to deserialize: ${message}`,
-            { where: { path: filePath }, cause: error },
+            {
+              where: { path: filePath },
+              cause: error,
+              artifact: 'snapshot',
+              ...rewrittenBy(filePath),
+            },
           ),
         );
       }
@@ -71,7 +102,7 @@ export function mapContractAtError(
               role === 'to'
                 ? `Target migration is missing its contract snapshot at ${expectedPath}`
                 : `Predecessor migration is missing its contract snapshot at ${expectedPath}`,
-            fix: 'Restore migrations/snapshots/ from version control, or re-run the command that produced this migration to regenerate its snapshot.',
+            fix: 'Restore migrations/snapshots/ from version control.',
             cause: error,
           }),
         );

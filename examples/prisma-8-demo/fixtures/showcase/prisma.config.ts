@@ -1,5 +1,5 @@
 import { definePrismaConfig } from '@prisma/cli-engine';
-import { defineConfig as ormConfig } from '@prisma/orm-postgres/config';
+import { defineConfig as ormConfig, postgres18, postgresDriver } from '@prisma/orm-postgres/config';
 
 // Showcase fixture config — a deliberately comprehensive migration graph that
 // exercises every shape the `migration graph` renderer handles: a linear spine,
@@ -13,7 +13,10 @@ import { defineConfig as ormConfig } from '@prisma/orm-postgres/config';
 //   pnpm exec prisma migration graph --config ./fixtures/showcase/prisma.config.ts
 export default definePrismaConfig({
   orm: ormConfig({
-    contract: './contract.prisma',
+    contract: {
+      path: './contract.prisma',
+      requiredCapabilities: [...postgres18, ...postgresDriver],
+    },
     db: {
       connection: 'postgresql://showcase:showcase@localhost:5432/showcase',
     },

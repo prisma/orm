@@ -15,6 +15,7 @@ import { postgresError } from '../errors';
 import { FULL_TEXT_INDEX_TYPE, fullTextIndexDefinitionOf } from '../full-text-index-definition';
 import { renderFullTextIndexDocument } from '../full-text-search-document';
 import { postgresAccessMethodOf } from '../index-types';
+import { setOwnEntry } from '../own-entry';
 import type { PostgresRlsPolicy } from '../postgres-rls-policy';
 import type { PostgresContract } from '../postgres-schema';
 import { isPostgresSchema } from '../postgres-schema';
@@ -106,7 +107,7 @@ export function contractToPostgresDatabaseSchemaNode(
       roles: [],
       extensions: [],
       existingSchemas: [],
-      pgVersion: '',
+      serverVersionNumber: undefined,
     });
   }
 
@@ -260,24 +261,28 @@ export function contractToPostgresDatabaseSchemaNode(
               dependsOn: columnDependsOn(ddlSchema, tableName, sqlTable.primaryKey.columns),
             })
           : undefined;
-      tables[tableName] = new PostgresTableSchemaNode({
-        name: sqlTable.name,
-        columns: sqlTable.columns,
-        foreignKeys,
-        uniques,
-        indexes,
-        ...ifDefined('primaryKey', primaryKey),
-        ...ifDefined('annotations', sqlTable.annotations),
-        ...ifDefined('checks', sqlTable.checks),
-        policies: policiesByTable.get(tableName) ?? [],
-        // Marker-driven, never derived from the policy set: the `rls` entry
-        // is the single authored source of enablement.
-        rlsEnabled: Object.hasOwn(ns.rls, tableName),
-      });
+      setOwnEntry(
+        tables,
+        tableName,
+        new PostgresTableSchemaNode({
+          name: sqlTable.name,
+          columns: sqlTable.columns,
+          foreignKeys,
+          uniques,
+          indexes,
+          ...ifDefined('primaryKey', primaryKey),
+          ...ifDefined('annotations', sqlTable.annotations),
+          ...ifDefined('checks', sqlTable.checks),
+          policies: policiesByTable.get(tableName) ?? [],
+          // Marker-driven, never derived from the policy set: the `rls` entry
+          // is the single authored source of enablement.
+          rlsEnabled: Object.hasOwn(ns.rls, tableName),
+        }),
+      );
     }
 
     for (const [tableName, tablePolicies] of policiesByTable) {
-      if (!(tableName in tables)) {
+      if (!Object.hasOwn(tables, tableName)) {
         const policyName = tablePolicies[0]?.name ?? '(unknown)';
         throw postgresError(
           'CONTRACT.POLICY_INVALID',
@@ -324,6 +329,6 @@ export function contractToPostgresDatabaseSchemaNode(
     roles,
     extensions,
     existingSchemas: ownedSchemas,
-    pgVersion: '',
+    serverVersionNumber: undefined,
   });
 }

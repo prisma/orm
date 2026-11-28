@@ -22,7 +22,7 @@ const user = await db.orm.public.User
   .first();
 
 // Your editor will show the type of user as
-// { id: number; email: string; username: string | null; name: string | null; createdAt: Date; posts: Post[] } | null
+// { id: {{idType}}; email: string; username: string | null; name: string | null; createdAt: Date; posts: Post[] } | null
 ```
 
 Your contract has two companion files in the same directory:
@@ -40,12 +40,11 @@ If you use a framework like Next.js or Vite, the Prisma ORM plugin will do this 
 
 ```typescript
 import 'dotenv/config';
-import { definePrismaConfig } from '@prisma/cli-engine';
-import { defineConfig as ormConfig } from '{{configEntrypoint}}';
+{{configImports}}
 
 export default definePrismaConfig({
   orm: ormConfig({
-    contract: './{{schemaPath}}',
+    contract: {{contractEntry}},
     db: {
       connection: process.env['DATABASE_URL']!,
     },

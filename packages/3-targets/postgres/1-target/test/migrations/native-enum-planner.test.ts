@@ -190,7 +190,7 @@ function liveTree(options: {
     },
     roles: [],
     existingSchemas: ['sales'],
-    pgVersion: 'unknown',
+    serverVersionNumber: undefined,
   });
 }
 
@@ -617,7 +617,7 @@ describe('D2-F1: enum drop-safety resolves ownership by physical type name', () 
       },
       roles: [],
       existingSchemas: ['public'],
-      pgVersion: 'unknown',
+      serverVersionNumber: undefined,
     });
   }
 

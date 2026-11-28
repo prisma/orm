@@ -68,6 +68,102 @@ describe('sql() builder structured error codes', () => {
     });
   });
 
+  describe('a column name several joined tables have', () => {
+    const sharedId = {
+      code: 'ORM.COLUMN_AMBIGUOUS',
+      meta: { column: 'id', candidates: ['users', 'posts', 'profiles'] },
+    };
+    const joined = () => {
+      const d = db();
+      return d.public.users
+        .innerJoin(d.public.posts, (f, fns) => fns.eq(f.users.id, f.posts.user_id))
+        .innerJoin(d.public.profiles, (f, fns) => fns.eq(f.users.id, f.profiles.user_id));
+    };
+    const selected = () =>
+      joined().select('email') as unknown as {
+        orderBy(arg: string): unknown;
+        groupBy(...args: string[]): unknown;
+        distinctOn(...args: string[]): unknown;
+      };
+
+    it('raises ORM.COLUMN_AMBIGUOUS in select, with a fix that lists the tables and leaves the choice to the user', () => {
+      expect(capture(() => joined().select('id' as never))).toMatchObject({
+        ...sharedId,
+        message: 'Column "id" is in more than one joined table (users, posts, profiles)',
+        fix: "Name the table the column comes from (users, posts or profiles); name any other columns in a separate select call: select('id', (f) => f.<table>.id)",
+      });
+    });
+
+    it('raises ORM.COLUMN_AMBIGUOUS in orderBy, groupBy and distinctOn, with a callback over a placeholder table as its fix', () => {
+      expect({
+        orderBy: capture(() => selected().orderBy('id')),
+        groupBy: capture(() => selected().groupBy('id')),
+        distinctOn: capture(() => selected().distinctOn('id')),
+      }).toMatchObject({
+        orderBy: {
+          ...sharedId,
+          message:
+            'Column "id" in orderBy is in more than one joined table (users, posts, profiles)',
+          fix: 'Name the table the column comes from (users, posts or profiles); keep its options: orderBy((f) => f.<table>.id)',
+        },
+        groupBy: {
+          ...sharedId,
+          message:
+            'Column "id" in groupBy is in more than one joined table (users, posts, profiles)',
+          fix: 'Name the table the column comes from (users, posts or profiles); name any other columns in a separate groupBy call: groupBy((f) => f.<table>.id)',
+        },
+        distinctOn: {
+          ...sharedId,
+          message:
+            'Column "id" in distinctOn is in more than one joined table (users, posts, profiles)',
+          fix: 'Name the table the column comes from (users, posts or profiles); name any other columns in a separate distinctOn call: distinctOn((f) => f.<table>.id)',
+        },
+      });
+    });
+    it('inside a lateral subquery, the fix does not name a parent table as the answer', () => {
+      const d = db();
+      const error = capture(() =>
+        joined().lateralJoin('profile', (lateral) =>
+          lateral.from(d.public.profiles).select('id' as never),
+        ),
+      );
+      expect(error).toMatchObject({
+        ...sharedId,
+        fix: "Name the table the column comes from (users, posts or profiles); name any other columns in a separate select call: select('id', (f) => f.<table>.id)",
+      });
+    });
+
+    it('quotes the table placeholder when an alias is not a JavaScript identifier', () => {
+      const d = db();
+      const error = capture(() =>
+        d.public.users
+          .as('u-1')
+          .innerJoin(d.public.users.as('u-2'), (f, fns) => fns.eq(f['u-1'].id, f['u-2'].id))
+          .select('email' as never),
+      );
+      expect(error).toMatchObject({
+        code: 'ORM.COLUMN_AMBIGUOUS',
+        meta: { column: 'email', candidates: ['u-1', 'u-2'] },
+        fix: "Name the table the column comes from (u-1 or u-2); name any other columns in a separate select call: select('email', (f) => f['<table>'].email)",
+      });
+    });
+
+    it('quotes the table placeholder when only one of the aliases is not a JavaScript identifier', () => {
+      const d = db();
+      const error = capture(() =>
+        d.public.users
+          .as('inviter')
+          .innerJoin(d.public.users.as('u-2'), (f, fns) => fns.eq(f.inviter.id, f['u-2'].id))
+          .select('email' as never),
+      );
+      expect(error).toMatchObject({
+        code: 'ORM.COLUMN_AMBIGUOUS',
+        meta: { column: 'email', candidates: ['inviter', 'u-2'] },
+        fix: "Name the table the column comes from (inviter or u-2); name any other columns in a separate select call: select('email', (f) => f['<table>'].email)",
+      });
+    });
+  });
+
   it('invalid orderBy argument raises ORM.ARGUMENT_INVALID', () => {
     const query = db().public.users.select('name') as unknown as {
       orderBy(arg: unknown): unknown;
@@ -93,7 +189,8 @@ describe('sql() builder structured error codes', () => {
     expect(isStructuredError(error)).toBe(true);
     expect(error).toMatchObject({
       code: 'ORM.CAPABILITY_MISSING',
-      message: 'lateralJoin() requires capability sql.lateral',
+      message:
+        "`lateralJoin()` is unavailable: your contract declares no dependency on `sql.lateral`. To enable it, add `sql.lateral` to your contract's required capabilities.",
       meta: { method: 'lateralJoin', capability: 'sql.lateral' },
     });
   });

@@ -32,7 +32,7 @@ import {
   sqlitePslConfigFixture,
 } from './journey-test-helpers';
 
-export type ContractVersion = 'base' | 'next' | 'unique';
+export type ContractVersion = 'base' | 'next' | 'unique' | 'renamed';
 
 export type PolicyTarget = 'postgres' | 'sqlite' | 'mysql' | 'mongo';
 
@@ -73,6 +73,16 @@ model User {
   @@map("user")
 }
 `,
+  renamed: `// use prisma-8
+
+model User {
+  id       Int     @id
+  email    String
+  nickname String?
+
+  @@map("user")
+}
+`,
 };
 
 const MONGO_CONTRACTS = {
@@ -105,12 +115,27 @@ model User {
   @@map("users")
 }
 `,
+  renamed: `// use prisma-8
+
+model User {
+  id       ObjectId @id @map("_id")
+  email    String
+  nickname String?
+
+  @@map("users")
+}
+`,
 };
 
 const POSTGRES_CONFIG = `import postgresAdapter from '@internal/adapter-postgres/control';
 import { defineConfig as ormConfig } from '@internal/cli/config-types';
-import postgresDriver from '@internal/driver-postgres/control';
+import postgresDriverDescriptor from '@internal/driver-postgres/control';
 import sql from '@internal/family-sql/control';
+import {
+  postgres18,
+  postgresContractCapabilities,
+  postgresDriver,
+} from '@internal/postgres/config';
 import { prismaContract } from '@internal/sql-contract-psl/provider';
 import postgres from '@internal/target-postgres/control';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
@@ -121,10 +146,11 @@ export default definePrismaConfig({
     family: sql,
     target: postgres,
     adapter: postgresAdapter,
-    driver: postgresDriver,
+    driver: postgresDriverDescriptor,
     extensions: [],
     contract: {
       ...prismaContract('./contract.prisma', {
+        capabilities: postgresContractCapabilities([...postgres18, ...postgresDriver]),
         output: 'contract.json',
         target: postgres,
         createNamespace: postgresCreateNamespace,
@@ -185,11 +211,12 @@ export function writeContract(project: PolicyProject, version: ContractVersion):
   writeFileSync(join(project.ctx.testDir, 'contract.prisma'), contracts[version], 'utf-8');
 }
 
-/** Emits `version` and plans a migration to it from the latest migration, returning the contract it ends at. */
+/** Emits `version` and plans a migration to it from the latest migration, with `statements`, returning the contract it ends at. */
 export async function planTo(
   project: PolicyProject,
   version: ContractVersion,
   name: string,
+  statements: readonly string[] = [],
 ): Promise<string> {
   const previous = getLatestMigrationDir(project.ctx);
   writeContract(project, version);
@@ -199,6 +226,7 @@ export async function planTo(
     '--name',
     name,
     ...(previous === undefined ? [] : ['--from', previous]),
+    ...statements,
   ]);
   expect(planned.exitCode, `plan ${name}: ${planned.stdout}\n${planned.stderr}`).toBe(0);
   return latestMigrationTo(project);

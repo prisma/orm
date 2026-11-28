@@ -9,6 +9,14 @@ import type { StorageValueSetInput } from '@internal/sql-contract/types';
 import { deriveValueSetFromEntity } from '@internal/sql-contract/value-set-derivation-hook';
 import type { ContractDefinition } from './contract-definition';
 import { contractError } from './contract-errors';
+import {
+  ensureNamedEntries,
+  type NameSite,
+  namedEntriesFrom,
+  readNamedEntry,
+  writeNamedEntry,
+} from './named-entries';
+import { inNamespace, perNamespace } from './namespace-id';
 
 export type CollectedColumnEntities = Record<string, Record<string, Record<string, unknown>>>;
 
@@ -31,19 +39,28 @@ export function collectEntityFromColumn(
   namespaceId: string,
   entityRef: NonNullable<ColumnTypeDescriptor['entityRef']>,
 ): void {
-  const forNs = collected[namespaceId] ?? {};
-  const forKind = forNs[entityRef.entityKind] ?? {};
-  const existing = forKind[entityRef.entityName];
+  const forNs = ensureNamedEntries(collected, namespaceId, {
+    kind: 'namespace',
+    modelName: undefined,
+    tableName: undefined,
+    entityKind: entityRef.entityKind,
+    entityName: entityRef.entityName,
+  });
+  const forKind = readNamedEntry(forNs, entityRef.entityKind) ?? {};
+  const existing = readNamedEntry(forKind, entityRef.entityName);
   if (existing !== undefined && existing !== entityRef.entity) {
     throw contractError(
       'CONTRACT.NAME_DUPLICATE',
-      `buildSqlContractFromDefinition: two different "${entityRef.entityKind}" entities named "${entityRef.entityName}" in namespace "${namespaceId}" — pack-entity names must be unique per namespace.`,
+      `buildSqlContractFromDefinition: two different "${entityRef.entityKind}" entities named "${entityRef.entityName}"${inNamespace(namespaceId)} — pack-entity names must be unique${perNamespace(namespaceId)}.`,
       { meta: { kind: entityRef.entityKind, name: entityRef.entityName, namespaceId } },
     );
   }
-  forKind[entityRef.entityName] = entityRef.entity;
+  writeNamedEntry(forKind, entityRef.entityName, entityRef.entity, {
+    kind: 'entity',
+    entityKind: entityRef.entityKind,
+    namespaceId,
+  });
   forNs[entityRef.entityKind] = forKind;
-  collected[namespaceId] = forNs;
 }
 
 /**
@@ -61,24 +78,29 @@ export function mergeColumnAndAttachedEntities(
   attached: Readonly<Record<string, Readonly<Record<string, unknown>>>> | undefined,
   columnCollected: Readonly<Record<string, Readonly<Record<string, unknown>>>> | undefined,
 ): Readonly<Record<string, Readonly<Record<string, unknown>>>> | undefined {
-  if (attached === undefined) return columnCollected;
-  if (columnCollected === undefined) return attached;
-  const kinds = new Set([...Object.keys(attached), ...Object.keys(columnCollected)]);
+  if (attached === undefined && columnCollected === undefined) return undefined;
+  const kinds = new Set([...Object.keys(attached ?? {}), ...Object.keys(columnCollected ?? {})]);
   const result: Record<string, Readonly<Record<string, unknown>>> = {};
   for (const kind of kinds) {
-    const attachedForKind = attached[kind];
-    const columnForKind = columnCollected[kind];
-    for (const [name, entity] of Object.entries(columnForKind ?? {})) {
-      const existing = attachedForKind?.[name];
+    const attachedForKind = readNamedEntry(attached ?? {}, kind) ?? {};
+    const columnForKind = readNamedEntry(columnCollected ?? {}, kind) ?? {};
+    const entitiesOfKind: Record<string, unknown> = {};
+    const entitySite: NameSite = { kind: 'entity', entityKind: kind, namespaceId };
+    for (const [name, entity] of Object.entries(attachedForKind)) {
+      writeNamedEntry(entitiesOfKind, name, entity, entitySite);
+    }
+    for (const [name, entity] of Object.entries(columnForKind)) {
+      const existing = readNamedEntry(attachedForKind, name);
       if (existing !== undefined && existing !== entity) {
         throw contractError(
           'CONTRACT.NAME_DUPLICATE',
-          `buildSqlContractFromDefinition: two different "${kind}" entities named "${name}" in namespace "${namespaceId}" — a column-referenced entity conflicts with an attached one; pack-entity names must be unique per namespace.`,
+          `buildSqlContractFromDefinition: two different "${kind}" entities named "${name}"${inNamespace(namespaceId)} — a column-referenced entity conflicts with an attached one; pack-entity names must be unique${perNamespace(namespaceId)}.`,
           { meta: { kind, name, namespaceId } },
         );
       }
+      writeNamedEntry(entitiesOfKind, name, entity, entitySite);
     }
-    result[kind] = { ...attachedForKind, ...columnForKind };
+    result[kind] = entitiesOfKind;
   }
   return result;
 }
@@ -100,7 +122,7 @@ export function assertNoManagedEntityKinds(
     if (MANAGED_ENTRY_KINDS.has(kind)) {
       throw contractError(
         'CONTRACT.ENTITY_KIND_INVALID',
-        `buildSqlContractFromDefinition: attached entity in namespace "${namespaceId}" declares entry kind "${kind}", which is managed by the framework (table/valueSet) and cannot be attached.`,
+        `buildSqlContractFromDefinition: attached entity${inNamespace(namespaceId)} declares entry kind "${kind}", which is managed by the framework (table/valueSet) and cannot be attached.`,
         { meta: { entityKind: kind, namespaceId } },
       );
     }
@@ -149,6 +171,7 @@ export function collectEntityTypeDescriptorsByDiscriminator(
  * value-set, contribute nothing.
  */
 export function deriveEntityValueSets(
+  namespaceId: string,
   entitiesForNs: Readonly<Record<string, Readonly<Record<string, unknown>>>> | undefined,
   entityTypesByDiscriminator: ReadonlyMap<string, AuthoringEntityTypeDescriptor>,
 ): Record<string, StorageValueSetInput> | undefined {
@@ -161,7 +184,7 @@ export function deriveEntityValueSets(
       const derivedValueSet = deriveValueSetFromEntity(descriptor.output, entity);
       if (derivedValueSet === undefined) continue;
       result ??= {};
-      result[name] = derivedValueSet;
+      writeNamedEntry(result, name, derivedValueSet, { kind: 'valueSet', namespaceId });
     }
   }
   return result;
@@ -186,11 +209,14 @@ export function mergeNamespaceValueSets(
       if (Object.hasOwn(enumValueSets, name)) {
         throw contractError(
           'CONTRACT.NAME_DUPLICATE',
-          `buildSqlContractFromDefinition: value-set "${name}" in namespace "${namespaceId}" is derived from both an enum and a pack entity — names must be unique per namespace.`,
+          `buildSqlContractFromDefinition: value-set "${name}"${inNamespace(namespaceId)} is derived from both an enum and a pack entity — names must be unique${perNamespace(namespaceId)}.`,
           { meta: { kind: 'valueSet', name, namespaceId } },
         );
       }
     }
   }
-  return { ...enumValueSets, ...packValueSets };
+  return namedEntriesFrom(
+    [...Object.entries(enumValueSets ?? {}), ...Object.entries(packValueSets ?? {})],
+    { kind: 'valueSet', namespaceId },
+  );
 }

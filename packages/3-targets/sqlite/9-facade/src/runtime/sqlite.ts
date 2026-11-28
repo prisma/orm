@@ -105,6 +105,9 @@ export interface SqliteTransactionContext<
 > extends TransactionContext,
     SqliteQueryMembers<TContract, TCollections> {
   readonly enums: SqliteStaticContext<TContract>['enums'];
+  transaction<R>(
+    fn: (tx: SqliteTransactionContext<TContract, TCollections>) => PromiseLike<R>,
+  ): Promise<R>;
 }
 
 export interface SqliteStaticMembers<TContract extends Contract<SqlStorage>>
@@ -229,7 +232,6 @@ export default function sqlite<
   const context = createExecutionContext<TContract, SqliteTargetId>({
     contract,
     stack,
-    driver: sqliteDriver,
   });
   const {
     sql,
@@ -324,6 +326,27 @@ export default function sqlite<
     return prepareQuery<D, Q, CT>(workRuntime, declaration, callback);
   }
 
+  function buildTransactionContext(
+    txCtx: TransactionContext,
+  ): SqliteTransactionContext<TContract, TCollections> {
+    return withTransactionMembers(txCtx, {
+      ...buildSqliteTransactionMembers<TContract, TCollections>(
+        {
+          context,
+          collections: options.collections,
+          rawCodecInferer: stack.adapter.rawCodecInferer,
+          enums,
+          toSql,
+          prepareRuntime: workRuntime,
+        },
+        txCtx,
+      ),
+      transaction: <R>(
+        fn: (tx: SqliteTransactionContext<TContract, TCollections>) => PromiseLike<R>,
+      ) => txCtx.transaction((nested) => fn(buildTransactionContext(nested))),
+    });
+  }
+
   return {
     sql,
     orm,
@@ -396,28 +419,10 @@ export default function sqlite<
           ? local.isolationLevel
           : transactionOptions?.isolationLevel;
       const timeout = local?.timeout !== undefined ? local.timeout : transactionOptions?.timeout;
-      return withTransaction(
-        workRuntime,
-        (txCtx) => {
-          const tx: SqliteTransactionContext<TContract, TCollections> = withTransactionMembers(
-            txCtx,
-            buildSqliteTransactionMembers<TContract, TCollections>(
-              {
-                context,
-                collections: options.collections,
-                rawCodecInferer: stack.adapter.rawCodecInferer,
-                enums,
-                toSql,
-                prepareRuntime: workRuntime,
-              },
-              txCtx,
-            ),
-          );
-
-          return fn(tx);
-        },
-        { isolationLevel, timeout },
-      );
+      return withTransaction(workRuntime, (txCtx) => fn(buildTransactionContext(txCtx)), {
+        isolationLevel,
+        timeout,
+      });
     },
 
     close(): Promise<void> {

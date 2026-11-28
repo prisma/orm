@@ -2,7 +2,9 @@
 
 The MongoDB family domain of Prisma 8: the Mongo contract surface, value and codec model, query AST and builders, wire transport, and the Mongo runtime.
 
-Applications receive it as an exact-pinned dependency of the Mongo facade (`@prisma/orm-mongo`); app developers install the facade. Extension authors and decomposed installs building against the Mongo family import it directly.
+> **Maturity level: Early Access.** This package is published so that you can try it. It may have known failures, and any new version may change it. At each new release you edit the Prisma lines in your `package.json` by hand, and [Versions and support](https://github.com/prisma/orm/blob/main/docs/oss/versioning.md#a-new-minor-below-ga) shows how. Until release 8.0 it is published as `8.0.0-rc.N`, like every Prisma 8 package, and any of those versions may contain breaking changes.
+
+A MongoDB application lists this package beside the MongoDB database package (`@prisma/orm-mongo`). The database package requires it as a peer dependency and says which versions it accepts, and `prisma orm init` writes the line for you. Application code imports from the database package. Extension authors and decomposed installs building against the Mongo family import it directly.
 
 ## Entrypoints
 

@@ -26,6 +26,7 @@ const commands = createBinCommands(
       connect: mocks.connect,
       readAllMarkers: mocks.readAllMarkers,
       migrate: mocks.migrate,
+      renderContractDts: async () => ok({ contractDts: '' }),
       close: mocks.close,
     }) as unknown as ControlClient,
 );
@@ -43,7 +44,7 @@ const OPS: readonly MigrationPlanOperation[] = [
 function contractEnvelope(storageHash: string): Record<string, unknown> {
   return {
     storage: { storageHash, namespaces: {} },
-    schemaVersion: '1.0.0',
+    formatVersion: 1,
     target: TARGET,
     targetFamily: FAMILY,
   };
@@ -147,6 +148,7 @@ function ormConfig(cwd: string, overrides: Record<string, unknown> = {}): Record
     contract: {
       source: { format: 'typescript', inputs: [], load: async () => ({}) },
       output: join(cwd, 'contract.json'),
+      typesModule: '@acme/orm-db/contract-types',
     },
     migrations: { dir: 'migrations' },
     ...overrides,

@@ -17,7 +17,8 @@ const recorded = vi.hoisted(() => ({
   rollbackFailure: undefined as Error | undefined,
 }));
 
-vi.mock('pg', () => {
+vi.mock('pg', async () => {
+  const { EventEmitter } = await import('node:events');
   function recordingQuery(connection: number) {
     return vi.fn(
       async (
@@ -35,13 +36,17 @@ vi.mock('pg', () => {
       },
     );
   }
-  class Pool {
-    on = vi.fn().mockReturnThis();
-    connect = vi.fn(async () => ({
-      query: recordingQuery(++recorded.connections),
-      release: vi.fn((reason?: unknown) => recorded.disposals.push(reason)),
-      on: vi.fn(),
-    }));
+  /** Opens a client on each checkout and, as pg-pool does, emits `connect` for it. */
+  class Pool extends EventEmitter {
+    connect = vi.fn(async () => {
+      const client = {
+        query: recordingQuery(++recorded.connections),
+        release: vi.fn((reason?: unknown) => recorded.disposals.push(reason)),
+        on: vi.fn(),
+      };
+      this.emit('connect', client);
+      return client;
+    });
     end = vi.fn().mockResolvedValue(undefined);
   }
   class Client {
@@ -247,7 +252,12 @@ describe('isolation across Supabase roots and user roles', () => {
       'BEGIN',
       'ROLLBACK',
     ]);
-    expect(recorded.disposals).toEqual([failure]);
+    expect(recorded.disposals).toEqual([
+      expect.objectContaining({
+        code: 'RUNTIME.TRANSACTION_ROLLBACK_FAILED',
+        details: { rollbackError: failure },
+      }),
+    ]);
     expect(vi.getTimerCount()).toBe(0);
   });
 

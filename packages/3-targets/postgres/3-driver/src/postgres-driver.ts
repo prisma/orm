@@ -1,5 +1,5 @@
 import type { SessionSettings } from '@internal/framework-components/components';
-import { SqlQueryError } from '@internal/sql-errors';
+import { SqlConnectionError, SqlQueryError } from '@internal/sql-errors';
 import type {
   PreparedStatementHandle,
   SqlConnection,
@@ -27,6 +27,7 @@ import type {
 import Cursor from 'pg-cursor';
 import { callbackToPromise } from './callback-to-promise';
 import { type DriverRuntimeError, driverError } from './driver-error';
+import { livenessCheckLimits, type PoolLastUse, poolLastUse } from './liveness-check';
 import { NamedCursor } from './named-cursor';
 import {
   isPostgresError,
@@ -34,6 +35,7 @@ import {
   normalizePgConnectFailure,
 } from './normalize-error';
 import {
+  destroySocket,
   hasLostConnection,
   hasStartedConnecting,
   markClientAbandoned,
@@ -41,6 +43,7 @@ import {
 } from './pg-client-state';
 import { serverTextTypes } from './server-text-types';
 import { createPgPool, SessionSettingsGuard } from './session-settings';
+import { timedStatement } from './timed-statement';
 
 export type QueryResult<T extends QueryResultRow = QueryResultRow> = PgQueryResult<T>;
 
@@ -796,6 +799,7 @@ class PostgresPoolDriverImpl
 {
   private readonly pool: PoolType;
   readonly #sessionSettings: SessionSettingsGuard;
+  readonly #lastUse: PoolLastUse;
   readonly #ownedByDriver: boolean;
   #closed = false;
 
@@ -806,6 +810,7 @@ class PostgresPoolDriverImpl
   ) {
     super(buildConnectionOptions(options));
     this.pool = options.connect.pool;
+    this.#lastUse = poolLastUse(this.pool);
     this.#sessionSettings = new SessionSettingsGuard(options.sessionSettings ?? {}, this.pool);
     this.#ownedByDriver = options.connect.ownedByDriver;
   }
@@ -835,18 +840,46 @@ class PostgresPoolDriverImpl
     }
   }
 
+  /**
+   * Takes a client from the pool that is alive. A client that sat idle is checked first, and a dead
+   * one is evicted for another; the caller's statement is never sent on a client found dead.
+   */
   async acquireClient(): Promise<PoolClient> {
+    let lastCheckFailure: SqlConnectionError | undefined;
+    for (let pass = 1; ; pass++) {
+      const client = await this.#checkOut();
+      const verdict = this.#lastUse.verdict(client);
+      if (verdict === 'use') {
+        await this.#ensureSessionSettings(client);
+        return client;
+      }
+      if (verdict === 'check') {
+        const failure = await this.#checkLiveness(client);
+        if (failure === undefined) return client;
+        lastCheckFailure = failure;
+        evictClient(client, failedCheckEviction(failure));
+      } else {
+        evictClient(client, olderClientEviction());
+      }
+      if (pass > poolMax(this.pool)) throw lastCheckFailure ?? noLiveClientFound(pass);
+    }
+  }
+
+  async #checkOut(): Promise<PoolClient> {
     // pg-pool detaches its own 'error' forwarding while a client is checked
-    // out, so a connection error during a held connection, transaction, or
-    // cursor emits on the client itself; without a listener that kills the
-    // process.
+    // out, so a connection error during a liveness check, held connection,
+    // transaction, or cursor emits on the client itself; without a listener
+    // that kills the process.
     let pooled: PoolClient;
     try {
       pooled = await this.pool.connect();
     } catch (error) {
       throw normalizePgConnectFailure(error);
     }
-    const client = watchClientLoss(suppressIdleConnectionErrors(pooled));
+    return watchClientLoss(suppressIdleConnectionErrors(pooled));
+  }
+
+  async #ensureSessionSettings(client: PoolClient): Promise<void> {
     try {
       await ensureSessionSettings(this.#sessionSettings, client);
     } catch (error) {
@@ -854,7 +887,34 @@ class PostgresPoolDriverImpl
       client.release(true);
       throw normalized;
     }
-    return client;
+  }
+
+  /**
+   * Sends one statement with the liveness check's time limit: the session settings when they are
+   * due, else an empty statement. Returns why the client is dead, or undefined when the server
+   * answered, which an error other than a connection error also proves.
+   */
+  async #checkLiveness(client: PoolClient): Promise<SqlConnectionError | undefined> {
+    const startedAt = this.#lastUse.now();
+    const settingsDue = this.#sessionSettings.needs(client);
+    try {
+      await sendLivenessCheck(this.#sessionSettings, client, settingsDue);
+      return undefined;
+    } catch (error) {
+      const normalized = normalizePgClientError(client, error);
+      if (SqlQueryError.is(normalized)) {
+        if (!settingsDue) return undefined;
+        client.release(true);
+        throw normalized;
+      }
+      this.#lastUse.recordFailedCheck(startedAt);
+      return SqlConnectionError.is(normalized)
+        ? normalized
+        : new SqlConnectionError(
+            `A pooled Postgres connection gave no answer from the server to its liveness check (time limit ${livenessCheckLimits.timeoutMillis} ms): ${normalized.message}`,
+            { cause: normalized, transient: true },
+          );
+    }
   }
 
   async releaseClient(client: PoolClient): Promise<void> {
@@ -1087,6 +1147,57 @@ export function createBoundDriverFromBinding(
         sessionSettings,
       });
   }
+}
+
+async function sendLivenessCheck(
+  guard: SessionSettingsGuard,
+  client: ClientBase,
+  settingsDue: boolean,
+): Promise<void> {
+  const timeLimitMillis = livenessCheckLimits.timeoutMillis;
+  const releaseLock = await acquireClientQueryLock(client);
+  try {
+    if (settingsDue) await guard.ensure(client, timeLimitMillis);
+    else await client.query(timedStatement({ text: '' }, timeLimitMillis));
+  } finally {
+    releaseLock();
+  }
+}
+
+const PG_POOL_DEFAULT_MAX = 10;
+
+/** The pool's `max`, or pg-pool's default for a pool-like object that has none. */
+function poolMax(pool: object): number {
+  const options = 'options' in pool ? pool.options : undefined;
+  const max =
+    typeof options === 'object' && options !== null && 'max' in options ? options.max : undefined;
+  return typeof max === 'number' && max > 0 ? max : PG_POOL_DEFAULT_MAX;
+}
+
+/** Removes a client from its pool, destroying its socket first so a silent peer cannot hold it open. */
+function evictClient(client: PoolClient, reason: SqlConnectionError): void {
+  destroySocket(client);
+  client.release(reason);
+}
+
+function failedCheckEviction(failure: SqlConnectionError): SqlConnectionError {
+  return new SqlConnectionError(
+    'The Postgres driver evicted an idle pooled connection that failed its liveness check.',
+    { cause: failure },
+  );
+}
+
+function noLiveClientFound(taken: number): SqlConnectionError {
+  return new SqlConnectionError(
+    `The Postgres driver took ${taken} connections from the pool and evicted each one, because each was last used before a liveness check on another connection from the same pool failed. No statement was sent.`,
+    { transient: true },
+  );
+}
+
+function olderClientEviction(): SqlConnectionError {
+  return new SqlConnectionError(
+    'The Postgres driver evicted an idle pooled connection last used before another connection from the same pool failed its liveness check.',
+  );
 }
 
 /** Ensures the session settings on a client the driver is about to use, holding the client's query lock while it does. */

@@ -9,11 +9,15 @@ import {
   type VerifyDatabaseSchemaResult,
 } from '@internal/framework-components/control';
 import { castAs } from '@internal/utils/casts';
+import { ifDefined } from '@internal/utils/defined';
 import { isStructuredErrorCode } from '@internal/utils/structured-error';
 import type { Block, TreeNode } from '@prisma/cli-engine';
 import type { Diagnostic, NextAction, Result } from '@prisma/cli-engine/protocol';
 import { type CliStructuredError, notOk, ok } from '@prisma/cli-engine/protocol';
-import { errorFromCaught } from '../../control-api/operations/caught-errors';
+import {
+  errorFromCaught,
+  readFailureReportedAsItself,
+} from '../../control-api/operations/caught-errors';
 import {
   errorConfigValidation,
   errorContractValidationFailed,
@@ -87,10 +91,12 @@ export async function readEmittedContract(inputs: {
       displayPath: relativePath,
     });
   } catch (error) {
+    const asItself = readFailureReportedAsItself(error, path);
+    if (asItself !== undefined) return notOk(normalizeError(asItself));
     return notOk(
       normalizeError(
         errorContractValidationFailed(
-          `Contract JSON is invalid: ${error instanceof Error ? error.message : String(error)}`,
+          `Contract at ${path} failed to deserialize: ${error instanceof Error ? error.message : String(error)}`,
           { where: { path }, meta: contractValidationMeta(error) },
         ),
       ),
@@ -146,6 +152,36 @@ export function verificationThrow(inputs: {
   );
 }
 
+/** Whether an issue says the database does not provide what the contract requires, which no change to its schema fixes. */
+export function isDatabaseCapabilitiesNotProvided(issue: SchemaDiffIssue): boolean {
+  return issue.explanation?.cause === 'database-capabilities-not-provided';
+}
+
+/** The issues a change to the database's schema or to the contract source can fix. */
+export function driftIssues(issues: readonly SchemaDiffIssue[]): readonly SchemaDiffIssue[] {
+  return issues.filter((issue) => !isDatabaseCapabilitiesNotProvided(issue));
+}
+
+/** Whether some issue says the database does not provide what the contract requires. */
+export function includesDatabaseCapabilitiesNotProvided(
+  issues: readonly SchemaDiffIssue[],
+): boolean {
+  return issues.some(isDatabaseCapabilitiesNotProvided);
+}
+
+/** Whether the database is refused in this run: some space's issues say it does not provide what that space's contract requires. `db update`, `db init` and `db migrate` refuse it then, so no space in the run gets advice that would change the database. */
+export function databaseRefusedInRun(
+  issuesBySpace: readonly (readonly SchemaDiffIssue[])[],
+): boolean {
+  return issuesBySpace.some(includesDatabaseCapabilitiesNotProvided);
+}
+
+/** Why no space in a refused run gets advice that would change the database, naming whose contract the database does not provide for. */
+export function databaseRefusedWhy(requiredBy: 'its contract' | 'another space'): string {
+  const contract = requiredBy === 'its contract' ? 'the contract' : 'the contract of another space';
+  return `\`db update\`, \`db init\` and \`db migrate\` refuse this database until it provides what ${contract} requires.`;
+}
+
 export function issueNodes(
   issues: readonly SchemaDiffIssue[],
   status: 'error' | 'warn',
@@ -156,7 +192,8 @@ export function issueNodes(
 /**
  * The drift, laid out as a tree the engine draws: one root per finding family,
  * one child per element. The engine owns the connectors and the status glyphs,
- * so nothing here carries an escape sequence.
+ * so nothing here carries an escape sequence. A database that does not provide
+ * what the contract requires is no drift: the verdict's summary says it.
  */
 export function schemaFindingBlocks(inputs: {
   readonly result: VerifyDatabaseSchemaResult;
@@ -164,7 +201,7 @@ export function schemaFindingBlocks(inputs: {
   readonly strict: boolean;
 }): readonly Block[] {
   const roots: TreeNode[] = [];
-  const issues = inputs.result.schema.issues;
+  const issues = driftIssues(inputs.result.schema.issues);
   if (issues.length > 0) {
     roots.push({ label: 'Schema issues', status: 'error', children: issueNodes(issues, 'error') });
   }
@@ -196,6 +233,7 @@ export function schemaFindingBlocks(inputs: {
 export function schemaVerdictDiagnostic(inputs: {
   readonly result: VerifyDatabaseSchemaResult;
   readonly space: string | undefined;
+  readonly databaseRefused: boolean;
   readonly nextActions: readonly NextAction[];
 }): Diagnostic {
   const code = inputs.result.code;
@@ -205,7 +243,7 @@ export function schemaVerdictDiagnostic(inputs: {
     code: dotted ? code : 'CONTRACT.VERIFY_FAILED',
     severity: 'error',
     summary: inputs.result.summary,
-    ...(issues.length === 0 ? {} : { why: schemaIssuesWhy('The live schema differs', issues) }),
+    ...ifDefined('why', schemaVerdictWhy(issues, inputs.databaseRefused)),
     nextActions: inputs.nextActions,
     meta: {
       ...(inputs.space === undefined ? {} : { space: inputs.space }),
@@ -215,18 +253,38 @@ export function schemaVerdictDiagnostic(inputs: {
   };
 }
 
+function schemaVerdictWhy(
+  issues: readonly SchemaDiffIssue[],
+  databaseRefused: boolean,
+): string | undefined {
+  const drift = driftIssues(issues);
+  if (drift.length === 0) return undefined;
+  if (includesDatabaseCapabilitiesNotProvided(issues)) {
+    return `${databaseRefusedWhy('its contract')} ${schemaIssuesWhy('The live schema also differs', drift)}`;
+  }
+  if (databaseRefused) {
+    return `${databaseRefusedWhy('another space')} ${schemaIssuesWhy('The live schema differs', drift)}`;
+  }
+  return schemaIssuesWhy('The live schema differs', drift);
+}
+
 /**
  * What to do about schema drift, by the causes the issues name. A value the database may hold in a
  * form of its own is fixed in the contract when the two mean the same, and by `db update` when they
  * do not. `db update` is always offered; changing the contract to describe the database is offered
  * when some issue is not one the database may only have stored in its own form, or there is none.
+ * A run in which the database is refused gets no action for any space: `db update`, `db init` and
+ * `db migrate` refuse the database until it provides what the contracts require.
  */
 export function schemaDriftNextActions(inputs: {
   readonly verb: 'sign' | 'verify';
   readonly contractRef: string | undefined;
   readonly issues: readonly SchemaDiffIssue[];
+  readonly databaseRefused: boolean;
 }): readonly NextAction[] {
-  const { verb, contractRef, issues } = inputs;
+  const { verb, contractRef } = inputs;
+  if (inputs.databaseRefused) return [];
+  const issues = driftIssues(inputs.issues);
   const retryAfterEmit =
     contractRef === undefined
       ? `${verb} again`

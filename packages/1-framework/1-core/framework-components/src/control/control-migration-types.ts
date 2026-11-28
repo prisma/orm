@@ -21,6 +21,7 @@ import type {
   ControlFamilyInstance,
 } from './control-instances';
 import type { OperationContext } from './control-operation-results';
+import type { DatabaseCapabilitiesNotProvided } from './database-capabilities-not-provided';
 import type { DatabasePolicies } from './database-policies';
 import type {
   AppliedMigrationStatement,
@@ -422,6 +423,8 @@ export interface MigrationRunnerFailureMeta {
   readonly blockingObjects?: readonly BlockingObject[];
   /** The differences the schema check after apply found, when that check failed. */
   readonly schemaIssues?: readonly SchemaDiffIssue[];
+  /** What the database does not provide of what the destination contract requires, when that refused the run. The failure's message is its text. */
+  readonly databaseCapabilitiesNotProvided?: DatabaseCapabilitiesNotProvided;
   /** Further facts for the code, such as `sqlState` or the marker hashes. */
   readonly [key: string]: unknown;
 }

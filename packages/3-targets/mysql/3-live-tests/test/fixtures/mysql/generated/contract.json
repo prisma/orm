@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "1",
+  "formatVersion": 1,
   "targetFamily": "sql",
   "target": "mysql",
   "profileHash": "5212eb1a1220f2d24de13f4efadd4c703f3a1098a5f57e09da0dc26ebb7201d0",
@@ -16,8 +16,24 @@
       "model": "Counter",
       "namespace": "__unbound__"
     },
+    "Drawer": {
+      "model": "Drawer",
+      "namespace": "__unbound__"
+    },
     "Event": {
       "model": "Event",
+      "namespace": "__unbound__"
+    },
+    "Item": {
+      "model": "Item",
+      "namespace": "__unbound__"
+    },
+    "Ledger": {
+      "model": "Ledger",
+      "namespace": "__unbound__"
+    },
+    "Measure": {
+      "model": "Measure",
       "namespace": "__unbound__"
     },
     "Note": {
@@ -26,6 +42,10 @@
     },
     "Post": {
       "model": "Post",
+      "namespace": "__unbound__"
+    },
+    "Shelf": {
+      "model": "Shelf",
       "namespace": "__unbound__"
     },
     "Task": {
@@ -206,6 +226,43 @@
               "table": "Counter"
             }
           },
+          "Drawer": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/int@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {
+              "items": {
+                "cardinality": "1:N",
+                "on": {
+                  "localFields": [
+                    "id"
+                  ],
+                  "targetFields": [
+                    "drawerId"
+                  ]
+                },
+                "to": {
+                  "model": "Item",
+                  "namespace": "__unbound__"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                }
+              },
+              "namespaceId": "__unbound__",
+              "table": "Drawer"
+            }
+          },
           "Event": {
             "fields": {
               "accountId": {
@@ -290,6 +347,249 @@
               },
               "namespaceId": "__unbound__",
               "table": "Feature"
+            }
+          },
+          "Item": {
+            "fields": {
+              "data": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/longblob@1",
+                  "kind": "scalar"
+                }
+              },
+              "doc": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/json@1",
+                  "kind": "scalar"
+                }
+              },
+              "drawerId": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/int@1",
+                  "kind": "scalar"
+                }
+              },
+              "extra": {
+                "nullable": true,
+                "type": {
+                  "codecId": "mysql/json@1",
+                  "kind": "scalar"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/int@1",
+                  "kind": "scalar"
+                }
+              },
+              "on": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/boolean@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {
+              "drawer": {
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": [
+                    "drawerId"
+                  ],
+                  "targetFields": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "Drawer",
+                  "namespace": "__unbound__"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "data": {
+                  "column": "data"
+                },
+                "doc": {
+                  "column": "doc"
+                },
+                "drawerId": {
+                  "column": "drawerId"
+                },
+                "extra": {
+                  "column": "extra"
+                },
+                "id": {
+                  "column": "id"
+                },
+                "on": {
+                  "column": "on"
+                }
+              },
+              "namespaceId": "__unbound__",
+              "table": "Item"
+            }
+          },
+          "Ledger": {
+            "fields": {
+              "cents": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/decimal@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 10,
+                    "scale": 2
+                  }
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/int@1",
+                  "kind": "scalar"
+                }
+              },
+              "wide": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/decimal@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 65,
+                    "scale": 0
+                  }
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "cents": {
+                  "column": "cents"
+                },
+                "id": {
+                  "column": "id"
+                },
+                "wide": {
+                  "column": "wide"
+                }
+              },
+              "namespaceId": "__unbound__",
+              "table": "Ledger"
+            }
+          },
+          "Measure": {
+            "fields": {
+              "amount": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/decimal@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 65,
+                    "scale": 30
+                  }
+                }
+              },
+              "count": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/bigintnumber@1",
+                  "kind": "scalar"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/int@1",
+                  "kind": "scalar"
+                }
+              },
+              "label": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "price": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/decimal@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 10,
+                    "scale": 2
+                  }
+                }
+              },
+              "ratio": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/double@1",
+                  "kind": "scalar"
+                }
+              },
+              "shelfId": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/int@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {
+              "shelf": {
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": [
+                    "shelfId"
+                  ],
+                  "targetFields": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "Shelf",
+                  "namespace": "__unbound__"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "amount": {
+                  "column": "amount"
+                },
+                "count": {
+                  "column": "count"
+                },
+                "id": {
+                  "column": "id"
+                },
+                "label": {
+                  "column": "label"
+                },
+                "price": {
+                  "column": "price"
+                },
+                "ratio": {
+                  "column": "ratio"
+                },
+                "shelfId": {
+                  "column": "shelfId"
+                }
+              },
+              "namespaceId": "__unbound__",
+              "table": "Measure"
             }
           },
           "Note": {
@@ -425,6 +725,43 @@
               },
               "namespaceId": "__unbound__",
               "table": "Post"
+            }
+          },
+          "Shelf": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/int@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {
+              "measures": {
+                "cardinality": "1:N",
+                "on": {
+                  "localFields": [
+                    "id"
+                  ],
+                  "targetFields": [
+                    "shelfId"
+                  ]
+                },
+                "to": {
+                  "model": "Measure",
+                  "namespace": "__unbound__"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                }
+              },
+              "namespaceId": "__unbound__",
+              "table": "Shelf"
             }
           },
           "Task": {
@@ -705,6 +1042,23 @@
               },
               "uniques": []
             },
+            "Drawer": {
+              "columns": {
+                "id": {
+                  "codecId": "mysql/int@1",
+                  "dataType": "mysql/int",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
             "Event": {
               "columns": {
                 "accountId": {
@@ -800,6 +1154,196 @@
                 }
               ],
               "indexes": [],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
+            "Item": {
+              "columns": {
+                "data": {
+                  "codecId": "mysql/longblob@1",
+                  "dataType": "mysql/longblob",
+                  "nullable": false
+                },
+                "doc": {
+                  "codecId": "mysql/json@1",
+                  "dataType": "mysql/json",
+                  "nullable": false
+                },
+                "drawerId": {
+                  "codecId": "mysql/int@1",
+                  "dataType": "mysql/int",
+                  "nullable": false
+                },
+                "extra": {
+                  "codecId": "mysql/json@1",
+                  "dataType": "mysql/json",
+                  "nullable": true
+                },
+                "id": {
+                  "codecId": "mysql/int@1",
+                  "dataType": "mysql/int",
+                  "nullable": false
+                },
+                "on": {
+                  "codecId": "mysql/boolean@1",
+                  "dataType": "mysql/boolean",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [
+                {
+                  "index": {
+                    "name": "Item_drawerId_idx_a3d701ce"
+                  },
+                  "source": {
+                    "columns": [
+                      "drawerId"
+                    ],
+                    "namespaceId": "__unbound__",
+                    "tableName": "Item"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "__unbound__",
+                    "tableName": "Drawer"
+                  }
+                }
+              ],
+              "indexes": [
+                {
+                  "columns": [
+                    "drawerId"
+                  ],
+                  "name": "Item_drawerId_idx_a3d701ce",
+                  "prefix": "Item_drawerId_idx",
+                  "unique": false
+                }
+              ],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
+            "Ledger": {
+              "columns": {
+                "cents": {
+                  "codecId": "mysql/decimal@1",
+                  "dataType": "mysql/decimal",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 10,
+                    "scale": 2
+                  }
+                },
+                "id": {
+                  "codecId": "mysql/int@1",
+                  "dataType": "mysql/int",
+                  "nullable": false
+                },
+                "wide": {
+                  "codecId": "mysql/decimal@1",
+                  "dataType": "mysql/decimal",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 65,
+                    "scale": 0
+                  }
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
+            "Measure": {
+              "columns": {
+                "amount": {
+                  "codecId": "mysql/decimal@1",
+                  "dataType": "mysql/decimal",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 65,
+                    "scale": 30
+                  }
+                },
+                "count": {
+                  "codecId": "mysql/bigintnumber@1",
+                  "dataType": "mysql/bigint",
+                  "nullable": false
+                },
+                "id": {
+                  "codecId": "mysql/int@1",
+                  "dataType": "mysql/int",
+                  "nullable": false
+                },
+                "label": {
+                  "codecId": "mysql/text@1",
+                  "dataType": "mysql/text",
+                  "nullable": false
+                },
+                "price": {
+                  "codecId": "mysql/decimal@1",
+                  "dataType": "mysql/decimal",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 10,
+                    "scale": 2
+                  }
+                },
+                "ratio": {
+                  "codecId": "mysql/double@1",
+                  "dataType": "mysql/double",
+                  "nullable": false
+                },
+                "shelfId": {
+                  "codecId": "mysql/int@1",
+                  "dataType": "mysql/int",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [
+                {
+                  "index": {
+                    "name": "Measure_shelfId_idx_8761559f"
+                  },
+                  "source": {
+                    "columns": [
+                      "shelfId"
+                    ],
+                    "namespaceId": "__unbound__",
+                    "tableName": "Measure"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "__unbound__",
+                    "tableName": "Shelf"
+                  }
+                }
+              ],
+              "indexes": [
+                {
+                  "columns": [
+                    "shelfId"
+                  ],
+                  "name": "Measure_shelfId_idx_8761559f",
+                  "prefix": "Measure_shelfId_idx",
+                  "unique": false
+                }
+              ],
               "primaryKey": {
                 "columns": [
                   "id"
@@ -930,6 +1474,23 @@
                   "unique": false
                 }
               ],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
+            "Shelf": {
+              "columns": {
+                "id": {
+                  "codecId": "mysql/int@1",
+                  "dataType": "mysql/int",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
               "primaryKey": {
                 "columns": [
                   "id"
@@ -1119,13 +1680,14 @@
         "id": "__unbound__"
       }
     },
-    "storageHash": "37bd4703f9af6fe818996a37f5ee71268b4e4c2b655c7c4410b066cf3e741639"
+    "storageHash": "05a4f049dd6bd181383e0bf9f8d5213a41064fe51bfcefa7b69b84d3872d431e"
   },
   "capabilities": {
     "sql": {
       "defaultInInsert": true,
       "enums": true,
       "foreignKeys": true,
+      "interactiveTransactions": true,
       "jsonAgg": true,
       "jsonAggWithoutTruncation": true,
       "limit": true,

@@ -1,4 +1,7 @@
 export type {
+  ConfigModuleExports,
+  ContractEntryInput,
+  ContractEntryNode,
   InitContribution,
   InitProbeResult,
   Prisma7QuickReferenceInput,

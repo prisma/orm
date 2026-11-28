@@ -25,7 +25,9 @@ Provide a deterministic, verifiable representation of the application's data con
 - **Emit**: Generate `contract.json` and `contract.d.ts` with family-specific type generation
 - **Descriptor-Agnostic**: The emitter is completely agnostic to how descriptors are produced. It receives pre-assembled `OperationRegistry`, `codecTypeImports`, and `extensionIds` from the CLI or family helpers—no pack manifest parsing happens inside the emitter.
 
-**Note**: The emitter does NOT normalize contracts. Normalization must happen in the contract builder when the contract is created. The emitter assumes contracts are already normalized (all required fields present, including `schemaVersion`, `models`, `relations`, `storage`, `extensions`, `capabilities`, `meta`, and `sources`). All fields can be empty objects/arrays, but they must be present.
+**Note**: The emitter writes the `formatVersion` that the family's contract serializer prints first in `contract.json`; a contract in memory carries none.
+
+**Note**: The emitter does NOT normalize contracts. Normalization must happen in the contract builder when the contract is created. The emitter assumes contracts are already normalized (all required fields present, including `models`, `relations`, `storage`, `extensions`, `capabilities`, `meta`, and `sources`). All fields can be empty objects/arrays, but they must be present.
 
 **Non-goals:**
 - Migration planning or execution
@@ -147,7 +149,6 @@ import { sqlEmission } from '@internal/sql-contract-emitter';
 
 // Emit contract
 const contract: Contract = {
-  schemaVersion: '1',
   targetFamily: 'sql',
   target: 'postgres',
   // ... contract structure

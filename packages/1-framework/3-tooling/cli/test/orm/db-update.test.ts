@@ -19,6 +19,7 @@ import { errorMigrationPlanningFailed } from '../../src/utils/cli-errors';
 import { dbUpdateRunnerFailureError } from '../../src/utils/db-update-failure';
 import { stdoutErrorMeta, stdoutFrames } from '../helpers/json-frames';
 import { createOrmTestCli } from '../helpers/orm-test-cli';
+import { NOT_RECORDED, reference, toEmitted } from '../utils/plan-origins';
 import { createTestProjectDir, writeProjectManifest } from '../utils/test-project-dir';
 
 const REFUSAL =
@@ -79,7 +80,7 @@ beforeEach(() => {
   writeProjectManifest(projectDir);
   writeFileSync(
     join(projectDir, 'contract.json'),
-    JSON.stringify({ storage: { storageHash: MARKER_HASH } }),
+    JSON.stringify({ formatVersion: 1, storage: { storageHash: MARKER_HASH } }),
   );
   writeFileSync(join(projectDir, 'contract.d.ts'), 'export type Contract = never;\n');
   mocks.connect.mockReset().mockResolvedValue(undefined);
@@ -228,11 +229,15 @@ describe('db update --rename', () => {
     expect(run.presented?.data).toMatchObject({ appliedStatements: [PROFILE_TO_USER] });
   });
 
-  it('says which field gets a temporary value in existing rows, and that migration plan --backfill chooses it', async () => {
+  it('says which field gets a temporary value in existing rows: before the run, that migration plan --backfill chooses it; after it, to update the rows', async () => {
     const temporaryValues = [{ field: 'User.email', value: "''" }];
     mocks.dbUpdate
-      .mockResolvedValueOnce(ok({ ...planSuccess(), temporaryValues }))
-      .mockResolvedValueOnce(ok({ ...applySuccess(), temporaryValues }));
+      .mockResolvedValueOnce(
+        ok({ ...planSuccess(), temporaryValues, migrationPlan: toEmitted(reference('db')) }),
+      )
+      .mockResolvedValueOnce(
+        ok({ ...applySuccess(), temporaryValues, migrationPlan: toEmitted(reference('db')) }),
+      );
     const dryRun = await harness().run(['db', 'update', '--dry-run'], {
       cwd: projectDir,
       isTty: { stdout: true },
@@ -245,22 +250,48 @@ describe('db update --rename', () => {
     expect(dryRun.presented?.presentation.human).toContainEqual({
       kind: 'summary',
       status: 'warn',
-      text: `Field "User.email" would get the temporary value '' where existing data has none. To choose the value, plan a migration with prisma-test migration plan --backfill User.email instead.`,
+      text: `Field "User.email" would get the temporary value '' where existing data has none. To choose the value instead, plan a migration with \`prisma-test migration plan --from db --backfill User.email\`, run \`node <migration directory>/migration.ts\` for the directory it writes, and apply it with \`prisma-test db migrate\`.`,
     });
     expect(applied.presented?.presentation.human).toContainEqual({
       kind: 'summary',
       status: 'warn',
-      text: `Field "User.email" got the temporary value '' where existing data has none. To choose the value, plan a migration with prisma-test migration plan --backfill User.email instead.`,
+      text: `Field "User.email" got the temporary value '' where existing data has none. To choose another value, update those rows.`,
     });
     expect(applied.presented?.data).toMatchObject({ temporaryValues });
   });
 
-  it('starts the migration plan it suggests for a temporary value from the contract the database is at', async () => {
-    mocks.dbUpdate.mockResolvedValue(
+  it('names the ref db update --to was given in the migration plan that chooses a temporary value', async () => {
+    mocks.dbUpdate.mockResolvedValueOnce(
       ok({
         ...planSuccess(),
         temporaryValues: [{ field: 'User.email', value: "''" }],
-        databaseStorageHash: MARKER_HASH,
+        migrationPlan: { from: reference('db'), to: reference('production') },
+      }),
+    );
+    const run = await harness().run(['db', 'update', '--dry-run'], {
+      cwd: projectDir,
+      isTty: { stdout: true },
+    });
+
+    expect(run.presented?.presentation.human).toContainEqual(
+      expect.objectContaining({
+        text: expect.stringContaining(
+          '`prisma-test migration plan --from db --to production --backfill User.email`',
+        ),
+      }),
+    );
+  });
+
+  it('points a temporary value at the migrations on disk that already lead to the ref, and plans no second path', async () => {
+    mocks.dbUpdate.mockResolvedValueOnce(
+      ok({
+        ...planSuccess(),
+        temporaryValues: [{ field: 'User.email', value: "''" }],
+        migrationPlan: {
+          from: reference('db'),
+          to: reference('production'),
+          migrationsToTarget: { kind: 'on-disk' },
+        },
       }),
     );
     const run = await harness().run(['db', 'update', '--dry-run'], {
@@ -271,9 +302,70 @@ describe('db update --rename', () => {
     expect(run.presented?.presentation.human).toContainEqual({
       kind: 'summary',
       status: 'warn',
-      text: `Field "User.email" would get the temporary value '' where existing data has none. To choose the value, plan a migration with prisma-test migration plan --from ${MARKER_HASH} --backfill User.email instead.`,
+      text: 'Field "User.email" would get the temporary value \'\' where existing data has none. Migrations on disk already lead from the database to `production`, so a migration planned now would be a second path between the same two contracts, and `db migrate` applies only one of them. To fill the rows as they do, apply them with `prisma-test db migrate --to production` instead.',
+    });
+  });
+
+  it('says why no migration chooses a temporary value when the database is already at the target', async () => {
+    mocks.dbUpdate.mockResolvedValueOnce(
+      ok({
+        ...planSuccess(),
+        temporaryValues: [{ field: 'User.email', value: "''" }],
+        migrationPlan: {
+          ...toEmitted(reference('db')),
+          migrationsToTarget: { kind: 'none-needed' },
+        },
+      }),
+    );
+    const run = await harness().run(['db', 'update', '--dry-run'], {
+      cwd: projectDir,
+      isTty: { stdout: true },
+    });
+
+    expect(run.presented?.presentation.human).toContainEqual({
+      kind: 'summary',
+      status: 'warn',
+      text: 'Field "User.email" would get the temporary value \'\' where existing data has none. No migration can be planned to choose it. The database is already at the emitted contract and records every invariant it requires, so there is no migration to apply.',
+    });
+  });
+
+  it('suggests no migration plan for a temporary value when no plan can start where the database is', async () => {
+    mocks.dbUpdate.mockResolvedValue(
+      ok({ ...planSuccess(), temporaryValues: [{ field: 'User.email', value: "''" }] }),
+    );
+    const run = await harness().run(['db', 'update', '--dry-run'], {
+      cwd: projectDir,
+      isTty: { stdout: true },
+    });
+
+    expect(run.presented?.presentation.human).toContainEqual({
+      kind: 'summary',
+      status: 'warn',
+      text: `Field "User.email" would get the temporary value '' where existing data has none.`,
+    });
+  });
+
+  it('starts the migration plan it suggests for a temporary value from the contract the database is at', async () => {
+    mocks.dbUpdate.mockResolvedValue(
+      ok({
+        ...planSuccess(),
+        temporaryValues: [{ field: 'User.email', value: "''" }],
+        databaseStorageHash: MARKER_HASH,
+        migrationPlan: toEmitted(reference(MARKER_HASH)),
+      }),
+    );
+    const run = await harness().run(['db', 'update', '--dry-run'], {
+      cwd: projectDir,
+      isTty: { stdout: true },
+    });
+
+    expect(run.presented?.presentation.human).toContainEqual({
+      kind: 'summary',
+      status: 'warn',
+      text: `Field "User.email" would get the temporary value '' where existing data has none. To choose the value instead, plan a migration with \`prisma-test migration plan --from ${MARKER_HASH} --backfill User.email\`, run \`node <migration directory>/migration.ts\` for the directory it writes, and apply it with \`prisma-test db migrate\`.`,
     });
     expect(run.presented?.data).not.toHaveProperty('databaseStorageHash');
+    expect(run.presented?.data).not.toHaveProperty('migrationPlan');
   });
 
   it('lists what an apply would ask about on a dry run, in its output and its JSON', async () => {
@@ -557,7 +649,11 @@ describe('db update --rename', () => {
 
   it('repeats --config and --db in every command a dry run prints, as a shell reads them', async () => {
     mocks.dbUpdate.mockResolvedValue(
-      ok({ ...planSuccess(), temporaryValues: [{ field: 'User.email', value: "''" }] }),
+      ok({
+        ...planSuccess(),
+        temporaryValues: [{ field: 'User.email', value: "''" }],
+        migrationPlan: toEmitted(reference('db')),
+      }),
     );
     const run = await harness().run(
       [
@@ -594,7 +690,7 @@ describe('db update --rename', () => {
       temporaryValue: {
         kind: 'summary',
         status: 'warn',
-        text: `Field "User.email" would get the temporary value '' where existing data has none. To choose the value, plan a migration with prisma-test migration plan --backfill User.email --config 'my app/prisma.config.ts' instead.`,
+        text: `Field "User.email" would get the temporary value '' where existing data has none. To choose the value instead, plan a migration with \`prisma-test migration plan --from db --backfill User.email --config 'my app/prisma.config.ts'\`, run \`node <migration directory>/migration.ts --config 'my app/prisma.config.ts'\` for the directory it writes, and apply it with \`prisma-test db migrate --advance-ref qa --config 'my app/prisma.config.ts' --db <url>\`.`,
       },
     });
   });
@@ -994,7 +1090,7 @@ describe('db update', () => {
           migrationRunnerFailure('MIGRATION.EXECUTION_FAILED', 'runner failed'),
           {},
           {
-            databaseStorageHash: undefined,
+            migrationPlan: toEmitted(NOT_RECORDED),
             invocation: { cwd: projectDir, configPath: undefined, dbGiven: false },
           },
         ),
@@ -1024,7 +1120,7 @@ describe('db update', () => {
             { meta: { blockingObjects: [{ kind: 'view', name: 'billing.v_paid' }] } },
           ),
           {},
-          { databaseStorageHash: undefined, invocation: options.invocation },
+          { migrationPlan: toEmitted(NOT_RECORDED), invocation: options.invocation },
         ),
       ),
     );
@@ -1079,7 +1175,7 @@ describe('db update', () => {
           migrationRunnerFailure('MIGRATION.EXECUTION_FAILED', 'runner failed'),
           {},
           {
-            databaseStorageHash: undefined,
+            migrationPlan: toEmitted(NOT_RECORDED),
             invocation: { cwd: projectDir, configPath: undefined, dbGiven: false },
           },
         ),
@@ -1125,7 +1221,7 @@ describe('db update', () => {
           migrationRunnerFailure('MIGRATION.EXECUTION_FAILED', 'runner failed'),
           {},
           {
-            databaseStorageHash: undefined,
+            migrationPlan: toEmitted(NOT_RECORDED),
             invocation: { cwd: projectDir, configPath: undefined, dbGiven: false },
           },
         ),
@@ -1152,7 +1248,7 @@ describe('db update', () => {
     mocks.dbUpdate.mockResolvedValue(
       notOk(
         dbUpdateRunnerFailureError(runnerFailure, runnerFailureFacts(runnerFailure, []), {
-          databaseStorageHash: undefined,
+          migrationPlan: toEmitted(NOT_RECORDED),
           invocation: { cwd: projectDir, configPath: undefined, dbGiven: false },
         }),
       ),
@@ -1187,6 +1283,7 @@ describe('db update', () => {
           rerunArgs: [],
           statementArgs: [],
         },
+        emittedContractHash: 'a'.repeat(64),
       }),
     );
   });
@@ -1232,7 +1329,7 @@ describe('db update', () => {
 
       expect(run.exitCode).toBe(0);
       expect(mocks.renderContractDts).toHaveBeenCalledWith({
-        contract: { storage: { storageHash: MARKER_HASH } },
+        contract: { formatVersion: 1, storage: { storageHash: MARKER_HASH } },
         typesModule: '@acme/orm-db/contract-types',
       });
       expect(mocks.renderContractDts.mock.invocationCallOrder[0]).toBeLessThan(

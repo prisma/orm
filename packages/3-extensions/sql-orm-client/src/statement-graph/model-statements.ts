@@ -6,7 +6,7 @@ import { loadsIncludesPerRelation } from '../include-strategy';
 import {
   deleteAst,
   groupRowsByColumnSignature,
-  type InsertConflictSkip,
+  type InsertConflict,
   insertAst,
   projectTableColumns,
   returningProjection,
@@ -37,19 +37,19 @@ export interface Model {
   readonly tables: CollectionTables;
 }
 
-export interface KeySource {
+export interface KeyFilter {
   readonly from: NodeId;
   readonly columns: readonly ColumnMapping[];
 }
 
-export interface LinkSource extends KeySource {
+export interface JunctionFilter extends KeyFilter {
   readonly junction: TableSource;
   readonly targets: readonly ColumnMapping[];
 }
 
-export interface Sources {
-  readonly filters: readonly KeySource[];
-  readonly links: readonly LinkSource[];
+export interface KeyFilters {
+  readonly filters: readonly KeyFilter[];
+  readonly links: readonly JunctionFilter[];
 }
 
 export interface Builder {
@@ -72,8 +72,8 @@ export const allColumns: Shape = {
 };
 
 export interface InsertWrite {
-  readonly conflict: InsertConflictSkip | undefined;
-  readonly keys: readonly KeySource[];
+  readonly conflict: InsertConflict | undefined;
+  readonly keys: readonly KeyFilter[];
   readonly junction: JunctionWrite | undefined;
   readonly requires: readonly Requires[];
   readonly owner: WrittenRowOwner;
@@ -120,16 +120,24 @@ export function insertRows(
     requires,
     owner,
   });
+  if (conflict !== undefined && 'link' in conflict) {
+    if (afterWrite === undefined && returns === 'count') {
+      return inserted;
+    }
+    const linked = readBack(b, model, inserted, conflict.columns, { shape, by: 'keys', owner });
+    afterWrite?.(linked);
+    return returns === 'count' ? inserted : linked;
+  }
   afterWrite?.(inserted);
   return readBackRows(b, model, inserted, { returns, shape, by: 'keys', owner });
 }
 
-export interface DeleteRows extends Sources {
+export interface DeleteRows extends KeyFilters {
   readonly where: AnyExpression | undefined;
 }
 
 export interface UpdateRows extends RowsRead, DeleteRows {
-  readonly payloads: readonly KeySource[];
+  readonly payloads: readonly KeyFilter[];
   readonly owner: WrittenRowOwner;
 }
 
@@ -166,17 +174,26 @@ export function deleteRows(
   });
 }
 
-function linkEdge({ from, columns, junction, targets }: LinkSource): JunctionFilterData {
+function linkEdge({ from, columns, junction, targets }: JunctionFilter): JunctionFilterData {
   return new JunctionFilterData(from, columns, junction, targets);
 }
 
 export function findRows(
   { graph }: Builder,
   ast: SelectAst,
-  { filter, requires }: { readonly filter: FilterData[]; readonly requires: Requires[] },
+  {
+    filter,
+    requires,
+    links = [],
+  }: {
+    readonly filter: FilterData[];
+    readonly requires: Requires[];
+    readonly links?: readonly JunctionFilter[];
+  },
 ): NodeId {
   const find = new Find(ast);
-  return graph.add(find, { filter, state: graph.stateEdgesFor(find), requires });
+  const link = links.map(linkEdge);
+  return graph.add(find, { filter, link, state: graph.stateEdgesFor(find, link), requires });
 }
 
 export interface ReadBack {

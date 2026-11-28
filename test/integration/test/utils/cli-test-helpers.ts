@@ -40,6 +40,7 @@ export interface EngineRunResult {
 export interface RunOnEngineOptions {
   /** Simulate piped stdout (isTTY=false), which receives the command's data lines. */
   readonly isTTY?: boolean;
+  readonly env?: Readonly<Record<string, string | undefined>>;
 }
 
 /**
@@ -134,6 +135,7 @@ export async function runOnEngine(
   const run = await cli.run([...argv], {
     cwd: project.testDir,
     isTty: { stdout: options?.isTTY !== false, stderr: options?.isTTY !== false },
+    ...(options?.env === undefined ? {} : { env: options.env }),
   });
 
   return {
@@ -201,9 +203,9 @@ export function createContractFile(testDir: string): string {
   writeFileSync(
     contractPath,
     `import { int4Column, textColumn } from '@repo/test-utils/column-descriptors';
-import { defineContract, field, model } from '@internal/postgres/contract-builder';
+import { defineContract, field, model, postgres18, postgresDriver } from '@internal/postgres/contract-builder';
 
-const contractObj = defineContract({
+const contractObj = defineContract({ requiredCapabilities: [...postgres18, ...postgresDriver],
   models: {
     User: model('User', {
       fields: {

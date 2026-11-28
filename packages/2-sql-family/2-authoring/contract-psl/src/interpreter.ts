@@ -87,6 +87,7 @@ import type {
   SyntaxNode,
 } from '@internal/psl-parser/syntax';
 import { NamespaceDeclarationAst } from '@internal/psl-parser/syntax';
+import { capabilityUnavailableMessage } from '@internal/sql-contract/capability-messages';
 import {
   type LoweredPackEntity,
   providesPslEntityPlacement,
@@ -1011,7 +1012,9 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
       if (input.capabilities['sql']?.['checkConstraint'] !== true) {
         diagnostics.push({
           code: 'PSL_CHECK_UNSUPPORTED_TARGET',
-          message: `Model "${model.name}" declares "@@check", but target "${input.targetId}" does not support check constraints (the adapter does not report the "checkConstraint" capability). Remove the check or author it against a target that supports check constraints.`,
+          message: capabilityUnavailableMessage(`\`@@check\` on model "${model.name}"`, [
+            'sql.checkConstraint',
+          ]),
           ...source.at(modelAttribute.span),
         });
         continue;
@@ -1877,11 +1880,11 @@ function resolveVariants(
     }
     if (!modelKeys.has(modelKey)) continue;
 
-    const variants: Record<string, CrossReference> = {};
+    const variants = new Map<string, CrossReference>();
     for (const baseDecl of baseDeclarations.values()) {
       if (baseDecl.base.key !== modelKey || baseDecl.value === undefined) continue;
       const variantName = baseDecl.model.name;
-      const existingVariant = variants[baseDecl.value];
+      const existingVariant = variants.get(baseDecl.value);
       if (existingVariant) {
         const qualified =
           existingVariant.namespace !== baseDecl.base.namespaceId ||
@@ -1893,10 +1896,10 @@ function resolveVariants(
         });
         continue;
       }
-      variants[baseDecl.value] = crossRef(variantName, baseDecl.namespaceId);
+      variants.set(baseDecl.value, crossRef(variantName, baseDecl.namespaceId));
     }
 
-    if (Object.keys(variants).length === 0) {
+    if (variants.size === 0) {
       const alreadyReported = [...baseDeclarations.values()].some(
         (baseDecl) => baseDecl.base.key === modelKey && baseDecl.value === undefined,
       );
@@ -1908,7 +1911,10 @@ function resolveVariants(
       });
       continue;
     }
-    discriminators.set(modelKey, { discriminator: { field: decl.fieldName }, variants });
+    discriminators.set(modelKey, {
+      discriminator: { field: decl.fieldName },
+      variants: Object.fromEntries(variants),
+    });
   }
 
   const bases = new Map<string, CrossReference>();

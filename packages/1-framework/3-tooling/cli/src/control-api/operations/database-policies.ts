@@ -2,21 +2,39 @@ import type { ContractMarkerRecord } from '@internal/contract/types';
 import { errorMarkerPoliciesCorrupt } from '@internal/errors/execution';
 import {
   type ChangeStrategy,
+  DATA_PROTECTION_KEYS,
   type DatabasePolicies,
   type DatabasePolicyDifference,
+  type DeclaredDatabasePolicies,
   databasePoliciesOf,
   databasePolicyDifferences,
   withDeclaredDatabasePolicies,
 } from '@internal/framework-components/control';
+import type { ContractMarkerRecordLike } from '@internal/migration-tools/aggregate';
 import type { NamedRef } from '@internal/migration-tools/refs';
+import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import type { CliStructuredError } from '../../utils/cli-errors';
 import {
+  type ChangePolicyCheckedCommand,
+  type DataProtectionCheckedCommand,
+  type DataProtectionRefusedOperation,
   errorChangePolicyForbids,
+  errorDataProtectionForbids,
   errorPolicyMismatch,
-  type PolicyCheckedCommand,
+  type PolicySource,
 } from '../../utils/policy-errors';
+import {
+  type DataProtectionKey,
+  FORBIDDEN_LEVEL,
+  PERMITTED_LEVEL,
+} from '../../utils/policy-settings';
 import type { CliInvocation } from '../../utils/printed-command';
+import {
+  type MigrationPlanArguments,
+  migrationPlanForDatabase,
+  type PlanSpace,
+} from './plan-arguments';
 
 /**
  * The database's policies in force: what the application space's marker records, filled from
@@ -50,7 +68,7 @@ export interface CheckedDatabasePolicies {
   readonly toWrite: DatabasePoliciesToWrite | undefined;
 }
 
-const STRATEGY_OF: Record<PolicyCheckedCommand, ChangeStrategy> = {
+const STRATEGY_OF: Record<ChangePolicyCheckedCommand, ChangeStrategy> = {
   'db migrate': 'migrate',
   'db update': 'reconcile',
   'db sign': 'reconcile',
@@ -62,15 +80,22 @@ const STRATEGY_OF: Record<PolicyCheckedCommand, ChangeStrategy> = {
  * them. Then the change policy the run would leave in force must permit the command.
  */
 export function checkRunPolicies(args: {
-  readonly command: PolicyCheckedCommand;
-  readonly appSpaceId: string;
+  readonly command: ChangePolicyCheckedCommand;
+  /** The application space, whose migrations and refs the refusal's advice names. */
+  readonly app: PlanSpace & { readonly spaceId: string };
+  /** The markers the run read, which say where the database is. */
+  readonly markers: ReadonlyMap<string, ContractMarkerRecordLike | null>;
   readonly inForce: DatabasePolicies;
   readonly ref: NamedRef | undefined;
   readonly permitPolicyChange: boolean;
+  /** The contract the run moves the database to: the ref's, when there is one. */
   readonly targetHash: string;
   readonly invocation: CliInvocation | undefined;
+  /** The `migration plan` to the target that the run already derived, which the refusal's advice names. */
+  readonly migrationPlan?: MigrationPlanArguments;
 }): Result<CheckedDatabasePolicies, CliStructuredError> {
-  const { appSpaceId, inForce, ref } = args;
+  const { app, inForce, ref } = args;
+  const appSpaceId = app.spaceId;
   const declared = ref?.policies;
   const differences = declared === undefined ? [] : databasePolicyDifferences(declared, inForce);
   if (ref !== undefined && differences.length > 0 && !args.permitPolicyChange) {
@@ -94,6 +119,15 @@ export function checkRunPolicies(args: {
             ? { kind: 'ref', refName: ref.name }
             : { kind: 'marker' },
         targetHash: args.targetHash,
+        migrationPlan:
+          args.migrationPlan ??
+          migrationPlanForDatabase(
+            app,
+            args.markers.get(app.spaceId),
+            ref === undefined
+              ? { kind: 'contract', hash: args.targetHash }
+              : { kind: 'ref', name: ref.name },
+          ),
         ref:
           ref === undefined
             ? undefined
@@ -103,4 +137,84 @@ export function checkRunPolicies(args: {
     );
   }
   return ok({ inForce, toWrite });
+}
+
+/** The data protection levels a checked run obeys: those it records when it consents to a change, otherwise those in force. */
+export function dataProtectionOfRun(
+  checked: CheckedDatabasePolicies,
+): DatabasePolicies['dataProtection'] {
+  return checked.toWrite?.policies.dataProtection ?? checked.inForce.dataProtection;
+}
+
+/** The data protection settings a checked run obeys at their `permitted` level: nobody is asked about what they cover. */
+export function permittedSettingsOfRun(
+  checked: CheckedDatabasePolicies,
+): readonly DataProtectionKey[] {
+  const levels = dataProtectionOfRun(checked);
+  return DATA_PROTECTION_KEYS.filter((setting) => levels[setting] === PERMITTED_LEVEL[setting]);
+}
+
+/** Each data protection setting at its `forbidden` level, with where that level is recorded. */
+export type ForbiddingSettings = Partial<Record<DataProtectionKey, PolicySource>>;
+
+function forbiddingSettings(
+  levels: DeclaredDatabasePolicies['dataProtection'],
+  sourceOf: (setting: DataProtectionKey) => PolicySource,
+): ForbiddingSettings {
+  return Object.fromEntries(
+    DATA_PROTECTION_KEYS.flatMap((setting) =>
+      levels?.[setting] === FORBIDDEN_LEVEL[setting] ? [[setting, sourceOf(setting)] as const] : [],
+    ),
+  );
+}
+
+/**
+ * The settings a checked run forbids. A setting the run records from `ref` is the ref's; any other
+ * is the marker's.
+ */
+export function forbiddingSettingsOfRun(
+  checked: CheckedDatabasePolicies,
+  ref: NamedRef | undefined,
+): ForbiddingSettings {
+  const declared = checked.toWrite === undefined ? undefined : ref?.policies?.dataProtection;
+  return forbiddingSettings(dataProtectionOfRun(checked), (setting) =>
+    ref !== undefined && declared?.[setting] !== undefined
+      ? { kind: 'ref', refName: ref.name }
+      : { kind: 'marker' },
+  );
+}
+
+/** The settings `ref` declares at their `forbidden` level, which a plan made for it obeys. */
+export function forbiddingSettingsOfRef(ref: NamedRef): ForbiddingSettings {
+  return forbiddingSettings(ref.policies?.dataProtection, () => ({
+    kind: 'ref',
+    refName: ref.name,
+  }));
+}
+
+/** Refuses the operations that lose data or change access where a forbidden setting covers them; `undefined` when none is refused. */
+export function refuseForbiddenChanges(args: {
+  readonly appSpaceId: string;
+  readonly command: DataProtectionCheckedCommand;
+  readonly forbidden: ForbiddingSettings;
+  readonly dataLoss: readonly DataProtectionRefusedOperation[];
+  readonly accessChanges: readonly DataProtectionRefusedOperation[];
+  readonly invocation: CliInvocation | undefined;
+  readonly migrationPlan?: MigrationPlanArguments;
+}): CliStructuredError | undefined {
+  const operationsOf = { dataLoss: args.dataLoss, accessWidening: args.accessChanges };
+  const refusals = DATA_PROTECTION_KEYS.flatMap((setting) => {
+    const source = args.forbidden[setting];
+    const operations = operationsOf[setting];
+    return source === undefined || operations.length === 0 ? [] : [{ setting, source, operations }];
+  });
+  return refusals.length === 0
+    ? undefined
+    : errorDataProtectionForbids({
+        spaceId: args.appSpaceId,
+        command: args.command,
+        refusals,
+        invocation: args.invocation,
+        ...ifDefined('migrationPlan', args.migrationPlan),
+      });
 }

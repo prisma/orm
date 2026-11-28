@@ -340,6 +340,7 @@ export class SqliteMigrationPlanner
           fromContract: options.fromContract,
           contract: options.contract,
           origins: statements.value.origins,
+          storageRenames: statements.value.storageRenames,
           byHand: sqliteTableRenameByHand,
           removedVariants: storedRewrites.value.removedVariants,
         },
@@ -381,7 +382,6 @@ export class SqliteMigrationPlanner
             frameworkComponents: options.frameworkComponents,
           }),
         apply: (call) => working.apply(call),
-        ...sqliteTableRenameByHand,
       },
     });
     if (!planned.ok) return planned;

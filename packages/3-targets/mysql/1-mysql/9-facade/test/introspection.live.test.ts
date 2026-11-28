@@ -15,6 +15,7 @@ import {
   frameworkComponents,
   loadExampleContract,
 } from './example-contract';
+import { contractWithScalarTypes } from './migrations/contracts';
 
 const autoincrement = { kind: 'function', expression: 'autoincrement()' } as const;
 
@@ -100,8 +101,8 @@ async function withExampleTables<T>(
 describe('introspecting a MySQL database made by hand', {
   timeout: timeouts.databaseOperation,
 }, () => {
-  it('yields the schema IR the example contract describes', async (test) => {
-    await withMysqlDatabase(test, ({ url }) =>
+  it('yields the schema IR the example contract describes', async () => {
+    await withMysqlDatabase(({ url }) =>
       withExampleTables(url, exampleTablesDdl, async (driver) => {
         const actual = await introspect(driver, loadExampleContract());
 
@@ -176,7 +177,113 @@ describe('introspecting a MySQL database made by hand', {
     );
   });
 
-  it('verifies a unique constraint and a unique index the contract declares without drift', async (test) => {
+  it('verifies a table made by hand with a column of each scalar convenience type and its default', async () => {
+    const contract = contractWithScalarTypes();
+    const measureDdl = `CREATE TABLE \`Measure\` (
+      \`id\` int NOT NULL,
+      \`count\` bigint NOT NULL DEFAULT 7,
+      \`ratio\` double NOT NULL DEFAULT 0.25,
+      \`amount\` decimal(65,30) NOT NULL DEFAULT 1.5,
+      \`price\` decimal(10,2) NOT NULL DEFAULT '-0.5',
+      \`label\` text NULL,
+      \`name\` varchar(40) NOT NULL DEFAULT 'it''s',
+      \`on\` tinyint(1) NOT NULL DEFAULT TRUE,
+      \`data\` longblob NOT NULL DEFAULT (X'00FF'),
+      \`doc\` json NOT NULL DEFAULT ('{"a": "it''s", "b": [1, null]}'),
+      \`extra\` json NULL,
+      PRIMARY KEY (\`id\`)
+    )`;
+    await withMysqlDatabase(({ url }) =>
+      withExampleTables(url, [measureDdl], async (driver) => {
+        const actual = await introspect(driver, contract);
+        const measure = actual.tables['Measure']?.columns ?? {};
+        expect({
+          amount: measure['amount']?.resolvedDefault,
+          price: measure['price']?.resolvedDefault,
+          ratio: measure['ratio']?.resolvedDefault,
+          on: measure['on']?.resolvedDefault,
+          data: measure['data']?.resolvedDefault,
+          doc: measure['doc']?.resolvedDefault,
+          issues: mysql.diffSchema({ contract, schema: actual, frameworkComponents }).issues,
+        }).toEqual({
+          amount: { kind: 'literal', value: `1.5${'0'.repeat(29)}` },
+          price: { kind: 'literal', value: '-0.50' },
+          ratio: { kind: 'literal', value: 0.25 },
+          on: { kind: 'literal', value: true },
+          data: { kind: 'literal', value: '00FF' },
+          doc: { kind: 'literal', value: { a: "it's", b: [1, null] } },
+          issues: [],
+        });
+      }),
+    );
+  });
+
+  it.for([
+    ["('abcd')", '61626364'],
+    ["('é€😀')", 'C3A9E282ACF09F9880'],
+    ["('')", ''],
+    ["(_binary X'FF00')", 'FF00'],
+  ])(
+    'reads the default %s on a longblob column as the bytes a row of it holds',
+    async ([written, rowHex]) => {
+      const contract = contractWithScalarTypes();
+      const ddl = `CREATE TABLE \`Measure\` (
+      \`id\` int NOT NULL,
+      \`data\` longblob NOT NULL DEFAULT ${written},
+      PRIMARY KEY (\`id\`)
+    )`;
+      await withMysqlDatabase(({ url }) =>
+        withExampleTables(url, [ddl], async (driver) => {
+          const data = (await introspect(driver, contract)).tables['Measure']?.columns['data'];
+          await driver.query('INSERT INTO `Measure` (`id`) VALUES (1)');
+          const { rows } = await driver.query<{ hex: string }>(
+            'SELECT HEX(`data`) AS hex FROM `Measure`',
+          );
+          expect({
+            row: rows[0]?.hex,
+            resolvedDefault: data?.resolvedDefault,
+            unreadable: data?.defaultUnreadable,
+          }).toEqual({
+            row: rowHex,
+            resolvedDefault: { kind: 'literal', value: rowHex },
+            unreadable: undefined,
+          });
+        }),
+      );
+    },
+  );
+
+  it('keeps a literal binary and varbinary default as reported, since MySQL cuts it at its first zero byte, though it reports an expression default whole', async () => {
+    const ddl = `CREATE TABLE \`Fixed\` (
+      \`id\` int NOT NULL,
+      \`cut\` binary(4) NOT NULL DEFAULT 'a\\0b',
+      \`gone\` varbinary(8) NOT NULL DEFAULT 0x00ff,
+      \`whole\` varbinary(8) NOT NULL DEFAULT (0x00ff),
+      PRIMARY KEY (\`id\`)
+    )`;
+    await withMysqlDatabase(({ url }) =>
+      withExampleTables(url, [ddl], async (driver) => {
+        const columns = (await introspect(driver)).tables['Fixed']?.columns ?? {};
+        await driver.query('INSERT INTO `Fixed` (`id`) VALUES (1)');
+        const { rows } = await driver.query<Record<string, string>>(
+          'SELECT HEX(`cut`) AS cut, HEX(`gone`) AS gone, HEX(`whole`) AS whole FROM `Fixed`',
+        );
+        expect({
+          row: rows[0],
+          reported: [columns['cut']?.default, columns['gone']?.default, columns['whole']?.default],
+          cut: columns['cut']?.resolvedDefault,
+          gone: columns['gone']?.resolvedDefault,
+        }).toEqual({
+          row: { cut: '61006200', gone: '00FF', whole: '00FF' },
+          reported: ['0x61', '0x', '0x00ff'],
+          cut: { kind: 'function', expression: '0x61' },
+          gone: { kind: 'function', expression: '0x' },
+        });
+      }),
+    );
+  });
+
+  it('verifies a unique constraint and a unique index the contract declares without drift', async () => {
     const contract = contractWithBothKindsOfUniqueness();
     const account = contract.storage.namespaces['__unbound__']?.entries.table?.['Account'];
     const uniqueIndexName = account?.indexes[0]?.name ?? '';
@@ -188,7 +295,7 @@ describe('introspecting a MySQL database made by hand', {
       UNIQUE KEY \`Account_email_key\` (\`email\`),
       UNIQUE KEY \`${uniqueIndexName}\` (\`handle\`)
     )`;
-    await withMysqlDatabase(test, ({ url }) =>
+    await withMysqlDatabase(({ url }) =>
       withExampleTables(url, [accountDdl], async (driver) => {
         const actual = await introspect(driver, contract);
         expect({
@@ -199,14 +306,14 @@ describe('introspecting a MySQL database made by hand', {
     );
   });
 
-  it('reads a literal default on a text column as the literal', async (test) => {
+  it('reads a literal default on a text column as the literal', async () => {
     const contract = contractWithTextDefault();
     const noteDdl = `CREATE TABLE \`Note\` (
       \`id\` int NOT NULL,
       \`body\` text NOT NULL DEFAULT ('it''s a \\\\ b'),
       PRIMARY KEY (\`id\`)
     )`;
-    await withMysqlDatabase(test, ({ url }) =>
+    await withMysqlDatabase(({ url }) =>
       withExampleTables(url, [noteDdl], async (driver) => {
         const actual = await introspect(driver, contract);
         expect({
@@ -217,7 +324,7 @@ describe('introspecting a MySQL database made by hand', {
     );
   });
 
-  it('leaves out the index InnoDB creates for a foreign key with no index of its own', async (test) => {
+  it('leaves out the index InnoDB creates for a foreign key with no index of its own', async () => {
     const [userTable] = exampleTablesDdl;
     const postWithoutIndex = `CREATE TABLE \`Post\` (
       \`id\` int NOT NULL AUTO_INCREMENT,
@@ -225,7 +332,7 @@ describe('introspecting a MySQL database made by hand', {
       PRIMARY KEY (\`id\`),
       CONSTRAINT \`Post_authorId_fkey\` FOREIGN KEY (\`authorId\`) REFERENCES \`User\` (\`id\`) ON DELETE CASCADE
     )`;
-    await withMysqlDatabase(test, ({ url }) =>
+    await withMysqlDatabase(({ url }) =>
       withExampleTables(url, [userTable, postWithoutIndex], async (driver) => {
         const post = (await introspect(driver)).tables['Post'];
         expect({ indexes: post?.indexes, foreignKeys: post?.foreignKeys }).toEqual({
@@ -242,9 +349,9 @@ describe('introspecting a MySQL database made by hand', {
     );
   });
 
-  it('keeps an index the contract declares under the name and columns of a foreign key', async (test) => {
+  it('keeps an index the contract declares under the name and columns of a foreign key', async () => {
     const contract = contractWithIndexNamedLikeItsForeignKey();
-    await withMysqlDatabase(test, ({ url }) =>
+    await withMysqlDatabase(({ url }) =>
       withExampleTables(url, tablesWithIndexNamedLikeItsForeignKey, async (driver) => {
         const actual = await introspect(driver, contract);
         expect({
@@ -255,8 +362,8 @@ describe('introspecting a MySQL database made by hand', {
     );
   });
 
-  it('leaves out an index named like a foreign key when the contract does not declare it', async (test) => {
-    await withMysqlDatabase(test, ({ url }) =>
+  it('leaves out an index named like a foreign key when the contract does not declare it', async () => {
+    await withMysqlDatabase(({ url }) =>
       withExampleTables(url, tablesWithIndexNamedLikeItsForeignKey, async (driver) => {
         const post = (await introspect(driver)).tables['Post'];
         expect({
@@ -267,13 +374,13 @@ describe('introspecting a MySQL database made by hand', {
     );
   });
 
-  it('reports a changed enum member as a different column type', async (test) => {
+  it('reports a changed enum member as a different column type', async () => {
     const [, postTable] = exampleTablesDdl;
     const userWithOtherMembers = exampleTablesDdl[0].replace(
       "enum('USER','ADMIN')",
       "enum('USER','OWNER')",
     );
-    await withMysqlDatabase(test, ({ url }) =>
+    await withMysqlDatabase(({ url }) =>
       withExampleTables(url, [userWithOtherMembers, postTable], async (driver) => {
         const actual = await introspect(driver, loadExampleContract());
         expect(

@@ -23,6 +23,18 @@ model Event {
   createdAt DateTime @default(now())
 }
 
+model Product {
+  id        Int                              @id @default(autoincrement())
+  name      String
+  price     Decimal(precision: 10, scale: 2)
+  rating    Float
+  sold      BigInt(as: number)               @default(0)
+  inStock   Boolean                          @default(true)
+  thumbnail Bytes
+  details   Json
+  notes     String(storage: text)?
+}
+
 enum Role {
   USER
   ADMIN

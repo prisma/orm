@@ -34,7 +34,7 @@ import {
 } from './prepared/prepared-query';
 import type { PreparedExecutionImpl, PreparedStatementImpl } from './prepared/prepared-statement';
 import type { PreparedExecution, PreparedStatement } from './prepared/types';
-import type { ActivityRoute, RuntimeTransaction } from './sql-runtime';
+import type { ActivityRoute, RuntimeTransaction, RuntimeTransactionOptions } from './sql-runtime';
 import { type StackEntry, TransactionStack } from './transaction-stack';
 import {
   type SettledTransactionTarget,
@@ -48,10 +48,11 @@ export interface OpenTransaction {
   readonly activity: TransactionRun;
   readonly assertAcceptsStatements: () => void;
   readonly assertOpen: () => void;
+  readonly transactionBeneath: (parent: ActivityParent) => Promise<RuntimeTransaction>;
 }
 
 export interface TransactionRuntime {
-  route(driverTx: SqlTransaction, activity: TransactionRun): ActivityRoute;
+  route(driverTx: SqlTransaction, transaction: OpenTransaction): ActivityRoute;
   startActivity<K extends ClientActivityKind>(
     route: ActivityRoute,
     activity: StartActivity<K>,
@@ -61,7 +62,6 @@ export interface TransactionRuntime {
   trackInFlight<T>(operation: () => Promise<T>): Promise<T>;
   register(queryable: SqlQueryable, transaction: OpenTransaction): void;
   unregister(queryable: SqlQueryable, transaction: OpenTransaction): void;
-  markHeld(driverTx: SqlTransaction, driverSavepoint: SqlTransaction): void;
   onConnectionReleased(connection: SqlConnection, teardown: () => Promise<void>): void;
 }
 
@@ -70,10 +70,12 @@ abstract class TransactionBase
     RuntimeTransaction,
     ActivitySourceTarget,
     PreparedStatementQueryTarget,
-    PreparedStatementExecuteTarget
+    PreparedStatementExecuteTarget,
+    SettledTransactionTarget
 {
   abstract readonly signal: AbortSignal;
   readonly [activitySource]: ActivitySource;
+  readonly [transactionSettlement]: TransactionSettlementState;
   protected readonly runtime: TransactionRuntime;
   protected readonly driverTx: SqlTransaction;
   protected readonly activity: TransactionRun;
@@ -94,16 +96,34 @@ abstract class TransactionBase
     this.activity = activity;
     this.stack = stack;
     this.entry = entry;
-    this.route = runtime.route(driverTx, activity);
     this.openTransaction = {
       activity,
       assertAcceptsStatements: () => this.assertAcceptsStatements(),
       assertOpen: () => this.assertOpen(),
+      transactionBeneath: (parent) => this.transactionBeneath(parent),
     };
+    this.route = runtime.route(driverTx, this.openTransaction);
     runtime.register(driverTx, this.openTransaction);
     this[activitySource] = {
       startActivity: (clientActivity) => runtime.startActivity(this.route, clientActivity),
       planContentHash: (plan) => runtime.planContentHash(plan, activity),
+    };
+    const isClosed = () => this.isClosed;
+    this[transactionSettlement] = {
+      get closed() {
+        return isClosed();
+      },
+      get committed() {
+        return entry.state === 'committed';
+      },
+      get rolledBack() {
+        return entry.state === 'rolled-back';
+      },
+      logDroppedError: (error) => this.logDroppedError(error),
+      abandon: async () => {
+        stack.invalidate();
+        await this.rollback().catch(() => undefined);
+      },
     };
   }
 
@@ -158,7 +178,11 @@ abstract class TransactionBase
     );
   }
 
-  async transaction(): Promise<RuntimeTransaction> {
+  transaction(): Promise<RuntimeTransaction> {
+    return this.transactionBeneath(this.activity);
+  }
+
+  private async transactionBeneath(parent: ActivityParent): Promise<RuntimeTransaction> {
     if (this.isClosed) throw transactionClosedError();
     this.assertAcceptsStatements();
     const name = this.stack.nextSavepointName();
@@ -166,7 +190,7 @@ abstract class TransactionBase
     this.stack.push(entry);
     let activity: TransactionRun;
     try {
-      activity = await this.runtime.startTransactionActivity(this.activity);
+      activity = await this.runtime.startTransactionActivity(parent);
     } catch (error) {
       this.stack.pop();
       throw error;
@@ -180,7 +204,6 @@ abstract class TransactionBase
       await activity.end({ by: 'rollback', outcome: 'failed', commitAttempted: false });
       throw error;
     }
-    this.runtime.markHeld(this.driverTx, driverSavepoint);
     return new Savepoint(
       this.runtime,
       driverSavepoint,
@@ -190,11 +213,18 @@ abstract class TransactionBase
       this.rootTransaction,
     );
   }
+
+  protected logDroppedError(error: unknown): void {
+    try {
+      this.activity.ctx.log.error({ event: 'middleware.activityEnded.error', error });
+    } catch {
+      // A failing logger must not replace the error the caller receives.
+    }
+  }
 }
 
-export class OuterTransaction extends TransactionBase implements SettledTransactionTarget {
+export class OuterTransaction extends TransactionBase {
   readonly signal: AbortSignal;
-  readonly [transactionSettlement]: TransactionSettlementState;
   private readonly controller = new AbortController();
   private readonly connection: SqlConnection;
   private readonly endTransactionWork: () => void;
@@ -221,15 +251,6 @@ export class OuterTransaction extends TransactionBase implements SettledTransact
     this.deadline = performance.now() + (timeout ?? Number.POSITIVE_INFINITY);
     this.connection = connection;
     runtime.register(connection, this.openTransaction);
-    this[transactionSettlement] = {
-      get committed() {
-        return entry.state === 'committed';
-      },
-      get rolledBack() {
-        return entry.state === 'rolled-back';
-      },
-      logDroppedError: (error) => this.logDroppedError(error),
-    };
     if (timeout !== undefined) {
       this.timer = setTimeout(() => this.expire(), timeout);
       runtime.onConnectionReleased(connection, () => this.releaseConnection());
@@ -366,14 +387,6 @@ export class OuterTransaction extends TransactionBase implements SettledTransact
     this.activity.stopAcceptingChildren();
     this.runtime.unregister(this.connection, this.openTransaction);
   }
-
-  private logDroppedError(error: unknown): void {
-    try {
-      this.activity.ctx.log.error({ event: 'middleware.activityEnded.error', error });
-    } catch {
-      // A failing logger must not replace the error the caller receives.
-    }
-  }
 }
 
 class Savepoint extends TransactionBase {
@@ -456,6 +469,14 @@ export function transactionClosedError(): Error {
     'RUNTIME.TRANSACTION_CLOSED',
     'Cannot use a transaction operation after the transaction has ended. Consume query results and await execute calls inside the transaction callback.',
     {},
+  );
+}
+
+export function savepointOptionsUnsupportedError(options: RuntimeTransactionOptions): Error {
+  return runtimeError(
+    'RUNTIME.SAVEPOINT_OPTIONS_UNSUPPORTED',
+    'A transaction started inside a transaction is a savepoint, which has the isolation level and timeout of the transaction it is in; it takes no options.',
+    { options },
   );
 }
 

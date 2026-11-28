@@ -3,7 +3,7 @@ import { blindCast, castAs } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import type { JsonObject } from '@internal/utils/json';
 import {
-  canonicalizeContract,
+  canonicalizeContractToObject,
   type PreserveEmptyPredicate,
   type StorageSort,
 } from './canonicalization';
@@ -11,7 +11,7 @@ import type { Contract } from './contract-types';
 import { isPlainRecord } from './is-plain-record';
 import type { ExecutionHashBase, ProfileHashBase, StorageHashBase } from './types';
 
-const SCHEMA_VERSION = '1';
+const HASHED_SCHEMA_VERSION = '1';
 
 // Storage hashes fingerprint table/column layout, not which target pack emitted a
 // namespace. Persisted contract.json carries namespace `kind` discriminators;
@@ -24,15 +24,13 @@ function omitNamespaceKindsForHash(storage: unknown): unknown {
   if (!isPlainRecord(namespaces)) {
     return storage;
   }
-  const stripped: Record<string, unknown> = {};
-  for (const [nsId, ns] of Object.entries(namespaces)) {
-    if (isPlainRecord(ns)) {
+  const stripped = Object.fromEntries(
+    Object.entries(namespaces).map(([nsId, ns]) => {
+      if (!isPlainRecord(ns)) return [nsId, ns];
       const { kind: _kind, ...rest } = ns;
-      stripped[nsId] = rest;
-    } else {
-      stripped[nsId] = ns;
-    }
-  }
+      return [nsId, rest];
+    }),
+  );
   return { ...storage, namespaces: stripped };
 }
 
@@ -63,12 +61,12 @@ function hashContract(section: HashContractSection): string {
     ...sectionData,
     storage: storageForHash,
   });
-  return canonicalizeContract(contract, {
-    schemaVersion: SCHEMA_VERSION,
+  const canonical = canonicalizeContractToObject(contract, {
     serializeContract: (c) => castAs<JsonObject>(JSON.parse(JSON.stringify(c))),
     ...ifDefined('shouldPreserveEmpty', shouldPreserveEmpty),
     ...ifDefined('sortStorage', sortStorage),
   });
+  return JSON.stringify({ schemaVersion: HASHED_SCHEMA_VERSION, ...canonical }, null, 2);
 }
 
 export type ComputeStorageHashArgs = {

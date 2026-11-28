@@ -1,4 +1,5 @@
 import { AsyncIterableResult } from '@internal/framework-components/runtime';
+import { capabilityUnavailableMessage } from '@internal/sql-contract/capability-messages';
 import type {
   AnyExpression,
   InsertAst,
@@ -49,7 +50,11 @@ export function checkOwnValues(
   if (asts.some((ast) => ast.onConflict?.action.kind === 'do-nothing')) {
     throw ormError(
       'ORM.CAPABILITY_MISSING',
-      `${method} with onConflict "skip" on model "${owner.modelName}" requires contract capability "returning": without it the rows are read back by key, which finds a skipped row's existing match. Use createAndCount() to skip conflicting rows.`,
+      capabilityUnavailableMessage(
+        `\`${method}\` with onConflict "skip" on model "${owner.modelName}"`,
+        ['sql.returning'],
+        "Without it the rows are read back by key, which finds a skipped row's existing match. Use createAndCount() to skip conflicting rows.",
+      ),
       { meta: { capability: 'returning', action: method } },
     );
   }
@@ -58,7 +63,7 @@ export function checkOwnValues(
     .flat()
     .flatMap((edge) => (edge instanceof DataEdge ? edge.columns.map(([, target]) => target) : []));
   for (const ast of asts) {
-    refuseUpsertOfColumnsReadBack(ast, returns, owner);
+    refuseUpsertOfColumnsReadBack(ast, returns, owner, given);
   }
   generatedKeyColumn(insertedRowsOf(context, first.table, asts, returns, owner, given));
 }
@@ -67,6 +72,7 @@ function refuseUpsertOfColumnsReadBack(
   ast: InsertAst,
   returns: readonly ProjectionItem[],
   owner: WrittenRowOwner,
+  given: readonly ProjectionItem[],
 ): void {
   const action = ast.onConflict?.action;
   if (action?.kind !== 'do-update-set') {
@@ -76,21 +82,30 @@ function refuseUpsertOfColumnsReadBack(
   const refused = (problem: string) =>
     ormError(
       'ORM.CAPABILITY_MISSING',
-      `${method} on model "${owner.modelName}" ${problem}; without capability "returning" the row is read back by the create's values for the conflict columns.`,
+      capabilityUnavailableMessage(
+        `\`${method}\` on model "${owner.modelName}"`,
+        ['sql.returning'],
+        `It ${problem}, and without \`sql.returning\` the row is read back by the create's values for the conflict columns.`,
+      ),
       { meta: { capability: 'returning', action: method } },
     );
   const read = returns.map((column) => column.alias);
+  const unchanged = new Set(['excluded', ast.table.alias ?? ast.table.name]);
   const updated = read.filter((column) => {
-    const value = action.set[column];
+    const value = Object.hasOwn(action.set, column) ? action.set[column] : undefined;
     return (
       value !== undefined &&
-      !(value.kind === 'column-ref' && value.table === 'excluded' && value.column === column)
+      !(value.kind === 'column-ref' && unchanged.has(value.table) && value.column === column)
     );
   });
   if (updated.length > 0) {
     throw refused(`updates conflict column "${updated.join('", "')}"`);
   }
-  const absent = read.filter((column) => ast.rows.some((row) => row[column]?.kind !== 'param-ref'));
+  const absent = read.filter(
+    (column) =>
+      !given.some(({ alias }) => alias === column) &&
+      ast.rows.some((row) => row[column]?.kind !== 'param-ref'),
+  );
   if (absent.length > 0) {
     throw refused(`gives conflict column "${absent.join('", "')}" no create value`);
   }

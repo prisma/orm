@@ -38,6 +38,7 @@ describe('ref set', () => {
       },
     });
     expect(JSON.parse(await readFile(refPointerPath(dir, 'staging'), 'utf-8'))).toEqual({
+      formatVersion: 1,
       hash: HASH_A,
       invariants: [],
     });
@@ -72,6 +73,7 @@ describe('ref set', () => {
       },
     });
     expect(JSON.parse(await readFile(refPointerPath(dir, 'production'), 'utf-8'))).toEqual({
+      formatVersion: 1,
       hash: HASH_A,
       invariants: ['split-user-name'],
       policies,
@@ -170,6 +172,7 @@ describe('ref set', () => {
 
     expect(run.exitCode).toBe(0);
     expect(JSON.parse(await readFile(refPointerPath(dir, 'staging'), 'utf-8'))).toEqual({
+      formatVersion: 1,
       hash: HASH_B,
       invariants: [],
     });
@@ -220,6 +223,7 @@ describe('ref set', () => {
 
     expect(run.exitCode).toBe(0);
     expect(JSON.parse(await readFile(refPointerPath(dir, 'staging'), 'utf-8'))).toEqual({
+      formatVersion: 1,
       hash: HASH_B,
       invariants: [],
     });

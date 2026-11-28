@@ -4,6 +4,12 @@
  * `pnpm publish` subprocesses.
  */
 
+import {
+  hasOwnVersion,
+  parseVersion,
+} from '../packages/0-shared/publish-surface/src/release-plan.ts';
+import { numberingOf, planWorkspace, releaseOfRootVersion } from './release-plan-workspace.ts';
+
 /**
  * npm's error wording when republishing a version number that already
  * exists on the registry. Surfaces both for "version is currently
@@ -56,4 +62,72 @@ export function classifyPublishResult({ code, output }) {
     return { ok: false, alreadyPublished: false, retryable: true };
   }
   return { ok: false, alreadyPublished: false, retryable: false };
+}
+
+/**
+ * The dist-tag one package is published under. A `latest` publish is a
+ * release, and each package goes under the tag the release plan gives it:
+ * on the release candidates that is `latest` for every package, and on the
+ * levels line a package below GA that has ever been GA goes under its
+ * level's name. Any other tag the workflow passes (`dev`, `beta`, a pull
+ * request's tag) applies to every package as before.
+ */
+export function publishTagFor(passedTag, plannedTag) {
+  if (passedTag !== 'latest') return passedTag;
+  if (plannedTag === undefined) {
+    throw new Error('a latest publish needs the release plan to give the package a tag');
+  }
+  return plannedTag;
+}
+
+/**
+ * Whether a package has ever had a GA release, in any major version: a
+ * plain `X.Y.Z` with a major of 1 or more is among its published versions.
+ * A `0.x` version is Semantic Versioning's initial development, and the
+ * `0.x` minors these packages had before the release candidates were not GA.
+ */
+export function wasEverGa(publishedVersions) {
+  return publishedVersions.some((version) => {
+    let parsed;
+    try {
+      parsed = parseVersion(version);
+    } catch {
+      return false;
+    }
+    return parsed.major >= 1 && parsed.level === undefined && parsed.dev === undefined;
+  });
+}
+
+/**
+ * Each published package's tag in the release plan for the root version.
+ * On the levels line a package below GA that has ever had a GA release goes
+ * under its level's name, which its published versions tell; the release
+ * candidates read nothing from the registry. `publishedVersions` reads one
+ * package's versions from the registry.
+ */
+export function releaseTagsFor({ rootDir, rootVersion, names, publishedVersions }) {
+  const { line } = releaseOfRootVersion(rootVersion);
+  const everGa = new Set(
+    line === 'levels'
+      ? names.filter((name) => numberingOf(name) !== 'ga' && wasEverGa(publishedVersions(name)))
+      : [],
+  );
+  const plan = planWorkspace(rootDir, rootVersion, everGa);
+  return new Map(Object.entries(plan).map(([name, planned]) => [name, planned.tag]));
+}
+
+/**
+ * The packages with their own version whose version is already on the
+ * registry. Such a package keeps its version until it gets a fix, so at most
+ * releases there is nothing new of it to publish; it is skipped and reported,
+ * not published and refused. A dry run skips nothing, so every package goes
+ * through `pnpm publish --dry-run` and its checks. On the release candidates
+ * every version is new, and nothing is read from the registry.
+ */
+export function ownVersionsAlreadyPublished({ dryRun, rootVersion, packages, publishedVersions }) {
+  if (dryRun || releaseOfRootVersion(rootVersion).line === 'release-candidates') return [];
+  return packages
+    .filter(({ name }) => hasOwnVersion(numberingOf(name)))
+    .filter(({ name, version }) => publishedVersions(name).includes(version))
+    .map(({ name }) => name);
 }

@@ -66,7 +66,7 @@ describe('value-set serializer hydration + round-trip', () => {
 
   it('round-trips through JSON and hydrates back to a StorageValueSet instance', () => {
     const serializer = new SqlContractSerializer();
-    const json = JSON.parse(JSON.stringify(authored));
+    const json = JSON.parse(JSON.stringify({ formatVersion: 1, ...authored }));
     const hydrated = serializer.deserializeContract(json) as Contract<SqlStorage>;
 
     const ns = hydrated.storage.namespaces['public'];
@@ -78,7 +78,7 @@ describe('value-set serializer hydration + round-trip', () => {
 
   it('domain enum slot round-trips as plain data', () => {
     const serializer = new SqlContractSerializer();
-    const json = JSON.parse(JSON.stringify(authored));
+    const json = JSON.parse(JSON.stringify({ formatVersion: 1, ...authored }));
     const hydrated = serializer.deserializeContract(json) as Contract<SqlStorage>;
 
     const domainEnum = hydrated.domain.namespaces['public']?.enum?.['Role'];
@@ -93,7 +93,7 @@ describe('value-set serializer hydration + round-trip', () => {
 
   it('storage column valueSet ref round-trips', () => {
     const serializer = new SqlContractSerializer();
-    const json = JSON.parse(JSON.stringify(authored));
+    const json = JSON.parse(JSON.stringify({ formatVersion: 1, ...authored }));
     const hydrated = serializer.deserializeContract(json) as Contract<SqlStorage>;
 
     const storageNs = hydrated.storage.namespaces['public'];
@@ -109,7 +109,7 @@ describe('value-set serializer hydration + round-trip', () => {
 
   it('domain field valueSet ref round-trips', () => {
     const serializer = new SqlContractSerializer();
-    const json = JSON.parse(JSON.stringify(authored));
+    const json = JSON.parse(JSON.stringify({ formatVersion: 1, ...authored }));
     const hydrated = serializer.deserializeContract(json) as Contract<SqlStorage>;
 
     const domainNs = hydrated.domain.namespaces['public'];
@@ -124,9 +124,9 @@ describe('value-set serializer hydration + round-trip', () => {
 
   it('serialization followed by deserialization is stable (double round-trip)', () => {
     const serializer = new SqlContractSerializer();
-    const json1 = JSON.parse(JSON.stringify(authored));
+    const json1 = JSON.parse(JSON.stringify({ formatVersion: 1, ...authored }));
     const hydrated1 = serializer.deserializeContract(json1) as Contract<SqlStorage>;
-    const json2 = JSON.parse(JSON.stringify(hydrated1));
+    const json2 = JSON.parse(JSON.stringify({ formatVersion: 1, ...hydrated1 }));
     const hydrated2 = serializer.deserializeContract(json2) as Contract<SqlStorage>;
 
     const ns2 = hydrated2.storage.namespaces['public'];

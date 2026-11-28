@@ -59,7 +59,7 @@ function buildExtension(opts: {
   readonly headRefHash: string;
 }): MongoControlExtensionDescriptor {
   const space: ContractSpace<MongoContract<MongoStorage>> = {
-    contractJson: buildContract(),
+    contractJson: Object.assign(buildContract(), { formatVersion: 1 }),
     migrations: [],
     headRef: {
       hash: opts.headRefHash,

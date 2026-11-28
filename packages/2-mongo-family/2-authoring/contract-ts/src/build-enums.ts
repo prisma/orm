@@ -3,6 +3,7 @@ import { encodeEnumMembers } from '@internal/framework-components/authoring';
 import type { CodecLookupWithDescriptors } from '@internal/framework-components/codec';
 import type { BuildRefusal } from './build-refusals';
 import type { ContractDefinition } from './contract-definition';
+import { defineOwn } from './own-keys';
 
 /** Each enum with its members as its codec stores them. An enum the builder refuses is left out. */
 export function buildEnums(
@@ -28,7 +29,7 @@ export function buildEnums(
       }
       continue;
     }
-    builtEnums[enumName] = { codecId: handle.codecId, members: encoded.value };
+    defineOwn(builtEnums, enumName, { codecId: handle.codecId, members: encoded.value });
   }
   for (const [enumName, handle] of Object.entries(definition.enums ?? {})) {
     if (enumName !== handle.enumName) {

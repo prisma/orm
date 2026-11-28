@@ -1,171 +1,249 @@
 /**
  * A model that keeps its name while `@@map` gives it a new table (Postgres).
  *
- * The Postgres twin of `table-map-change.sqlite.e2e.test.ts`.
+ * The Postgres twin of `table-map-change.sqlite.e2e.test.ts`. Each journey runs once through `migration plan` and `db migrate`, and once through `db update`.
  *
- * No statement can rename that table, so the question about the dropped table says how to keep its rows. Journey M1 follows the `migration plan` route as printed: a migration of its own written with `migration new`, the printed `renameTable` call and the printed `node` command, then `db migrate`. Journey M2 follows the `db update` route: the printed SQL, then `db update`.
+ * Journey M1 changes only `@@map`: the table is renamed with no question, and the rows are read back under the new name. Journey M2 changes a column from `Int` to `String` in the same change: the column of the renamed table is altered, and its values read back as text. Journey M3 renames a field with a statement in the same change. Journey M4 removes a field in the same change: the question names the origin model and field, and `--delete User.nick` answers it. Journey M5 is a script that still passes `--delete User`, as the drop and create of the table once needed: the run is refused, since nothing asks about `User`.
  */
 
-import { readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'pathe';
 import { describe, expect, it } from 'vitest';
 import { withTempDir } from '../utils/cli-test-helpers';
+import { timeouts, useDevDatabase } from '../utils/journey-test-helpers';
 import {
-  type EngineCommandResult,
-  engineError,
-  type JourneyContext,
-  latestMigrationDirName,
-  latestMigrationToHash,
-  parseJsonOutput,
-  planMigrationAndSelfEmit,
-  runContractEmit,
-  runDbUpdate,
-  runDbVerify,
-  runMigrate,
-  runMigrationNew,
-  runMigrationPlan,
-  runPrintedSelfEmit,
-  setupJourney,
-  sql,
-  timeouts,
-  useDevDatabase,
-} from '../utils/journey-test-helpers';
+  COMMANDS,
+  columnNames,
+  emit,
+  expectSettled,
+  latestMigrationSource,
+  planAndApply,
+  postgresJourney,
+  refusal,
+  rows,
+  type StoredNameJourney,
+  start,
+  tableNames,
+} from '../utils/stored-name-journeys';
 
 const FROM_PSL = `// use prisma-8
 
-model Profile {
-  id   Int    @id
-  name String @unique
+model User {
+  id    Int     @id
+  email String  @unique
+  nick  String?
+  score Int
 
-  @@map("profiles")
+  @@map("users")
 }
 `;
 
-const TO_PSL = FROM_PSL.replace('@@map("profiles")', '@@map("people")');
+const MOVED_PSL = FROM_PSL.replace('@@map("users")', '@@map("people")');
 
-async function emitContract(ctx: JourneyContext, psl: string, label: string): Promise<void> {
-  writeFileSync(join(ctx.testDir, 'contract.prisma'), psl, 'utf-8');
-  const emit = await runContractEmit(ctx);
-  expect(emit.exitCode, `${label}: emit: ${emit.stderr}`).toBe(0);
+const SEED = `INSERT INTO "users" (id, email, nick, score) VALUES (1, 'alice@example.com', 'al', 10), (2, 'bob@example.com', NULL, 20)`;
+
+const RENAMED_TABLE = [
+  { label: 'Rename table "users" to "people"', operationClass: 'widening' },
+  {
+    label: 'Rename primary key "users_pkey" to "people_pkey" on "people"',
+    operationClass: 'widening',
+  },
+  {
+    label: 'Rename unique constraint "users_email_key" to "people_email_key" on "people"',
+    operationClass: 'widening',
+  },
+];
+
+async function people(journey: StoredNameJourney): Promise<readonly Record<string, unknown>[]> {
+  return rows(journey, 'SELECT * FROM "people" ORDER BY id');
 }
 
-function questionOf(result: EngineCommandResult): string {
-  return String(engineError(result)?.why);
-}
-
-async function expectRowsKept(connectionString: string, label: string): Promise<void> {
-  const rows = await sql(connectionString, 'SELECT id, name FROM "public"."people" ORDER BY id');
-  const tables = await sql(
-    connectionString,
-    "SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename NOT LIKE '\\_prisma%' ORDER BY tablename",
-  );
-  expect(
-    { rows: rows.rows, tables: tables.rows.map((row) => row['tablename']) },
-    `${label}: the rows are in the renamed table`,
-  ).toEqual({
-    rows: [
-      { id: 1, name: 'alice' },
-      { id: 2, name: 'bob' },
-    ],
-    tables: ['people'],
-  });
-}
-
-async function seedRows(connectionString: string): Promise<void> {
-  await sql(
-    connectionString,
-    `INSERT INTO "public"."profiles" (id, name) VALUES (1, 'alice'), (2, 'bob')`,
-  );
+async function begin(journey: StoredNameJourney, label: string): Promise<void> {
+  await start(journey, FROM_PSL, SEED, label);
 }
 
 withTempDir(({ createTempDir }) => {
-  describe('Journey M1 (Postgres): the migration plan route keeps the rows', () => {
+  describe.each(COMMANDS)('Journey M1 (Postgres): a changed @@map with %s', (command) => {
     const db = useDevDatabase();
 
     it(
-      'writes the rename as a migration of its own, as the question prints it',
+      'renames the table with no question and keeps the rows',
       async () => {
-        const ctx = setupJourney({
-          connectionString: db.connectionString,
-          createTempDir,
-          contractMode: 'psl',
-        });
-        await emitContract(ctx, FROM_PSL, 'M1.01');
-        const initial = await planMigrationAndSelfEmit(ctx, ['--name', 'initial']);
-        expect(initial.exitCode, `M1.02: plan initial: ${initial.stderr}`).toBe(0);
-        expect((await runMigrate(ctx)).exitCode, 'M1.03: migrate initial').toBe(0);
-        await seedRows(db.connectionString);
-        const origin = latestMigrationDirName(ctx);
-        const originHash = latestMigrationToHash(ctx);
-        await emitContract(ctx, TO_PSL, 'M1.04');
+        const journey = postgresJourney(db.connectionString, createTempDir, command);
+        await begin(journey, 'M1.01');
+        await emit(journey, MOVED_PSL, 'M1.02');
 
-        const refused = await runMigrationPlan(ctx, ['--from', origin, '--json']);
-        expect(refused.exitCode, 'M1.05: the drop of profiles needs a statement').toBe(2);
-        const question = questionOf(refused);
-        expect(question, 'M1.05: the question says how to keep the rows').toContain(
-          'To keep its rows, rename table "profiles" to "people" instead',
-        );
-
-        const scaffold = await runMigrationNew(ctx, ['--name', 'people', '--from', originHash]);
-        expect(scaffold.exitCode, `M1.06: migration new: ${scaffold.stderr}`).toBe(0);
-        const dir = latestMigrationDirName(ctx);
-        const call = /add (\.\.\.this\.renameTable\(.*?\)) to the operations/.exec(question)?.[1];
-        expect(call, `M1.07: the printed renameTable call in: ${question}`).toBeDefined();
-        const migrationTs = join(ctx.testDir, 'migrations/app', dir, 'migration.ts');
-        const scaffolded = readFileSync(migrationTs, 'utf-8');
-        const edited = scaffolded.replace(/return \[[\s\S]*?\];/, () => `return [${call}];`);
-        expect(edited, 'M1.07: the call is in the operations').not.toBe(scaffolded);
-        writeFileSync(migrationTs, edited, 'utf-8');
-        const emitted = runPrintedSelfEmit(question, dirname(migrationTs));
-        expect(emitted.exitCode, `M1.08: node on migration.ts, as printed: ${emitted.stderr}`).toBe(
-          0,
-        );
-
-        const applied = await runMigrate(ctx);
-        expect(applied.exitCode, `M1.09: db migrate: ${applied.stderr}`).toBe(0);
-        await expectRowsKept(db.connectionString, 'M1.10');
-        const verify = await runDbVerify(ctx, ['--schema-only']);
-        expect(verify.exitCode, `M1.10: db verify --schema-only: ${verify.stderr}`).toBe(0);
-        const further = await runMigrationPlan(ctx, ['--from', dir, '--json']);
-        expect(further.exitCode, `M1.11: a further plan: ${further.stderr}`).toBe(0);
-        expect(parseJsonOutput<{ noOp: boolean }>(further).noOp, 'M1.11: it is empty').toBe(true);
+        const planned = await planAndApply(journey, [], 'M1.03');
+        expect(planned, 'M1.03: the table and its constraints are renamed').toEqual(RENAMED_TABLE);
+        if (command === 'migration plan') {
+          expect(latestMigrationSource(journey), 'M1.03: migration.ts renames the table').toContain(
+            "...this.renameTable({ schema: 'public', table: 'users', to: 'people' })",
+          );
+        }
+        expect(await tableNames(journey), 'M1.04: only the new table').toEqual(['people']);
+        expect(await people(journey), 'M1.04: the rows under the new name').toEqual([
+          { id: 1, email: 'alice@example.com', nick: 'al', score: 10 },
+          { id: 2, email: 'bob@example.com', nick: null, score: 20 },
+        ]);
+        await expectSettled(journey, 'M1.05');
       },
       timeouts.spinUpPpgDev,
     );
   });
 
-  describe('Journey M2 (Postgres): the db update route keeps the rows', () => {
-    const db = useDevDatabase();
+  describe.each(COMMANDS)(
+    'Journey M2 (Postgres): a changed @@map and a column type change with %s',
+    (command) => {
+      const db = useDevDatabase();
 
-    it(
-      'renames the table with the printed SQL, then db update finds nothing that loses data',
-      async () => {
-        const ctx = setupJourney({
-          connectionString: db.connectionString,
-          createTempDir,
-          contractMode: 'psl',
-        });
-        await emitContract(ctx, FROM_PSL, 'M2.01');
-        const create = await runDbUpdate(ctx, ['--json']);
-        expect(create.exitCode, `M2.02: db update creates the table: ${create.stderr}`).toBe(0);
-        await seedRows(db.connectionString);
-        await emitContract(ctx, TO_PSL, 'M2.03');
+      it(
+        'renames the table, then changes the type of its column',
+        async () => {
+          const journey = postgresJourney(db.connectionString, createTempDir, command);
+          await begin(journey, 'M2.01');
+          await emit(journey, MOVED_PSL.replace('score Int', 'score String'), 'M2.02');
 
-        const refused = await runDbUpdate(ctx, ['--no-interactive', '--json']);
-        expect(refused.exitCode, 'M2.04: the drop of profiles needs a statement').toBe(2);
-        const printed = /yourself with (.*?), then run prisma db update/.exec(
-          questionOf(refused),
-        )?.[1];
-        expect(printed, 'M2.04: the printed SQL').toBeDefined();
-        await sql(db.connectionString, String(printed));
+          const planned = await planAndApply(journey, [], 'M2.03');
+          expect(planned, 'M2.03: the rename, then the type change of the renamed column').toEqual([
+            ...RENAMED_TABLE,
+            { label: 'Alter type of "people"."score" to text', operationClass: 'widening' },
+          ]);
+          expect(await people(journey), 'M2.04: the rows, with the converted column').toEqual([
+            { id: 1, email: 'alice@example.com', nick: 'al', score: '10' },
+            { id: 2, email: 'bob@example.com', nick: null, score: '20' },
+          ]);
+          await expectSettled(journey, 'M2.05');
+        },
+        timeouts.spinUpPpgDev,
+      );
+    },
+  );
 
-        const updated = await runDbUpdate(ctx, ['--no-interactive', '--json']);
-        expect(updated.exitCode, `M2.05: db update: ${updated.stderr}`).toBe(0);
-        await expectRowsKept(db.connectionString, 'M2.06');
-        const verify = await runDbVerify(ctx, ['--schema-only']);
-        expect(verify.exitCode, `M2.06: db verify --schema-only: ${verify.stderr}`).toBe(0);
-      },
-      timeouts.spinUpPpgDev,
-    );
-  });
+  describe.each(COMMANDS)(
+    'Journey M3 (Postgres): a changed @@map and a field rename statement with %s',
+    (command) => {
+      const db = useDevDatabase();
+
+      it(
+        'renames the table first, then the column the statement names',
+        async () => {
+          const journey = postgresJourney(db.connectionString, createTempDir, command);
+          await begin(journey, 'M3.01');
+          await emit(journey, MOVED_PSL.replace('nick  String?', 'handle String?'), 'M3.02');
+
+          const planned = await planAndApply(
+            journey,
+            ['--rename', 'User.nick:User.handle'],
+            'M3.03',
+          );
+          expect(planned, 'M3.03: the table rename, then the column rename').toEqual([
+            ...RENAMED_TABLE,
+            { label: 'Rename column "people"."nick" to "handle"', operationClass: 'widening' },
+          ]);
+          expect(await people(journey), 'M3.04: the rows under the new names').toEqual([
+            { id: 1, email: 'alice@example.com', handle: 'al', score: 10 },
+            { id: 2, email: 'bob@example.com', handle: null, score: 20 },
+          ]);
+          await expectSettled(journey, 'M3.05');
+        },
+        timeouts.spinUpPpgDev,
+      );
+    },
+  );
+
+  describe.each(COMMANDS)(
+    'Journey M4 (Postgres): a changed @@map and a removed field with %s',
+    (command) => {
+      const db = useDevDatabase();
+
+      it(
+        'asks about the field by its origin model and name, and --delete User.nick answers',
+        async () => {
+          const journey = postgresJourney(db.connectionString, createTempDir, command);
+          await begin(journey, 'M4.01');
+          await emit(journey, MOVED_PSL.replace('  nick  String?\n', ''), 'M4.02');
+
+          const asked = await refusal(journey, [], 'M4.03');
+          expect(asked, 'M4.03: the question names User.nick').toEqual({
+            code: 'CLI.CONSENT_REQUIRED',
+            severity: 'error',
+            summary: 'This command requires explicit consent, but it was not provided.',
+            why: 'Drop column "nick" from "people" would lose the values of field "User.nick".',
+            nextActions: [
+              {
+                kind: 'user-choice',
+                label: "Run the command again with --rename 'User.nick:User.<new name>'",
+              },
+              { kind: 'user-choice', label: 'Run the command again with --delete User.nick' },
+            ],
+            meta: {
+              subject: 'User.nick',
+              verbs: ['rename', 'delete'],
+              unanswered: [{ subject: 'User.nick', verbs: ['rename', 'delete'] }],
+            },
+            docsUrl:
+              'https://docs.prisma.io/docs/orm/v8/reference/error-reference/CLI.CONSENT_REQUIRED',
+          });
+
+          const planned = await planAndApply(journey, ['--delete', 'User.nick'], 'M4.04');
+          expect(planned, 'M4.04: the rename, then the drop of the column').toEqual([
+            ...RENAMED_TABLE,
+            { label: 'Drop column "nick" from "people"', operationClass: 'destructive' },
+          ]);
+          expect(await columnNames(journey, 'people'), 'M4.05: the column is gone').toEqual([
+            'email',
+            'id',
+            'score',
+          ]);
+          expect(await people(journey), 'M4.05: the rows under the new name').toEqual([
+            { id: 1, email: 'alice@example.com', score: 10 },
+            { id: 2, email: 'bob@example.com', score: 20 },
+          ]);
+          await expectSettled(journey, 'M4.06');
+        },
+        timeouts.spinUpPpgDev,
+      );
+    },
+  );
+
+  describe.each(COMMANDS)(
+    'Journey M5 (Postgres): a script that passes --delete User for a changed @@map with %s',
+    (command) => {
+      const db = useDevDatabase();
+
+      it(
+        'refuses the run, since nothing asks about User, and plans the rename without it',
+        async () => {
+          const journey = postgresJourney(db.connectionString, createTempDir, command);
+          await begin(journey, 'M5.01');
+          await emit(journey, MOVED_PSL, 'M5.02');
+
+          const refused = await refusal(journey, ['--delete', 'User'], 'M5.03');
+          expect(refused, 'M5.03: an unused consent').toEqual({
+            code: 'CLI.CONSENT_UNUSED',
+            severity: 'error',
+            summary: '--delete User was given but nothing in this run asked about User.',
+            nextActions: [
+              {
+                kind: 'user-choice',
+                label: 'Remove the flag, or spell the subject the way the command names it.',
+              },
+            ],
+            meta: { unused: [{ verb: 'delete', values: ['User'] }] },
+            docsUrl:
+              'https://docs.prisma.io/docs/orm/v8/reference/error-reference/CLI.CONSENT_UNUSED',
+          });
+          expect(await tableNames(journey), 'M5.03: nothing changed').toEqual(['users']);
+
+          expect(await planAndApply(journey, [], 'M5.04'), 'M5.04: without it').toEqual(
+            RENAMED_TABLE,
+          );
+          expect(await people(journey), 'M5.05: the rows under the new name').toEqual([
+            { id: 1, email: 'alice@example.com', nick: 'al', score: 10 },
+            { id: 2, email: 'bob@example.com', nick: null, score: 20 },
+          ]);
+          await expectSettled(journey, 'M5.06');
+        },
+        timeouts.spinUpPpgDev,
+      );
+    },
+  );
 });

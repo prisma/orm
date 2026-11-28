@@ -24,6 +24,17 @@ describe('Assert', () => {
     expect(run).toMatchObject({ queried: [], executed: [] });
   });
 
+  it('throws the error it was made with when a row of its input holds another value than it expects', async () => {
+    const assert = new Assert(missing, { type: 'bug' });
+
+    expect(() =>
+      assert.execute({ rows: [{ id: 7, type: 'feature' }], requires: null }, recordingRun()),
+    ).toThrow(missing);
+    expect(
+      await assert.execute({ rows: [{ id: 7, type: 'bug' }], requires: null }, recordingRun()),
+    ).toEqual([]);
+  });
+
   it('gives no row and does not throw when a node it requires produced no row', async () => {
     const run = recordingRun();
 

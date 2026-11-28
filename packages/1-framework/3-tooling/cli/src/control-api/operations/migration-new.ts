@@ -6,7 +6,6 @@ import { readFile } from 'node:fs/promises';
 import type { PrismaConfig } from '@internal/config/config-types';
 import type { Contract } from '@internal/contract/types';
 import { APP_SPACE_ID, createControlStack } from '@internal/framework-components/control';
-import { loadContractSpaceAggregate } from '@internal/migration-tools/aggregate';
 import {
   contractSnapshotDir,
   snapshotsImportPathFrom,
@@ -35,8 +34,11 @@ import { contractValidationMeta } from '../../utils/contract-validation-meta';
 import { assertFrameworkComponentsCompatible } from '../../utils/framework-components';
 import { snapshotVerifierFor } from '../../utils/snapshot-content-verification';
 import type { ControlClient } from '../types';
-import { errorFromCaught } from './caught-errors';
-import { refusePackageCorruptionOnAggregate } from './contract-space-aggregate-loader';
+import { errorFromCaught, readFailureReportedAsItself } from './caught-errors';
+import {
+  loadContractSpaceAggregateForCli,
+  refusePackageCorruptionOnAggregate,
+} from './contract-space-aggregate-loader';
 import { resolveDefaultOriginHash } from './plan-resolution';
 import { renderSnapshotDeclarations } from './snapshot-declarations';
 
@@ -44,6 +46,8 @@ export interface MigrationNewOptions {
   readonly config: PrismaConfig;
   /** Directory the command was invoked from. */
   readonly cwd: string;
+  /** The `--config` the command was given, which the commands its errors print repeat. */
+  readonly configPath?: string;
   readonly name?: string;
   readonly from?: string;
   /** Renders the declarations of the destination snapshot from its `contract.json`. */
@@ -106,6 +110,8 @@ export async function executeMigrationNewCommand(
     parsedContract = JSON.parse(contractJsonContent);
     toContract = familyInstance.deserializeContract(parsedContract);
   } catch (error) {
+    const asItself = readFailureReportedAsItself(error, contractPathAbsolute);
+    if (asItself !== undefined) return notOk(asItself);
     return notOk(
       errorRuntime('MIGRATION.CONTRACT_DESERIALIZATION_FAILED', 'Contract JSON is invalid', {
         why: `Failed to deserialize ${contractPathAbsolute}: ${error instanceof Error ? error.message : String(error)}`,
@@ -127,12 +133,18 @@ export async function executeMigrationNewCommand(
   }
 
   const verifySnapshotContent = snapshotVerifierFor(config);
-  const aggregate = await loadContractSpaceAggregate({
+  const loaded = await loadContractSpaceAggregateForCli({
+    targetId: config.target.targetId,
     migrationsDir,
-    deserializeContract: (json) => familyInstance.deserializeContract(json),
     appContract: toContract,
+    extensions: config.extensions ?? [],
+    deserializeContract: (json) => familyInstance.deserializeContract(json),
     ...ifDefined('verifySnapshotContent', verifySnapshotContent),
   });
+  if (!loaded.ok) {
+    return notOk(loaded.failure);
+  }
+  const aggregate = loaded.value;
   const packageCorruptionFailure = refusePackageCorruptionOnAggregate(aggregate, migrationsDir);
   if (packageCorruptionFailure) {
     return notOk(packageCorruptionFailure);
@@ -177,7 +189,11 @@ export async function executeMigrationNewCommand(
     }
     fromHash = matchedHashes[0] ?? null;
   } else {
-    const origin = resolveDefaultOriginHash(aggregate.app);
+    const origin = resolveDefaultOriginHash(aggregate.app, {
+      cwd,
+      configPath: options.configPath,
+      dbGiven: false,
+    });
     if (!origin.ok) {
       return notOk(origin.failure);
     }
@@ -185,7 +201,7 @@ export async function executeMigrationNewCommand(
       return notOk(
         errorRuntime('MIGRATION.HASH_NOT_IN_GRAPH', 'The db ref is not a graph node yet', {
           why: `The db ref points at ${origin.value.fromHash}, but ${appMigrationsRelative} contains no migrations, so that contract is not a graph node and nothing can chain from it.`,
-          fix: 'Run `{bin} migration plan` first: on an empty graph it writes the baseline migration for the db ref alongside the delta, after which `migration new` can chain from it.',
+          fix: 'Run `{bin} migration plan` first: on an empty graph it writes the baseline migration for the db ref, and a delta to the emitted contract when the contract changed. Then run `migration new` with `--from` the contract the new migration starts at, which `{bin} migration list` shows: without it, `migration new` starts from the db ref, where a contract that did not change leaves nothing to scaffold.',
           meta: { refName: origin.value.refName, resolvedHash: origin.value.fromHash },
         }),
       );

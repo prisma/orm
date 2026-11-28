@@ -63,11 +63,6 @@ const pgvectorPackMetaBase = {
   familyId: 'sql',
   targetId: 'postgres',
   version: '0.0.1',
-  capabilities: {
-    postgres: {
-      'pgvector.cosine': true,
-    },
-  },
   authoring: {
     type: pgvectorAuthoringTypes,
   },

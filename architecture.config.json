@@ -301,6 +301,12 @@
       "plane": "runtime"
     },
     {
+      "glob": "packages/9-public/@prisma/orm-better-auth/**",
+      "domain": "extensions",
+      "layer": "integrations",
+      "plane": "runtime"
+    },
+    {
       "glob": "packages/3-extensions/sql-orm-client/**",
       "domain": "extensions",
       "layer": "integrations",
@@ -559,6 +565,12 @@
       "plane": "shared"
     },
     {
+      "glob": "packages/3-targets/postgres/1-target/src/exports/server-version-range.ts",
+      "domain": "extensions",
+      "layer": "targets",
+      "plane": "shared"
+    },
+    {
       "glob": "packages/3-targets/postgres/1-target/src/exports/sql-utils.ts",
       "domain": "extensions",
       "layer": "targets",
@@ -649,6 +661,12 @@
       "plane": "runtime"
     },
     {
+      "glob": "packages/3-targets/postgres/2-adapter/src/exports/capabilities.ts",
+      "domain": "targets",
+      "layer": "adapters",
+      "plane": "shared"
+    },
+    {
       "glob": "packages/3-targets/postgres/2-adapter/src/exports/adapter.ts",
       "domain": "targets",
       "layer": "adapters",
@@ -721,6 +739,12 @@
       "plane": "shared"
     },
     {
+      "glob": "packages/3-targets/postgres/3-driver/src/exports/capabilities.ts",
+      "domain": "targets",
+      "layer": "drivers",
+      "plane": "shared"
+    },
+    {
       "glob": "packages/3-targets/postgres/3-driver/src/exports/control.ts",
       "domain": "targets",
       "layer": "drivers",
@@ -731,6 +755,18 @@
       "domain": "targets",
       "layer": "drivers",
       "plane": "runtime"
+    },
+    {
+      "glob": "packages/3-targets/postgres/3-driver/src/liveness-check.ts",
+      "domain": "targets",
+      "layer": "drivers",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/3-targets/postgres/3-driver/src/timed-statement.ts",
+      "domain": "targets",
+      "layer": "drivers",
+      "plane": "shared"
     },
     {
       "glob": "packages/3-targets/postgres/3-driver/src/named-cursor.ts",
@@ -1225,6 +1261,18 @@
       "plane": "runtime"
     },
     {
+      "glob": "packages/3-targets/sqlite/9-facade/src/exports/init.ts",
+      "domain": "extensions",
+      "layer": "adapters",
+      "plane": "migration"
+    },
+    {
+      "glob": "packages/3-targets/sqlite/9-facade/src/init/**",
+      "domain": "extensions",
+      "layer": "adapters",
+      "plane": "migration"
+    },
+    {
       "glob": "packages/3-targets/sqlite/9-facade/src/config/**",
       "domain": "extensions",
       "layer": "adapters",
@@ -1523,6 +1571,18 @@
       "domain": "extensions",
       "layer": "adapters",
       "plane": "runtime"
+    },
+    {
+      "glob": "packages/3-targets/mysql/1-mysql/9-facade/src/exports/init.ts",
+      "domain": "extensions",
+      "layer": "adapters",
+      "plane": "migration"
+    },
+    {
+      "glob": "packages/3-targets/mysql/1-mysql/9-facade/src/init/**",
+      "domain": "extensions",
+      "layer": "adapters",
+      "plane": "migration"
     },
     {
       "glob": "packages/3-targets/mysql/1-mysql/9-facade/src/config/**",

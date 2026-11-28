@@ -44,6 +44,7 @@ import { createPostgresAdapter } from '../src/core/adapter';
 import type { PostgresContract } from '../src/core/types';
 
 const contract = new SqlContractSerializer().deserializeContract({
+  formatVersion: 1,
   target: 'postgres',
   targetFamily: 'sql',
   profileHash: 'test-profile',
@@ -702,14 +703,7 @@ describe('Postgres adapter', () => {
   it('exposes profile metadata: capabilities and readMarker', () => {
     expect(adapter.profile.target).toBe('postgres');
     expect(adapter.profile.id).toBe('postgres/default@1');
-    expect(adapter.profile.capabilities['postgres']).toMatchObject({ lateral: true });
-    expect(adapter.profile.capabilities['sql']).toMatchObject({
-      returning: true,
-      insertOnConflictTarget: true,
-      jsonAgg: true,
-      outerReferencesInDerivedTables: true,
-      jsonAggWithoutTruncation: true,
-    });
+    expect(adapter.profile.capabilities).toEqual({});
     expect(typeof adapter.profile.readMarker).toBe('function');
   });
 

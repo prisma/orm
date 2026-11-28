@@ -79,11 +79,12 @@ const NOTHING_DECLARED: DeclaredIndexes = {
   declaresUniqueIndex: () => false,
 };
 
-/** What a column's reported literal default reads as, through the codec of the column the contract declares. */
+/** What a column's reported literal default reads as, through the codec of the column the contract declares: `body` is the literal's value, text or bytes, and `rawDefault` its text, which a refusal quotes: the body itself, or what the catalog reports for bytes. */
 export type ReadLiteralDefault = (
   tableName: string,
   columnName: string,
   rawDefault: string,
+  body: string | Uint8Array,
 ) => Promise<Pick<SqlColumnIRInput, 'resolvedDefault' | 'defaultValue' | 'defaultUnreadable'>>;
 
 const PRIMARY_INDEX = 'PRIMARY';
@@ -94,6 +95,16 @@ const REFERENTIAL_ACTIONS: Readonly<Record<string, SqlReferentialAction>> = {
   'SET NULL': 'setNull',
   'SET DEFAULT': 'setDefault',
 };
+
+/** Stores `value` as an own key of `target`, so a name the database returns, such as `__proto__`, is a key rather than the prototype. */
+function defineOwn<Value>(target: Record<string, Value>, key: string, value: Value): void {
+  Object.defineProperty(target, key, {
+    value,
+    enumerable: true,
+    writable: true,
+    configurable: true,
+  });
+}
 
 /** A rule `REFERENTIAL_CONSTRAINTS` reports, with `NO ACTION`, MySQL's default, as no action at all. */
 function referentialAction(rule: string): SqlReferentialAction | undefined {
@@ -138,21 +149,26 @@ function byPosition<Row>(position: (row: Row) => string): (a: Row, b: Row) => nu
   return (a, b) => Number(position(a)) - Number(position(b));
 }
 
+type ReadDefault = Pick<SqlColumnIRInput, 'resolvedDefault' | 'defaultValue' | 'defaultUnreadable'>;
+
+async function readDefaultOf(
+  row: MysqlColumnRow,
+  readLiteralDefault: ReadLiteralDefault,
+): Promise<ReadDefault> {
+  const reported = readMysqlDefault(row.column_default, row.extra, row.column_type);
+  if (reported === undefined) return {};
+  if (reported.kind === 'function') return { resolvedDefault: reported satisfies ColumnDefault };
+  const { body } = reported.literal;
+  const raw = typeof body === 'string' ? body : (row.column_default ?? '');
+  return readLiteralDefault(row.table_name, row.column_name, raw, body);
+}
+
 async function columnOf(
   row: MysqlColumnRow,
   dataTypes: readonly DataType[],
   readLiteralDefault: ReadLiteralDefault,
 ): Promise<SqlColumnIRInput> {
-  const reported = readMysqlDefault(row.column_default, row.extra);
-  const readDefault: Pick<
-    SqlColumnIRInput,
-    'resolvedDefault' | 'defaultValue' | 'defaultUnreadable'
-  > =
-    reported === undefined
-      ? {}
-      : reported.kind === 'function'
-        ? { resolvedDefault: reported satisfies ColumnDefault }
-        : await readLiteralDefault(row.table_name, row.column_name, reported.literal.body);
+  const readDefault = await readDefaultOf(row, readLiteralDefault);
   const reportedType = {
     text: row.column_type,
     kind: undefined,
@@ -262,7 +278,7 @@ async function tableOf(
 ): Promise<SqlTableIR> {
   const columns: Record<string, SqlColumnIRInput> = {};
   for (const row of [...rows.columns].sort(byPosition((column) => column.ordinal_position))) {
-    columns[row.column_name] = await columnOf(row, dataTypes, readLiteralDefault);
+    defineOwn(columns, row.column_name, await columnOf(row, dataTypes, readLiteralDefault));
   }
 
   const foreignKeys = foreignKeysOf(tableName, rows.foreignKeys);
@@ -343,17 +359,21 @@ export async function buildMysqlSchemaIR(
   const foreignKeysByTable = groupBy(rows.foreignKeys, (row) => row.table_name);
   const tables: Record<string, SqlTableIR> = {};
   for (const tableName of rows.tables) {
-    tables[tableName] = await tableOf(
+    defineOwn(
+      tables,
       tableName,
-      {
-        columns: columnsByTable.get(tableName) ?? [],
-        indexes: indexesByTable.get(tableName) ?? [],
-        constraints: constraintsByTable.get(tableName) ?? [],
-        foreignKeys: foreignKeysByTable.get(tableName) ?? [],
-      },
-      dataTypes,
-      readLiteralDefault,
-      declared,
+      await tableOf(
+        tableName,
+        {
+          columns: columnsByTable.get(tableName) ?? [],
+          indexes: indexesByTable.get(tableName) ?? [],
+          constraints: constraintsByTable.get(tableName) ?? [],
+          foreignKeys: foreignKeysByTable.get(tableName) ?? [],
+        },
+        dataTypes,
+        readLiteralDefault,
+        declared,
+      ),
     );
   }
   return new SqlSchemaIR({ tables });

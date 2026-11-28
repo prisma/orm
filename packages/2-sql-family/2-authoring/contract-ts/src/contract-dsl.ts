@@ -31,6 +31,7 @@ import type { NamedConstraintSpec } from './authoring-type-utils';
 import type { AuthoredColumnDefault, CapabilityContributor } from './contract-definition';
 import { contractError } from './contract-errors';
 import type { EnumTypeHandle } from './enum-type';
+import { assertPlainNamedEntries, type NameSite, writeNamedEntry } from './named-entries';
 
 export type NamingStrategy = 'identity' | 'snake_case';
 
@@ -1605,12 +1606,17 @@ export type SqlContext<
   readonly constraints: PackAwareSqlConstraints<IndexTypes>;
 };
 
+function fieldNameSite(modelName: string | undefined): NameSite {
+  return { kind: 'field', modelName };
+}
+
 function createFieldRefs<Fields extends Record<string, ScalarFieldBuilder>>(
   fields: Fields,
+  modelName: string | undefined,
 ): FieldRefs<Fields> {
   const refs = {} as Record<string, ColumnRef>;
   for (const fieldName of Object.keys(fields)) {
-    refs[fieldName] = { kind: 'columnRef', fieldName };
+    writeNamedEntry(refs, fieldName, { kind: 'columnRef', fieldName }, fieldNameSite(modelName));
   }
   return refs as FieldRefs<Fields>;
 }
@@ -1632,24 +1638,29 @@ function createModelTokenRefs<
   for (const [fieldName, fieldBuilder] of Object.entries(fields)) {
     const physicalColumn =
       crossSpaceCoordinate !== undefined ? fieldBuilder.physicalColumnName : undefined;
-    refs[fieldName] = {
-      kind: 'targetFieldRef',
-      source: 'token',
-      modelName,
+    writeNamedEntry(
+      refs,
       fieldName,
-      ...(crossSpaceCoordinate !== undefined
-        ? {
-            spaceId: crossSpaceCoordinate.spaceId,
-            ...(crossSpaceCoordinate.namespaceId !== undefined
-              ? { namespaceId: crossSpaceCoordinate.namespaceId }
-              : {}),
-            ...(crossSpaceCoordinate.tableName !== undefined
-              ? { tableName: crossSpaceCoordinate.tableName }
-              : {}),
-            ...(physicalColumn !== undefined ? { columnName: physicalColumn } : {}),
-          }
-        : {}),
-    };
+      {
+        kind: 'targetFieldRef',
+        source: 'token',
+        modelName,
+        fieldName,
+        ...(crossSpaceCoordinate !== undefined
+          ? {
+              spaceId: crossSpaceCoordinate.spaceId,
+              ...(crossSpaceCoordinate.namespaceId !== undefined
+                ? { namespaceId: crossSpaceCoordinate.namespaceId }
+                : {}),
+              ...(crossSpaceCoordinate.tableName !== undefined
+                ? { tableName: crossSpaceCoordinate.tableName }
+                : {}),
+              ...(physicalColumn !== undefined ? { columnName: physicalColumn } : {}),
+            }
+          : {}),
+      },
+      fieldNameSite(modelName),
+    );
   }
   return refs as ModelTokenRefs<ModelName, Fields, TSpaceId>;
 }
@@ -1689,8 +1700,9 @@ function createSqlConstraintsDsl<
 
 function createColumnRefs<Fields extends Record<string, ScalarFieldBuilder>>(
   fields: Fields,
+  modelName: string | undefined,
 ): SqlContext<Fields>['cols'] {
-  return createFieldRefs(fields);
+  return createFieldRefs(fields, modelName);
 }
 
 type StaticLiteralName<Name> = Name extends string ? (string extends Name ? never : Name) : never;
@@ -1890,6 +1902,11 @@ export class ContractModelBuilder<
     readonly spaceId?: TSpaceId,
     readonly tableName?: string,
   ) {
+    assertPlainNamedEntries(stageOne.fields, { kind: 'field', modelName: stageOne.modelName });
+    assertPlainNamedEntries(stageOne.relations, {
+      kind: 'relation',
+      modelName: stageOne.modelName,
+    });
     const crossSpaceCoordinate =
       spaceId !== undefined
         ? {
@@ -1951,6 +1968,7 @@ export class ContractModelBuilder<
     TSpaceId,
     Namespace
   > {
+    assertPlainNamedEntries(relations, { kind: 'relation', modelName: this.stageOne.modelName });
     const duplicateRelationName = findDuplicateRelationName(this.stageOne.relations, relations);
     if (duplicateRelationName) {
       throw contractError(
@@ -2065,7 +2083,7 @@ export class ContractModelBuilder<
     }
 
     return buildStageSpec(this.attributesFactory, {
-      fields: createFieldRefs(this.stageOne.fields),
+      fields: createFieldRefs(this.stageOne.fields, this.stageOne.modelName),
       constraints: createAttributeConstraintsDsl() as AttributeContext<Fields>['constraints'],
     });
   }
@@ -2075,7 +2093,7 @@ export class ContractModelBuilder<
       return undefined as SqlSpec;
     }
     return buildStageSpec(this.sqlFactory, {
-      cols: createColumnRefs(this.stageOne.fields),
+      cols: createColumnRefs(this.stageOne.fields, this.stageOne.modelName),
       constraints: createSqlConstraintsDsl<IndexTypes>(),
     });
   }
@@ -2200,7 +2218,7 @@ export type ContractInput<
   readonly family: Family;
   readonly target: Target;
   readonly extensions?: Extensions;
-  /** The adapter the contract runs with. Its capabilities join the target's and the extensions', as `prisma contract emit` and the runtime join them. The Postgres and SQLite `defineContract` supply it. */
+  /** Capabilities the contract records beside its target's and its extensions', joined as `prisma contract emit` joins them. The PostgreSQL `defineContract` passes the author's `requiredCapabilities` here, and the SQLite one its adapter's set. */
   readonly adapter?: CapabilityContributor;
   readonly naming?: NamingConfig;
   readonly storageHash?: string;

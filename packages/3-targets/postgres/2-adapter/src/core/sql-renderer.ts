@@ -4,6 +4,7 @@ import type { CodecRef, DataTypeLookup } from '@internal/framework-components/co
 import { dataTypeParams } from '@internal/framework-components/codec';
 import type { CapabilityMatrix } from '@internal/framework-components/components';
 import { runtimeError } from '@internal/framework-components/runtime';
+import { capabilityUnavailableMessage } from '@internal/sql-contract/capability-messages';
 import {
   nameIsCatalogText,
   sqlBaseName,
@@ -178,7 +179,7 @@ function unreachableKind(value: never): string {
 interface ParamIndexMap {
   readonly indexMap: Map<AnyParamRef, number>;
   readonly types: RenderTypes;
-  readonly capabilities: CapabilityMatrix;
+  readonly contract: PostgresContract;
 }
 
 interface RenderTypes {
@@ -196,7 +197,8 @@ export function renderLoweredSql(
   contract: PostgresContract,
   codecDescriptorRegistry: PostgresCodecDescriptorRegistry,
   dataTypeLookup: DataTypeLookup,
-  capabilities: CapabilityMatrix,
+  /** Ignored. Prisma 8.0 removes this parameter. */
+  _capabilities?: CapabilityMatrix,
 ): { readonly sql: string; readonly params: readonly LoweredParam[] } {
   const orderedRefs = collectOrderedParamRefs(ast);
   const indexMap = new Map<AnyParamRef, number>();
@@ -209,7 +211,7 @@ export function renderLoweredSql(
   const pim: ParamIndexMap = {
     indexMap,
     types: { codecDescriptorRegistry, dataTypeLookup },
-    capabilities,
+    contract,
   };
 
   const node = ast;
@@ -272,7 +274,7 @@ function renderSelect(ast: SelectAst, contract: PostgresContract, pim: ParamInde
   const limitClause = renderLimitOffset('LIMIT', ast.limit, contract, pim);
   const offsetClause = renderLimitOffset('OFFSET', ast.offset, contract, pim);
   const lockingClause = (ast.locking ?? [])
-    .map((clause) => renderLockingClause(clause, pim.capabilities))
+    .map((clause) => renderLockingClause(clause, pim.contract.capabilities))
     .join(' ');
 
   const clauses = [
@@ -326,7 +328,7 @@ function requireCapability(
   if (capability !== undefined) {
     throw adapterError(
       'RUNTIME.AST_UNSUPPORTED',
-      `Postgres adapter does not report capability ${capability}, which this locking clause needs`,
+      capabilityUnavailableMessage('This locking clause', [capability]),
       { meta: { target: 'postgres', feature: 'locking-clause', capability } },
     );
   }

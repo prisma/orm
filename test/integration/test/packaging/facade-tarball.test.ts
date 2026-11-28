@@ -32,13 +32,13 @@ function pack(scratch: string, names: readonly ShellName[]): PackedShell[] {
   });
 }
 
-describe('an application that installs only the Postgres facade', () => {
+describe('an application that lists the Postgres facade and its platform shells', () => {
   let scratch: string;
   let installedDir: string;
 
   beforeAll(() => {
     scratch = mkdtempSync(join(tmpdir(), 'orm-postgres-facade-'));
-    installShells(scratch, pack(scratch, [facade, ...platform]), { direct: [facade] });
+    installShells(scratch, pack(scratch, [facade, ...platform]), { direct: [facade, ...platform] });
     installedDir = join(scratch, 'node_modules', '@prisma', 'orm-postgres');
   });
 
@@ -50,9 +50,9 @@ describe('an application that installs only the Postgres facade', () => {
     const subpaths = importSubpaths(installedDir);
     expect(subpaths.length).toBeGreaterThan(60);
     // The surfaces an application reaches for by hand, as opposed to the ones
-    // only generated files name. An application depends on the facade and
-    // nothing else, so a missing name here is a package it cannot import at
-    // all (ADR 242).
+    // only generated files name. An application imports these from the
+    // facade, so a missing name here is one it has to reach into a platform
+    // shell for (ADR 242).
     expect(subpaths).toEqual(
       expect.arrayContaining([
         './orm-client',
@@ -77,8 +77,8 @@ describe('an application that installs only the Postgres facade', () => {
 
   it('names its own published modules in the config its defineConfig returns', () => {
     const script = [
-      `const { defineConfig } = await import('${facade}/config');`,
-      "const config = defineConfig({ contract: './prisma/contract.prisma' });",
+      `const { defineConfig, postgres18, postgresDriver } = await import('${facade}/config');`,
+      "const config = defineConfig({ contract: { path: './prisma/contract.prisma', requiredCapabilities: [...postgres18, ...postgresDriver] } });",
       'console.log(JSON.stringify([config.contract.typesModule, config.migrations.module]));',
     ].join('\n');
     expect(JSON.parse(runInScratch(scratch, script))).toEqual([
@@ -87,12 +87,17 @@ describe('an application that installs only the Postgres facade', () => {
     ]);
   });
 
-  it('pulls every platform shell in transitively', () => {
+  it('resolves each platform shell it names as a peer to the copy the application lists', () => {
     const script = [
+      "import { strict as assert } from 'node:assert';",
       "import { createRequire } from 'node:module';",
-      `const require = createRequire(import.meta.resolve('${facade}/package.json'));`,
+      `const fromFacade = createRequire(import.meta.resolve('${facade}/package.json'));`,
+      'const fromApplication = createRequire(import.meta.url);',
       `const shells = ${JSON.stringify(platform)};`,
-      'for (const shell of shells) require.resolve(shell + "/package.json");',
+      'for (const shell of shells) {',
+      '  const manifest = shell + "/package.json";',
+      '  assert.equal(fromFacade.resolve(manifest), fromApplication.resolve(manifest), shell);',
+      '}',
       `console.log('platform ok');`,
     ].join('\n');
     expect(runInScratch(scratch, script)).toContain('platform ok');

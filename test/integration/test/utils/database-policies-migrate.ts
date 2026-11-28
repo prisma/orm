@@ -99,7 +99,7 @@ export function definePolicyMigrateJourneys(withProject: WithPolicyProject, time
             {
               kind: 'user-choice',
               label:
-                "Make the ref match the database, or have whoever owns the database apply the ref's policies.",
+                "Nothing runs while production declares policies that differ from the database's. Report the difference to whoever owns the database.",
             },
           ],
           meta: { spaceId: 'app', refName: 'production', differences: [CHANGE_DIFFERENCE] },
@@ -298,7 +298,12 @@ export function definePolicyMigrateJourneys(withProject: WithPolicyProject, time
         mkdirSync(appRefsDir(project), { recursive: true });
         writeFileSync(
           refPath,
-          JSON.stringify({ hash: base, invariants: [], policies: { change: ['migrat'] } }),
+          JSON.stringify({
+            formatVersion: 1,
+            hash: base,
+            invariants: [],
+            policies: { change: ['migrat'] },
+          }),
         );
 
         const refused = await runMigrate(project.ctx, [

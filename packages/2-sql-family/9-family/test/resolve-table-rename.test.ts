@@ -70,6 +70,7 @@ describe('resolveTableRenameAgainst', () => {
     namespaces: Readonly<Record<string, readonly string[]>>,
     sameName: (left: string, right: string) => boolean = (left, right) => left === right,
   ): SchemaTables => ({
+    sameName,
     hasTable: (namespaceId, tableName) => namespaces[namespaceId]?.includes(tableName) === true,
     hasNamespace: (namespaceId) => Object.hasOwn(namespaces, namespaceId),
     hasColumn: () => false,

@@ -84,7 +84,7 @@ const audit: SqlMiddleware = {
 await db.orm.public.User.first({ id: 1 }, (meta) => meta.annotate(cacheAnnotation({ key: 'user-1' })));
 ```
 
-- **Statements go through the call.** Reads and the statements of a statement graph, including those of nested-relation mutations, are the call's children. The client's own transaction is `handle.transaction(fn)`, which reports a failed `COMMIT` or `ROLLBACK` with `withTransaction`'s codes; inside `db.transaction(fn)` the call is a child of that transaction and opens none of its own.
+- **Statements go through the call.** Reads and the statements of a statement graph, including those of nested-relation mutations, are the call's children. The client's own transaction is `handle.transaction(fn)`, which reports a failed `COMMIT` or `ROLLBACK` with `withTransaction`'s codes; inside `db.transaction(fn)` the call is a child of that transaction, and a write of more than one statement runs in a savepoint that `handle.transaction(fn)` opens there, without the implicit transaction options.
 - **Annotations live on the call.** The annotations the `configure` callback records are the call's, including for writes with relation callbacks. The statements the call sends carry only the reserved keys the client sets itself, so a middleware that reads annotations from `plan.meta.annotations` sees none from an ORM call.
 - **The call ends with the value the method returns:** the model rows, the row or `null`, the aggregate object or the count. A failed call ends `failed`. A streaming terminal such as `all()` starts its call when the caller first reads it and ends it when the caller reads to the end (`succeeded`), stops early (`stopped`) or the stream fails (`failed`); it keeps the rows for the call's result only when the call carries annotations. Read a streaming terminal with `for await` or `await`, or call `return()` on its iterator when you stop early: an iterator dropped after `next()` leaves its call open, and `close()` then waits for it for ever.
 - **Middleware can answer the call.** When an `intercept.onActivity` handler supplies a result, the client returns it without sending any statement. A value of the wrong shape for the method rejects with `ORM.INTERCEPTED_RESULT_INVALID`.
@@ -322,13 +322,13 @@ const added = await db.User.createAndCount(rows, {
 
 `createAll` yields only the rows the database inserted; `createAndCount` returns its count. A collision on a constraint other than the one `conflictOn` names is not skipped — it surfaces as a unique violation.
 
-The option needs the contract capability `insertOnConflictSkip`, and also `insertOnConflictTarget` when `conflictOn` is given or `insertOnConflictWithoutTarget` when it is omitted. The runtime adds the adapter's capabilities to the contract, so a contract emitted before the adapter reported a key still has it when the call runs. Without `returning`, `createAll` refuses the option, because it reads the inserted rows back by key and would also find the existing row a skipped one collided with; `createAndCount` takes it. MTI variant collections refuse the option with `ORM.OPERATION_UNSUPPORTED`. `create()` does not take it.
+The option needs the contract to require `sql.insertOnConflictSkip`, and also `sql.insertOnConflictTarget` when `conflictOn` is given or `sql.insertOnConflictWithoutTarget` when it is omitted. The client goes by the contract's required capabilities only: what the adapter or the driver provides is not added to them. Without `sql.returning`, `createAll` refuses the option, because it reads the inserted rows back by key and would also find the existing row a skipped one collided with; `createAndCount` takes it. MTI variant collections refuse the option with `ORM.OPERATION_UNSUPPORTED`. `create()` does not take it.
 
 The optional `configure` callback may still be passed in second position when there are no options.
 
 ### In a nested create
 
-A nested `create` on a one-to-many relation takes the same option in `create()` and `update()`:
+A nested `create` takes `onConflict` in `create()` and `update()`: `'skip'` on a one-to-many relation, `'connect'` on every relation.
 
 ```ts
 await db.User.where({ id: 1 }).update({
@@ -336,11 +336,23 @@ await db.User.where({ id: 1 }).update({
 });
 ```
 
-A row that collides is left unchanged and is not linked to the parent, and the one-to-many and many-to-many writes inside it are not made. Rows without relation callbacks are inserted in one statement; a row with relation callbacks is inserted on its own, and without `returning` such a row is refused. The capability checks are those of `createAll`. A to-one or many-to-many relation refuses the option with `ORM.OPERATION_UNSUPPORTED`. On a polymorphic target, `variant(value).create(rows, options)` takes the option; a variant stored in its own table, reached through `variant()` or as the target of the relation, refuses it with `ORM.OPERATION_UNSUPPORTED`. In nested and top-level calls, a row that gives no non-null value for every column of at least one conflict key (the `conflictOn` fields, or every primary key, unique constraint and unique index of the table) is refused before any statement runs. A value the row gives, a create default the ORM fills in, or, in a nested create, the parent's key in the child's foreign key and a foreign key that a `connect` or `create` on a to-one relation inside the row fills counts; a column the database fills in does not.
+With `'skip'`, a row that collides is left unchanged and is not linked to the parent, and the one-to-many and many-to-many writes inside it are not made. Rows without relation callbacks are inserted in one statement; a row with relation callbacks is inserted on its own, and without `returning` such a row is refused. The capability checks are those of `createAll`. A to-one or many-to-many relation refuses `'skip'` with `ORM.OPERATION_UNSUPPORTED`.
+
+`onConflict: 'connect'` creates the row or links the existing one on every relation, with its other fields unchanged; the conflict columns are the `conflictOn` fields, or the primary key. Each row is inserted on its own and read back by its conflict columns, and the relation callbacks inside it run under the row it gives, created or existing. On a one-to-many or child-held one-to-one relation, the insert sets the foreign key of an existing row, so a row of another parent moves to this one, as with `connect`. On a parent-held or many-to-many relation, the insert assigns the first conflict column the value the existing row already holds, which is an update: update triggers fire, the row is locked until the transaction ends, the caller needs UPDATE privilege on the table, and the call fails if that column is generated. The parent's foreign key or a junction row then links it. When the junction table has a key over exactly its link columns, a target already linked gets no second junction row; otherwise the junction insert is a plain insert, so a target already linked gets a second junction row, or the call fails with the database's unique violation when another unique constraint of the junction covers it. Without `insertOnConflictTarget`, a row that can also collide on another key is refused, as for `upsert`.
+
+A row with either option refuses a callback on a relation whose foreign key is on the row (a many-to-one relation, or the side of a one-to-one relation that holds the foreign key) with `ORM.OPERATION_UNSUPPORTED`, because the callback would write before the database decides whether the row conflicts. Callbacks on relations whose foreign key is on the other row or in a junction table are accepted.
+
+On a polymorphic target, `variant(value).create(rows, options)` takes either option; a variant stored in its own table, reached through `variant()` or as the target of the relation, refuses both with `ORM.OPERATION_UNSUPPORTED`. With `'connect'` through `variant()`, a colliding row of another variant fails the call with `ORM.RELATION_ROW_MISSING` before it is linked or moved, as `connect` through `variant()` does. In nested and top-level calls, a row that gives no non-null value for every column of at least one conflict key (the `conflictOn` fields, or every primary key, unique constraint and unique index of the table) is refused before any statement runs. A value the row gives, a create default the ORM fills in, or, in a nested create, the parent's key in the child's foreign key counts; a column the database fills in does not.
 
 ## Writes without `RETURNING`
 
-A write that returns rows is built the same way on every database: the write, then a `SELECT` that reads the written rows back by their key. When the contract reports `returning`, the ORM merges that `SELECT` into the write, so it is one statement with `RETURNING`, except when the read-back loads includes or the variant tables of a polymorphic base model. When it does not, as on MySQL, the write runs without `RETURNING` inside a transaction, and the ORM reads the rows back by their key with a `SELECT`. The rows come back in no particular order. A write the ORM cannot read back is refused before any statement runs, as a rejection of the call:
+A write that returns rows is built the same way on every database: the write, then a `SELECT` that reads the written rows back by their key. When the contract reports `returning`, the ORM merges that `SELECT` into the write, so the write is one statement with `RETURNING`. These calls still read their rows with a separate `SELECT` on such a database, before or after the write:
+
+- `create()`, `createAll()`, `upsert()`, `update()` and `updateAll()` whose rows load includes or the variant tables of a polymorphic base model, and `update()` and `updateAll()` on a variant stored in its own table, write with `RETURNING` of the columns they read the rows back by (the key, or for `upsert()` the conflict columns), then read the rows back by them, because the write cannot return those rows. For `update()` and `updateAll()` the rows are the rows the `UPDATE` changed, with their new values.
+- `update()` whose filter names no unique key, or that has an `offset` or a `cursor`, first selects the key of the row `first()` returns with `LIMIT 1`, then updates the row with that key alone. It takes no row lock, so a row another transaction changed between the two statements so that it no longer matches the filter is still updated and returned. `update()` with `distinct` or `distinctOn` whose filter names a unique key, and that has no `offset` or `cursor`, also selects the key first, then updates the row with that key and the caller's filter, so such a row is not updated.
+- `delete()` whose filter names no unique key, or that has an `offset`, a `cursor`, `distinct` or `distinctOn`, and `delete()` and `deleteAll()` whose rows load includes or the variant tables of a polymorphic model, read their rows with a `SELECT` first: `delete()` to choose its row, and both because a `DELETE` cannot return included rows or the columns of another table. The `DELETE` is limited to the keys it read and the caller's filter (`delete()` that chose its row with `LIMIT 1` deletes by that key alone), and returns the rows it removed. The call returns only the rows it read that the `DELETE` removed, with the values the `DELETE` returned for the model's own table, so `delete()` returns `null` when another transaction deleted its row first. On a table with no primary key, and no unique constraint whose columns are all `NOT NULL`, `deleteAll()` deletes by the caller's filter alone and returns the rows it read.
+
+When the contract does not report `returning`, as on MySQL and MariaDB, the write runs without `RETURNING` inside a transaction, and the ORM reads the rows back by their key with a `SELECT`. The rows come back in no particular order. A write the ORM cannot read back is refused before any statement runs, as a rejection of the call:
 
 ```ts
 const user = await db.User.create({ email: 'a@example.com', role: 'USER' });
@@ -351,7 +363,7 @@ const user = await db.User.create({ email: 'a@example.com', role: 'USER' });
 - **`create`, `createAll`, nested creates another write reads:** the key is the values the client writes, from the call or a client-side default. A key column the client leaves out must be the auto-increment column: its value is the `insertId` the driver reports for a one-row insert, decoded with the column's codec. `create` is refused with `ORM.CAPABILITY_MISSING` when a key column the client leaves out has another database default, such as a UUID function, because the database does not report that value. `createAll` of several rows whose keys the database generates is refused the same way, because the database reports a generated value only for a one-row insert; `createAndCount` takes them. `createAll` with `onConflict: 'skip'` is refused, because reading back by key would find a skipped row's existing match; `createAndCount` takes it. A nested create of child rows that no other write reads is inserted whatever fills its key. When the driver reports no `insertId` where one is needed, for example because a middleware answered the insert, the call fails with `ORM.MUTATION_ROW_MISSING` (`phase: 'insert-id'`) and the transaction rolls back.
 - **`update`:** finds the row's key, updates it, and reads it back by the key, or by the new key when the update sets a key column.
 - **`updateAll`:** selects the keys of the rows the filter matches, updates the rows that have those keys and still match the caller's filter, and reads the rows back by the selected keys. It takes no row lock, so a row another transaction changed between the two statements may be returned as it now is.
-- **`delete`, `deleteAll`:** select the rows, then delete with the same filter, and return the selected rows. `deleteAll` takes no row lock, so a row another transaction changed between the two statements may be deleted without being returned, or returned without being deleted.
+- **`delete`, `deleteAll`:** select the rows, then delete them: `deleteAll` by the caller's filter and the selected keys, `delete` by the key of the row it selected, and by the caller's filter too when the filter names a unique key and the call has no `offset` or `cursor`. They return the selected rows and take no row lock. A row another transaction deleted between the two statements is returned without being deleted by this call. A row another transaction changed so that it no longer matches the filter is returned without being deleted when the `DELETE` has the caller's filter, and is still deleted and returned when `delete` deletes by the key alone. On a table with no primary key, and no unique constraint whose columns are all `NOT NULL`, `deleteAll` deletes by the caller's filter alone, so a row can also be deleted without being returned.
 - **`upsert`:** without `insertOnConflictTarget`, the database's conflict clause fires on any unique key. The ORM then allows `upsert` only when the contract shows the named columns are the only unique key the create values can collide on: every other primary key or unique constraint contains an auto-increment column the create values leave out. Otherwise it refuses with `ORM.CAPABILITY_MISSING`. It sends no conflict columns and reads the row back by the create's values for the conflict columns, so it also refuses an upsert whose update sets a conflict column or whose create leaves one out. This is correct only when the contract lists every unique index of the table. When the insert collides on an index the contract does not list and no row has the conflict values, the read-back finds no row, the call fails with `ORM.MUTATION_ROW_MISSING` and the transaction rolls back. When a row with the conflict values also exists, the database can update the row the unlisted index matched, and the call returns the conflict values' row unchanged, with no error. `db verify --strict` reports unique indexes the contract does not list.
 
 The count variants (`createAndCount`, `updateAndCount`, `deleteAndCount`) send one statement either way. MTI variant collections still need `returning` to create rows.
@@ -374,10 +386,14 @@ await db.User.where({ id: 1 }).update({
 | `r.disconnect(criteria?)` | `update()` | all |
 | `r.where(w).updateAll(data)`, `r.updateAll(data)` | `update()` | to-many |
 | `r.where(w).deleteAll()`, `r.deleteAll()` | `update()` | to-many |
+| `r.where(w).update(data)`, `r.where(w).delete()` | `update()` | all |
+| `r.update(data)`, `r.delete()` | `update()` | to-one |
 
-An operation used where the table does not list it is refused with `ORM.OPERATION_UNSUPPORTED`; with an emitted `contract.d.ts` it is also a type error.
+An operation used where the table does not list it is refused with `ORM.OPERATION_UNSUPPORTED`; with an emitted `contract.d.ts` it is also a type error. The exception is `update` and `delete` on a to-many relation without a `where` that filters, which is refused with `ORM.ARGUMENT_INVALID` (`problem: 'missing-where'`).
 
 `r.disconnect()` sets the foreign key of the relation to null: on a relation the record holds the key for, the record's key; on a relation the related rows hold the key for, theirs. When that key is required, `disconnect` is refused with `ORM.OPERATION_UNSUPPORTED` (`reason: 'required-foreign-key'`, with the model and fields of the key in `model` and `fields`) before any statement runs, and is a type error, also when it would have changed no row. When `model` is the model being updated, the record holds the key (a many-to-one relation, such as `Post.author`): link it to another row with `connect`, or delete the record. Otherwise the related rows hold the key (one-to-many, or one-to-one from the side without the key): connect them to another record, or delete them. Or make the key optional.
+
+On a relation the record holds the key for, `r.disconnect(criteria)` unlinks the record only when the row it is linked to matches one of the criteria; otherwise it changes nothing and raises no error. `r.disconnect()` without criteria unlinks it whatever row it is linked to.
 
 On a many-to-many relation, `r.disconnect()` without criteria is refused with `ORM.ARGUMENT_INVALID` and is a type error; pass the criteria of the rows to unlink. `r.create` and `r.connect` are refused with `ORM.OPERATION_UNSUPPORTED`, and are type errors, when the junction table has a column other than its link columns that is not nullable and has no default; `r.disconnect(criteria)` stays available.
 
@@ -401,7 +417,7 @@ A to-one relation takes at most one operation: an array of two or more is refuse
 
 ### Nested writes on a polymorphic model
 
-On a relation whose target is a polymorphic base model, the mutator has `variant(value)`, which takes a discriminator value the model declares. `r.variant(value)` has `create`, `connect`, `disconnect`, `where`, `updateAll` and `deleteAll`, available where the same operation is available on `r` except `disconnect` on a relation the record holds the key for, and each acts only on rows of that variant: for a variant stored in the base table, the rows whose discriminator is the variant's value; for a variant stored in its own table, the base rows with that discriminator value that have a row in the variant table.
+On a relation whose target is a polymorphic base model, the mutator has `variant(value)`, which takes a discriminator value the model declares. `r.variant(value)` has `create`, `connect`, `disconnect`, `where`, `updateAll`, `deleteAll`, `update` and `delete`, available where the same operation is available on `r`, and each acts only on rows of that variant: for a variant stored in the base table, the rows whose discriminator is the variant's value; for a variant stored in its own table, the base rows with that discriminator value that have a row in the variant table.
 
 #### Creating rows
 
@@ -420,15 +436,13 @@ await db.Project.where({ id: 1 }).update({
 
 #### Connecting and disconnecting rows
 
-`r.variant(value).connect(criteria)` and `r.variant(value).disconnect(criteria?)` find only rows of the variant. A row of another variant is treated as a row that does not exist: `connect` on a relation the record holds the key for, and `connect` and `disconnect` on a many-to-many relation, refuse it with `ORM.RELATION_ROW_MISSING`; on a relation the related rows hold the key for, `connect` links nothing and `disconnect` unlinks nothing, with no error.
+`r.variant(value).connect(criteria)` and `r.variant(value).disconnect(criteria?)` find only rows of the variant. A row of another variant is treated as a row that does not exist: `connect` on a relation the record holds the key for, and `connect` and `disconnect` on a many-to-many relation, refuse it with `ORM.RELATION_ROW_MISSING`; on a relation the related rows hold the key for, `connect` links nothing and `disconnect` unlinks nothing, with no error. On a relation the record holds the key for, `disconnect` unlinks the record only when the row it is linked to is of the variant, and matches one of the criteria when they are given; otherwise it changes nothing, with no error.
 
 ```ts
 await db.Project.where({ id: 1 }).update({
   tasks: (tasks) => [tasks.variant('bug').connect({ id: 7 }), tasks.variant('feature').disconnect()],
 });
 ```
-
-On a relation the record holds the key for, `disconnect` is not available on a variant: it is a type error and is refused with `ORM.OPERATION_UNSUPPORTED` (`reason: 'variant-parent-owned'`). Use `r.disconnect()`.
 
 #### Updating and deleting rows of a variant
 
@@ -474,6 +488,28 @@ await db.User.where({ id: 1 }).update({
 Both operations are available only in `update()` and only on a to-many relation. Inside `create()`, or on a to-one relation, they are refused with `ORM.OPERATION_UNSUPPORTED` and are type errors.
 
 On a many-to-many relation, `deleteAll` deletes the related rows and does not delete or change junction rows itself. What happens to the junction rows that link them is decided by the foreign-key action in your schema: with a cascading foreign key they are removed, and with a restricting one the database refuses the delete and the whole `update()` is rolled back. When the junction table has no foreign key to the related table, the junction rows remain and hold keys of rows that no longer exist; declare a foreign key with a cascading delete on the junction table to remove them with the rows they refer to.
+
+### Updating or deleting one related row
+
+`r.where(w).update(data)` and `r.where(w).delete()` change or delete the first related row the filter matches; on a to-one relation, `r.update(data)` and `r.delete()` change or delete the linked row, and `where` narrows it. Which row among several matching rows is first is unspecified, as for a collection's `update` and `delete` without `orderBy`. The `UPDATE` or `DELETE` re-checks that the row is still related to the record, so a row that another transaction linked to a different record in the meantime is left unchanged. A row is related as for `updateAll` and `deleteAll`; on a relation the record holds the key for, the related row is the one its foreign key points at after the record's own update, and when that update matches no row, for example because another transaction deleted the record, nothing changes.
+
+```ts
+await db.User.where({ id: 1 }).update({
+  profile: (profile) => profile.update({ bio: 'New' }),
+  posts: (posts) => [
+    posts.where({ id: 3 }).update({ title: 'Renamed' }),
+    posts.where({ published: false }).delete(),
+  ],
+});
+```
+
+- When no related row matches, or a to-one relation links no row, nothing changes and no error is raised.
+- On a to-many relation, `update` and `delete` need a `where` that filters. Without `where()` they are a type error. An empty filter, such as `where({})` or a filter whose fields are all `undefined`, type-checks but is refused at run time. Both are refused with `ORM.ARGUMENT_INVALID` (`problem: 'missing-where'`). A collection's own `where({}).update()` is not refused.
+- `update` data is the related model's own fields, with its update defaults, and on a one-to-many and one-to-one relation the same `parent-link-column` refusal as `updateAll`.
+- `update()` data that sets a field of the foreign key the record holds for a relation and also has a callback on that relation, such as `{ authorId: 2, author: (author) => author.update({ name: 'Ada' }) }`, is refused with `ORM.ARGUMENT_INVALID` (`problem: 'foreign-key-with-relation-mutation'`, with the relation in `relation` and the fields in `fields`) before any statement runs, whatever operation the callback returns. The key and the callback name different rows; set the key or use the callback. It is not a type error.
+- On a relation the record holds the key for, `delete` sets the record's foreign key to null and then deletes the row it pointed at; when that key is required, `delete` is a type error and is refused with `ORM.OPERATION_UNSUPPORTED` (`reason: 'required-foreign-key'`).
+- On a many-to-many relation, `delete` deletes the related row and leaves the junction rows that link it to the database's foreign-key action, as `deleteAll` does.
+- `r.variant(value).where(w).update(data)` and `.delete()` act only on a row of the variant. For a variant stored in its own table, `delete` deletes the base row and leaves the variant row to the database's foreign-key action.
 
 ## Prepared row descriptions
 

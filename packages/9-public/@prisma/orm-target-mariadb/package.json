@@ -1,6 +1,6 @@
 {
   "name": "@prisma/orm-target-mariadb",
-  "version": "8.0.0-rc.24",
+  "version": "8.0.0-rc.25",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
@@ -13,22 +13,24 @@
     "lint": "biome check . --error-on-warnings",
     "clean": "rm -rf dist src-gen"
   },
-  "dependencies": {
-    "@prisma/orm-family-sql": "workspace:8.0.0-rc.24",
-    "@prisma/orm-framework": "workspace:8.0.0-rc.24",
-    "@prisma/orm-target-mysql": "workspace:8.0.0-rc.24"
-  },
+  "dependencies": {},
   "devDependencies": {
-    "@internal/adapter-mariadb": "workspace:8.0.0-rc.24",
-    "@internal/driver-mariadb": "workspace:8.0.0-rc.24",
-    "@internal/target-mariadb": "workspace:8.0.0-rc.24",
-    "@repo/tsconfig": "workspace:8.0.0-rc.24",
-    "@repo/tsdown": "workspace:8.0.0-rc.24",
+    "@internal/adapter-mariadb": "workspace:8.0.0-rc.25",
+    "@internal/driver-mariadb": "workspace:8.0.0-rc.25",
+    "@internal/target-mariadb": "workspace:8.0.0-rc.25",
+    "@prisma/orm-family-sql": "workspace:8.0.0-rc.25",
+    "@prisma/orm-framework": "workspace:8.0.0-rc.25",
+    "@prisma/orm-target-mysql": "workspace:8.0.0-rc.25",
+    "@repo/tsconfig": "workspace:8.0.0-rc.25",
+    "@repo/tsdown": "workspace:8.0.0-rc.25",
     "tsdown": "catalog:",
     "typescript": "catalog:"
   },
   "peerDependencies": {
-    "temporal-polyfill": "^1.0.4",
+    "@prisma/orm-family-sql": "workspace:8.0.0-rc.25",
+    "@prisma/orm-framework": "workspace:8.0.0-rc.25",
+    "@prisma/orm-target-mysql": "workspace:8.0.0-rc.25",
+    "temporal-polyfill": "^1.0.8",
     "typescript": ">=5.9"
   },
   "peerDependenciesMeta": {

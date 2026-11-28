@@ -14,7 +14,7 @@ import { type as arktype } from 'arktype';
 import { decodeEWKBHex, encodeEWKBHex } from './ewkb';
 import type { Geometry } from './geojson';
 
-export const postgisGeometryParams = arktype({ 'srid?': 'number.integer >= 1' });
+export const postgisGeometryParams = arktype({ '+': 'reject', 'srid?': 'number.integer >= 1' });
 
 const HEX_TEXT = /^(?:[0-9A-Fa-f]{2})*$/;
 

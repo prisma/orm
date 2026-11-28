@@ -182,6 +182,7 @@ export function interpretSchemaTextResult(
     authoringContributions: context.authoringContributions,
     codecLookup: context.codecLookup,
     dataTypes: context.dataTypes,
+    capabilities: context.capabilities,
     composedExtensions: [...context.composedExtensions, ...composedPacks.keys()],
     composedExtensionContracts: new Map([...context.composedExtensionContracts, ...composedPacks]),
   });

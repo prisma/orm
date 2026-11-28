@@ -1,4 +1,5 @@
 import type { PreserveEmptyPredicate, StorageSort } from '@internal/contract/hashing';
+import { convertContractDocument } from '@internal/contract/internal/format-version';
 import { ifDefined } from '@internal/utils/defined';
 import { errorDescriptorHeadHashMismatch } from './errors';
 import { recomputePublishedStorageHash } from './hash';
@@ -11,16 +12,8 @@ import { recomputePublishedStorageHash } from './hash';
  */
 export interface DescriptorSelfConsistencyInputs {
   readonly extensionId: string;
-  readonly target: string;
-  readonly targetFamily: string;
-  /**
-   * Family-specific storage object. Typed as `unknown` so callers can
-   * pass their own narrow storage shape (e.g. `SqlStorage`) without an
-   * inline cast — the helper canonicalises through `JSON.stringify`
-   * inside {@link computeStorageHash} and only requires a plain
-   * record-shaped value at runtime.
-   */
-  readonly storage: unknown;
+  /** The extension's bundled `contract.json`, as the descriptor imports it. */
+  readonly contractJson: unknown;
   readonly headRefHash: string;
   readonly shouldPreserveEmpty?: PreserveEmptyPredicate;
   readonly sortStorage?: StorageSort;
@@ -31,9 +24,11 @@ export interface DescriptorSelfConsistencyInputs {
  * `headRef.hash` it publishes must match the canonical hash recomputed
  * from its `contractSpace.contractJson`.
  *
- * Recomputes via {@link computeStorageHash} — the same canonical-JSON
- * pipeline the descriptor's own emit pipeline produced the hash with —
- * over `(target, targetFamily, storage)`. Mismatch indicates the
+ * Reads the bundled contract's format version first, and throws a format
+ * version error for one this release cannot read. Recomputes via
+ * {@link computeStorageHash} — the same canonical-JSON pipeline the
+ * descriptor's own emit pipeline produced the hash with — over
+ * `(target, targetFamily, storage)`. Mismatch indicates the
  * extension author bumped `contractJson` without rerunning emit, leaving
  * the descriptor's `headRef.hash` stale; the consumer-side helpers
  * (drift detection, on-disk artefact emission, runner marker writes) all
@@ -46,10 +41,14 @@ export interface DescriptorSelfConsistencyInputs {
  * clear remediation hint without re-deriving them.
  */
 export function assertDescriptorSelfConsistency(inputs: DescriptorSelfConsistencyInputs): void {
+  const contract = convertContractDocument(inputs.contractJson, {
+    path: 'contract.json',
+    bundledIn: inputs.extensionId,
+  });
   const recomputed = recomputePublishedStorageHash({
-    target: inputs.target,
-    targetFamily: inputs.targetFamily,
-    storage: inputs.storage,
+    target: contract['target'],
+    targetFamily: contract['targetFamily'],
+    storage: contract['storage'],
     hooks: {
       ...ifDefined('shouldPreserveEmpty', inputs.shouldPreserveEmpty),
       ...ifDefined('sortStorage', inputs.sortStorage),

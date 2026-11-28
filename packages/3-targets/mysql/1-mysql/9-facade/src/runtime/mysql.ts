@@ -117,6 +117,9 @@ export interface MysqlTransactionContext<
 > extends TransactionContext,
     MysqlQueryMembers<TContract, TCollections> {
   readonly enums: MysqlStaticContext<TContract>['enums'];
+  transaction<R>(
+    fn: (tx: MysqlTransactionContext<TContract, TCollections>) => PromiseLike<R>,
+  ): Promise<R>;
 }
 
 export interface MysqlStaticMembers<
@@ -278,7 +281,6 @@ export function createMysqlClient<
     const context = createExecutionContext<TContract, TargetId>({
       contract,
       stack,
-      driver: components.driver,
     });
     const {
       sql,
@@ -381,6 +383,27 @@ export function createMysqlClient<
       return prepareQuery<D, Q, CT>(workRuntime, declaration, callback);
     }
 
+    function buildTransactionContext(
+      txCtx: TransactionContext,
+    ): MysqlTransactionContext<TContract, TCollections> {
+      return withTransactionMembers(txCtx, {
+        ...buildMysqlTransactionMembers<TContract, TCollections>(
+          {
+            context,
+            collections: options.collections,
+            rawCodecInferer: stack.adapter.rawCodecInferer,
+            enums,
+            toSql,
+            prepareRuntime: workRuntime,
+          },
+          txCtx,
+        ),
+        transaction: <R>(
+          fn: (tx: MysqlTransactionContext<TContract, TCollections>) => PromiseLike<R>,
+        ) => txCtx.transaction((nested) => fn(buildTransactionContext(nested))),
+      });
+    }
+
     return {
       sql,
       orm,
@@ -457,28 +480,10 @@ export function createMysqlClient<
             ? local.isolationLevel
             : transactionOptions?.isolationLevel;
         const timeout = local?.timeout !== undefined ? local.timeout : transactionOptions?.timeout;
-        return withTransaction(
-          workRuntime,
-          (txCtx) => {
-            const tx: MysqlTransactionContext<TContract, TCollections> = withTransactionMembers(
-              txCtx,
-              buildMysqlTransactionMembers<TContract, TCollections>(
-                {
-                  context,
-                  collections: options.collections,
-                  rawCodecInferer: stack.adapter.rawCodecInferer,
-                  enums,
-                  toSql,
-                  prepareRuntime: workRuntime,
-                },
-                txCtx,
-              ),
-            );
-
-            return fn(tx);
-          },
-          { isolationLevel, timeout },
-        );
+        return withTransaction(workRuntime, (txCtx) => fn(buildTransactionContext(txCtx)), {
+          isolationLevel,
+          timeout,
+        });
       },
 
       close(): Promise<void> {

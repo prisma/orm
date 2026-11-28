@@ -5,7 +5,6 @@ import { flag } from '@prisma/cli-engine';
 import type { NextAction } from '@prisma/cli-engine/protocol';
 import { notOk, ok } from '@prisma/cli-engine/protocol';
 import { join, resolve } from 'pathe';
-import { createControlClient } from '../../control-api/client';
 import type { MigrationNewResult } from '../../control-api/operations/migration-new';
 import { executeMigrationNewCommand } from '../../control-api/operations/migration-new';
 import type { CreateControlClient } from '../../control-api/types';
@@ -93,6 +92,7 @@ export function createMigrationNewCommand(createClient: CreateControlClient) {
       const scaffolded = await executeMigrationNewCommand({
         config: ctx.config,
         cwd: ctx.cwd,
+        ...ifDefined('configPath', ctx.configPath),
         ...ifDefined('name', args.flags.name),
         ...ifDefined('from', args.flags.from),
         client: createClient({
@@ -123,5 +123,3 @@ export function createMigrationNewCommand(createClient: CreateControlClient) {
     },
   });
 }
-
-export const migrationNewCommand = createMigrationNewCommand(createControlClient);

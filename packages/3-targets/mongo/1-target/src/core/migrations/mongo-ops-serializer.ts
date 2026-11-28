@@ -1,4 +1,5 @@
 import type { PlanMeta } from '@internal/contract/types';
+import type { MigrationRunnerPerSpaceOptions } from '@internal/framework-components/control';
 import {
   type AnyMongoDdlCommand,
   type AnyMongoInspectionCommand,
@@ -49,13 +50,15 @@ import {
 } from '@internal/mongo-query-ast/execution';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
+import { isStructuredError, type StructuredError } from '@internal/utils/structured-error';
 import { type } from 'arktype';
 import { mongoTargetError } from '../mongo-target-errors';
 
 const IndexKeyDirection = type('1 | -1 | "text" | "2dsphere" | "2d" | "hashed"');
-const IndexKeyJson = type({ field: 'string', direction: IndexKeyDirection });
+const IndexKeyJson = type({ '+': 'reject', field: 'string', direction: IndexKeyDirection });
 
 const CollationJson = type({
+  '+': 'reject',
   locale: 'string',
   'caseLevel?': 'boolean',
   'caseFirst?': 'string',
@@ -68,6 +71,7 @@ const CollationJson = type({
 });
 
 const CreateIndexJson = type({
+  '+': 'reject',
   kind: '"createIndex"',
   collection: 'string',
   keys: IndexKeyJson.array().atLeastLength(1),
@@ -84,12 +88,14 @@ const CreateIndexJson = type({
 });
 
 const DropIndexJson = type({
+  '+': 'reject',
   kind: '"dropIndex"',
   collection: 'string',
   name: 'string',
 });
 
 const CreateCollectionJson = type({
+  '+': 'reject',
   kind: '"createCollection"',
   collection: 'string',
   'validator?': 'Record<string, unknown>',
@@ -99,13 +105,15 @@ const CreateCollectionJson = type({
   'size?': 'number',
   'max?': 'number',
   'timeseries?': {
+    '+': 'reject',
     timeField: 'string',
     'metaField?': 'string',
     'granularity?': '"seconds" | "minutes" | "hours"',
   },
   'collation?': CollationJson,
-  'changeStreamPreAndPostImages?': { enabled: 'boolean' },
+  'changeStreamPreAndPostImages?': { '+': 'reject', enabled: 'boolean' },
   'clusteredIndex?': {
+    '+': 'reject',
     key: 'Record<string, number>',
     unique: 'boolean',
     'name?': 'string',
@@ -113,35 +121,41 @@ const CreateCollectionJson = type({
 });
 
 const DropCollectionJson = type({
+  '+': 'reject',
   kind: '"dropCollection"',
   collection: 'string',
 });
 
 const RenameCollectionJson = type({
+  '+': 'reject',
   kind: '"renameCollection"',
   collection: 'string',
   to: 'string',
 });
 
 const CollModJson = type({
+  '+': 'reject',
   kind: '"collMod"',
   collection: 'string',
   'validator?': 'Record<string, unknown>',
   'validationLevel?': '"strict" | "moderate"',
   'validationAction?': '"error" | "warn"',
-  'changeStreamPreAndPostImages?': { enabled: 'boolean' },
+  'changeStreamPreAndPostImages?': { '+': 'reject', enabled: 'boolean' },
 });
 
 const ListIndexesJson = type({
+  '+': 'reject',
   kind: '"listIndexes"',
   collection: 'string',
 });
 
 const ListCollectionsJson = type({
+  '+': 'reject',
   kind: '"listCollections"',
 });
 
 const FieldFilterJson = type({
+  '+': 'reject',
   kind: '"field"',
   field: 'string',
   op: 'string',
@@ -149,21 +163,25 @@ const FieldFilterJson = type({
 });
 
 const AndFilterJson = type({
+  '+': 'reject',
   kind: '"and"',
   exprs: 'Record<string, unknown>[]',
 });
 
 const OrFilterJson = type({
+  '+': 'reject',
   kind: '"or"',
   exprs: 'Record<string, unknown>[]',
 });
 
 const NotFilterJson = type({
+  '+': 'reject',
   kind: '"not"',
   expr: 'Record<string, unknown>',
 });
 
 const ExistsFilterJson = type({
+  '+': 'reject',
   kind: '"exists"',
   field: 'string',
   exists: 'boolean',
@@ -174,18 +192,21 @@ const ExistsFilterJson = type({
 // ============================================================================
 
 const RawInsertOneJson = type({
+  '+': 'reject',
   kind: '"rawInsertOne"',
   collection: 'string',
   document: 'Record<string, unknown>',
 });
 
 const RawInsertManyJson = type({
+  '+': 'reject',
   kind: '"rawInsertMany"',
   collection: 'string',
   documents: 'Record<string, unknown>[]',
 });
 
 const RawUpdateOneJson = type({
+  '+': 'reject',
   kind: '"rawUpdateOne"',
   collection: 'string',
   filter: 'Record<string, unknown>',
@@ -193,6 +214,7 @@ const RawUpdateOneJson = type({
 });
 
 const RawUpdateManyJson = type({
+  '+': 'reject',
   kind: '"rawUpdateMany"',
   collection: 'string',
   filter: 'Record<string, unknown>',
@@ -201,43 +223,53 @@ const RawUpdateManyJson = type({
 });
 
 const RawDeleteOneJson = type({
+  '+': 'reject',
   kind: '"rawDeleteOne"',
   collection: 'string',
   filter: 'Record<string, unknown>',
 });
 
 const RawDeleteManyJson = type({
+  '+': 'reject',
   kind: '"rawDeleteMany"',
   collection: 'string',
   filter: 'Record<string, unknown>',
 });
 
 const RawAggregateJson = type({
+  '+': 'reject',
   kind: '"rawAggregate"',
   collection: 'string',
   pipeline: 'Record<string, unknown>[]',
 });
 
 const RawFindOneAndUpdateJson = type({
+  '+': 'reject',
   kind: '"rawFindOneAndUpdate"',
   collection: 'string',
   filter: 'Record<string, unknown>',
   update: 'Record<string, unknown> | Record<string, unknown>[]',
   upsert: 'boolean',
+  'sort?': 'Record<string, 1 | -1>',
+  'returnDocument?': "'before' | 'after'",
 });
 
 const RawFindOneAndDeleteJson = type({
+  '+': 'reject',
   kind: '"rawFindOneAndDelete"',
   collection: 'string',
   filter: 'Record<string, unknown>',
+  'sort?': 'Record<string, 1 | -1>',
 });
 
 const TypedAggregateJson = type({
+  '+': 'reject',
   kind: '"aggregate"',
   collection: 'string',
   pipeline: 'Record<string, unknown>[]',
 });
 
+/** Entries no reader acts on stay open, such as the `paramDescriptors` a hand-written plan carries. */
 const PlanMetaJson = type({
   target: 'string',
   storageHash: 'string',
@@ -248,37 +280,55 @@ const PlanMetaJson = type({
 });
 
 const QueryPlanJson = type({
+  '+': 'reject',
   collection: 'string',
   command: 'Record<string, unknown>',
   meta: PlanMetaJson,
+  /** Written by the query builder for a pipeline on a model; no migration reader acts on it. */
+  'resultShape?': 'Record<string, unknown>',
 });
 
 const MatchStageJson = type({
+  '+': 'reject',
   kind: '"match"',
   filter: 'Record<string, unknown>',
 });
 
 const LimitStageJson = type({
+  '+': 'reject',
   kind: '"limit"',
   limit: 'number',
 });
 
 const SortStageJson = type({
+  '+': 'reject',
   kind: '"sort"',
   sort: 'Record<string, 1 | -1>',
 });
 
 const ProjectStageJson = type({
+  '+': 'reject',
   kind: '"project"',
   projection: 'Record<string, 0 | 1>',
 });
 
+const MergeStageJson = type({
+  '+': 'reject',
+  kind: '"merge"',
+  into: type('string').or({ '+': 'reject', db: 'string', coll: 'string' }),
+  'on?': 'string | string[]',
+  'whenMatched?': 'string | Record<string, unknown>[]',
+  'whenNotMatched?': 'string',
+});
+
 const AddFieldsStageJson = type({
+  '+': 'reject',
   kind: '"addFields"',
   fields: 'Record<string, unknown>',
 });
 
 const LookupStageJson = type({
+  '+': 'reject',
   kind: '"lookup"',
   from: 'string',
   as: 'string',
@@ -293,6 +343,7 @@ const LookupStageJson = type({
 // ============================================================================
 
 const CheckJson = type({
+  '+': 'reject',
   description: 'string',
   source: 'Record<string, unknown>',
   filter: 'Record<string, unknown>',
@@ -301,19 +352,23 @@ const CheckJson = type({
 });
 
 const StepJson = type({
+  '+': 'reject',
   description: 'string',
   command: 'Record<string, unknown>',
 });
 
 const OperationMetaJson = type({
+  '+': 'reject',
   'rewrite?': type({
+    '+': 'reject',
     kind: '"cast"',
     collection: 'string',
     field: 'string',
     to: 'string',
   })
-    .or({ kind: '"fill"', collection: 'string', field: 'string' })
+    .or({ '+': 'reject', kind: '"fill"', collection: 'string', field: 'string' })
     .or({
+      '+': 'reject',
       kind: '"renameStoredKey"',
       collection: 'string',
       field: 'string',
@@ -321,18 +376,21 @@ const OperationMetaJson = type({
       to: 'string',
     })
     .or({
+      '+': 'reject',
       kind: '"removeStoredKey" | "fillStoredKey"',
       collection: 'string',
       field: 'string',
       path: 'string',
     })
     .or({
+      '+': 'reject',
       kind: '"replaceStoredValue"',
       collection: 'string',
       field: 'string',
       'path?': 'string',
     })
     .or({
+      '+': 'reject',
       kind: '"removeStoredValue"',
       collection: 'string',
       field: 'string',
@@ -340,11 +398,12 @@ const OperationMetaJson = type({
       value: 'string | number | boolean',
       'required?': 'boolean',
       'filter?': 'Record<string, unknown>',
-      'enumValue?': { 'namespaceId?': 'string', enum: 'string', member: 'string' },
+      'enumValue?': { '+': 'reject', 'namespaceId?': 'string', enum: 'string', member: 'string' },
     }),
 });
 
 const DdlOperationJson = type({
+  '+': 'reject',
   id: 'string',
   label: 'string',
   operationClass: '"additive" | "widening" | "destructive"',
@@ -355,6 +414,7 @@ const DdlOperationJson = type({
 });
 
 const DmlCheckJson = type({
+  '+': 'reject',
   description: 'string',
   source: 'Record<string, unknown>',
   filter: 'Record<string, unknown>',
@@ -362,10 +422,12 @@ const DmlCheckJson = type({
 });
 
 const DmlOperationJson = type({
+  '+': 'reject',
   id: 'string',
   label: 'string',
   operationClass: '"additive" | "widening" | "destructive" | "data"',
   name: 'string',
+  'invariantId?': 'string',
   'meta?': OperationMetaJson,
   precheck: 'Record<string, unknown>[]',
   run: 'Record<string, unknown>[]',
@@ -380,6 +442,32 @@ type SerializedSlot =
   | boolean
   | null
   | undefined;
+
+function isInvalidEntry(error: unknown): error is StructuredError {
+  return isStructuredError(error) && error.code === 'MIGRATION.INVALID_OPERATION_ENTRY';
+}
+
+function pathOfRefusal(error: StructuredError): readonly string[] {
+  const at = error.meta?.['at'];
+  return Array.isArray(at) ? at.map(String) : [];
+}
+
+/** Reads the part of an operation at `segment`, so a refusal inside it says where in the operation it is. */
+function readingAt<T>(segment: string, read: () => T): T {
+  try {
+    return read();
+  } catch (error) {
+    if (!isInvalidEntry(error)) throw error;
+    throw mongoTargetError('MIGRATION.INVALID_OPERATION_ENTRY', error.message, {
+      meta: { ...error.meta, at: [segment, ...pathOfRefusal(error)] },
+      cause: error.cause ?? error,
+    });
+  }
+}
+
+function readingEachAt<T, R>(name: string, items: readonly T[], read: (item: T) => R): R[] {
+  return items.map((item, index) => readingAt(`${name}[${index}]`, () => read(item)));
+}
 
 function recordValue(json: unknown, key: string, context: string): SerializedSlot {
   if (json === null || typeof json !== 'object') {
@@ -481,15 +569,15 @@ function deserializeFilterExpr(json: unknown): MongoFilterExpr {
     }
     case 'and': {
       const data = validate(AndFilterJson, json, 'and filter');
-      return MongoAndExpr.of(data.exprs.map(deserializeFilterExpr));
+      return MongoAndExpr.of(readingEachAt('exprs', data.exprs, deserializeFilterExpr));
     }
     case 'or': {
       const data = validate(OrFilterJson, json, 'or filter');
-      return MongoOrExpr.of(data.exprs.map(deserializeFilterExpr));
+      return MongoOrExpr.of(readingEachAt('exprs', data.exprs, deserializeFilterExpr));
     }
     case 'not': {
       const data = validate(NotFilterJson, json, 'not filter');
-      return new MongoNotExpr(deserializeFilterExpr(data.expr));
+      return new MongoNotExpr(readingAt('expr', () => deserializeFilterExpr(data.expr)));
     }
     case 'exists': {
       const data = validate(ExistsFilterJson, json, 'exists filter');
@@ -513,7 +601,7 @@ export function deserializePipelineStage(json: unknown): MongoPipelineStage {
   switch (kind) {
     case 'match': {
       const data = validate(MatchStageJson, json, 'match stage');
-      return new MongoMatchStage(deserializeFilterExpr(data.filter));
+      return new MongoMatchStage(readingAt('filter', () => deserializeFilterExpr(data.filter)));
     }
     case 'limit': {
       const data = validate(LimitStageJson, json, 'limit stage');
@@ -550,7 +638,8 @@ export function deserializePipelineStage(json: unknown): MongoPipelineStage {
       };
       if (data.localField !== undefined) opts.localField = data.localField;
       if (data.foreignField !== undefined) opts.foreignField = data.foreignField;
-      if (data.pipeline !== undefined) opts.pipeline = data.pipeline.map(deserializePipelineStage);
+      if (data.pipeline !== undefined)
+        opts.pipeline = readingEachAt('pipeline', data.pipeline, deserializePipelineStage);
       if (data.let_ !== undefined)
         opts.let_ = blindCast<
           Record<string, never>,
@@ -559,24 +648,18 @@ export function deserializePipelineStage(json: unknown): MongoPipelineStage {
       return new MongoLookupStage(opts);
     }
     case 'merge': {
-      const whenMatched = recordValue(json, 'whenMatched', 'merge stage');
+      const data = validate(MergeStageJson, json, 'merge stage');
+      const { whenMatched } = data;
       const opts: {
         into: string | { db: string; coll: string };
         on?: string | ReadonlyArray<string>;
         whenMatched?: string | ReadonlyArray<MongoUpdatePipelineStage>;
         whenNotMatched?: string;
       } = {
-        into: blindCast<
-          string | { db: string; coll: string },
-          'merge stage into is validated by MongoDB-compatible serialized operation authors'
-        >(recordValue(json, 'into', 'merge stage')),
+        into: data.into,
+        ...ifDefined('on', data.on),
+        ...ifDefined('whenNotMatched', data.whenNotMatched),
       };
-      const on = recordValue(json, 'on', 'merge stage');
-      if (on !== undefined)
-        opts.on = blindCast<
-          string | string[],
-          'merge stage on is either a field name or field-name array'
-        >(on);
       if (whenMatched !== undefined) {
         opts.whenMatched =
           typeof whenMatched === 'string'
@@ -584,19 +667,8 @@ export function deserializePipelineStage(json: unknown): MongoPipelineStage {
             : blindCast<
                 MongoUpdatePipelineStage[],
                 'merge stage whenMatched non-string branch is an update pipeline array'
-              >(
-                blindCast<
-                  unknown[],
-                  'merge stage whenMatched non-string branch is a serialized stage array'
-                >(whenMatched).map(deserializePipelineStage),
-              );
+              >(readingEachAt('whenMatched', whenMatched, deserializePipelineStage));
       }
-      const whenNotMatched = recordValue(json, 'whenNotMatched', 'merge stage');
-      if (whenNotMatched !== undefined)
-        opts.whenNotMatched = blindCast<
-          string,
-          'merge stage whenNotMatched is a Mongo merge action token'
-        >(whenNotMatched);
       return new MongoMergeStage(opts);
     }
     default:
@@ -650,15 +722,22 @@ export function deserializeDmlCommand(json: unknown): AnyMongoCommand {
     }
     case 'rawFindOneAndUpdate': {
       const data = validate(RawFindOneAndUpdateJson, json, 'rawFindOneAndUpdate command');
-      return new RawFindOneAndUpdateCommand(data.collection, data.filter, data.update, data.upsert);
+      return new RawFindOneAndUpdateCommand(
+        data.collection,
+        data.filter,
+        data.update,
+        data.upsert,
+        data.sort,
+        data.returnDocument,
+      );
     }
     case 'rawFindOneAndDelete': {
       const data = validate(RawFindOneAndDeleteJson, json, 'rawFindOneAndDelete command');
-      return new RawFindOneAndDeleteCommand(data.collection, data.filter);
+      return new RawFindOneAndDeleteCommand(data.collection, data.filter, data.sort);
     }
     case 'aggregate': {
       const data = validate(TypedAggregateJson, json, 'aggregate command');
-      const pipeline = data.pipeline.map(deserializePipelineStage);
+      const pipeline = readingEachAt('pipeline', data.pipeline, deserializePipelineStage);
       return new AggregateCommand(data.collection, pipeline);
     }
     default:
@@ -676,7 +755,7 @@ export function deserializeDmlCommand(json: unknown): AnyMongoCommand {
 
 export function deserializeMongoQueryPlan(json: unknown): MongoQueryPlan {
   const data = validate(QueryPlanJson, json, 'Mongo query plan');
-  const command = deserializeDmlCommand(data.command);
+  const command = readingAt('command', () => deserializeDmlCommand(data.command));
   const m = data.meta;
   const meta: PlanMeta = {
     target: m.target,
@@ -785,8 +864,8 @@ function deserializeCheck(json: unknown): MongoMigrationCheck {
   const data = validate(CheckJson, json, 'migration check');
   return {
     description: data.description,
-    source: deserializeCheckSource(data.source),
-    filter: deserializeFilterExpr(data.filter),
+    source: readingAt('source', () => deserializeCheckSource(data.source)),
+    filter: readingAt('filter', () => deserializeFilterExpr(data.filter)),
     expect: data.expect,
     ...ifDefined('object', data.object),
   };
@@ -796,7 +875,7 @@ function deserializeStep(json: unknown): MongoMigrationStep {
   const data = validate(StepJson, json, 'migration step');
   return {
     description: data.description,
-    command: deserializeDdlCommand(data.command),
+    command: readingAt('command', () => deserializeDdlCommand(data.command)),
   };
 }
 
@@ -811,9 +890,9 @@ function deserializeDdlOp(json: unknown): MongoMigrationPlanOperation {
     label: data.label,
     operationClass: data.operationClass,
     ...ifDefined('meta', data.meta),
-    precheck: data.precheck.map(deserializeCheck),
-    execute: data.execute.map(deserializeStep),
-    postcheck: data.postcheck.map(deserializeCheck),
+    precheck: readingEachAt('precheck', data.precheck, deserializeCheck),
+    execute: readingEachAt('execute', data.execute, deserializeStep),
+    postcheck: readingEachAt('postcheck', data.postcheck, deserializeCheck),
   };
 }
 
@@ -821,8 +900,8 @@ function deserializeDmlCheck(json: unknown): MongoDmlCheck {
   const data = validate(DmlCheckJson, json, 'DML operation check');
   return {
     description: data.description,
-    source: deserializeMongoQueryPlan(data.source),
-    filter: deserializeFilterExpr(data.filter),
+    source: readingAt('source', () => deserializeMongoQueryPlan(data.source)),
+    filter: readingAt('filter', () => deserializeFilterExpr(data.filter)),
     expect: data.expect,
   };
 }
@@ -834,10 +913,11 @@ function deserializeDmlOp(json: unknown): MongoDmlOperation {
     label: data.label,
     operationClass: data.operationClass,
     name: data.name,
+    ...ifDefined('invariantId', data.invariantId),
     ...ifDefined('meta', data.meta),
-    precheck: data.precheck.map(deserializeDmlCheck),
-    run: data.run.map(deserializeMongoQueryPlan),
-    postcheck: data.postcheck.map(deserializeDmlCheck),
+    precheck: readingEachAt('precheck', data.precheck, deserializeDmlCheck),
+    run: readingEachAt('run', data.run, deserializeMongoQueryPlan),
+    postcheck: readingEachAt('postcheck', data.postcheck, deserializeDmlCheck),
   };
 }
 
@@ -848,8 +928,79 @@ export function deserializeMongoOp(json: unknown): AnyMongoMigrationOperation {
   return deserializeDdlOp(json);
 }
 
-export function deserializeMongoOps(json: readonly unknown[]): AnyMongoMigrationOperation[] {
-  return json.map(deserializeMongoOp);
+/** Which migrations the operations being read belong to, in order, so a refusal can name one. */
+export interface MongoOperationsLocation {
+  readonly space?: string;
+  readonly migrations?: readonly Pick<
+    MigrationRunnerPerSpaceOptions['migrationEdges'][number],
+    'dirName' | 'operationCount'
+  >[];
+}
+
+function migrationPlaceOf(
+  index: number,
+  location: MongoOperationsLocation | undefined,
+): { readonly position: number; readonly migration: string | undefined } {
+  let start = 0;
+  for (const migration of location?.migrations ?? []) {
+    if (index < start + migration.operationCount) {
+      return { position: index - start, migration: migration.dirName };
+    }
+    start += migration.operationCount;
+  }
+  return { position: index, migration: undefined };
+}
+
+function operationIdOf(operation: unknown): string | undefined {
+  if (operation === null || typeof operation !== 'object') return undefined;
+  const id: unknown = Reflect.get(operation, 'id');
+  return typeof id === 'string' ? id : undefined;
+}
+
+function refusalOfOperation(
+  error: StructuredError,
+  operation: unknown,
+  index: number,
+  location: MongoOperationsLocation | undefined,
+): StructuredError {
+  const { position, migration } = migrationPlaceOf(index, location);
+  const operationId = operationIdOf(operation);
+  const path = pathOfRefusal(error).join('.');
+  const named = operationId === undefined ? '' : ` ("${operationId}")`;
+  const inMigration =
+    migration === undefined
+      ? ''
+      : `In migration "${migration}"${location?.space === undefined ? '' : ` of space "${location.space}"`}: `;
+  const { at: _place, ...innerMeta } = error.meta ?? {};
+  return mongoTargetError('MIGRATION.INVALID_OPERATION_ENTRY', error.message, {
+    why: `${inMigration}Operation ${position}${named} is not in a format this release of Prisma reads: ${path === '' ? '' : `at ${path}: `}${error.message}.`,
+    fix: "If the migration's migration.ts builds this operation, change it so the operation holds only the fields the format defines, and emit the migration again. If ops.json was edited by hand, restore it from version control. Otherwise Prisma wrote an operation it cannot read, which is a bug in Prisma: please report it with the operation.",
+    meta: {
+      ...innerMeta,
+      index: position,
+      ...ifDefined('operationId', operationId),
+      ...ifDefined('migration', migration),
+      ...ifDefined('space', location?.space),
+      ...(path === '' ? {} : { path }),
+      reason: error.message,
+    },
+    cause: error,
+  });
+}
+
+/** Reads the operations of a migration plan; a refusal names the operation, the migration `location` places it in, and the path of the refused part from the operation. */
+export function deserializeMongoOps(
+  json: readonly unknown[],
+  location?: MongoOperationsLocation,
+): AnyMongoMigrationOperation[] {
+  return json.map((operation, index) => {
+    try {
+      return deserializeMongoOp(operation);
+    } catch (error) {
+      if (!isInvalidEntry(error)) throw error;
+      throw refusalOfOperation(error, operation, index, location);
+    }
+  });
 }
 
 export function serializeMongoOps(ops: readonly AnyMongoMigrationOperation[]): string {

@@ -1,7 +1,7 @@
 {
   "name": "@internal/driver-postgres",
   "private": true,
-  "version": "8.0.0-rc.24",
+  "version": "8.0.0-rc.25",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
@@ -15,26 +15,26 @@
     "clean": "rm -rf dist dist-tsc dist-tsc-prod coverage .tmp-output"
   },
   "dependencies": {
-    "@internal/contract": "workspace:8.0.0-rc.24",
-    "@internal/errors": "workspace:8.0.0-rc.24",
-    "@internal/framework-components": "workspace:8.0.0-rc.24",
-    "@internal/sql-contract": "workspace:8.0.0-rc.24",
-    "@internal/sql-errors": "workspace:8.0.0-rc.24",
-    "@internal/sql-operations": "workspace:8.0.0-rc.24",
-    "@internal/sql-relational-core": "workspace:8.0.0-rc.24",
-    "@internal/target-postgres": "workspace:8.0.0-rc.24",
-    "@internal/utils": "workspace:8.0.0-rc.24",
+    "@internal/contract": "workspace:8.0.0-rc.25",
+    "@internal/errors": "workspace:8.0.0-rc.25",
+    "@internal/framework-components": "workspace:8.0.0-rc.25",
+    "@internal/sql-contract": "workspace:8.0.0-rc.25",
+    "@internal/sql-errors": "workspace:8.0.0-rc.25",
+    "@internal/sql-operations": "workspace:8.0.0-rc.25",
+    "@internal/sql-relational-core": "workspace:8.0.0-rc.25",
+    "@internal/target-postgres": "workspace:8.0.0-rc.25",
+    "@internal/utils": "workspace:8.0.0-rc.25",
     "@types/node": "catalog:",
-    "arktype": "^2.2.2",
-    "pg-connection-string": "^2.14.0",
-    "pg-cursor": "^2.21.0"
+    "arktype": "^2.2.9",
+    "pg-connection-string": "2.14.0",
+    "pg-cursor": "^2.22.1"
   },
   "devDependencies": {
-    "@electric-sql/pglite": "0.5.4",
-    "@electric-sql/pglite-socket": "0.2.7",
-    "@repo/test-utils": "workspace:8.0.0-rc.24",
-    "@repo/tsconfig": "workspace:8.0.0-rc.24",
-    "@repo/tsdown": "workspace:8.0.0-rc.24",
+    "@electric-sql/pglite": "0.5.16",
+    "@electric-sql/pglite-socket": "0.2.19",
+    "@repo/test-utils": "workspace:8.0.0-rc.25",
+    "@repo/tsconfig": "workspace:8.0.0-rc.25",
+    "@repo/tsdown": "workspace:8.0.0-rc.25",
     "@types/pg": "catalog:",
     "@types/pg-cursor": "^2.4.6",
     "pg": "catalog:",
@@ -59,6 +59,7 @@
     "src"
   ],
   "exports": {
+    "./capabilities": "./dist/capabilities.mjs",
     "./control": "./dist/control.mjs",
     "./runtime": "./dist/runtime.mjs",
     "./package.json": "./package.json"

@@ -87,7 +87,9 @@ async function loadPsl(parityCase: ParityCase) {
 async function emitContract(contract: Contract) {
   const normalized = mongoFamilyDescriptor
     .create(mongoStack)
-    .deserializeContract(enrichContract(contract, [mongoTargetDescriptor, mongoAdapter]));
+    .deserializeContract(
+      serializeContract(enrichContract(contract, [mongoTargetDescriptor, mongoAdapter])),
+    );
   return emit(normalized, mongoStack, mongoFamilyDescriptor.emission, {
     serializeContract,
     ...mongoContractCanonicalizationHooks,

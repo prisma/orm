@@ -1,10 +1,13 @@
 {
   "name": "@prisma/orm-sqlite",
-  "version": "8.0.0-rc.24",
+  "version": "8.0.0-rc.25",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
-  "description": "Prisma 8 for SQLite: the one package a SQLite application installs",
+  "description": "Prisma 8 for SQLite: the package a SQLite application installs for its database, beside the platform packages it names as peers",
+  "keywords": [
+    "prisma-orm-extension"
+  ],
   "files": [
     "dist",
     "skills"
@@ -16,24 +19,28 @@
     "clean": "rm -rf dist src-gen skills"
   },
   "dependencies": {
-    "@prisma/orm-family-sql": "workspace:8.0.0-rc.24",
-    "@prisma/orm-framework": "workspace:8.0.0-rc.24",
-    "@prisma/orm-target-sqlite": "workspace:8.0.0-rc.24",
-    "@prisma/orm-toolchain": "workspace:8.0.0-rc.24",
     "arktype": "catalog:",
     "pathe": "^2.0.3",
     "tinyglobby": "catalog:",
     "temporal-spec": "1.0.1"
   },
   "devDependencies": {
-    "@internal/sqlite": "workspace:8.0.0-rc.24",
-    "@repo/tsconfig": "workspace:8.0.0-rc.24",
-    "@repo/tsdown": "workspace:8.0.0-rc.24",
+    "@internal/sqlite": "workspace:8.0.0-rc.25",
+    "@prisma/orm-family-sql": "workspace:8.0.0-rc.25",
+    "@prisma/orm-framework": "workspace:8.0.0-rc.25",
+    "@prisma/orm-target-sqlite": "workspace:8.0.0-rc.25",
+    "@prisma/orm-toolchain": "workspace:8.0.0-rc.25",
+    "@repo/tsconfig": "workspace:8.0.0-rc.25",
+    "@repo/tsdown": "workspace:8.0.0-rc.25",
     "tsdown": "catalog:",
     "typescript": "catalog:"
   },
   "peerDependencies": {
-    "temporal-polyfill": "^1.0.4",
+    "@prisma/orm-family-sql": "workspace:8.0.0-rc.25",
+    "@prisma/orm-framework": "workspace:8.0.0-rc.25",
+    "@prisma/orm-target-sqlite": "workspace:8.0.0-rc.25",
+    "@prisma/orm-toolchain": "workspace:8.0.0-rc.25",
+    "temporal-polyfill": "^1.0.8",
     "typescript": ">=5.9"
   },
   "peerDependenciesMeta": {
@@ -70,8 +77,10 @@
     "./contract/contract-validation-error": "./dist/contract__contract-validation-error.mjs",
     "./contract/default-namespace": "./dist/contract__default-namespace.mjs",
     "./contract/enum-accessor": "./dist/contract__enum-accessor.mjs",
+    "./contract/format-version": "./dist/contract__format-version.mjs",
     "./contract/hashing": "./dist/contract__hashing.mjs",
     "./contract/hashing-utils": "./dist/contract__hashing-utils.mjs",
+    "./contract/internal/format-version": "./dist/contract__internal__format-version.mjs",
     "./contract/is-plain-record": "./dist/contract__is-plain-record.mjs",
     "./contract/resolve-domain-model": "./dist/contract__resolve-domain-model.mjs",
     "./contract/types": "./dist/contract__types.mjs",
@@ -97,6 +106,7 @@
     "./family-contract": "./dist/family-contract.mjs",
     "./family-contract/authored-check-naming": "./dist/family-contract__authored-check-naming.mjs",
     "./family-contract/canonicalization-hooks": "./dist/family-contract__canonicalization-hooks.mjs",
+    "./family-contract/capability-messages": "./dist/family-contract__capability-messages.mjs",
     "./family-contract/check-expressions": "./dist/family-contract__check-expressions.mjs",
     "./family-contract/codec-json-type": "./dist/family-contract__codec-json-type.mjs",
     "./family-contract/contract-view": "./dist/family-contract__contract-view.mjs",
@@ -118,6 +128,7 @@
     "./family-contract/value-set-derivation-hook": "./dist/family-contract__value-set-derivation-hook.mjs",
     "./family-runtime": "./dist/family-runtime.mjs",
     "./family-runtime/internal/prepared-query": "./dist/family-runtime__internal__prepared-query.mjs",
+    "./init": "./dist/init.mjs",
     "./migration": "./dist/migration.mjs",
     "./migration-tools/aggregate": "./dist/migration-tools__aggregate.mjs",
     "./migration-tools/contract-snapshot-store": "./dist/migration-tools__contract-snapshot-store.mjs",
@@ -169,6 +180,7 @@
     "./utils/canonical-stringify": "./dist/utils__canonical-stringify.mjs",
     "./utils/casts": "./dist/utils__casts.mjs",
     "./utils/defined": "./dist/utils__defined.mjs",
+    "./utils/guards": "./dist/utils__guards.mjs",
     "./utils/hash-content": "./dist/utils__hash-content.mjs",
     "./utils/internal-error": "./dist/utils__internal-error.mjs",
     "./utils/json": "./dist/utils__json.mjs",
@@ -180,6 +192,7 @@
     "./utils/suppress-idle-connection-errors": "./dist/utils__suppress-idle-connection-errors.mjs",
     "./utils/text": "./dist/utils__text.mjs",
     "./utils/types": "./dist/utils__types.mjs",
+    "./utils/upgrade-guides": "./dist/utils__upgrade-guides.mjs",
     "./vite-plugin-contract-emit": "./dist/vite-plugin-contract-emit.mjs",
     "./package.json": "./package.json"
   },

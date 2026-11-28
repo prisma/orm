@@ -23,6 +23,7 @@ import {
 } from '../../src/orm/project-modules';
 import { declareAddedPackages } from '../utils/fake-package-manager';
 import { fixtureContribution } from '../utils/fixture-contribution';
+import { noRegistryLookup, noRegistryPeersLookup } from '../utils/registry-keywords';
 import { createTestProjectDir } from '../utils/test-project-dir';
 
 let projectDir: string;
@@ -56,6 +57,8 @@ function harness(loadInit: ImportFromProject = importFromProject) {
       emitScaffoldedContract: vi.fn().mockResolvedValue(undefined),
       importFromProject: (cwd, specifier) =>
         specifier.endsWith('/init') ? loadInit(cwd, specifier) : importFromProject(cwd, specifier),
+      lookUpRegistryKeywords: noRegistryLookup,
+      lookUpRegistryPeers: noRegistryPeersLookup,
     }),
   };
   return createTestCli({
@@ -118,9 +121,9 @@ function writePackage(
   }
 }
 
-describe('init takes the project from the target package', () => {
+describe('init takes the project from the facade', () => {
   it(
-    'installs the target package before it asks anything about the project',
+    'installs the facade before it asks anything about the project',
     async () => {
       script = [{ exitCode: 1, stderr: 'ENOTFOUND registry.npmjs.org' }];
 
@@ -142,7 +145,7 @@ describe('init takes the project from the target package', () => {
   );
 
   it(
-    'stops with no file written when the install of the target package fails',
+    'stops with no file written when the install of the facade fails',
     async () => {
       script = [{ exitCode: 1, stderr: 'ENOTFOUND registry.npmjs.org' }];
 
@@ -178,7 +181,7 @@ describe('init takes the project from the target package', () => {
   );
 
   it(
-    'stops under --skip-install with no file written and names the install command when the target package is not installed',
+    'stops under --skip-install with no file written and names the install command when the facade is not installed',
     async () => {
       const run = await harness(loadsAs({ kind: 'not-installed' })).run(
         [...STARTER, '--skip-install'],
@@ -231,7 +234,7 @@ describe('init takes the project from the target package', () => {
   );
 
   it(
-    'leaves a declared, installed target package out of the install before the questions',
+    'leaves a declared, installed facade out of the install before the questions',
     async () => {
       const manifest = {
         name: 'app',
@@ -262,7 +265,7 @@ describe('init takes the project from the target package', () => {
   );
 
   it(
-    'never asks the package manager for a declared, installed target package, through to the end',
+    'never asks the package manager for a declared, installed facade, through to the end',
     async () => {
       writeProjectFile(
         'package.json',
@@ -327,7 +330,7 @@ describe('init takes the project from the target package', () => {
   );
 
   it(
-    'names a declared target package whose range the install rewrote, with its old range',
+    'names a declared facade whose range the install rewrote, with its old range',
     async () => {
       const outside = mkdtempSync(join(tmpdir(), 'orm-init-declared-target-'));
       try {

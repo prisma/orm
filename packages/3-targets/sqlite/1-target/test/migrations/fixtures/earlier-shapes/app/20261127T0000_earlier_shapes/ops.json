@@ -1,0 +1,49 @@
+[
+  {
+    "id": "table.User.rebuild",
+    "label": "Rebuild table \"User\"",
+    "operationClass": "destructive",
+    "target": {
+      "id": "sqlite",
+      "details": { "schema": "main", "objectType": "table", "name": "User" }
+    },
+    "precheck": [],
+    "execute": [
+      {
+        "description": "copy rows into the rebuilt \"User\"",
+        "sql": "INSERT INTO \"_new_User\" SELECT CAST(\"age\" AS INTEGER) FROM \"User\"",
+        "meta": {
+          "conversionCopy": {
+            "table": "User",
+            "expressions": { "age": "CAST(\"age\" AS INTEGER)" }
+          }
+        }
+      }
+    ],
+    "postcheck": []
+  },
+  {
+    "id": "removeStoredValue.task.state.archived",
+    "label": "Remove value \"archived\" from column \"state\" of \"task\"",
+    "operationClass": "destructive",
+    "target": {
+      "id": "sqlite",
+      "details": { "objectType": "column", "name": "state", "table": "task" }
+    },
+    "precheck": [
+      {
+        "description": "ensure column \"state\" of \"task\" takes NULL, or no row holds \"archived\" in it",
+        "sql": "SELECT true AS result",
+        "params": ["archived"],
+        "meta": {
+          "rowsHoldingValue": {
+            "enumValue": { "enum": "Status", "member": "ARCHIVED" },
+            "value": "archived"
+          }
+        }
+      }
+    ],
+    "execute": [],
+    "postcheck": []
+  }
+]

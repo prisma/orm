@@ -1,7 +1,7 @@
 {
   "name": "@internal/type-implementations",
   "private": true,
-  "version": "8.0.0-rc.24",
+  "version": "8.0.0-rc.25",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
@@ -19,9 +19,9 @@
     "temporal-spec": "1.0.1"
   },
   "devDependencies": {
-    "@repo/tsconfig": "workspace:8.0.0-rc.24",
-    "@repo/tsdown": "workspace:8.0.0-rc.24",
-    "temporal-polyfill": "^1.0.4",
+    "@repo/tsconfig": "workspace:8.0.0-rc.25",
+    "@repo/tsdown": "workspace:8.0.0-rc.25",
+    "temporal-polyfill": "^1.0.8",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
@@ -43,6 +43,7 @@
     "./date": "./dist/date.mjs",
     "./decimal": "./dist/decimal.mjs",
     "./duration": "./dist/duration.mjs",
+    "./json": "./dist/json.mjs",
     "./now": "./dist/now.mjs",
     "./temporal": "./dist/temporal.mjs",
     "./temporal-text": "./dist/temporal-text.mjs",

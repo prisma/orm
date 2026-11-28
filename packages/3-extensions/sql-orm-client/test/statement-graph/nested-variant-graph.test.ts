@@ -27,6 +27,8 @@ interface FilteredMutator {
   where(filter: unknown): FilteredMutator;
   updateAll(data: object): unknown;
   deleteAll(): unknown;
+  update(data: object): unknown;
+  delete(): unknown;
 }
 
 interface VariantMutator {
@@ -397,7 +399,8 @@ describe('a nested create of a variant stored in its own table', () => {
       ),
     ).toMatchObject({
       code: 'ORM.CAPABILITY_MISSING',
-      message: 'create() requires contract capability "returning"',
+      message:
+        "`create()` is unavailable: your contract declares no dependency on `sql.returning`. To enable it, add `sql.returning` to your contract's required capabilities.",
       meta: { capability: 'returning', action: 'create()' },
     });
   });
@@ -604,19 +607,54 @@ describe('connect and disconnect on a variant stored in its own table', () => {
 });
 
 describe('disconnect on a variant', () => {
-  it('is refused on a relation the parent holds the key for while the graph is built', () => {
+  it('adds no Update for an explicit empty list of criteria', () => {
     expect(
-      thrownBy(() =>
+      [
+        updateOf('TaskComment', {
+          task: (task: VariantMutator) => task.variant('bug').disconnect([]),
+        }),
+        updateOf('Project', {
+          tasks: (tasks: VariantMutator) => tasks.variant('bug').disconnect([]),
+        }),
+      ].map((graph) => printGraph(graph)),
+    ).toEqual([
+      ['n1 Find task_comments where id = 1', 'result: n1'].join('\n'),
+      ['n1 Find projects_tbl where id = 1', 'result: n1'].join('\n'),
+    ]);
+  });
+
+  it('unlinks the parent only when the linked row is of the variant, on a variant stored in the base table', () => {
+    expect(
+      printGraph(
         updateOf('TaskComment', {
           task: (task: VariantMutator) => task.variant('bug').disconnect(),
         }),
       ),
-    ).toMatchObject({
-      code: 'ORM.OPERATION_UNSUPPORTED',
-      message:
-        'disconnect() nested mutation for relation "task" is not available on a variant, because the parent holds the key of the related row',
-      meta: { kind: 'disconnect', relation: 'task', reason: 'variant-parent-owned' },
-    });
+    ).toBe(
+      [
+        'n1 Find task_comments where id = 1',
+        "n2 Update task_comments set task_id = null where task_id in (select id from tasks where type = 'bug') <- FilterData n1 (id->id)",
+        'n3 Find task_comments <- FilterData n1 (id->id)',
+        'result: n3',
+      ].join('\n'),
+    );
+  });
+
+  it('unlinks the parent only when the linked row is of the variant and matches the criteria, on a variant stored in its own table', () => {
+    expect(
+      printGraph(
+        updateOf('TaskComment', {
+          task: (task: VariantMutator) => task.variant('feature').disconnect([{ id: 2 }]),
+        }),
+      ),
+    ).toBe(
+      [
+        'n1 Find task_comments where id = 1',
+        `n2 Update task_comments set task_id = null where task_id in (select id from tasks where ${featureTwo}) <- FilterData n1 (id->id)`,
+        'n3 Find task_comments <- FilterData n1 (id->id)',
+        'result: n3',
+      ].join('\n'),
+    );
   });
 
   it('is refused on a relation the child holds the key for when that key is required', () => {
@@ -669,6 +707,81 @@ describe('disconnect on a variant', () => {
 
 const featureExists = (condition: string) =>
   `exists (select id from tasks tasks_2 inner join features on tasks_2.id = features.id where (id = tasks.id and tasks.type = 'feature'${condition}))`;
+
+describe('update and delete on a variant', () => {
+  it('find the first row of the variant the filter matches among the children of the parent', () => {
+    expect(
+      printGraph(
+        updateOf('Project', {
+          tasks: (tasks: VariantMutator) => [
+            tasks.variant('bug').where({ title: 'Crash' }).update({ title: 'Seen' }),
+            tasks.variant('feature').where({ title: 'Search' }).delete(),
+          ],
+        }),
+      ),
+    ).toBe(
+      [
+        'n1 Find projects_tbl where id = 1',
+        "n2 Find tasks where type = 'bug' and title = 'Crash' limit 1 <- FilterData n1 (id->project_id)",
+        "n3 Update tasks set title = 'Seen' where type = 'bug' and title = 'Crash' <- FilterData n2 (id->id), FilterData n1 (id->project_id)",
+        "n4 Find tasks where type = 'feature' and title = 'Search' limit 1 <- FilterData n1 (id->project_id)",
+        `n5 Delete tasks where ${featureExists(" and tasks.title = 'Search'")} <- FilterData n4 (id->id), FilterData n1 (id->project_id)`,
+        'result: n1',
+      ].join('\n'),
+    );
+  });
+
+  it('update the linked row of a relation the parent holds the key for only when it is of the variant', () => {
+    expect(
+      printGraph(
+        updateOf('TaskComment', {
+          task: (task: VariantMutator) => task.variant('bug').update({ title: 'Seen' }),
+        }),
+      ),
+    ).toBe(
+      [
+        'n1 Find task_comments where id = 1',
+        "n2 Find tasks where type = 'bug' limit 1 <- JunctionFilterData n1 (id->id; task_comments task_id->id)",
+        "n3 Update tasks set title = 'Seen' where type = 'bug' <- FilterData n2 (id->id), JunctionFilterData n1 (id->id; task_comments task_id->id)",
+        'result: n1',
+      ].join('\n'),
+    );
+  });
+
+  it('delete the linked row of a relation the parent holds the key for only when it is of the variant', () => {
+    expect(
+      printGraph(
+        updateOf('TaskComment', {
+          task: (task: VariantMutator) => task.variant('feature').delete(),
+        }),
+      ),
+    ).toBe(
+      [
+        'n1 Find task_comments where id = 1',
+        "n2 Find tasks where type = 'feature' limit 1 <- JunctionFilterData n1 (id->id; task_comments task_id->id)",
+        'n3 Update task_comments set task_id = null <- FilterData n1 (id->id), FilterData n2 (id->task_id)',
+        'n4 Delete tasks <- FilterData n2 (id->id)',
+        'n5 Find task_comments <- FilterData n1 (id->id)',
+        'result: n5',
+      ].join('\n'),
+    );
+  });
+
+  it('refuses update() without where() on a to-many relation', () => {
+    expect(
+      thrownBy(() =>
+        updateOf('Project', {
+          tasks: (tasks: VariantMutator) => tasks.variant('bug').update({ title: 'Seen' }),
+        }),
+      ),
+    ).toMatchObject({
+      code: 'ORM.ARGUMENT_INVALID',
+      message:
+        'update() nested mutation for relation "tasks" requires where() on a to-many relation',
+      meta: { kind: 'update', relation: 'tasks', problem: 'missing-where' },
+    });
+  });
+});
 
 describe('updateAll and deleteAll on a variant', () => {
   it('add the discriminator and filter by fields of a variant stored in the base table on 1:N', () => {
@@ -805,7 +918,7 @@ describe('the discriminator in update data', () => {
     expect(runtime.executions).toEqual([]);
   });
 
-  it('is refused in nested updateAll data, with and without variant()', () => {
+  it('is refused in nested updateAll and update data, with and without variant()', () => {
     const errors = [
       (tasks: VariantMutator & FilteredMutator) => tasks.updateAll({ type: 'bug' }),
       (tasks: VariantMutator & FilteredMutator) =>
@@ -813,6 +926,8 @@ describe('the discriminator in update data', () => {
       (tasks: VariantMutator) => tasks.variant('feature').updateAll({ type: 'bug' }),
       (tasks: VariantMutator) =>
         tasks.variant('bug').where({ title: 'Crash' }).updateAll({ type: 'feature' }),
+      (tasks: VariantMutator) =>
+        tasks.variant('bug').where({ title: 'Crash' }).update({ type: 'feature' }),
     ].map((tasks) => thrownBy(() => updateOf('Project', { tasks })));
 
     expect(errors).toMatchObject(errors.map(() => refusal));

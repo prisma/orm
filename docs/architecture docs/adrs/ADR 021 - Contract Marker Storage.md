@@ -1,6 +1,6 @@
 # ADR 021 — Contract marker storage & verification modes
 
-**Status:** Accepted. [ADR 320](ADR%20320%20-%20Databases%20record%20a%20change%20policy%20and%20a%20data%20protection%20policy.md) adds `meta.policies`, the policies in force, and requires every marker write to preserve the `meta` keys it does not own.
+**Status:** Accepted. [ADR 320](ADR%20320%20-%20Databases%20record%20a%20change%20policy%20and%20a%20data%20protection%20policy.md) adds `meta.policies`, the policies in force, and requires every marker write to preserve the `meta` keys it does not own. [ADR 333](ADR%20333%20-%20The%20runtime's%20marker%20check%20only%20warns.md) supersedes what this record says the runtime does when the marker cannot be read or decoded, and its strict-mode refusals: the runtime's check only warns.
 
 ## Context
 
@@ -187,6 +187,8 @@ createRunner({
 ### Runtime read-side behaviour (TML-2680)
 
 The SQL runtime's marker read path no longer throws on hash mismatch or absent marker. Instead, on the first `execute()` call per runtime (unless `verifyMarker: false`), the runtime emits a structured `warn`-level log line with `code: 'CONTRACT.MARKER_MISMATCH'` or `code: 'CONTRACT.MARKER_MISSING'` and proceeds with the query. The check runs **once per runtime instance**; subsequent queries skip the marker read entirely. The marker write path and the explicit `db-verify` CLI verification surface are unchanged. Operators who need fail-fast verification should use `db-verify`; the runtime's role is a silent diagnostic during normal query execution.
+
+Amended 2026-11-20: the read runs before the runtime's first use of the database: its first statement, or a connection taken to hold (by `connection()`, a transaction, or a subclass's raw connection such as a Supabase role session), whichever comes first. It always goes through the driver. Before, it ran at the first statement, when a caller could already hold a connection. On a pool with no connection to spare, the read then could not get one: a Supabase role-bound query waited for the connection it held itself, and on a PostgreSQL pool of one a first query's read and a first transaction waited for each other. The calls failed when the pool's connection timeout ended. A read that cannot reach the database still fails the call with `CONTRACT.MARKER_READ_FAILED`; only drift is a logged diagnostic.
 
 ## Testing
 - Migration runner tests that marker is updated atomically with edge apply

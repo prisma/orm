@@ -4,6 +4,7 @@ import { join } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   contractSnapshotDir,
+  hasContractSnapshot,
   readContractSnapshotJson,
   readContractSnapshotJsonTolerant,
   writeContractSnapshot,
@@ -15,7 +16,7 @@ const STORAGE_HASH = HASH_HEX;
 const OTHER_HASH = 'b'.repeat(64);
 
 function contractFixture(storageHash: string) {
-  return { storage: { storageHash }, target: 'postgres' };
+  return { formatVersion: 1, storage: { storageHash }, target: 'postgres' };
 }
 
 describe('writeContractSnapshot', () => {
@@ -41,7 +42,7 @@ describe('writeContractSnapshot', () => {
     const json = await readFile(join(result.dir, 'contract.json'), 'utf-8');
     // Canonicalized: object keys sorted lexicographically at every level.
     expect(json).toBe(
-      '{"storage":{"storageHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},"target":"postgres"}\n',
+      '{"formatVersion":1,"storage":{"storageHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},"target":"postgres"}\n',
     );
 
     const dts = await readFile(join(result.dir, 'contract.d.ts'), 'utf-8');
@@ -96,7 +97,7 @@ describe('writeContractSnapshot', () => {
     );
 
     const second = await writeContractSnapshot(migrationsDir, STORAGE_HASH, {
-      contractJson: { storage: { storageHash: STORAGE_HASH }, target: 'sqlite' },
+      contractJson: { formatVersion: 1, storage: { storageHash: STORAGE_HASH }, target: 'sqlite' },
       contractDts: 'export type Contract = { different: true };',
     });
 
@@ -115,6 +116,16 @@ describe('writeContractSnapshot', () => {
     expect(afterDts).toBe(beforeDts);
   });
 
+  it('says whether the store holds a snapshot for a hash', async () => {
+    expect(await hasContractSnapshot(migrationsDir, STORAGE_HASH)).toBe(false);
+    await writeContractSnapshot(migrationsDir, STORAGE_HASH, {
+      contractJson: contractFixture(STORAGE_HASH),
+      contractDts: 'export {};',
+    });
+    expect(await hasContractSnapshot(migrationsDir, STORAGE_HASH)).toBe(true);
+    expect(await hasContractSnapshot(migrationsDir, OTHER_HASH)).toBe(false);
+  });
+
   it('throws MIGRATION.CONTRACT_SNAPSHOT_HASH_MISMATCH when the contract inner hash disagrees', async () => {
     await expect(
       writeContractSnapshot(migrationsDir, STORAGE_HASH, {
@@ -126,6 +137,26 @@ describe('writeContractSnapshot', () => {
         code: 'MIGRATION.CONTRACT_SNAPSHOT_HASH_MISMATCH',
       }),
     );
+  });
+
+  it('refuses to write a contract that has no format version, and writes nothing', async () => {
+    const { formatVersion: _, ...withoutVersion } = contractFixture(STORAGE_HASH);
+    await expect(
+      writeContractSnapshot(migrationsDir, STORAGE_HASH, {
+        contractJson: withoutVersion,
+        contractDts: 'export type Contract = {};',
+      }),
+    ).rejects.toThrow(expect.objectContaining({ code: 'CONTRACT.FORMAT_VERSION_MISSING' }));
+    expect(await hasContractSnapshot(migrationsDir, STORAGE_HASH)).toBe(false);
+  });
+
+  it('refuses to write a contract in a format version this release does not know', async () => {
+    await expect(
+      writeContractSnapshot(migrationsDir, STORAGE_HASH, {
+        contractJson: { ...contractFixture(STORAGE_HASH), formatVersion: 2 },
+        contractDts: 'export type Contract = {};',
+      }),
+    ).rejects.toThrow(expect.objectContaining({ code: 'CONTRACT.FORMAT_VERSION_NEWER' }));
   });
 
   it('throws a plain Error on a malformed storageHash', async () => {

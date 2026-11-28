@@ -8,6 +8,7 @@ import type { ChangedStorageEntity } from '../../control-api/operations/changed-
 import type { AppliedStatementReport } from '../../control-api/statements/report-applied-statements';
 import type { TemporaryValueReport } from '../../control-api/statements/temporary-values';
 import type { PerSpaceExecutionEntry } from '../../control-api/types';
+import type { DataProtectionKey } from '../policy-settings';
 
 /**
  * Render a single statement of an `OperationPreview` for the human-readable
@@ -118,6 +119,8 @@ export interface MigrationCommandResult {
   readonly dataLoss?: readonly PlannedSubjectJson[];
   /** `db update --dry-run` only: the operations an apply would ask about because they change access. */
   readonly accessChanges?: readonly PlannedSubjectJson[];
+  /** `db update` only: the data protection settings at their `permitted` level, so an apply asks nothing about the operations they cover. */
+  readonly permitted?: readonly DataProtectionKey[];
   /** `db update --dry-run` only: the namespaces the plan removes, each answered by a `--delete` of it. */
   readonly removedNamespaces?: readonly RemovedNamespaceJson[];
   /** `db update --dry-run` only: the namespaces the destination adds, which a rename of a removed one may name. */

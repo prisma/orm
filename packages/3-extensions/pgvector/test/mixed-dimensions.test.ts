@@ -1,4 +1,4 @@
-import { defineContract } from '@internal/postgres/contract-builder';
+import { defineContract, postgres18, postgresDriver } from '@internal/postgres/contract-builder';
 import postgresStatic from '@internal/postgres/static';
 import { deriveParamMetadata, encodeParamsWithMetadata } from '@internal/sql-runtime';
 import { describe, expect, it } from 'vitest';
@@ -6,17 +6,20 @@ import { vector } from '../src/exports/column-types';
 import pgvector from '../src/exports/pack';
 import pgvectorRuntime from '../src/exports/runtime';
 
-const contract = defineContract({ extensions: { pgvector } }, ({ field, model, type }) => ({
-  models: {
-    Doc: model('Doc', {
-      fields: {
-        id: field.column(type.Char(36)).id(),
-        anyLength: field.column(vector()),
-        fixed: field.column(vector(3)),
-      },
-    }),
-  },
-}));
+const contract = defineContract(
+  { requiredCapabilities: [...postgres18, ...postgresDriver], extensions: { pgvector } },
+  ({ field, model, type }) => ({
+    models: {
+      Doc: model('Doc', {
+        fields: {
+          id: field.column(type.Char(36)).id(),
+          anyLength: field.column(vector()),
+          fixed: field.column(vector(3)),
+        },
+      }),
+    },
+  }),
+);
 
 function encodeInsert(row: { anyLength: number[]; fixed: number[] }) {
   const { sql, context } = postgresStatic({ contract, extensions: [pgvectorRuntime] });

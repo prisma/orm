@@ -2,8 +2,9 @@
  * Shared helpers for family.schema-verify tests.
  */
 import postgresAdapter from '@internal/adapter-postgres/control';
+import { isContractBuiltInMemory } from '@internal/contract/internal/format-version';
 import type { Contract } from '@internal/contract/types';
-import postgresDriver from '@internal/driver-postgres/control';
+import postgresDriverDescriptor from '@internal/driver-postgres/control';
 import sql, { type SqlControlFamilyInstance } from '@internal/family-sql/control';
 import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
 import type { ControlExtensionDescriptor } from '@internal/framework-components/control';
@@ -22,6 +23,8 @@ export {
   field,
   model,
   now,
+  postgres18,
+  postgresDriver,
   rel,
 } from '@internal/postgres/contract-builder';
 export type { CodecTypes } from '@internal/target-postgres/codec-types';
@@ -31,7 +34,7 @@ export {
   PostgresContractSerializer,
   postgres,
   postgresAdapter,
-  postgresDriver,
+  postgresDriverDescriptor,
   sql,
   timeouts,
   withClient,
@@ -75,7 +78,7 @@ export function createFamilyInstance(
       family: sql,
       target: postgres,
       adapter: postgresAdapter,
-      driver: postgresDriver,
+      driver: postgresDriverDescriptor,
       extensions: extensions,
     }),
   );
@@ -86,9 +89,9 @@ export function createFamilyInstance(
  */
 export async function withDriver<T>(
   connectionString: string,
-  callback: (driver: Awaited<ReturnType<typeof postgresDriver.create>>) => Promise<T>,
+  callback: (driver: Awaited<ReturnType<typeof postgresDriverDescriptor.create>>) => Promise<T>,
 ): Promise<T> {
-  const driver = await postgresDriver.create(connectionString);
+  const driver = await postgresDriverDescriptor.create(connectionString);
   try {
     return await callback(driver);
   } finally {
@@ -109,8 +112,11 @@ export async function runSchemaVerify(
 ) {
   return withDriver(connectionString, async (driver) => {
     const familyInstance = createFamilyInstance(options.extensions);
-    const validatedContract = new PostgresContractSerializer().deserializeContract(
-      contract,
+    const serializer = new PostgresContractSerializer();
+    const validatedContract = serializer.deserializeContract(
+      isContractBuiltInMemory(contract)
+        ? serializer.serializeContract(contract as Contract<SqlStorage>)
+        : contract,
     ) as Contract<SqlStorage>;
     const frameworkComponents: ReadonlyArray<TargetBoundComponentDescriptor<'sql', 'postgres'>> = [
       postgres,

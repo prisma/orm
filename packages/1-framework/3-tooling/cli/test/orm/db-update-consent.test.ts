@@ -1,5 +1,6 @@
-import { rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { asNamespaceId } from '@internal/contract/types';
+import { writeRef } from '@internal/migration-tools/refs';
 import { ok } from '@internal/utils/result';
 import type { StreamEvent } from '@prisma/cli-engine';
 import { join } from 'pathe';
@@ -129,7 +130,7 @@ beforeEach(() => {
   writeProjectManifest(projectDir);
   writeFileSync(
     join(projectDir, 'contract.json'),
-    JSON.stringify({ storage: { storageHash: MARKER_HASH } }),
+    JSON.stringify({ formatVersion: 1, storage: { storageHash: MARKER_HASH } }),
   );
   writeFileSync(join(projectDir, 'contract.d.ts'), 'export type Contract = never;\n');
   answers.splice(0);
@@ -329,6 +330,10 @@ describe('db update questions', () => {
 
   it('refuses --backfill before it plans anything, naming migration plan and keeping a two-name --convert for the control API to resolve', async () => {
     mocks.readMarker.mockResolvedValueOnce({ storageHash: 'c'.repeat(64) });
+    await writeRef(join(projectDir, 'migrations', 'app', 'refs'), 'db', {
+      hash: 'c'.repeat(64),
+      invariants: [],
+    });
     const run = await harness().run(
       [
         'db',
@@ -353,7 +358,7 @@ describe('db update questions', () => {
         nextActions: [
           expect.objectContaining({
             command:
-              'prisma-test migration plan --rename User.years:User.age --convert User.age --backfill User.email',
+              'prisma-test migration plan --from db --rename User.years:User.age --convert User.age --backfill User.email',
           }),
           expect.anything(),
         ],
@@ -361,6 +366,60 @@ describe('db update questions', () => {
       },
     });
     expect(mocks.dbUpdate).not.toHaveBeenCalled();
+  });
+
+  it('names the migration it could not read when it cannot suggest a migration plan', async () => {
+    mocks.readMarker.mockResolvedValueOnce({ storageHash: 'c'.repeat(64) });
+    const packageDir = join(projectDir, 'migrations', 'app', '20260101T0000_init');
+    mkdirSync(packageDir, { recursive: true });
+    writeFileSync(join(packageDir, 'migration.json'), '{ not json');
+    writeFileSync(join(packageDir, 'ops.json'), '[]');
+    const run = await harness().run(['db', 'update', '--backfill', 'User.email', '--json'], {
+      cwd: projectDir,
+    });
+
+    expect(JSON.stringify(envelopeOf(run.json))).toContain(
+      `The CLI could not read the migrations: Failed to parse \\"${join(packageDir, 'migration.json')}\\"`,
+    );
+  });
+
+  it('warns that it plans without the origin snapshot it could not read, in words for every family', async () => {
+    const snapshotPath = join(projectDir, 'migrations', 'snapshots', MARKER_HASH, 'contract.json');
+    mocks.dbUpdate.mockImplementation(async (options: DbUpdateOptions) => {
+      options.onUnreadableOrigin?.({ path: snapshotPath, reason: 'zzz must be removed' });
+      return ok(applySuccess(options.mode));
+    });
+
+    const run = await harness().run(['db', 'update', '--dry-run', '--json'], { cwd: projectDir });
+
+    expect(run.exitCode).toBe(0);
+    expect(run.events).toContainEqual({
+      kind: 'message',
+      severity: 'warn',
+      text: `Could not read the contract snapshot migrations/snapshots/${MARKER_HASH}/contract.json, which holds the contract the database is at: zzz must be removed. db update plans without it, so the questions about data it would lose name what they remove by its storage name, and a rename statement cannot be resolved.`,
+    });
+  });
+
+  it('warns about a migration the run applies whose snapshot it cannot read, since the database records no contract for it', async () => {
+    const snapshotPath = join(projectDir, 'migrations', 'snapshots', MARKER_HASH, 'contract.json');
+    mocks.dbUpdate.mockImplementation(async (options: DbUpdateOptions) => {
+      options.onUnrecordedSnapshot?.({
+        spaceId: 'pgvector',
+        dirName: '20260101T0000_init',
+        path: snapshotPath,
+        reason: 'not JSON',
+      });
+      return ok(applySuccess(options.mode));
+    });
+
+    const run = await harness().run(['db', 'update', '--json'], { cwd: projectDir });
+
+    expect(run.exitCode).toBe(0);
+    expect(run.events).toContainEqual({
+      kind: 'message',
+      severity: 'warn',
+      text: `Could not read the contract snapshot migrations/snapshots/${MARKER_HASH}/contract.json, where the migration pgvector/20260101T0000_init ends: not JSON. db update applies that migration, but the database records no contract for it. Restore the file from version control.`,
+    });
   });
 
   it('refuses --convert and --backfill within a few seconds when the database never answers', async () => {
@@ -374,10 +433,10 @@ describe('db update questions', () => {
     expect(envelopeOf(run.json)).toMatchObject({
       error: {
         code: 'MIGRATION.STATEMENT_NEEDS_MIGRATION_FILE',
-        nextActions: [
-          expect.objectContaining({ command: 'prisma-test migration plan --backfill User.email' }),
-          expect.anything(),
-        ],
+        why: expect.stringContaining(
+          'The CLI could not read the database within 3 seconds to find the contract it is at. A plan from `@empty` creates every model, so its statements name nothing it can resolve.',
+        ),
+        nextActions: [{ kind: 'user-choice', label: 'Run db update without these statements' }],
       },
     });
   }, 10_000);
@@ -391,10 +450,10 @@ describe('db update questions', () => {
     expect(envelopeOf(run.json)).toMatchObject({
       error: {
         code: 'MIGRATION.STATEMENT_NEEDS_MIGRATION_FILE',
-        nextActions: [
-          expect.objectContaining({ command: 'prisma-test migration plan --backfill User.email' }),
-          expect.anything(),
-        ],
+        why: expect.stringContaining(
+          'The CLI could not read the database: connect ECONNREFUSED 127.0.0.1:1. A plan from `@empty` creates every model, so its statements name nothing it can resolve.',
+        ),
+        nextActions: [{ kind: 'user-choice', label: 'Run db update without these statements' }],
       },
     });
     expect(mocks.connect).toHaveBeenCalledWith(expect.anything(), {

@@ -1,6 +1,6 @@
 import { asNamespaceId, type ContractWithDomain } from '@internal/contract/types';
 import type { MigrationSubject } from '@internal/framework-components/control';
-import { isSqlModelStorage } from './statement-planning';
+import { isSqlModelStorage } from './model-storage';
 
 /**
  * The field of `contract` that stores `column` of `table`, or undefined when no field stores it or

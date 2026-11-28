@@ -14,7 +14,13 @@
  */
 
 import type { SupabaseDb } from '@internal/extension-supabase/runtime';
-import { defineContract, field, model } from '@internal/postgres/contract-builder';
+import {
+  defineContract,
+  field,
+  model,
+  postgres18,
+  postgresDriver,
+} from '@internal/postgres/contract-builder';
 import { expectTypeOf, test } from 'vitest';
 import supabasePack from '../src/exports/pack';
 
@@ -27,6 +33,7 @@ const Item = model('Item', {
 }).sql({ table: 'item' });
 
 const appContract = defineContract({
+  requiredCapabilities: [...postgres18, ...postgresDriver],
   extensions: { supabase: supabasePack },
   models: { Item },
 });

@@ -3,6 +3,8 @@
  * from, or the schema a migration's earlier renames leave behind.
  */
 export interface SchemaTables {
+  /** Whether the database takes two table or column names for one, as `tablesNamed` and `columnsNamed` do. */
+  sameName(left: string, right: string): boolean;
   hasTable(namespaceId: string, table: string): boolean;
   hasColumn(namespaceId: string, table: string, column: string): boolean;
   /**

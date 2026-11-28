@@ -101,7 +101,6 @@ import type {
   ModelFragmentReceiver,
   Ordered,
   QueryFragment,
-  // biome-ignore lint/correctness/noUnusedImports: used in `declare` properties
   RowType,
   TypeState,
   UniquelyFiltered,
@@ -2140,6 +2139,7 @@ export class CollectionBase<
       { action: method, modelName: this.modelName, meta: { method, model: this.modelName } },
       this.namespaceId,
       options,
+      ['skip'],
       createAll
         ? variantInOwnTableOf(
             this.contract,

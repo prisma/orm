@@ -10,9 +10,14 @@ import sql from '@internal/family-sql/control';
 import { createControlStack } from '@internal/framework-components/control';
 import type { MongoContract } from '@internal/mongo-contract';
 import { mongoContract } from '@internal/mongo-contract-psl/provider';
+import {
+  postgres18,
+  postgresContractCapabilities,
+  postgresDriver,
+} from '@internal/postgres/config';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { prismaContract } from '@internal/sql-contract-psl/provider';
-import { mongoTargetDescriptor } from '@internal/target-mongo/control';
+import { type MongoTargetContract, mongoTargetDescriptor } from '@internal/target-mongo/control';
 import mongoTargetPack from '@internal/target-mongo/pack';
 import postgres from '@internal/target-postgres/control';
 import postgresPackRef from '@internal/target-postgres/pack';
@@ -73,10 +78,11 @@ export interface SqlAuthoringResult {
   readonly contract?: Contract<SqlStorage>;
 }
 
-/** Authors PSL through the production provider + enrichment path the CLI uses. */
+/** Authors PSL through the production provider, enrichment and serialization path the CLI uses. */
 export async function authorSqlContractFromPsl(schema: string): Promise<SqlAuthoringResult> {
   const schemaPath = writeSchemaToTempFile(schema);
   const provider = prismaContract(schemaPath, {
+    capabilities: postgresContractCapabilities([...postgres18, ...postgresDriver]),
     target: postgresPackRef,
     createNamespace: postgresCreateNamespace,
   });
@@ -92,7 +98,9 @@ export async function authorSqlContractFromPsl(schema: string): Promise<SqlAutho
 
   const familyInstance = sql.create(sqlStack);
   const contract = familyInstance.deserializeContract(
-    enrichContract(providerResult.value, postgresFrameworkComponents),
+    postgres.contractSerializer.serializeContract(
+      enrichContract(providerResult.value, postgresFrameworkComponents) as Contract<SqlStorage>,
+    ),
   ) as Contract<SqlStorage>;
 
   return { ok: true, diagnostics: [], contract };
@@ -141,7 +149,9 @@ export async function authorMongoContractFromPsl(schema: string): Promise<MongoA
 
   const familyInstance = mongoFamilyDescriptor.create(mongoStack);
   const contract = familyInstance.deserializeContract(
-    enrichContract(providerResult.value, mongoFrameworkComponents),
+    mongoTargetDescriptor.contractSerializer.serializeContract(
+      enrichContract(providerResult.value, mongoFrameworkComponents) as MongoTargetContract,
+    ),
   ) as MongoContract;
 
   return { ok: true, diagnostics: [], contract };

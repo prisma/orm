@@ -3,6 +3,7 @@ import {
   migrationRunnerFailure,
   type SchemaDiffIssue,
 } from '@internal/framework-components/control';
+import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import { ifDefined } from '@internal/utils/defined';
 import type { RunnerFailureFacts } from '../../src/control-api/types';
 import { dbInitRunnerFailureError } from '../../src/utils/db-init-failure';
@@ -10,14 +11,28 @@ import { dbUpdateRunnerFailureError } from '../../src/utils/db-update-failure';
 import { migrateRunnerFailureError } from '../../src/utils/migrate-failure';
 import type { CliInvocation } from '../../src/utils/printed-command';
 import type { FailedMigrationOnDisk } from '../../src/utils/runner-failure-advice';
+import { originOf, reference, toEmitted } from './plan-origins';
+
+/** A failed migration as a test states it: its directory, the contract it starts from, and its extension space. */
+export interface WrittenMigration {
+  readonly directory: string;
+  readonly from: string;
+  readonly extensionSpaceId?: string;
+}
+
+/** The failed migration as `db migrate` hands it to the advice, replanned from where it started. */
+export function onDisk(written: WrittenMigration): FailedMigrationOnDisk {
+  const { from, ...rest } = written;
+  return { ...rest, replanFrom: reference(from === EMPTY_CONTRACT_HASH ? '@empty' : from) };
+}
 
 /** A runner failure and the facts its advice names, as the advice tests state them. */
 interface AdviceInput extends Omit<RunnerFailureFacts, 'failedMigration'> {
   readonly summary: string;
   readonly why: string | undefined;
-  readonly failedMigration?: FailedMigrationOnDisk;
+  readonly failedMigration?: WrittenMigration;
   readonly schemaIssues?: readonly SchemaDiffIssue[];
-  readonly databaseStorageHash?: string;
+  readonly planFrom?: string;
   readonly conflicts?: undefined;
   /** Whether the database is as it was before the failed apply; the SQL runners say it is. */
   readonly databaseUnchanged?: boolean | undefined;
@@ -58,14 +73,14 @@ export function migrateError(input: AdviceInput, invocation: CliInvocation) {
   return migrateRunnerFailureError(
     runnerFailureOf(input),
     factsOf(input),
-    input.failedMigration,
+    input.failedMigration === undefined ? undefined : onDisk(input.failedMigration),
     invocation,
   );
 }
 
 export function dbUpdateError(input: AdviceInput, invocation: CliInvocation) {
   return dbUpdateRunnerFailureError(runnerFailureOf(input), factsOf(input), {
-    databaseStorageHash: input.databaseStorageHash,
+    migrationPlan: toEmitted(originOf(input.planFrom)),
     invocation,
   });
 }

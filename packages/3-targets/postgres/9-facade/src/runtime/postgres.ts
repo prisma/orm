@@ -8,6 +8,7 @@ import {
   createExecutionContext,
   createSqlExecutionStack,
   toRuntimeOptions,
+  warnOfCapabilitiesNotProvided,
 } from '@internal/sql-runtime';
 import postgresTarget from '@internal/target-postgres/runtime';
 import { InternalError } from '@internal/utils/internal-error';
@@ -39,6 +40,7 @@ import {
 } from './postgres-options';
 import { PostgresRuntimeImpl } from './postgres-runtime';
 import type { PostgresTargetId } from './postgres-target-id';
+import type { PostgresStackProvides } from './stack-capabilities';
 
 export interface PostgresClient<
   TContract extends Contract<SqlStorage>,
@@ -89,7 +91,9 @@ export type PostgresOptions<
 export default function postgres<
   TContract extends Contract<SqlStorage>,
   TCollections extends CollectionClasses = NoCollectionClasses,
->(options: PostgresOptions<TContract, TCollections>): PostgresClient<TContract, TCollections> {
+>(
+  options: PostgresOptions<TContract, TCollections> & PostgresStackProvides<TContract>,
+): PostgresClient<TContract, TCollections> {
   const cursor = validateCursorOptions(options.cursor, 'postgres');
   const transactionOptions = validateTransactionOptions(options.transactionOptions);
   const contract = validatePostgresContract(options.contract);
@@ -105,8 +109,8 @@ export default function postgres<
   const context = createExecutionContext<TContract, PostgresTargetId>({
     contract,
     stack,
-    driver: postgresDriver,
   });
+  warnOfCapabilitiesNotProvided(contract, stack, options);
   const {
     sql,
     raw: rawSqlTag,

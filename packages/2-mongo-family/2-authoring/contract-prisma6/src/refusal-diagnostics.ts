@@ -3,9 +3,17 @@ import {
   type EnumBlockSite,
   enumMemberProblemDiagnostic,
 } from '@internal/framework-components/authoring';
-import type { BuildRefusal, FieldKey } from '@internal/mongo-contract-ts/contract-builder';
+import type {
+  BuildRefusal,
+  FieldKey,
+  RefusalKey,
+} from '@internal/mongo-contract-ts/contract-builder';
 import type { PslSpan } from '@internal/psl-parser';
+import { ifDefined } from '@internal/utils/defined';
 import { prisma6Diagnostic } from './diagnostics';
+
+type RelationKey = Extract<RefusalKey, { readonly kind: 'relation' }>;
+type UnsupportedNameRefusal = Extract<BuildRefusal, { readonly kind: 'nameUnsupported' }>;
 
 /** Where a part of a Prisma 6 schema is written. */
 export interface Site {
@@ -33,8 +41,10 @@ export function fieldSiteKey(model: string, field: string): string {
   return JSON.stringify([model, field]);
 }
 
-function fieldSiteOf(sites: Prisma6Sites, key: FieldKey): FieldSite | undefined {
-  return sites.fields.get(fieldSiteKey(key.owner.name, key.field));
+function fieldSiteOf(sites: Prisma6Sites, key: FieldKey | RelationKey): FieldSite | undefined {
+  return key.kind === 'field'
+    ? sites.fields.get(fieldSiteKey(key.owner.name, key.field))
+    : sites.fields.get(fieldSiteKey(key.model, key.relation));
 }
 
 function unexplained(refusal: BuildRefusal, sourceId: string): ContractSourceDiagnostic {
@@ -46,6 +56,35 @@ function unexplained(refusal: BuildRefusal, sourceId: string): ContractSourceDia
   );
 }
 
+function unsupportedNameSubject(refusal: UnsupportedNameRefusal): string {
+  const { key, name } = refusal;
+  switch (key.kind) {
+    case 'model':
+      return `A model is named "${name}"`;
+    case 'collectionSettings':
+      return `Model "${key.model}" is stored in collection "${name}"`;
+    case 'valueObject':
+      return `A composite type is named "${name}"`;
+    case 'enum':
+      return `An enum is named "${name}"`;
+    case 'field':
+      return `A field of ${key.owner.kind === 'model' ? 'model' : 'composite type'} "${key.owner.name}" is named "${name}"`;
+    case 'relation':
+      return `A relation of model "${key.model}" is named "${name}"`;
+  }
+}
+
+const UNSUPPORTED_NAME_WORDS = {
+  model: 'a model',
+  valueObject: 'a composite type',
+  enum: 'an enum',
+  collection: 'a collection',
+  root: 'a root',
+  field: 'a field',
+  valueObjectField: 'a field',
+  relation: 'a relation',
+} as const satisfies Record<UnsupportedNameRefusal['subject'], string>;
+
 /**
  * The reader's diagnostic for one refusal of the builder, at the place in the schema it is about. A refusal the reader cannot place is reported as a bug in the reader, as a contract Prisma 8 rejects.
  */
@@ -55,12 +94,25 @@ export function refusalDiagnostic(
   fallbackSourceId: string,
 ): ContractSourceDiagnostic {
   switch (refusal.kind) {
+    case 'nameUnsupported': {
+      const { key } = refusal;
+      const site =
+        key.kind === 'field' || key.kind === 'relation' ? fieldSiteOf(sites, key) : undefined;
+      return {
+        code: 'PSL_STORED_NAME_UNSUPPORTED',
+        message: `${unsupportedNameSubject(refusal)}, which JavaScript reads as the prototype of an object rather than as a key. Prisma 8 cannot read or write ${UNSUPPORTED_NAME_WORDS[refusal.subject]} of that name.`,
+        sourceId: site?.sourceId ?? fallbackSourceId,
+        ...ifDefined('span', site?.span),
+      };
+    }
     case 'storedNameUnsupported': {
-      const site = fieldSiteOf(sites, refusal.key);
+      const { key } = refusal;
+      if (key.kind !== 'field') break;
+      const site = fieldSiteOf(sites, key);
       if (site === undefined) break;
       return {
         code: 'PSL_STORED_NAME_UNSUPPORTED',
-        message: `Field "${refusal.key.owner.name}.${refusal.key.field}" ${refusal.reason}. Prisma 8 cannot read or write a field stored under that name.`,
+        message: `Field "${key.owner.name}.${key.field}" ${refusal.reason}. Prisma 8 cannot read or write a field stored under that name.`,
         sourceId: site.sourceId,
         span: site.span,
       };

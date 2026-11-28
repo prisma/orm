@@ -33,7 +33,7 @@ export type ContractExecutionSection<THash extends string = string> = {
  * family-parameterized (SQL, Mongo, etc. specialize via `TStorage` and model
  * storage generics on `ContractModel`).
  *
- * JSON persistence fields (`schemaVersion`, `sources`) are not represented
+ * JSON persistence fields (`formatVersion`, `sources`) are not represented
  * here — they are handled at the serialization boundary.
  *
  * @template TStorage  Family-specific storage block (extends {@link StorageBase}).

@@ -8,6 +8,14 @@ import { storageWithNamespacedTables } from './storage-with-namespaced-tables';
 
 const text = { kind: 'scalar', codecId: 'pg/text@1' };
 
+const userTable = {
+  columns: { id: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false, many: false } },
+  primaryKey: { columns: ['id'] },
+  uniques: [],
+  indexes: [],
+  foreignKeys: [],
+};
+
 const checkedInSchemaPath = join(import.meta.dirname, '..', 'schemas', 'data-contract-sql-v1.json');
 
 function compileGeneratedSchema() {
@@ -31,7 +39,18 @@ describe('data contract JSON schema', () => {
                 fields: { name: field },
               },
             },
-            valueObjects: { Address: { fields: { city: field } } },
+          },
+        },
+      },
+      storage: {
+        storageHash: 'test',
+        namespaces: {
+          __unbound__: {
+            id: '__unbound__',
+            entries: {
+              table: { User: userTable },
+              valueObject: { Address: { fields: { city: field } } },
+            },
           },
         },
       },

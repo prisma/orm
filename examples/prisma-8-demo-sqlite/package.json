@@ -16,18 +16,22 @@
     "lint": "biome check . --error-on-warnings"
   },
   "dependencies": {
-    "@prisma/orm-sqlite": "workspace:8.0.0-rc.24",
-    "arktype": "^2.2.2",
+    "@prisma/orm-family-sql": "workspace:8.0.0-rc.25",
+    "@prisma/orm-framework": "workspace:8.0.0-rc.25",
+    "@prisma/orm-sqlite": "workspace:8.0.0-rc.25",
+    "@prisma/orm-target-sqlite": "workspace:8.0.0-rc.25",
+    "@prisma/orm-toolchain": "workspace:8.0.0-rc.25",
+    "arktype": "^2.2.9",
     "dotenv": "^17.4.2"
   },
   "devDependencies": {
-    "@prisma/cli-engine": "0.10.0",
-    "@repo/prisma-bin": "workspace:8.0.0-rc.24",
-    "@repo/tsconfig": "workspace:8.0.0-rc.24",
+    "@prisma/cli-engine": "0.10.4",
+    "@repo/prisma-bin": "workspace:8.0.0-rc.25",
+    "@repo/tsconfig": "workspace:8.0.0-rc.25",
     "@types/node": "catalog:",
     "tsx": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   },
-  "version": "8.0.0-rc.24"
+  "version": "8.0.0-rc.25"
 }

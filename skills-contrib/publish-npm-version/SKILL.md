@@ -22,10 +22,10 @@ Maintainers of Prisma 8 who have permission to push branches and open PRs in the
 
 ## Background reading
 
-Read [`docs/oss/versioning.md`](../../docs/oss/versioning.md) before running this skill. It covers:
+Read [`docs/oss/releasing.md`](../../docs/oss/releasing.md) before running this skill. It covers:
 
 - The source-of-truth model (root `package.json` `version`).
-- The lockstep guarantee (every workspace package matches the root).
+- Each published package at the version the release plan gives it (until release 8.0, every package at the root version).
 - The v8 RC line (`8.0.0-rc.N`, with `latest` tracking the newest RC or stable release).
 - The dist-tag convention (`latest` / `dev` / `beta`).
 - The full release procedure (this skill covers steps 1-2 of 3; merging the PR is the publish trigger — there is no separate dispatch step).
@@ -55,6 +55,8 @@ If either precondition is unmet, stop and surface the issue. Do **not** try to a
    echo "$CURRENT → $NEXT"
    ```
 
+   For release 8.0 itself, set `NEXT=8.0.1` by hand. The helper cannot leave the release candidates: from `8.0.0-rc.N` it returns the next release candidate. [The releasing page](../../docs/oss/releasing.md#procedure-release-80) has the whole procedure for that release.
+
    (`$NEXT` is only for naming the branch and PR — the authoritative bump in step 3 recomputes it inside the fresh `origin/main` worktree. The command above runs the helper from *your* checkout, which may be older than `origin/main`; step 3 therefore ends by verifying the two agree.)
 
 2. **Create a fresh worktree off `origin/main`.** Use the convention `release/<version>` for both the branch and the sibling worktree path:
@@ -66,7 +68,7 @@ If either precondition is unmet, stop and surface the issue. Do **not** try to a
 
    This is what makes the skill safe to invoke from any worktree: the bump happens against a fresh checkout of `origin/main`, not against the maintainer's current branch. The branch name encodes the target version so reviewers can tell at a glance what the PR ships.
 
-3. **Bump.** From the new worktree, run `pnpm bump-version`. The script reads the root `package.json` `version` from `git show HEAD:package.json` (in this worktree, HEAD is `origin/main`), computes the next release version, and writes it to every workspace `package.json` via `scripts/set-version.ts`.
+3. **Bump.** From the new worktree, run `pnpm bump-version`. (For release 8.0 itself, run `node scripts/set-version.ts 8.0.1` here instead, for the same reason as in step 1.) The script reads the root `package.json` `version` from `git show HEAD:package.json` (in this worktree, HEAD is `origin/main`), computes the next release version, and writes it to every workspace `package.json` via `scripts/set-version.ts`.
 
    Note: `bump-version` requires `node_modules` to resolve its dependencies (e.g. `pathe`). If the fresh worktree has no `node_modules`, run `pnpm install --frozen-lockfile --ignore-scripts` first.
 
@@ -117,7 +119,7 @@ If either precondition is unmet, stop and surface the issue. Do **not** try to a
     The body should:
 
     - State the previous and new version (`<previous> → <new>`).
-    - Link to [`docs/oss/versioning.md`](../../docs/oss/versioning.md) for context.
+    - Link to [`docs/oss/releasing.md`](../../docs/oss/releasing.md) for context.
     - Point reviewers at the committed `docs/releases/v<version>.md` (authored by the `draft-release-notes` skill in step 8) as the human-review surface for the release's user-facing changes.
     - Note that **merging this PR ships the release**: the resulting push to `main` carries the bumped root `version`, the `Publish to npm` workflow detects the change and publishes `<new>` under dist-tag `latest`, and a matching GitHub Release (marked pre-release on the RC line) is created automatically.
 
@@ -142,5 +144,5 @@ If the release branch/worktree already exists, inspect its Git status and diff b
 ## Out of scope
 
 - **Merging the PRs.** The skill stops at "PRs opened" so a human can confirm the release notes. Merging the release PR is what triggers the actual publish, but it remains a human gate by design; the docs PR follows once the publish has succeeded.
-- **Patch releases.** On the RC line there are none (a fix is just the next `rc.N`, which this skill handles). For stable-line patches (`patch+1`), the manual procedure in `docs/oss/versioning.md` applies.
+- **Patch releases.** On the RC line there are none (a fix is just the next `rc.N`, which this skill handles). For stable-line patches (`patch+1`), see `docs/oss/releasing.md`.
 - **Beta tags.** The `beta` dist-tag is hand-cut via a manual `workflow_dispatch` of `Publish to npm`; this skill always advances to the next release version.

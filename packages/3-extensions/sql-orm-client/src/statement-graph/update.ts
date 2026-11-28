@@ -1,4 +1,5 @@
 import { AsyncIterableResult } from '@internal/framework-components/runtime';
+import { capabilityUnavailableMessage } from '@internal/sql-contract/capability-messages';
 import type { ProjectionItem, UpdateAst } from '@internal/sql-relational-core/ast';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import { hasContractCapability } from '../collection-contract';
@@ -75,7 +76,11 @@ export class Update extends StatementNode<Inputs> {
     }
     throw ormError(
       'ORM.CAPABILITY_MISSING',
-      `${action} on model "${this.owner.modelName}" cannot read back the rows it updates: it sets key column "${column}" by an expression, and without capability "returning" the database does not report the value it wrote.`,
+      capabilityUnavailableMessage(
+        `\`${action}\` on model "${this.owner.modelName}"`,
+        ['sql.returning'],
+        `It cannot read back the rows it updates: it sets key column "${column}" by an expression, and without \`sql.returning\` the database does not report the value it wrote.`,
+      ),
       { meta: { capability: 'returning', action } },
     );
   }

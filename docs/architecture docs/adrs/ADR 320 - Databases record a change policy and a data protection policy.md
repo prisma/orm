@@ -2,6 +2,7 @@
 
 **Status:** Accepted
 **Date:** 2026-10-30
+**Amended by:** [ADR 334 — A person changes the policies a ref declares, by hand or with `migration ref policy`](ADR%20334%20-%20A%20person%20changes%20the%20policies%20a%20ref%20declares%20by%20hand%20or%20with%20migration%20ref%20policy.md)
 
 ## Example
 
@@ -10,6 +11,7 @@ A team wants its production database to change only through reviewed migrations.
 ```json
 // migrations/app/refs/production.json
 {
+  "formatVersion": 1,
   "hash": "4b1c…e09a",
   "invariants": [],
   "policies": { "change": ["migrate"] }
@@ -22,7 +24,7 @@ The database does not yet record that rule, so a deploy to the ref stops before 
 $ prisma db migrate --to production --db $PROD
 ✘ [MIGRATION.POLICY_MISMATCH] The ref's policies differ from the database's
   why: production declares change: migrate; the database has change: migrate, reconcile.
-→ Make the ref match the database, or have whoever owns the database apply the ref's policies.
+→ Nothing runs while production declares policies that differ from the database's. Report the difference to whoever owns the database.
 ```
 
 Whoever owns production applies the rule with explicit consent, and from then on the database itself refuses `db update`:
@@ -62,7 +64,7 @@ The **data protection policy** has two settings, each with three levels:
 | `dataLoss` | `data-loss-forbidden`, `data-loss-with-consent`, `data-loss-permitted` |
 | `accessWidening` | `access-widening-forbidden`, `access-widening-with-consent`, `access-widening-permitted` |
 
-An operation loses data when it drops a table or column, or changes a column's type in a way that loses values; these are the operations whose class is `destructive`. An operation widens access when it changes who can read or write a model's rows, such as dropping a row-level-security policy. Each target decides which operations widen access from their structure, never from their label.
+An operation loses data when it drops a table or column, or changes a column's type in a way that loses values; these are the operations whose class is `destructive`. An operation widens access when it changes who can read or write a model's rows, such as dropping a row-level-security policy. Each target decides which operations widen access from their structure, never from their label. A recorded migration's operations are read back from `ops.json`, so the target recognises them there: on Postgres, disabling row-level security and dropping a policy, each recognised by the object it acts on and the operation id its factory builds. The form of those ids is therefore part of the recorded format: changing it would stop migrations recorded earlier from being recognised. A dropped policy is not an access change when a policy the same migration creates, under the same name or generated-name prefix, is still there when the migration ends. Creating a policy and renaming a policy to its old name followed by `.rename` have the same id and target, so the target reads the operation's recorded class too, `additive` for the create and `widening` for the rename; those classes are part of the recorded format as well. Disabling row-level security and dropping a policy are recognised without their class, because releases up to 8.0.0-rc.16 recorded them as `destructive`. The setting is called `accessWidening`, but under `forbidden` it refuses every such operation, including a dropped policy, which may narrow access or widen it: nothing can tell which from the operation alone. What a raw SQL operation or a data transform does is not read. Such an operation loses data only if its recorded class is `destructive`, and it is never counted as changing access.
 
 The two policies are separate because they answer separate questions, and every combination occurs:
 
@@ -119,6 +121,7 @@ When a database's marker names a contract that is not in the migration graph, th
 - A ref file may carry `policies`, and every command that writes a ref keeps the fields it did not change ([ADR 218](ADR%20218%20-%20Refs%20with%20paired%20contract%20snapshots%20and%20universal%20graph-node%20invariant.md)).
 - The framework owns `meta.policies`: its key, its stored form, its parser, the comparison and the defaults. Targets write the value the framework gives them, and every marker write on every target keeps the `meta` keys it does not own. MongoDB's guarded marker write is built from the framework's key and value lists, so it accepts exactly the stored values the framework would read as the checked policies.
 - [ADR 287](ADR%20287%20-%20Prisma%208%20has%20no%20db%20push%20to%20production.md)'s rule that production changes only through migrations becomes something a database states about itself and the tools enforce.
+- A refusal happens before the first operation runs, and it cannot be answered: under `forbidden`, `--delete` and `--allow` do not permit the change. Only a statement that says the change loses nothing changes the outcome: `--rename`, and in `migration plan` `--convert`. A migration that copies the data elsewhere and then drops the original still drops it, and is still refused; dropping data from such a database takes a change to its policy first.
 - The policies stop mistakes, not deliberate workarounds. Anyone who can write the marker table, or who passes `--permit-policy-change` with an edited ref, can change them.
 - Control policy ([ADR 224](ADR%20224%20-%20Control%20Policy%20—%20framework-locked%20vocabulary%20and%20family-owned%20dispatch.md)) is a different concept: it says whether Prisma may write a given database object.
 - The names leave room for other kinds of change control later, such as which operation classes may run, or which running application versions must stay compatible during a change.

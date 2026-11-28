@@ -22,6 +22,10 @@ export type {
 } from '../core/control-target-descriptor';
 export type { SqlDefaultFunctionName } from '../core/default-functions';
 export { sqlDefaultFunctions } from '../core/default-functions';
+export {
+  type SqlDatabaseCapabilitiesNotProvidedFn,
+  VERIFY_CODE_DATABASE_CAPABILITIES_NOT_PROVIDED,
+} from '../core/diff/database-capabilities-not-provided';
 export { acceptedByDataType } from '../core/migrations/accepted-by-data-type';
 export type {
   ContractToSchemaIROptions,
@@ -66,6 +70,7 @@ export {
 } from '../core/migrations/fill-value-check';
 export type { JsonKeyPath, JsonPath, JsonPathStep } from '../core/migrations/json-path';
 export { jsonPathText, keyPathOf, parseJsonPath } from '../core/migrations/json-path';
+export { exactName, type ModelTable, type SameName } from '../core/migrations/model-storage';
 export { storageNameOfOperation } from '../core/migrations/operation-storage-name';
 export type {
   CallSubjects,
@@ -76,6 +81,15 @@ export {
   subjectsOfCalls,
   unknownCallNames,
 } from '../core/migrations/operation-subjects';
+export type {
+  SqlOperationsLocation,
+  SqlOperationsReader,
+  SqlTargetOperationsFormat,
+} from '../core/migrations/operations-reader';
+export {
+  createSqlOperationsReader,
+  SQL_OPERATIONS_OPEN_PLACES,
+} from '../core/migrations/operations-reader';
 export {
   createMigrationPlan,
   plannerFailure,
@@ -137,7 +151,6 @@ export type {
   FieldStatementColumns,
   FieldStorageEffect,
   ModelStorageEffect,
-  ModelTable,
   NamespaceRename,
   NamespaceStatementTarget,
   NoTable,
@@ -163,6 +176,7 @@ export {
   otherSpaceDeclaring,
   planStatements,
 } from '../core/migrations/statement-planning';
+export { StorageRenames } from '../core/migrations/storage-renames';
 export {
   type PlannedStoredRewrites,
   planStoredRewrites,
@@ -222,6 +236,8 @@ export {
   unconvertedFieldOf,
 } from '../core/migrations/unconverted-field';
 export { UnfilledValue } from '../core/migrations/unfilled-value';
+export type { DocumentPlace, UnknownKeyProbe } from '../core/migrations/unknown-key-probe';
+export { probeUnknownKeys } from '../core/migrations/unknown-key-probe';
 export {
   planValueObjectFieldFills,
   type StoredKeyFill,

@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "1",
+  "formatVersion": 1,
   "targetFamily": "sql",
   "target": "mariadb",
   "profileHash": "c3165876e6069b3fd8cde4fadadb0b534082345d678b2c81c8c83e9225ce21d8",
@@ -10,6 +10,10 @@
     },
     "Post": {
       "model": "Post",
+      "namespace": "__unbound__"
+    },
+    "Product": {
+      "model": "Product",
       "namespace": "__unbound__"
     },
     "User": {
@@ -178,6 +182,114 @@
               },
               "namespaceId": "__unbound__",
               "table": "Post"
+            }
+          },
+          "Product": {
+            "fields": {
+              "details": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/json@1",
+                  "kind": "scalar"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/int@1",
+                  "kind": "scalar"
+                }
+              },
+              "inStock": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/boolean@1",
+                  "kind": "scalar"
+                }
+              },
+              "name": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sql/varchar@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 191
+                  }
+                }
+              },
+              "notes": {
+                "nullable": true,
+                "type": {
+                  "codecId": "mysql/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "price": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/decimal@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 10,
+                    "scale": 2
+                  }
+                }
+              },
+              "rating": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/double@1",
+                  "kind": "scalar"
+                }
+              },
+              "sold": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/bigintnumber@1",
+                  "kind": "scalar"
+                }
+              },
+              "thumbnail": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mysql/longblob@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "details": {
+                  "column": "details"
+                },
+                "id": {
+                  "column": "id"
+                },
+                "inStock": {
+                  "column": "inStock"
+                },
+                "name": {
+                  "column": "name"
+                },
+                "notes": {
+                  "column": "notes"
+                },
+                "price": {
+                  "column": "price"
+                },
+                "rating": {
+                  "column": "rating"
+                },
+                "sold": {
+                  "column": "sold"
+                },
+                "thumbnail": {
+                  "column": "thumbnail"
+                }
+              },
+              "namespaceId": "__unbound__",
+              "table": "Product"
             }
           },
           "User": {
@@ -380,6 +492,82 @@
               },
               "uniques": []
             },
+            "Product": {
+              "columns": {
+                "details": {
+                  "codecId": "mysql/json@1",
+                  "dataType": "mysql/json",
+                  "nullable": false
+                },
+                "id": {
+                  "codecId": "mysql/int@1",
+                  "dataType": "mysql/int",
+                  "default": {
+                    "expression": "autoincrement()",
+                    "kind": "function"
+                  },
+                  "nullable": false
+                },
+                "inStock": {
+                  "codecId": "mysql/boolean@1",
+                  "dataType": "mysql/boolean",
+                  "default": {
+                    "kind": "literal",
+                    "value": true
+                  },
+                  "nullable": false
+                },
+                "name": {
+                  "codecId": "sql/varchar@1",
+                  "dataType": "mysql/varchar",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 191
+                  }
+                },
+                "notes": {
+                  "codecId": "mysql/text@1",
+                  "dataType": "mysql/text",
+                  "nullable": true
+                },
+                "price": {
+                  "codecId": "mysql/decimal@1",
+                  "dataType": "mysql/decimal",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 10,
+                    "scale": 2
+                  }
+                },
+                "rating": {
+                  "codecId": "mysql/double@1",
+                  "dataType": "mysql/double",
+                  "nullable": false
+                },
+                "sold": {
+                  "codecId": "mysql/bigintnumber@1",
+                  "dataType": "mysql/bigint",
+                  "default": {
+                    "kind": "literal",
+                    "value": "0"
+                  },
+                  "nullable": false
+                },
+                "thumbnail": {
+                  "codecId": "mysql/longblob@1",
+                  "dataType": "mysql/longblob",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
             "User": {
               "columns": {
                 "email": {
@@ -446,13 +634,14 @@
         "id": "__unbound__"
       }
     },
-    "storageHash": "a79b2f48d08a4ba5bd11c7307b331a418e1f63f4e922bd68fe767b90f28c16c2"
+    "storageHash": "8a090b49a6a45e10bb29d909e12cb460ddee912d908102948b32b8a636a7d41c"
   },
   "capabilities": {
     "sql": {
       "defaultInInsert": true,
       "enums": true,
       "foreignKeys": true,
+      "interactiveTransactions": true,
       "jsonAgg": true,
       "limit": true,
       "orderBy": true

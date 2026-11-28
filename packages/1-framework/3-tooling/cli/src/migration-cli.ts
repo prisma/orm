@@ -53,8 +53,12 @@ import {
 import { errorMigrationTargetMismatch } from '@internal/errors/migration';
 import { createControlStack } from '@internal/framework-components/control';
 import { errorInvalidJson } from '@internal/migration-tools/errors';
-import type { MigrationMetadata } from '@internal/migration-tools/metadata';
+import {
+  type MigrationMetadata,
+  parseMigrationMetadataDocument,
+} from '@internal/migration-tools/metadata';
 import { buildMigrationArtifacts, type Migration } from '@internal/migration-tools/migration';
+import { blindCast } from '@internal/utils/casts';
 import { isStructuredError } from '@internal/utils/structured-error';
 import { Cli, Command, Option, UsageError } from 'clipanion';
 import { dirname, join } from 'pathe';
@@ -458,8 +462,9 @@ function writeStructuredError(stream: MigrationCliWritable, err: CliStructuredEr
 
 /**
  * Read a previously-scaffolded `migration.json` from disk, returning
- * `null` when the file is missing and throwing `MIGRATION.INVALID_JSON`
- * when the file is present but cannot be parsed as JSON. The CLI feeds
+ * `null` when the file is missing, throwing `MIGRATION.INVALID_JSON`
+ * when the file is present but cannot be parsed as JSON, and throwing a
+ * format version error for a file this release cannot read. The CLI feeds
  * this into `buildMigrationArtifacts` so the pure builder can preserve
  * fields owned by `migration plan` (contract bookends, `createdAt`) across
  * re-emits.
@@ -484,11 +489,19 @@ function readExistingMetadata(metadataPath: string): Partial<MigrationMetadata> 
   } catch {
     return null;
   }
+  let document: unknown;
   try {
-    return JSON.parse(raw) as Partial<MigrationMetadata>;
+    document = JSON.parse(raw);
   } catch (e) {
     throw errorInvalidJson(metadataPath, e instanceof Error ? e.message : String(e));
   }
+  const metadata = parseMigrationMetadataDocument(document, metadataPath);
+  if (metadata.ok) return metadata.value;
+  const { formatVersion: _, ...partial } = blindCast<
+    Partial<MigrationMetadata> & { readonly formatVersion?: unknown },
+    'a migration.json in a format version this release reads; its fields are re-derived, and only createdAt is kept'
+  >(document);
+  return partial;
 }
 
 /**

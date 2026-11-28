@@ -13,6 +13,11 @@ import { createControlStack } from '@internal/framework-components/control';
 import type { MongoContract } from '@internal/mongo-contract';
 import { mongoContractCanonicalizationHooks } from '@internal/mongo-contract/canonicalization-hooks';
 import { mongoContract } from '@internal/mongo-contract-psl/provider';
+import {
+  postgres18,
+  postgresContractCapabilities,
+  postgresDriver,
+} from '@internal/postgres/config';
 import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonicalization-hooks';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { prismaContract } from '@internal/sql-contract-psl/provider';
@@ -166,6 +171,7 @@ describe('side-by-side contract examples', () => {
 
       const fixture = await loadFixture(fixtureCase);
       const provider = prismaContract(fixtureCase.contractPslPath, {
+        capabilities: postgresContractCapabilities([...postgres18, ...postgresDriver]),
         target: postgresPackRef,
         createNamespace: postgresCreateNamespace,
       });
@@ -270,17 +276,16 @@ describe('side-by-side contract examples', () => {
       const familyInstance = mongoFamilyDescriptor.create(mongoStack);
       const frameworkComponents = [mongoTargetDescriptor, mongoAdapter];
 
+      const mongoSerializeContract: SerializeContract = (contract) =>
+        mongoTargetDescriptor.contractSerializer.serializeContract(contract as MongoTargetContract);
       const normalizedTs = familyInstance.deserializeContract(
-        enrichContract(fixture.tsContract, frameworkComponents),
+        mongoSerializeContract(enrichContract(fixture.tsContract, frameworkComponents)),
       );
       const normalizedPsl = familyInstance.deserializeContract(
-        enrichContract(providerResult.value, frameworkComponents),
+        mongoSerializeContract(enrichContract(providerResult.value, frameworkComponents)),
       );
 
       expect(normalizedTs).toEqual(normalizedPsl);
-
-      const mongoSerializeContract: SerializeContract = (contract) =>
-        mongoTargetDescriptor.contractSerializer.serializeContract(contract as MongoTargetContract);
       const emittedTs = await emit(normalizedTs, mongoStack, mongoFamilyDescriptor.emission, {
         serializeContract: mongoSerializeContract,
         ...mongoContractCanonicalizationHooks,
