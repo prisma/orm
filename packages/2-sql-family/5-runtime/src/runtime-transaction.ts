@@ -279,7 +279,7 @@ export class OuterTransaction extends TransactionBase {
   }
 
   async commit(): Promise<void> {
-    if (this.timeout !== undefined) this.assertOpen();
+    this.assertOpen();
     this.assertAcceptsStatements();
     this.stopDeadline();
     this.commitAttempted = true;
