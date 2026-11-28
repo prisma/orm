@@ -132,6 +132,8 @@ export async function lastRelease({
   return { version, tag: `v${version}`, base, baseVersion };
 }
 
+const discardBody = (response) => response.body?.cancel().catch(() => {});
+
 const describeError = (error) =>
   error?.cause?.message
     ? `${error.message} (${error.cause.message})`
@@ -151,12 +153,13 @@ async function requestRegistry(
     let response;
     try {
       response = await fetchImpl(url, init);
-      if (response.status === 404) return undefined;
       if (response.ok) return await read(response);
     } catch (error) {
       failure = describeError(error);
       continue;
     }
+    await discardBody(response);
+    if (response.status === 404) return undefined;
     if (response.status < 500 && response.status !== 429) {
       throw new LastReleaseError(
         `could not read ${what} from the registry: it answered ${response.status}`,

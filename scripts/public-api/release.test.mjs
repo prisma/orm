@@ -159,6 +159,26 @@ describe('fetchPackument', () => {
     strictEqual(calls, 2);
   });
 
+  it('cancels the body of every answer it does not read', async () => {
+    const unread = [];
+    const answer = (status) => {
+      const response = new Response('body', { status });
+      unread.push(response);
+      return response;
+    };
+    let calls = 0;
+    const fetchImpl = async () => {
+      calls++;
+      return answer(calls === 1 ? 503 : calls === 2 ? 429 : 403);
+    };
+    await rejects(fetchPackument('@prisma/orm-a', { fetchImpl, retryDelayMs: 0 }));
+    await fetchPackument('@prisma/orm-a', { fetchImpl: async () => answer(404) });
+    deepStrictEqual(
+      unread.map((response) => response.bodyUsed || response.body.locked),
+      [true, true, true, true],
+    );
+  });
+
   it('retries an answer that asks it to slow down', async () => {
     let calls = 0;
     const fetchImpl = async () => {
