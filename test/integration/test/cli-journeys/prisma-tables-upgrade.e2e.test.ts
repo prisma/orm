@@ -518,6 +518,30 @@ withTempDir(({ createTempDir }) => {
     );
   });
 
+  describe("db migrate on a database a release candidate set up, where a view depends on the release candidate's marker", () => {
+    const db = useDevDatabase();
+
+    it(
+      'stops, names the view with its schema in the message a person reads, and changes nothing',
+      async () => {
+        const { ctx } = await releaseCandidateProject(db.connectionString, createTempDir);
+        await sql(
+          db.connectionString,
+          'CREATE VIEW public.marker_view AS SELECT space, core_hash FROM prisma_contract.marker',
+        );
+
+        const migrate = await runMigrate(ctx);
+
+        expect(migrate.exitCode).not.toBe(0);
+        expect(`${migrate.stdout}${migrate.stderr}`).toContain(
+          'In this database, those objects are view public.marker_view.',
+        );
+        expect(await schemas(db.connectionString)).toEqual(['prisma_contract']);
+      },
+      timeouts.spinUpPpgDev,
+    );
+  });
+
   describe('db sign on a database whose tables are in a form from before the release candidates', () => {
     const db = useDevDatabase();
 
