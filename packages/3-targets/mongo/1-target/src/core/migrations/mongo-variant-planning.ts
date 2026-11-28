@@ -1,4 +1,4 @@
-import { asNamespaceId, type ContractWithDomain } from '@internal/contract/types';
+import { asNamespaceId, type Contract, type ContractWithDomain } from '@internal/contract/types';
 import {
   describeMigrationStatement,
   fieldStatementText,
@@ -22,7 +22,11 @@ import {
 } from '@internal/mongo-contract';
 import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
 import { notOk, ok, type Result } from '@internal/utils/result';
+import { collectionControlPolicy } from './mongo-control-policy';
 import { discriminatorRenameOf } from './mongo-discriminator-renames';
+import { type DocumentMove, documentMoveOf, type MovingModel } from './mongo-document-moves';
+import { documentCollectionOf, modelCoordinates, sameModel } from './mongo-model-coordinates';
+import { capitalized, documentMovesText, joinedList, modelNamesText } from './mongo-plan-text';
 import { inTwoSteps } from './mongo-rewrite-overlaps';
 import {
   SEPARATE_THE_MODELS,
@@ -30,11 +34,14 @@ import {
   TIME_SERIES_UPDATES,
 } from './mongo-rewrite-refusals';
 import {
-  collectionControlPolicy,
+  destinationKeepsModel,
   destinationModelOf,
+  type ModelMatchInput,
   modelAt,
-  modelCoordinates,
+  movingModelOf,
+  sharesCollectionInDestination,
 } from './mongo-statement-planning';
+import { type FieldRename, type ModelRename, renameRefused } from './mongo-storage-renames';
 import { DeleteDocumentsCall, ReplaceStoredValueCall } from './op-factory-call';
 
 type VariantStatement = ResolvedModelRenameStatement | ResolvedVariantConvertStatement;
@@ -68,17 +75,23 @@ export interface VariantDocumentRewrites {
 
 export interface VariantInput {
   readonly statements: readonly ResolvedMigrationStatement[];
-  readonly fromContract: ContractWithDomain | null;
+  readonly fromContract: Contract | null;
   readonly contract: MongoContract;
   /** The schema the plan starts from, with each renamed collection under its new name. */
   readonly schema: MongoSchemaIR;
+  /** The plan's collection renames. */
+  readonly collectionRenames: readonly { readonly from: string; readonly to: string }[];
   /** The collections the destination keeps. */
   readonly keptCollections: ReadonlySet<string>;
   readonly collectionAfterRenames: (collection: string) => string;
+  /** The plan's model renames, which pair origin models with destination models. */
+  readonly models: readonly ModelRename[];
   /** The plan's replacements of enum values, one of which may already move a variant's discriminator value. */
   readonly enumReplacements: readonly ReplaceStoredValueCall[];
-  /** The plan's renames of fields, as stored. */
-  readonly fieldRenames: readonly {
+  /** The plan's field renames, those of its statements and those no statement asks for. */
+  readonly fieldRenames: readonly FieldRename[];
+  /** The calls of the plan's field renames, as stored. */
+  readonly fieldRenameCalls: readonly {
     readonly collection: string;
     readonly from: string;
     readonly to: string;
@@ -92,10 +105,6 @@ interface VariantChange extends Omit<VariantDocumentRewrite, 'call'> {
   readonly originField: string;
   /** The enum value replacement that already moves the value, when the discriminator is an enum. */
   readonly byEnum: ReplaceStoredValueCall | undefined;
-}
-
-function sameModel(a: ModelCoordinate, b: ModelCoordinate): boolean {
-  return a.namespaceId === b.namespaceId && a.model === b.model;
 }
 
 function statementOf(
@@ -117,14 +126,20 @@ function destinationOf(
   fromContract: ContractWithDomain,
   input: VariantInput,
 ): ModelCoordinate | undefined {
-  return destinationModelOf(origin, {
+  return destinationModelOf(origin, matchInputOf(fromContract, input));
+}
+
+function matchInputOf(fromContract: ContractWithDomain, input: VariantInput): ModelMatchInput {
+  return {
     statements: input.statements.filter(
       (statement): statement is ResolvedRenameStatement => statement.kind === 'rename',
     ),
     fromContract,
     contract: input.contract,
+    models: input.models,
+    fieldRenames: input.fieldRenames,
     collectionAfterRenames: input.collectionAfterRenames,
-  });
+  };
 }
 
 function baseOf(contract: ContractWithDomain, model: ModelCoordinate): ModelCoordinate | undefined {
@@ -226,9 +241,12 @@ function variantText(model: ModelCoordinate): string {
 }
 
 function changeLabel(change: VariantChange, input: VariantInput, fromContract: ContractWithDomain) {
-  return change.statement === undefined
+  if (change.statement !== undefined) {
+    return `Cannot ${describeMigrationStatement(change.statement, fromContract, input.contract)}`;
+  }
+  return change.to === undefined
     ? `Cannot delete the documents of ${variantText(change.model)}`
-    : `Cannot ${describeMigrationStatement(change.statement, fromContract, input.contract)}`;
+    : `Cannot replace the discriminator value ${quoted(change.from)} of ${variantText(change.model)}`;
 }
 
 function refusedChange(
@@ -237,14 +255,7 @@ function refusedChange(
   reason: string,
   why: string,
 ): MigrationPlannerConflict {
-  return change.statement === undefined
-    ? { kind: 'unsupportedOperation', summary: `${label}: ${reason}`, why }
-    : {
-        kind: 'statementRefused',
-        summary: `${label}: ${reason}`,
-        why,
-        refusedStatement: change.statement,
-      };
+  return renameRefused(change.statement, `${label}: ${reason}`, why);
 }
 
 /** How to change discriminator values that one migration cannot change safely. */
@@ -257,7 +268,7 @@ export const VARIANT_TWO_STEPS = inTwoSteps(
 function collectionRefusal(
   change: VariantChange,
   input: VariantInput,
-  fromContract: ContractWithDomain,
+  fromContract: Contract,
 ): MigrationPlannerConflict | undefined {
   const label = changeLabel(change, input, fromContract);
   const policy = collectionControlPolicy(input.contract, change.collection);
@@ -270,7 +281,7 @@ function collectionRefusal(
     );
   }
   if (input.schema.collection(change.collection)?.options?.timeseries === undefined) {
-    return sharedCollectionRefusal(change, label, fromContract);
+    return sharedCollectionRefusal(change, label, fromContract, input);
   }
   return refusedChange(
     change,
@@ -281,6 +292,35 @@ function collectionRefusal(
 }
 
 /**
+ * How to make a variant change that other root models' documents block. A model that stays in the
+ * collection can only be moved apart, or the change carried out by hand; a model that moves out
+ * leaves its documents behind, so its move goes first, in a plan of its own, with its documents,
+ * since the refusal is decided from the contracts and planning the same change again would refuse
+ * it again.
+ */
+function variantRoute(
+  change: VariantChange,
+  moves: readonly DocumentMove[],
+  staying: readonly string[],
+): string {
+  const keep = `keep ${change.to === undefined ? variantText(change.model) : `the discriminator value ${quoted(change.from)}`} in the contract`;
+  const namesOf = (move: DocumentMove) => move.copies.flatMap((copy) => copy.models);
+  const moving = moves.flatMap(namesOf);
+  const destinations = joinedList(
+    moves.map((move) => `${modelNamesText(namesOf(move))} to collection ${quoted(move.to)}`),
+  );
+  const sameTarget = `Write that first contract as this one with ${variantText(change.model)} kept, so its plan changes ${moves.length === 1 ? `collection ${quoted(moves[0]?.to ?? '')}` : 'those collections'} as this plan does, which the steps below expect.`;
+  const firstMove = `First move ${destinations}, keep ${variantText(change.model)} as it is, and plan that with migration plan. ${sameTarget}\n\n${documentMovesText(moves)}\n\nUnder db update, first stop writes to collection ${quoted(change.collection)}, then move the documents of ${modelNamesText(moving)} out of it by hand, then apply that change, and allow writes again only once it is applied: a document of ${modelNamesText(moving)} written there after the copy would not be moved. Applied before the move, the change can stop at the new validator of collection ${quoted(change.collection)}, which need not accept those documents.`;
+  if (staying.length === 0) {
+    return `A model that moves out of collection ${quoted(change.collection)} leaves its documents in it, so make the change in two plans. ${firstMove}\n\nThen make the change to ${variantText(change.model)} and plan again. Or ${keep}.`;
+  }
+  const stayAdvice = `To change only the documents of ${variantText(change.model)}, ${change.statement === undefined ? `move the models to separate collections, or ${keep}` : SEPARATE_THE_MODELS}.`;
+  return moving.length === 0
+    ? stayAdvice
+    : `${stayAdvice} ${capitalized(modelNamesText(moving))} also ${moving.length === 1 ? 'moves' : 'move'} out of collection ${quoted(change.collection)} but ${moving.length === 1 ? 'leaves its' : 'leave their'} documents in it, so that move goes in a plan of its own before this change. ${firstMove}`;
+}
+
+/**
  * The refusal of a change whose documents another root model stored in the same collection can
  * share: a model with the same discriminator field and value, whose documents the delete or
  * replacement would reach too.
@@ -288,7 +328,8 @@ function collectionRefusal(
 function sharedCollectionRefusal(
   change: VariantChange,
   label: string,
-  fromContract: ContractWithDomain,
+  fromContract: Contract,
+  input: VariantInput,
 ): MigrationPlannerConflict | undefined {
   const originCollection = collectionOfModel(fromContract.domain, change.model);
   if (originCollection === undefined) return undefined;
@@ -298,9 +339,50 @@ function sharedCollectionRefusal(
     originCollection,
     { field: change.originField, value: change.from },
     undefined,
+  ).filter((name) =>
+    destinationKeepsModel(
+      { namespaceId: change.model.namespaceId, model: name },
+      matchInputOf(fromContract, input),
+    ),
   );
   if (others.length === 0) return undefined;
-  const named = others.map(quoted).join(', ');
+  const matchInput = matchInputOf(fromContract, input);
+  const destinationOf = (name: string) => {
+    const model = destinationModelOf(
+      { namespaceId: change.model.namespaceId, model: name },
+      matchInput,
+    );
+    return model === undefined ? undefined : documentCollectionOf(input.contract, model);
+  };
+  const moving = others.filter(
+    (name) =>
+      destinationOf(name) !== undefined &&
+      !sharesCollectionInDestination(
+        { namespaceId: change.model.namespaceId, model: name },
+        input.collectionAfterRenames(originCollection),
+        matchInput,
+      ),
+  );
+  const staying = others.filter((name) => !moving.includes(name));
+  const movingModel = (name: string): MovingModel => {
+    const origin = { namespaceId: change.model.namespaceId, model: name };
+    return movingModelOf(matchInput, name, origin, destinationModelOf(origin, matchInput));
+  };
+  const moves = [...new Set(moving.map(destinationOf))]
+    .filter((to): to is string => to !== undefined)
+    .map((to) =>
+      documentMoveOf(
+        {
+          schema: input.schema,
+          fromContract,
+          contract: input.contract,
+          originFrom: originCollection,
+          to,
+          collectionRenames: input.collectionRenames,
+        },
+        moving.filter((name) => destinationOf(name) === to).map(movingModel),
+      ),
+    );
   const effect =
     change.to === undefined
       ? 'deleting the documents with that value would delete the documents'
@@ -308,8 +390,8 @@ function sharedCollectionRefusal(
   return refusedChange(
     change,
     label,
-    `model ${named} ${others.length === 1 ? 'is' : 'are'} stored in collection ${quoted(change.collection)} and its documents can hold ${change.originField} ${quoted(change.from)}`,
-    `${sharedCollectionWhy(change.collection, others, effect)} To change only the documents of ${variantText(change.model)}, ${SEPARATE_THE_MODELS}.`,
+    `the documents of ${modelNamesText(others)} in collection ${quoted(change.collection)} can hold ${change.originField} ${quoted(change.from)}`,
+    `${sharedCollectionWhy(change.collection, others, effect)} ${variantRoute(change, moves, staying)}`,
   );
 }
 
@@ -323,7 +405,7 @@ function unrenamedDiscriminatorRefusal(
   input: VariantInput,
   fromContract: ContractWithDomain,
 ): MigrationPlannerConflict | undefined {
-  const renamed = input.fieldRenames.some(
+  const renamed = input.fieldRenameCalls.some(
     (rename) =>
       rename.collection === change.collection &&
       rename.from === change.originField &&
@@ -338,6 +420,7 @@ function unrenamedDiscriminatorRefusal(
           fromContract,
           contract: input.contract,
           statements: input.statements,
+          fieldRenames: input.fieldRenames,
         });
   const field = quoted(change.field);
   const discriminator =

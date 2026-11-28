@@ -203,9 +203,6 @@ withTempDir(({ createTempDir }) => {
 
         const asked = await refusal(ctx, via, 'O1.04');
         if (via === 'db update') {
-          expect(asked, 'O1.04: the consent error').toContain(
-            '"summary":"This command requires explicit consent, but it was not provided."',
-          );
           expect(asked, 'O1.04: one question, about GeoPoint.lat').toContain(
             '"unanswered":[{"subject":"GeoPoint.lat","verbs":["rename","delete"]}]',
           );

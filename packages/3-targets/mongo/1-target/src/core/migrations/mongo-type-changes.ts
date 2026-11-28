@@ -21,15 +21,16 @@ import { bsonTypesOfCodec } from '@internal/mongo-contract/data-type';
 import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
 import { castsFrom, isConvertTarget } from './bson-convert';
 import { type CastFieldOptions, unrewritableFieldNameReason } from './migration-factories';
+import { collectionControlPolicy } from './mongo-control-policy';
+import { modelCoordinates } from './mongo-model-coordinates';
 import {
-  collectionControlPolicy,
   destinationFieldOf,
   destinationModelOf,
   embeddedModelReason,
   type FieldRemovalInput,
   modelAt,
-  modelCoordinates,
 } from './mongo-statement-planning';
+
 import { CastFieldCall } from './op-factory-call';
 
 type Document = Record<string, unknown>;
@@ -154,7 +155,7 @@ export function planFieldTypeChanges(
     return Object.keys(model.fields)
       .sort()
       .flatMap((field): TypeChange[] => {
-        const destinationField = destinationFieldOf({ ...origin, field }, input.statements);
+        const destinationField = destinationFieldOf({ ...origin, field }, input.fieldRenames);
         if (!Object.hasOwn(destinationModel.fields, destinationField)) return [];
         const from = fieldShapeOf(model.fields[field], lookups);
         const to = fieldShapeOf(destinationModel.fields[destinationField], lookups);

@@ -323,6 +323,74 @@ describe('MongoMigrationRunner, a data transform filled in by the user', () => {
     },
     timeouts.spinUpMongoMemoryServer,
   );
+
+  it(
+    'converts each document once when a --convert update that stopped part way runs again',
+    async () => {
+      await db.createCollection('users');
+      await db.collection('users').insertMany([
+        { name: 'Ada', age: '42' },
+        { name: 'Bo', age: 'forty' },
+        { name: 'Cy', age: '7' },
+      ]);
+      const properties = {
+        name: { bsonType: 'string' },
+        age: { bsonType: 'int' },
+        conversions: { bsonType: 'int' },
+      };
+      const notInt = { age: { $ne: null, $not: { $type: ['int'] } } };
+      const operations = [
+        dataTransform('User.age', {
+          check: { source: () => rawAggregate('users', [{ $match: notInt }, { $limit: 1 }]) },
+          run: () =>
+            rawUpdateMany(
+              'users',
+              notInt,
+              [
+                {
+                  $set: {
+                    age: { $toInt: '$age' },
+                    conversions: { $add: [{ $ifNull: ['$conversions', 0] }, 1] },
+                  },
+                },
+              ],
+              { bypassDocumentValidation: true },
+            ),
+        }),
+        validatorChange(properties),
+      ];
+      const contract = usersContract(properties);
+
+      const stopped = await run(operations, contract);
+      const convertedBeforeTheStop = await db
+        .collection('users')
+        .find({ age: { $type: 'int' } }, { projection: { _id: 0, name: 1 } })
+        .toArray();
+      await db.collection('users').updateOne({ name: 'Bo' }, { $set: { age: '40' } });
+      const finished = await run(operations, contract);
+
+      expect({
+        stopped: stopped.ok ? 'ok' : stopped.failure.code,
+        convertedBeforeTheStop,
+        finished: finished.ok ? finished.value.operationsExecuted : finished.failure,
+        documents: await db
+          .collection('users')
+          .find({}, { projection: { _id: 0 } })
+          .sort({ name: 1 })
+          .toArray(),
+      }).toEqual({
+        stopped: 'MIGRATION.EXECUTION_FAILED',
+        convertedBeforeTheStop: [{ name: 'Ada' }],
+        finished: 2,
+        documents: [
+          { name: 'Ada', age: 42, conversions: 1 },
+          { name: 'Bo', age: 40, conversions: 1 },
+          { name: 'Cy', age: 7, conversions: 1 },
+        ],
+      });
+    },
+    timeouts.spinUpMongoMemoryServer,
+  );
 });
 
 describe('MongoMigrationRunner, a data transform whose update MongoDB cannot convert', () => {
@@ -339,7 +407,7 @@ describe('MongoMigrationRunner, a data transform whose update MongoDB cannot con
     };
   };
   const conversionWhy = (reason: string) =>
-    `MongoDB stopped the data transform's update: ${reason}. Documents it updated before that value stay updated. Until a re-run finishes, a document the update already changed may no longer fit the collection's current validator, so updates to it fail. Fix the update in the migration's migration.ts, run the file with node, then run the command again. The operations that ran before the failure stay applied.`;
+    `MongoDB stopped the data transform's update: ${reason}. Documents it updated before that value stay updated. Until a re-run finishes, a document the update already changed may no longer fit the collection's current validator, so updates to it fail. When the command runs again, this update changes only the documents its filter still selects, the same documents its check finds. A document it already took out of that filter is not changed again. A document it changed but left inside that filter, as an update of only other fields does, is changed again. Fix the update in the migration's migration.ts, run the file with node, then run the command again; operations that already ran are skipped. The operations that ran before the failure stay applied.`;
 
   it(
     "reports the user's update failing, not a type change, for a filled --convert",
@@ -476,7 +544,7 @@ describe('MongoMigrationRunner, a data transform whose update MongoDB refuses fo
         why: result.failure.why,
       }).toEqual({
         message: 'Operation data_transform.User.code failed',
-        why: "Documents the update changed before the error stay changed. Until a re-run finishes, a document the update already changed may no longer fit the collection's current validator, so updates to it fail. Fix what MongoDB names; when it comes from the update, change the update in the migration's migration.ts so its filter and update work on a re-run, and run the file with node. Then run the command again. The operations that ran before the failure stay applied.",
+        why: "Documents the update changed before the error stay changed. Until a re-run finishes, a document the update already changed may no longer fit the collection's current validator, so updates to it fail. When the command runs again, this update changes only the documents its filter still selects, the same documents its check finds. A document it already took out of that filter is not changed again. A document it changed but left inside that filter, as an update of only other fields does, is changed again. Fix what MongoDB names; when it comes from the update, change it in the migration's migration.ts and run the file with node. Then run the command again; operations that already ran are skipped. The operations that ran before the failure stay applied.",
       });
     },
     timeouts.spinUpMongoMemoryServer,

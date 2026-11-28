@@ -81,7 +81,7 @@ describe('MongoMigrationPlanner, field statements', () => {
       ).toEqual({ labels: [], classes: [], applied: [], dataLoss: [] });
     });
 
-    it('asks about the field whose stored name changes without a statement, by its own name', () => {
+    it('renames the stored field of a field whose stored name changes without a statement, and asks nothing', () => {
       expect(
         planned(
           plan({
@@ -89,12 +89,16 @@ describe('MongoMigrationPlanner, field statements', () => {
             to: displayName('to', 'name', 'full_name'),
             schema: displayNameSchema,
           }),
-        ).dataLoss,
-      ).toEqual([
-        expect.objectContaining({
-          subject: { kind: 'field', namespaceId: NS, model: 'Profile', field: 'name' },
-        }),
-      ]);
+        ),
+      ).toEqual({
+        labels: [
+          'Rename field display_name to full_name in collection profiles',
+          'Update validator on profiles (added: full_name; removed: display_name)',
+        ],
+        classes: ['widening', 'widening'],
+        applied: [],
+        dataLoss: [],
+      });
     });
 
     it('plans nothing from a contract that named the document id _id to one that names it id', () => {

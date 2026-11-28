@@ -1,15 +1,30 @@
 import type { Document } from '@internal/mongo-value';
+import type { CollationOptions } from '@internal/mongo-value/mongodb-types';
 import { MongoAstNode } from './ast-node';
+
+export interface RawAggregateOptions {
+  readonly bypassDocumentValidation?: boolean;
+  readonly collation?: CollationOptions;
+}
 
 export class RawAggregateCommand extends MongoAstNode {
   readonly kind = 'rawAggregate' as const;
   readonly collection: string;
   readonly pipeline: ReadonlyArray<Document>;
+  declare readonly bypassDocumentValidation?: boolean;
+  declare readonly collation?: CollationOptions;
 
-  constructor(collection: string, pipeline: ReadonlyArray<Document>) {
+  constructor(
+    collection: string,
+    pipeline: ReadonlyArray<Document>,
+    options?: RawAggregateOptions,
+  ) {
     super();
     this.collection = collection;
     this.pipeline = pipeline;
+    if (options?.bypassDocumentValidation !== undefined)
+      this.bypassDocumentValidation = options.bypassDocumentValidation;
+    if (options?.collation !== undefined) this.collation = options.collation;
     this.freeze();
   }
 }
@@ -95,15 +110,21 @@ export class RawDeleteOneCommand extends MongoAstNode {
   }
 }
 
+export interface RawDeleteManyOptions {
+  readonly collation?: CollationOptions;
+}
+
 export class RawDeleteManyCommand extends MongoAstNode {
   readonly kind = 'rawDeleteMany' as const;
   readonly collection: string;
   readonly filter: Document;
+  declare readonly collation?: CollationOptions;
 
-  constructor(collection: string, filter: Document) {
+  constructor(collection: string, filter: Document, options?: RawDeleteManyOptions) {
     super();
     this.collection = collection;
     this.filter = filter;
+    if (options?.collation !== undefined) this.collation = options.collation;
     this.freeze();
   }
 }

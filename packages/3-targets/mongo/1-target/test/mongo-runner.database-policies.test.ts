@@ -151,6 +151,7 @@ function runSpaces(
     readonly databasePolicies?: DatabasePolicies;
   }>,
   expectedDatabasePolicies: DatabasePolicies,
+  executionChecks = { prechecks: false, postchecks: false, idempotencyChecks: false },
 ) {
   const family = {
     createRunnerDependencies: () => dependencies,
@@ -165,7 +166,7 @@ function runSpaces(
       policy: ALL_POLICY,
       frameworkComponents: [],
       strictVerification: false,
-      executionChecks: { prechecks: false, postchecks: false, idempotencyChecks: false },
+      executionChecks,
     })),
     expectedDatabasePolicies,
   });
@@ -456,5 +457,68 @@ describe('MongoMigrationRunner database policies', () => {
         },
       ],
     });
+  });
+
+  it("guards the application space's marker with the policies in force, and leaves an extension space's marker unguarded", async () => {
+    const appStore = new MarkerStore(markerAt('start', { policies: MIGRATE_ONLY }));
+    const extensionStore = new MarkerStore(markerAt('start', {}));
+    const runWith = (store: MarkerStore, policiesInForce: DatabasePolicies, spaceId?: string) =>
+      makeRunner(store).execute({
+        plan: {
+          ...makePlan([createCollection('items')], 'start'),
+          ...ifDefined('spaceId', spaceId),
+        },
+        migrationEdges: [edge('start', DEST, '002_items')],
+        destinationContract: makeContract(),
+        policy: ALL_POLICY,
+        frameworkComponents: [],
+        strictVerification: false,
+        executionChecks: { prechecks: false, postchecks: false, idempotencyChecks: false },
+        policiesInForce,
+      });
+
+    const app = await runWith(appStore, DEFAULT_DATABASE_POLICIES);
+    const extension = await runWith(extensionStore, MIGRATE_ONLY, 'audit');
+
+    expect({
+      app: app.ok ? 'applied' : app.failure.meta?.['reason'],
+      appHash: appStore.marker?.storageHash,
+      extension: extension.ok ? 'applied' : extension.failure,
+      extensionHash: extensionStore.marker?.storageHash,
+    }).toEqual({
+      app: 'databasePolicies',
+      appHash: 'start',
+      extension: 'applied',
+      extensionHash: DEST,
+    });
+  });
+
+  it("gives an extension space's refusal the ways the database's policies permit, as the application space's", async () => {
+    const store = new MarkerStore(markerAt('start', { policies: MIGRATE_ONLY }));
+    const inspection = new StubInspectionExecutor();
+    inspection.collections = [{ name: 'audit_log' }];
+
+    const result = await runSpaces(
+      makeDependencies(store, inspection),
+      [
+        {
+          space: 'audit',
+          plan: {
+            ...makePlan([{ ...createCollection('audit_log'), postcheck: [] }], 'start'),
+            spaceId: 'audit',
+          },
+          migrationEdges: [edge('start', DEST, '001_audit')],
+        },
+      ],
+      MIGRATE_ONLY,
+      { prechecks: true, postchecks: true, idempotencyChecks: true },
+    );
+
+    const failure = result.assertNotOk();
+    expect(failure).toMatchObject({
+      code: 'MIGRATION.PRECHECK_FAILED',
+      why: expect.stringContaining('moving the collection aside'),
+    });
+    expect(failure.why).not.toContain('db sign');
   });
 });

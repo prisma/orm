@@ -103,10 +103,17 @@ export class UpdateManyWireCommand extends MongoWireCommand {
 export class DeleteManyWireCommand extends MongoWireCommand {
   readonly kind = 'deleteMany' as const;
   readonly filter: Document;
+  /** Present only when given, so every other delete keeps its fields and content hash. */
+  declare readonly collation?: CollationOptions;
 
-  constructor(collection: string, filter: Document) {
+  constructor(
+    collection: string,
+    filter: Document,
+    options?: { readonly collation?: CollationOptions },
+  ) {
     super(collection);
     this.filter = filter;
+    if (options?.collation !== undefined) this.collation = options.collation;
     this.freeze();
   }
 }
@@ -157,10 +164,23 @@ export class FindOneAndDeleteWireCommand extends MongoWireCommand {
 export class AggregateWireCommand extends MongoWireCommand {
   readonly kind = 'aggregate' as const;
   readonly pipeline: RawPipeline;
+  /** Present only when `true`, so every other aggregate keeps its fields and content hash. */
+  declare readonly bypassDocumentValidation?: true;
+  /** Present only when given, as `bypassDocumentValidation` is. */
+  declare readonly collation?: CollationOptions;
 
-  constructor(collection: string, pipeline: RawPipeline) {
+  constructor(
+    collection: string,
+    pipeline: RawPipeline,
+    options?: {
+      readonly bypassDocumentValidation?: boolean;
+      readonly collation?: CollationOptions;
+    },
+  ) {
     super(collection);
     this.pipeline = pipeline;
+    if (options?.bypassDocumentValidation === true) this.bypassDocumentValidation = true;
+    if (options?.collation !== undefined) this.collation = options.collation;
     this.freeze();
   }
 }

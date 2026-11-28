@@ -337,7 +337,7 @@ describe('MongoMigrationPlanner, a new required field on a collection with docum
         ({ summary }) => summary,
       ),
     ).toEqual([
-      'Cannot fill field "level" of model "SuperAdmin" in collection "users": model "Member", "SuperMember" is stored in the same collection',
+      'Cannot fill field "level" of model "SuperAdmin" in collection "users": models "Member" and "SuperMember" are stored in the same collection',
     ]);
   });
 });

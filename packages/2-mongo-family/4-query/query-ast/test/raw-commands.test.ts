@@ -74,6 +74,30 @@ describe('RawUpdateOneCommand', () => {
     expect(cmd.update).toEqual(update);
   });
 
+  it('carries bypassDocumentValidation on an aggregate only when given', () => {
+    const pipeline = [{ $match: {} }, { $merge: { into: 'members' } }];
+    const plain = new RawAggregateCommand('users', pipeline);
+    const bypassing = new RawAggregateCommand('users', pipeline, {
+      bypassDocumentValidation: true,
+    });
+    expect({
+      plainHasKey: 'bypassDocumentValidation' in plain,
+      bypassing: bypassing.bypassDocumentValidation,
+    }).toEqual({ plainHasKey: false, bypassing: true });
+  });
+
+  it('carries a collation on an aggregate only when given', () => {
+    const pipeline = [{ $match: { kind: 'sample' } }, { $limit: 1 }];
+    const plain = new RawAggregateCommand('users', pipeline);
+    const collated = new RawAggregateCommand('users', pipeline, {
+      collation: { locale: 'simple' },
+    });
+    expect({
+      plainHasKey: 'collation' in plain,
+      collation: collated.collation,
+    }).toEqual({ plainHasKey: false, collation: { locale: 'simple' } });
+  });
+
   it('carries bypassDocumentValidation only when given', () => {
     const plain = new RawUpdateManyCommand('users', filter, update);
     const bypassing = new RawUpdateManyCommand('users', filter, update, {
@@ -142,6 +166,20 @@ describe('RawDeleteManyCommand', () => {
     expect(cmd.kind).toBe('rawDeleteMany');
     expect(cmd.collection).toBe('sessions');
     expect(cmd.filter).toEqual(filter);
+  });
+
+  it('carries a collation only when given', () => {
+    const plain = new RawDeleteManyCommand('sessions', filter);
+    const collated = new RawDeleteManyCommand('sessions', filter, {
+      collation: { locale: 'en', strength: 2 },
+    });
+    expect({
+      plainKeys: Object.keys(plain).sort(),
+      collation: collated.collation,
+    }).toEqual({
+      plainKeys: ['collection', 'filter', 'kind'],
+      collation: { locale: 'en', strength: 2 },
+    });
   });
 
   it('is frozen', () => {

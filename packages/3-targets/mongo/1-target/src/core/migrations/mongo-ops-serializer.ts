@@ -234,6 +234,7 @@ const RawDeleteManyJson = type({
   kind: '"rawDeleteMany"',
   collection: 'string',
   filter: 'Record<string, unknown>',
+  'collation?': CollationJson,
 });
 
 const RawAggregateJson = type({
@@ -241,6 +242,8 @@ const RawAggregateJson = type({
   kind: '"rawAggregate"',
   collection: 'string',
   pipeline: 'Record<string, unknown>[]',
+  'bypassDocumentValidation?': 'boolean',
+  'collation?': CollationJson,
 });
 
 const RawFindOneAndUpdateJson = type({
@@ -714,11 +717,18 @@ export function deserializeDmlCommand(json: unknown): AnyMongoCommand {
     }
     case 'rawDeleteMany': {
       const data = validate(RawDeleteManyJson, json, 'rawDeleteMany command');
-      return new RawDeleteManyCommand(data.collection, data.filter);
+      return new RawDeleteManyCommand(
+        data.collection,
+        data.filter,
+        ifDefined('collation', data.collation),
+      );
     }
     case 'rawAggregate': {
       const data = validate(RawAggregateJson, json, 'rawAggregate command');
-      return new RawAggregateCommand(data.collection, data.pipeline);
+      return new RawAggregateCommand(data.collection, data.pipeline, {
+        ...ifDefined('bypassDocumentValidation', data.bypassDocumentValidation),
+        ...ifDefined('collation', data.collation),
+      });
     }
     case 'rawFindOneAndUpdate': {
       const data = validate(RawFindOneAndUpdateJson, json, 'rawFindOneAndUpdate command');

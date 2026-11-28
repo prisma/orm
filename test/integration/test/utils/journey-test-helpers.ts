@@ -625,52 +625,6 @@ export function runPrintedSelfEmit(message: string, packageDir: string): Command
 }
 
 /**
- * Splits the body of a `return [ ... ]` operations list into its top-level entries, keeping each entry's source text.
- */
-function operationEntries(body: string): string[] {
-  const entries: string[] = [];
-  let depth = 0;
-  let quote: string | undefined;
-  let start = 0;
-  for (let i = 0; i < body.length; i++) {
-    const char = body[i]!;
-    if (quote !== undefined) {
-      if (char === '\\') i++;
-      else if (char === quote) quote = undefined;
-    } else if (char === "'" || char === '"' || char === '`') quote = char;
-    else if ('([{'.includes(char)) depth++;
-    else if (')]}'.includes(char)) depth--;
-    else if (char === ',' && depth === 0) {
-      entries.push(body.slice(start, i));
-      start = i + 1;
-    }
-  }
-  entries.push(body.slice(start));
-  return entries.map((entry) => entry.trim()).filter((entry) => entry !== '');
-}
-
-/**
- * Edits a MongoDB `migration.ts` as the advice to keep a dropped collection's documents says: `renameCollection(from, to)` becomes the first operation, imported with the others, and the drop of `from` and any create of `to` are deleted.
- */
-export function followRenameCollectionAdvice(source: string, from: string, to: string): string {
-  const operations = /(override get operations\(\) \{\s*return \[)([\s\S]*?)(\];\s*\})/;
-  const match = operations.exec(source);
-  if (match === null) throw new Error(`no operations list in:\n${source}`);
-  const isCall = (entry: string, factory: string, collection: string) =>
-    new RegExp(`^${factory}\\(\\s*['"]${collection}['"]`).test(entry);
-  const kept = operationEntries(match[2]!).filter(
-    (entry) => !isCall(entry, 'dropCollection', from) && !isCall(entry, 'createCollection', to),
-  );
-  const entries = [`renameCollection(${JSON.stringify(from)}, ${JSON.stringify(to)})`, ...kept];
-  return source
-    .replace(
-      operations,
-      (_all, open: string, _body, close: string) => `${open}${entries.join(', ')}${close}`,
-    )
-    .replace(/import \{/, 'import { renameCollection,');
-}
-
-/**
  * Runs `migration plan` (which scaffolds a draft migration.ts), then runs
  * that migration.ts in-process so it writes its own ops.json and
  * migration.json (self-emission; see {@link runMigrationFile}).

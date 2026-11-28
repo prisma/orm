@@ -326,7 +326,7 @@ describe('MongoMigrationPlanner, a field of a value object', () => {
         kind: 'fieldRemovalRefused',
         summary:
           'Cannot remove value object field "Address.street" inside field "addresses" of model "User" in collection "users": model "Note" stores it in the same collection',
-        why: 'Collection "users" stores several models and no discriminator tells their documents apart, so removing the key would remove it from the documents of "Note" too. To keep it in "Note" documents only, move the models to separate collections, or carry out the change yourself, with a filter that selects only their documents, in a dataTransform operation of the migration.ts that migration plan writes or in mongosh.',
+        why: 'Collection "users" stores several models and no discriminator tells their documents apart, so removing the key would remove it from the documents of "Note" too. To keep it in "Note" documents only, move the models to separate collections, or keep the field in the contract.',
       },
     ]);
   });

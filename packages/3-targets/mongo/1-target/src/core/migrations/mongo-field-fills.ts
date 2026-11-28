@@ -25,17 +25,18 @@ import {
 import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { unrewritableFieldNameReason } from './migration-factories';
+import { collectionControlPolicy } from './mongo-control-policy';
 import { discriminatorRenameOf } from './mongo-discriminator-renames';
+import { modelCoordinates } from './mongo-model-coordinates';
 import {
-  collectionControlPolicy,
   destinationFieldOf,
   type ModelMatchInput,
   modelAt,
-  modelCoordinates,
   originFieldOf,
   originModelOf,
   storedFieldsKeptOf,
 } from './mongo-statement-planning';
+
 import { FillFieldCall } from './op-factory-call';
 
 const EMPTY_LIST: MongoTemporaryValue = { expression: [], text: '[]' };
@@ -98,9 +99,9 @@ function inOrigin(
   const origin = originModelOf(field, input.match);
   const model = origin === undefined ? undefined : modelAt(input.match.fromContract, origin);
   if (origin === undefined || model === undefined) return true;
-  const originField = originFieldOf(field, input.match.statements);
+  const originField = originFieldOf(field, input.match.fieldRenames);
   const movedAway =
-    destinationFieldOf({ ...origin, field: originField }, input.match.statements) !== field.field;
+    destinationFieldOf({ ...origin, field: originField }, input.match.fieldRenames) !== field.field;
   return (
     !movedAway &&
     (Object.hasOwn(model.fields, originField) ||
@@ -139,6 +140,7 @@ function newDiscriminatorRefusal(
           fromContract: input.match.fromContract,
           contract: input.contract,
           statements: input.statements,
+          fieldRenames: input.match.fieldRenames,
         });
   if (rename === undefined) return undefined;
   const text = fieldStatementText(input.contract, { ...model, field });

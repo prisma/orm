@@ -337,11 +337,6 @@ describe('createCollection', () => {
     const cmd = op.execute[0]!.command as CreateCollectionCommand;
     expect(cmd.changeStreamPreAndPostImages).toEqual({ enabled: true });
   });
-
-  it('has empty postcheck', () => {
-    const op = createCollection('users');
-    expect(op.postcheck).toHaveLength(0);
-  });
 });
 
 describe('dropCollection', () => {

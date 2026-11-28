@@ -1,5 +1,12 @@
 import type { JsonValue } from '@internal/contract/types';
 import {
+  isDisabledChangeStream,
+  isSimpleCollation,
+  reportedCappedMax,
+  reportedCappedSize,
+  reportsValidator,
+} from '@internal/family-mongo/schema-verify';
+import {
   defaultMongoIndexName,
   MONGO_INDEX_OPTION_KEYS,
   type MongoIndexOptionKey,
@@ -39,6 +46,7 @@ import {
 import { createFieldAccessor } from '@internal/mongo-query-builder';
 import { collection } from '@internal/mongo-query-builder/contract-free';
 import type { Document, MongoValue } from '@internal/mongo-value';
+import type { CollationOptions } from '@internal/mongo-value/mongodb-types';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { mongoTargetError } from '../mongo-target-errors';
@@ -132,12 +140,23 @@ export function dataTransform(
   };
 }
 
-/** A raw `aggregate` on a collection, as a data transform's check reads documents. */
+/**
+ * A raw `aggregate` on a collection. It is a read, as a data transform's check makes, or a write
+ * when the pipeline ends in `$merge` or `$out`, which can skip document validation as `rawUpdateMany` can.
+ */
 export function rawAggregate(
   collectionName: string,
   pipeline: readonly Document[],
+  options?: { readonly bypassDocumentValidation?: boolean },
 ): MongoQueryPlan {
-  return rewritePlan(collectionName, new RawAggregateCommand(collectionName, pipeline));
+  return rewritePlan(
+    collectionName,
+    new RawAggregateCommand(
+      collectionName,
+      pipeline,
+      ifDefined('bypassDocumentValidation', options?.bypassDocumentValidation),
+    ),
+  );
 }
 
 /**
@@ -596,10 +615,18 @@ function noDocumentMatches(
   collectionName: string,
   match: Document,
   description: string,
+  collation?: CollationOptions,
 ): MongoDmlCheck {
   return {
     description,
-    source: rawAggregate(collectionName, [{ $match: match }, { $limit: 1 }]),
+    source: rewritePlan(
+      collectionName,
+      new RawAggregateCommand(
+        collectionName,
+        [{ $match: match }, { $limit: 1 }],
+        ifDefined('collation', collation),
+      ),
+    ),
     filter: MATCH_ALL_FILTER,
     expect: 'notExists',
   };
@@ -1049,6 +1076,8 @@ export function removeStoredValue(options: RemoveStoredValueOptions): MongoDmlOp
 export interface DeleteDocumentsOptions {
   readonly collection: string;
   readonly filter: Document;
+  /** The collation the delete and its check select with, in place of the collection's own. */
+  readonly collation?: CollationOptions;
 }
 
 /** The documents a filter selects, in words where the planner wrote it, for an operation's label. */
@@ -1063,7 +1092,7 @@ function selectedText(filter: Document): string {
 
 /** Deletes the documents of a collection that `filter` selects, as a variant's documents are deleted. */
 export function deleteDocuments(options: DeleteDocumentsOptions): MongoDmlOperation {
-  const { collection: collectionName, filter } = options;
+  const { collection: collectionName, filter, collation } = options;
   const id = `documents.${collectionName}.delete${idSuffix(filter)}`;
   return {
     id,
@@ -1071,12 +1100,18 @@ export function deleteDocuments(options: DeleteDocumentsOptions): MongoDmlOperat
     operationClass: 'destructive',
     name: id,
     precheck: [],
-    run: [rewritePlan(collectionName, new RawDeleteManyCommand(collectionName, filter))],
+    run: [
+      rewritePlan(
+        collectionName,
+        new RawDeleteManyCommand(collectionName, filter, ifDefined('collation', collation)),
+      ),
+    ],
     postcheck: [
       noDocumentMatches(
         collectionName,
         filter,
         `no document in ${collectionName} matches ${JSON.stringify(filter)}`,
+        collation,
       ),
     ],
   };
@@ -1360,8 +1395,105 @@ export function createCollection(
         command: collection(collectionName).createCollection(options),
       },
     ],
-    postcheck: [],
+    postcheck: [
+      {
+        description: `collection ${collectionName} exists with the options it is created with`,
+        source: new ListCollectionsCommand(),
+        filter: MongoAndExpr.of([
+          f.name.eq(collectionName),
+          ...createdCollectionOptionFilters(options ?? {}),
+        ]),
+        expect: 'exists',
+        object: `collection "${collectionName}"`,
+      },
+    ],
   };
+}
+
+/**
+ * How the postcheck compares each option `listCollections` reports: the validator whole, a
+ * scalar exactly, and a document by the fields the call gives, since MongoDB completes a time-series
+ * spec, a collation and a clustered index with defaults. Every option is listed, so a new one does
+ * not compile until it is placed.
+ */
+const CREATED_OPTION_KINDS = {
+  validator: 'validator',
+  validationLevel: 'scalar',
+  validationAction: 'scalar',
+  capped: 'scalar',
+  size: 'scalar',
+  max: 'scalar',
+  timeseries: 'document',
+  collation: 'document',
+  changeStreamPreAndPostImages: 'document',
+  clusteredIndex: 'document',
+} as const satisfies Record<keyof CreateCollectionOptions, 'validator' | 'scalar' | 'document'>;
+
+/** The options MongoDB reports for a collection created with `options`, by the family's rule. */
+function reportedCreateOptions(options: CreateCollectionOptions): CreateCollectionOptions {
+  const { validator, capped, size, max, collation, changeStreamPreAndPostImages, ...rest } =
+    options;
+  return {
+    ...rest,
+    ...(reportsValidator(validator) ? ifDefined('validator', validator) : {}),
+    ...(capped === true ? { capped } : {}),
+    ...(size === undefined ? {} : { size: reportedCappedSize(size) }),
+    ...(max === undefined ? {} : { max: reportedCappedMax(max) }),
+    ...(isSimpleCollation(collation) ? {} : ifDefined('collation', collation)),
+    ...(isDisabledChangeStream(changeStreamPreAndPostImages)
+      ? {}
+      : ifDefined('changeStreamPreAndPostImages', changeStreamPreAndPostImages)),
+  };
+}
+
+/** Options `listCollections` can report that `createCollection` never sets, so a collection that has one was made another way. */
+const OPTIONS_CREATE_NEVER_SETS = [
+  'viewOn',
+  'pipeline',
+  'expireAfterSeconds',
+  'storageEngine',
+  'indexOptionDefaults',
+  'encryptedFields',
+] as const;
+
+/**
+ * What `listCollections` reports for a collection created with `options`, so that the create is
+ * skipped on a re-run only when the collection it made is there, and not for one made another way.
+ * Its `type` must be the kind the call creates, an option the call does not give, or sets to a
+ * default MongoDB does not report, must be absent, and so must every option the call never sets.
+ */
+function createdCollectionOptionFilters(options: CreateCollectionOptions): MongoFilterExpr[] {
+  const reported = reportedCreateOptions(options);
+  return [
+    MongoFieldFilter.eq('type', options.timeseries === undefined ? 'collection' : 'timeseries'),
+    ...Object.entries(CREATED_OPTION_KINDS).flatMap(([option, kind]): MongoFilterExpr[] => {
+      const given: unknown = Reflect.get(reported, option);
+      if (given === undefined) return [MongoExistsExpr.notExists(`options.${option}`)];
+      if (kind === 'validator') {
+        return [
+          MongoFieldFilter.eq(
+            'options.validator',
+            blindCast<MongoValue, 'the validator option is a plain BSON document'>(given),
+          ),
+        ];
+      }
+      if (kind === 'scalar') {
+        return [
+          MongoFieldFilter.eq(
+            `options.${option}`,
+            blindCast<MongoValue, 'scalar collection options are BSON scalars'>(given),
+          ),
+        ];
+      }
+      return Object.entries(Object(given)).map(([field, value]) =>
+        MongoFieldFilter.eq(
+          `options.${option}.${field}`,
+          blindCast<MongoValue, 'collection options are plain BSON values'>(value),
+        ),
+      );
+    }),
+    ...OPTIONS_CREATE_NEVER_SETS.map((option) => MongoExistsExpr.notExists(`options.${option}`)),
+  ];
 }
 
 export function dropCollection(collectionName: string): MongoMigrationPlanOperation {

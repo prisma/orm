@@ -3,12 +3,12 @@
  *
  * Dropping a collection loses its documents, so `migration plan` and `db update` ask what the drop means; `--delete <Model>` answers. The MongoDB planner refuses rename statements in this release.
  *
- * Journey S1 removes `Event` through `migration plan`: refused without `--delete Event`, planned with it, and applied by `migrate`. Journey S2 does the same through `db update`, where `--confirm <database>` no longer consents. Journey S3 adds a required field with no refusal; the existing document gets a temporary value. Journey S4 gives a rename, which renames the collection and keeps its documents. Journey S5 follows, as printed, the refusal of a field rename whose model keeps its name while its collection changes. Journey S6 follows, through `db update`, the question about a collection whose model keeps its name, and keeps its documents.
+ * Journey S1 removes `Event` through `migration plan`: refused without `--delete Event`, planned with it, and applied by `migrate`. Journey S2 does the same through `db update`, where `--confirm <database>` no longer consents. Journey S3 adds a required field with no refusal; the existing document gets a temporary value. Journey S4 gives a rename, which renames the collection and keeps its documents. Journey S5 plans a field rename on a model whose `@@map` changes: the collection is renamed first, then the field. Journey S6 runs `db update` after the collection was renamed by hand: nothing is planned for it, and the documents stay.
  */
 
 import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 import { timeouts } from '@repo/test-utils';
 import { MongoClient } from 'mongodb';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
@@ -16,7 +16,6 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { fixtureAppDir, writeProjectManifest } from '../utils/cli-test-helpers';
 import {
   engineError,
-  followRenameCollectionAdvice,
   type JourneyContext,
   latestMigrationDirName,
   parseJsonOutput,
@@ -24,7 +23,6 @@ import {
   runDbUpdate,
   runMigrate,
   runMigrationPlan,
-  runPrintedSelfEmit,
 } from '../utils/journey-test-helpers';
 import { writeMongoPslConfig } from '../utils/journey-workspace-helpers';
 
@@ -281,7 +279,7 @@ describe('Journeys (MongoDB): statements that consent to data loss', {
     expect(documents, 'S4.04: its documents are kept').toEqual([{ name: 'launch' }]);
   });
 
-  it('S5: the advice for a field rename whose collection changes keeps the documents when followed as printed', async () => {
+  it('S5: a field rename statement on a model whose @@map changes is planned after the collection rename, and keeps the documents', async () => {
     const dbName = 'mongo_remap_then_rename';
     const ctx = setupProject(withDatabase(replSet.getUri(), dbName));
     created.add(ctx.testDir);
@@ -294,71 +292,31 @@ describe('Journeys (MongoDB): statements that consent to data loss', {
 
     useFixture(ctx, 'contract-events-remapped-title.ts');
     await emit(ctx, 'S5.04');
-    const refused = await runMigrationPlan(ctx, [
+    const planned = await runMigrationPlan(ctx, [
+      '--name',
+      'title',
       '--from',
       origin,
       '--rename',
       'Event.name:Event.title',
       '--json',
     ]);
-    expect(refused.exitCode, 'S5.05: the field rename is refused').not.toBe(0);
-    expect(JSON.stringify(engineError(refused)?.meta), 'S5.05: the advice').toContain(
-      'run node on that migration.ts so it writes ops.json again',
-    );
-
-    useFixture(ctx, 'contract-events-remapped.ts');
-    await emit(ctx, 'S5.06');
-    const asked = await runMigrationPlan(ctx, ['--from', origin, '--json']);
-    expect(asked.exitCode, 'S5.06: the drop of events needs a statement').toBe(2);
+    expect(planned.exitCode, `S5.05: plan the field rename: ${planned.stderr}`).toBe(0);
     expect(
-      JSON.stringify(engineError(asked)),
-      'S5.06: the question says how to keep the documents',
-    ).toContain(
-      'make renameCollection(\\"events\\", \\"occasions\\") the first operation, imported with the other operations, delete the drop of \\"events\\", and delete the create of \\"occasions\\" if there is one',
-    );
-    const remap = await runMigrationPlan(ctx, [
-      '--name',
-      'remap',
-      '--from',
-      origin,
-      '--delete',
-      'Event',
+      parseJsonOutput<{ operations: readonly { label: string }[] }>(planned).operations.map(
+        ({ label }) => label,
+      ),
+      'S5.05: the collection is renamed, then the field',
+    ).toEqual([
+      'Rename collection events to occasions',
+      'Rename field name to title in collection occasions',
+      'Create index title_1 on occasions (title:1)',
+      'Update validator on occasions (added: title; removed: name)',
     ]);
-    expect(
-      remap.exitCode,
-      `S5.07: plan the collection change with --delete Event: ${remap.stderr}`,
-    ).toBe(0);
-    const remapDir = latestMigrationDirName(ctx);
-    const migrationTs = join(ctx.testDir, 'migrations/app', remapDir, 'migration.ts');
-    const planned = readFileSync(migrationTs, 'utf-8');
-    const edited = followRenameCollectionAdvice(planned, 'events', 'occasions');
-    expect(edited, `S5.08: migration.ts is edited as the advice says:\n${edited}`).toMatch(
-      /return \[renameCollection\("events", "occasions"\)/,
-    );
-    expect(edited, `S5.08: the drop and the create are gone:\n${edited}`).not.toMatch(
-      /dropCollection\(['"]events|createCollection\(['"]occasions/,
-    );
-    writeFileSync(migrationTs, edited, 'utf-8');
-    const emitted = runPrintedSelfEmit(String(engineError(asked)?.why), dirname(migrationTs));
-    expect(emitted.exitCode, `S5.09: node on migration.ts, as printed: ${emitted.stderr}`).toBe(0);
-    const applyRemap = await runMigrate(ctx);
-    expect(applyRemap.exitCode, `S5.10: migrate: ${applyRemap.stderr}`).toBe(0);
+    const applied = await runMigrate(ctx);
+    expect(applied.exitCode, `S5.06: migrate: ${applied.stderr}`).toBe(0);
 
-    useFixture(ctx, 'contract-events-remapped-title.ts');
-    await emit(ctx, 'S5.11');
-    const rename = await runMigrationPlan(ctx, [
-      '--name',
-      'title',
-      '--from',
-      remapDir,
-      '--rename',
-      'Event.name:Event.title',
-    ]);
-    expect(rename.exitCode, `S5.12: plan the field rename: ${rename.stderr}`).toBe(0);
-    const applyRename = await runMigrate(ctx);
-    expect(applyRename.exitCode, `S5.13: migrate: ${applyRename.stderr}`).toBe(0);
-
-    expect(await collections(dbName), 'S5.14: the collection is renamed').toEqual([
+    expect(await collections(dbName), 'S5.07: the collection is renamed').toEqual([
       'occasions',
       'users',
     ]);
@@ -367,12 +325,12 @@ describe('Journeys (MongoDB): statements that consent to data loss', {
       .collection('occasions')
       .find({}, { projection: { _id: 0 } })
       .toArray();
-    expect(documents, 'S5.14: its document is kept under the new field').toEqual([
+    expect(documents, 'S5.07: its document is kept under the new field').toEqual([
       { title: 'launch' },
     ]);
   });
 
-  it('S6: db update keeps the documents when the question about a collection whose model keeps its name is followed', async () => {
+  it('S6: db update after the collection was renamed by hand plans nothing for the collection and keeps the documents', async () => {
     const dbName = 'mongo_remap_update';
     const ctx = setupProject(withDatabase(replSet.getUri(), dbName));
     created.add(ctx.testDir);
@@ -383,21 +341,14 @@ describe('Journeys (MongoDB): statements that consent to data loss', {
     useFixture(ctx, 'contract-events-remapped.ts');
     await emit(ctx, 'S6.03');
 
-    const refused = await runDbUpdate(ctx, ['--no-interactive', '--json']);
-    expect(refused.exitCode, 'S6.04: the drop of events needs a statement').toBe(2);
-    expect(engineError(refused)?.code, 'S6.04').toBe('CLI.CONSENT_REQUIRED');
-    expect(
-      JSON.stringify(engineError(refused)),
-      'S6.04: the question says how to keep the documents',
-    ).toContain(
-      'db.getCollection(\\"events\\").renameCollection(\\"occasions\\") in mongosh, then run db update',
-    );
-    expect(await collections(dbName), 'S6.04: nothing dropped').toContain('events');
-
     await client.db(dbName).collection('events').rename('occasions');
     const updated = await runDbUpdate(ctx, ['--no-interactive', '--json']);
-    expect(updated.exitCode, `S6.05: db update after the rename: ${updated.stderr}`).toBe(0);
-    expect(await collections(dbName), 'S6.05: the collection is renamed').toEqual([
+    expect(updated.exitCode, `S6.04: db update after the rename: ${updated.stderr}`).toBe(0);
+    expect(
+      parseJsonOutput<{ plan: { operations: readonly unknown[] } }>(updated).plan.operations,
+      'S6.04: nothing is planned for the collection',
+    ).toEqual([]);
+    expect(await collections(dbName), 'S6.05: the collection keeps its new name').toEqual([
       'occasions',
       'users',
     ]);

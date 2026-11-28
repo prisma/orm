@@ -2,6 +2,7 @@ import type { ContractWithDomain } from '@internal/contract/types';
 import type {
   MigrationPlannerConflict,
   ModelCoordinate,
+  ResolvedMigrationStatement,
 } from '@internal/framework-components/control';
 import {
   otherModelsReached,
@@ -9,6 +10,8 @@ import {
   validatorRootShapesOf,
 } from '@internal/mongo-contract';
 import type { MongoFieldRewriteMeta } from '@internal/mongo-query-ast/control';
+import { joinedList, modelNamesText, quotedList } from './mongo-plan-text';
+import { renameRefused } from './mongo-storage-renames';
 
 export const SEPARATE_THE_MODELS =
   'move the models to separate collections, or carry out the change yourself, with a filter that selects only their documents, in a dataTransform operation of the migration.ts that migration plan writes or in mongosh';
@@ -18,8 +21,46 @@ export function sharedCollectionWhy(
   others: readonly string[],
   change: string,
 ): string {
-  const names = others.map((name) => JSON.stringify(name)).join(', ');
-  return `Collection ${JSON.stringify(collection)} stores several models and no discriminator tells their documents apart, so ${change} of ${names} too.`;
+  return `Collection ${JSON.stringify(collection)} stores several models and no discriminator tells their documents apart, so ${change} of ${quotedList(others)} too.`;
+}
+
+/** How a model that blocks a rewrite came to share its documents in the destination. */
+export type Arrival = 'joinsCollection' | 'startsStoringField';
+
+/** The arrival of destination model `model` in `collection` with a field stored as `storedName`; `undefined` when the origin already stores it there with that field. */
+export type ArrivalOf = (
+  model: ModelCoordinate,
+  collection: string,
+  storedName: string,
+) => Arrival | undefined;
+
+/**
+ * The order that works when every model blocking a rewrite arrives in the destination: the change
+ * in an earlier migration, before they do, when their documents do not hold the field yet. Empty
+ * when one of them does not arrive, and for a rewrite that reaches a model's documents whether or
+ * not they hold the field, since an earlier migration reaches a model already there just the same.
+ */
+export function earlierMigrationText(
+  arrivals: readonly { readonly name: string; readonly arrival: Arrival | undefined }[],
+  collection: string,
+  field: string,
+  reaches: 'holding' | 'selected',
+): string {
+  if (
+    arrivals.length === 0 ||
+    arrivals.some(
+      ({ arrival }) =>
+        arrival === undefined || (reaches === 'selected' && arrival === 'startsStoringField'),
+    )
+  ) {
+    return '';
+  }
+  const before = arrivals.map(({ name, arrival }) =>
+    arrival === 'joinsCollection'
+      ? `model ${JSON.stringify(name)} is added to collection ${JSON.stringify(collection)}`
+      : `model ${JSON.stringify(name)} stores field ${JSON.stringify(field)}`,
+  );
+  return ` Or make the change in an earlier migration, before ${joinedList(before)}.`;
 }
 
 export const TIME_SERIES_UPDATES =
@@ -40,10 +81,15 @@ export interface PlannedRewrite {
   readonly model: ModelCoordinate | undefined;
   /** For a rewrite of a key inside the field: the field the key stores, in words, and the other models whose documents the same rewrite is planned for. */
   readonly storedKey: { readonly key: string; readonly together: readonly string[] } | undefined;
+  /** For a contract change no statement asks for, how to leave it out of the contract instead; `undefined` for a rewrite a statement asks for (`--rename`, `--convert`, `--backfill`). */
+  readonly keepAdvice: string | undefined;
+  /** For a key rename or a value replacement, the rename statement that asks for it, which its refusal carries; `undefined` for a contract change, and for every other kind of rewrite, whose refusal kind does not depend on it. */
+  readonly renameStatement: ResolvedMigrationStatement | undefined;
 }
 
 interface RewriteWords {
-  readonly conflictKind: string;
+  /** The kind of a refusal; `undefined` for a rename or a value replacement, refused as a statement or a contract change the plan cannot make. */
+  readonly conflictKind: string | undefined;
   readonly verb: string;
   /** The verb for a key a rewrite names, as in "rename value object field "Address.street" inside". */
   readonly keyVerb: string | undefined;
@@ -113,7 +159,7 @@ const WORDS: Readonly<Record<RewriteKind, RewriteWords>> = {
   },
   renameStoredKey: {
     keyVerb: 'rename',
-    conflictKind: 'statementRefused',
+    conflictKind: undefined,
     verb: 'rename a key inside',
     preposition: 'in',
     reaches: 'holding',
@@ -135,7 +181,7 @@ const WORDS: Readonly<Record<RewriteKind, RewriteWords>> = {
   },
   replaceStoredValue: {
     keyVerb: 'replace',
-    conflictKind: 'statementRefused',
+    conflictKind: undefined,
     verb: 'replace a value inside',
     preposition: 'in',
     reaches: 'holding',
@@ -168,10 +214,6 @@ const WORDS: Readonly<Record<RewriteKind, RewriteWords>> = {
   },
 };
 
-function quoted(names: readonly string[]): string {
-  return names.map((name) => JSON.stringify(name)).join(', ');
-}
-
 /** What a rewrite's refusals read about its collection: whether it is a time-series collection, and its validator before the change. */
 export interface RewriteCollection {
   readonly timeSeries: boolean;
@@ -187,13 +229,25 @@ function action(rewrite: PlannedRewrite): string {
     : words.verb;
 }
 
+/** The refusal of `rewrite`, of its kind's conflict kind, or built as a rename refusal when its kind has none. */
+function refusalOf(
+  rewrite: PlannedRewrite,
+  summary: string,
+  why: string,
+): MigrationPlannerConflict {
+  const { conflictKind } = WORDS[rewrite.kind];
+  return conflictKind === undefined
+    ? renameRefused(rewrite.renameStatement, summary, why)
+    : { kind: conflictKind, summary, why };
+}
+
 function timeSeriesRefusal(rewrite: PlannedRewrite): MigrationPlannerConflict {
   const words = WORDS[rewrite.kind];
-  return {
-    kind: words.conflictKind,
-    summary: `Cannot ${action(rewrite)} field ${JSON.stringify(rewrite.field)} ${words.preposition} collection ${JSON.stringify(rewrite.collection)}: it is a time-series collection`,
-    why: `${TIME_SERIES_UPDATES}, ${words.timeSeries}`,
-  };
+  return refusalOf(
+    rewrite,
+    `Cannot ${action(rewrite)} field ${JSON.stringify(rewrite.field)} ${words.preposition} collection ${JSON.stringify(rewrite.collection)}: it is a time-series collection`,
+    `${TIME_SERIES_UPDATES}, ${words.timeSeries}`,
+  );
 }
 
 /**
@@ -208,6 +262,7 @@ function sharedCollectionRefusal(
   rewrite: PlannedRewrite,
   contract: ContractWithDomain,
   validator: unknown,
+  arrivalOf: ArrivalOf | undefined,
 ): MigrationPlannerConflict | undefined {
   const words = WORDS[rewrite.kind];
   const { collection, field, model } = rewrite;
@@ -219,11 +274,11 @@ function sharedCollectionRefusal(
     ) {
       return undefined;
     }
-    return {
-      kind: words.conflictKind,
-      summary: `Cannot ${action(rewrite)} field ${JSON.stringify(field)} ${words.preposition} collection ${JSON.stringify(collection)}: the collection stores several root models`,
-      why: 'No discriminator tells their documents apart, and without the origin contract the plan cannot tell which documents belong to the model that changed. Plan the change with migration plan --from <hash of the migration the database is at>.',
-    };
+    return refusalOf(
+      rewrite,
+      `Cannot ${action(rewrite)} field ${JSON.stringify(field)} ${words.preposition} collection ${JSON.stringify(collection)}: the collection stores several root models`,
+      'No discriminator tells their documents apart, and without the origin contract the plan cannot tell which documents belong to the model that changed. Plan the change with migration plan --from <hash of the migration the database is at>.',
+    );
   }
   const others = otherModelsReached(
     contract.domain,
@@ -233,27 +288,41 @@ function sharedCollectionRefusal(
     words.reaches === 'holding' ? field : undefined,
   ).filter((name) => !(rewrite.storedKey?.together.includes(name) ?? false));
   if (others.length === 0) return undefined;
-  const named = quoted(others);
+  const named = quotedList(others);
   const modelName = JSON.stringify(model.model);
-  return {
-    kind: words.conflictKind,
-    summary: `Cannot ${action(rewrite)} field ${JSON.stringify(field)} of model ${modelName} ${words.preposition} collection ${JSON.stringify(collection)}: model ${named} ${words.reaches === 'holding' ? 'stores it' : 'is stored'} in the same collection`,
-    why: `${sharedCollectionWhy(collection, others, words.sharedChange)} ${words.sharedGoal(modelName, named)}, ${SEPARATE_THE_MODELS}.`,
-  };
+  const earlier =
+    arrivalOf === undefined
+      ? ''
+      : earlierMigrationText(
+          others.map((name) => ({
+            name,
+            arrival: arrivalOf({ namespaceId: model.namespaceId, model: name }, collection, field),
+          })),
+          collection,
+          field,
+          words.reaches,
+        );
+  return refusalOf(
+    rewrite,
+    `Cannot ${action(rewrite)} field ${JSON.stringify(field)} of model ${modelName} ${words.preposition} collection ${JSON.stringify(collection)}: ${modelNamesText(others)} ${words.reaches === 'holding' ? (others.length === 1 ? 'stores it' : 'store it') : others.length === 1 ? 'is stored' : 'are stored'} in the same collection`,
+    `${sharedCollectionWhy(collection, others, words.sharedChange)} ${words.sharedGoal(modelName, named)}, ${rewrite.keepAdvice === undefined ? SEPARATE_THE_MODELS : `move the models to separate collections, or ${rewrite.keepAdvice}`}.${earlier}`,
+  );
 }
 
 /**
  * Why the plan refuses a rewrite of its collection's documents: MongoDB does not let an update change
  * a time-series collection's documents except through the metaField, and a rewrite must not change
  * the documents of another model stored in the same collection. The planner refuses every rewrite it
- * plans with these; the runner asks them before it names a statement that would plan one.
+ * plans with these, and with `arrivalOf` names the earlier migration that works; the runner asks them
+ * before it names a statement that would plan one.
  */
 export function rewriteRefusals(
   rewrite: PlannedRewrite,
   contract: ContractWithDomain,
   collection: RewriteCollection,
+  arrivalOf: ArrivalOf | undefined,
 ): readonly MigrationPlannerConflict[] {
-  const shared = sharedCollectionRefusal(rewrite, contract, collection.validator);
+  const shared = sharedCollectionRefusal(rewrite, contract, collection.validator, arrivalOf);
   return [
     ...(collection.timeSeries ? [timeSeriesRefusal(rewrite)] : []),
     ...(shared === undefined ? [] : [shared]),

@@ -6,7 +6,7 @@ import {
   type MongoMigrationPlanOperation,
 } from '@internal/mongo-query-ast/control';
 import { FilterEvaluator } from '@internal/target-mongo/control';
-import { collMod, createIndex } from '@internal/target-mongo/migration';
+import { collMod, createCollection, createIndex } from '@internal/target-mongo/migration';
 import { timeouts } from '@repo/test-utils';
 import { type Db, MongoClient } from 'mongodb';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
@@ -33,9 +33,7 @@ afterAll(async () => {
 }, timeouts.spinUpMongoMemoryServer);
 
 beforeEach(async () => {
-  for (const collection of await db.listCollections().toArray()) {
-    await db.dropCollection(collection['name'] as string);
-  }
+  await db.dropDatabase();
   await db.createCollection('items');
 });
 
@@ -161,5 +159,64 @@ describe('collMod postchecks for a query validator', {
     );
 
     expect(await postchecksHold(wanted())).toBe(false);
+  });
+});
+
+describe('createCollection postchecks', { timeout: timeouts.spinUpMongoMemoryServer }, () => {
+  it.each([
+    ['no options', {}],
+    [
+      'a validator',
+      {
+        validator: {
+          $jsonSchema: { bsonType: 'object', properties: { a: { bsonType: 'string' } } },
+        },
+        validationLevel: 'strict',
+        validationAction: 'error',
+      },
+    ],
+    ['a cap', { capped: true, size: 5000, max: 10 }],
+    ['a collation', { collation: { locale: 'fr', strength: 2 } }],
+    ['a time series', { timeseries: { timeField: 'at', metaField: 'source' } }],
+    ['a clustered index', { clusteredIndex: { key: { _id: 1 }, unique: true } }],
+    ['change stream images', { changeStreamPreAndPostImages: { enabled: true } }],
+    ['change stream images turned off', { changeStreamPreAndPostImages: { enabled: false } }],
+    ['the simple collation', { collation: { locale: 'simple' } }],
+    ['capped turned off', { capped: false }],
+    ['a cap with no limit on the number of documents', { capped: true, size: 4096, max: 0 }],
+    ['a fractional cap size', { capped: true, size: 1000.5 }],
+    ['an empty validator', { validator: {} }],
+  ] as const)(
+    'hold once the operation created a collection with %s, and not before',
+    async (_, options) => {
+      const op = createCollection('created', options);
+      const before = await postchecksHold(op);
+      await execute(op);
+
+      expect({ before, after: await postchecksHold(op) }).toEqual({ before: false, after: true });
+    },
+  );
+
+  it('does not hold for a view of that name', async () => {
+    await db.createCollection('created', { viewOn: 'items', pipeline: [] });
+
+    expect(await postchecksHold(createCollection('created'))).toBe(false);
+  });
+
+  it('does not hold for a collection of that name made without the validator', async () => {
+    const op = createCollection('items', { validator: { $jsonSchema: { bsonType: 'object' } } });
+
+    expect(await postchecksHold(op)).toBe(false);
+  });
+
+  it('does not hold for a collection whose validator adds a predicate to the $jsonSchema', async () => {
+    const $jsonSchema = { bsonType: 'object' };
+    await db.createCollection('stock', {
+      validator: { $jsonSchema, $expr: { $gt: ['$qty', 0] } },
+    });
+
+    expect(await postchecksHold(createCollection('stock', { validator: { $jsonSchema } }))).toBe(
+      false,
+    );
   });
 });

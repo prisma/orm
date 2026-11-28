@@ -257,6 +257,48 @@ describe('MongoAdapter', () => {
       const wire = narrowWire(await adapter.lower(plan('orders', command), {}), 'aggregate');
       expect(wire.pipeline).toEqual(pipeline);
     });
+
+    it('passes bypassDocumentValidation through to the wire command only when set', async () => {
+      const pipeline = [{ $match: {} }, { $merge: { into: 'members' } }];
+      const bypassing = narrowWire(
+        await adapter.lower(
+          plan(
+            'users',
+            new RawAggregateCommand('users', pipeline, { bypassDocumentValidation: true }),
+          ),
+          {},
+        ),
+        'aggregate',
+      );
+      const plain = narrowWire(
+        await adapter.lower(plan('users', new RawAggregateCommand('users', pipeline)), {}),
+        'aggregate',
+      );
+      expect({
+        bypassing: bypassing.bypassDocumentValidation,
+        plainHasKey: 'bypassDocumentValidation' in plain,
+      }).toEqual({ bypassing: true, plainHasKey: false });
+    });
+
+    it('passes a collation through to the wire command only when set', async () => {
+      const pipeline = [{ $match: { kind: 'sample' } }, { $limit: 1 }];
+      const collation = { locale: 'en', strength: 2 };
+      const collated = narrowWire(
+        await adapter.lower(
+          plan('events', new RawAggregateCommand('events', pipeline, { collation })),
+          {},
+        ),
+        'aggregate',
+      );
+      const plain = narrowWire(
+        await adapter.lower(plan('events', new RawAggregateCommand('events', pipeline)), {}),
+        'aggregate',
+      );
+      expect({
+        collation: collated.collation,
+        plainKeys: Object.keys({ ...plain }).sort(),
+      }).toEqual({ collation, plainKeys: ['collection', 'kind', 'pipeline'] });
+    });
   });
 
   describe('RawInsertOneCommand', () => {
@@ -341,6 +383,28 @@ describe('MongoAdapter', () => {
       const command = new RawDeleteManyCommand('sessions', filter);
       const wire = narrowWire(await adapter.lower(plan('sessions', command), {}), 'deleteMany');
       expect(wire.filter).toEqual(filter);
+    });
+
+    it('passes a collation through to the wire command only when set', async () => {
+      const filter = { kind: 'sample' };
+      const collated = narrowWire(
+        await adapter.lower(
+          plan(
+            'events',
+            new RawDeleteManyCommand('events', filter, { collation: { locale: 'simple' } }),
+          ),
+          {},
+        ),
+        'deleteMany',
+      );
+      const plain = narrowWire(
+        await adapter.lower(plan('events', new RawDeleteManyCommand('events', filter)), {}),
+        'deleteMany',
+      );
+      expect({
+        collation: collated.collation,
+        plainKeys: Object.keys({ ...plain }).sort(),
+      }).toEqual({ collation: { locale: 'simple' }, plainKeys: ['collection', 'filter', 'kind'] });
     });
   });
 

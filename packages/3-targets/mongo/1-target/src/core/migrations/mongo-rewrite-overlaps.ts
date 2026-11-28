@@ -6,6 +6,8 @@ import {
 } from '@internal/framework-components/control';
 import type { SelectedVariant } from '@internal/mongo-contract';
 import { InternalError } from '@internal/utils/internal-error';
+import { ONE_AT_A_TIME } from './mongo-plan-text';
+import { type FieldRename, renameRefused } from './mongo-storage-renames';
 import { type UnansweredChange, unansweredChangesAdvice } from './mongo-unanswered-changes';
 import type {
   CastFieldCall,
@@ -21,9 +23,6 @@ import type {
   UnsetFieldCall,
 } from './op-factory-call';
 import { jsonPathText, storedKeyPath } from './stored-key-path';
-
-export const ONE_AT_A_TIME =
-  "MongoDB applies a migration's operations one at a time, without a transaction, and knows that an operation already ran only from the documents.";
 
 /** Advice to make a change as two changes to the contract, the first applied before the second is made. */
 export function inTwoSteps(first: string, second: string): string {
@@ -410,15 +409,13 @@ function refusal(
   contracts: { readonly fromContract: ContractWithDomain; readonly contract: ContractWithDomain },
 ): MigrationPlannerConflict {
   const [refused] = involved.flatMap((rewrite) => rewrite.statements);
-  if (refused === undefined) {
-    return { kind: 'unsupportedOperation', summary: `Cannot plan the migration: ${reason}`, why };
-  }
-  return {
-    kind: 'statementRefused',
-    summary: `Cannot ${describeMigrationStatement(refused, contracts.fromContract, contracts.contract)}: ${reason}`,
+  return renameRefused(
+    refused,
+    refused === undefined
+      ? `Cannot plan the migration: ${reason}`
+      : `Cannot ${describeMigrationStatement(refused, contracts.fromContract, contracts.contract)}: ${reason}`,
     why,
-    refusedStatement: refused,
-  };
+  );
 }
 
 /**
@@ -444,6 +441,8 @@ export function overlapRefusal(
     readonly contract: ContractWithDomain;
     /** The statements the plan carries out. */
     readonly statements: readonly ResolvedMigrationStatement[];
+    /** The field renames the plan makes, those of its statements and those no statement asks for. */
+    readonly fieldRenames: readonly FieldRename[];
   },
 ): MigrationPlannerConflict | undefined {
   const accessed = rewrites.map((rewrite) => ({ rewrite, access: accessOf(rewrite) }));

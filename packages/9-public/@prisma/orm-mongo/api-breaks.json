@@ -16,5 +16,14 @@
     "lastRelease": "8.0.0-rc.25",
     "fingerprint": "ba2f4a77c9784772",
     "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./runtime",
+    "export": "MongoPrepareMember",
+    "test": "type",
+    "kind": "allowed",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "9d5e76fbd0dceaad",
+    "reason": "Not a break for code written for 8.0.0-rc.25, which still compiles. prisma/orm#31192 gives RawAggregateCommand optional bypassDocumentValidation and collation properties, and RawDeleteManyCommand an optional collation property and options argument. Neither class is exported from this package, and the change only adds optional members. The return type of prepare, MongoPreparedFrom, resolves a plan through MongoPreparedFor, a conditional type that tests the plan's command type against unions of the command classes. TypeScript relates two such conditional types only when the types they test against are identical, and the release's classes and this build's now differ, so the comparison reports a break."
   }
 ]

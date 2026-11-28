@@ -52,7 +52,7 @@ Pairing order, per kind:
 
 | Object | Paired by, in this order | Compared | SQL family | MongoDB |
 | --- | --- | --- | --- | --- |
-| Model | a model rename statement; else a namespace rename statement and the same name; else the same coordinate; else, MongoDB variants only, the same storage (the rule of prisma/orm#31061, unchanged) | table, collection | rename table | rename collection |
+| Model | a model rename statement; else a namespace rename statement and the same name; else the same coordinate; else, on MongoDB, the same storage (the rule of prisma/orm#31061, unchanged), for root models and variants, with renames no statement asks for derived only for variants | table, collection | rename table | rename collection |
 | Field of a paired model | a field rename statement; else the same field name | column, document key | rename column | rename field (`$rename`) |
 | Field of an embedded model (MongoDB) | the same field name in the same embedded model | key inside the subdocument | not applicable | rename stored key, in every place the type is stored |
 | Enum member | an enum value rename statement; else the same member name | stored value | replace stored value | replace stored value |
@@ -71,7 +71,7 @@ A table, collection or column can be shared: SQL single-table variants share the
 1. Every origin object stored in the old name that the destination keeps is paired with a destination object stored in the new name. An object the destination removes does not block the rename: its rows move with the storage and are asked about by `--delete` as usual.
 2. Every destination object stored in the new name is new or is paired with an origin object stored in the old name.
 
-A name freed by the rename may be taken by a new object, so the old name may still be used in the destination by something new.
+A name freed by the rename may be taken by a new object, so the old name may still be used in the destination by something new; on MongoDB, not a collection name (see "Freed and reused").
 
 When only some of the objects move, or objects from elsewhere join, the storage is splitting or merging, not being renamed. That is a change of storage mode (a variant moving between its base's table and its own, a model leaving a shared collection), which the design notes already list as a data migration that statements do not offer. No rename is planned for it, and the plan is what it is today: the storage diff, with its questions.
 
@@ -84,7 +84,7 @@ This also fixes a defect in statement renames today. `--rename Bug:Defect`, wher
 - **Companions.** Constraint, index and check renames, foreign key retargeting, row-level security policies and validators follow as they follow a statement rename.
 - **A stored name and something else change together.** The rename is applied to the working schema first, and the storage diff then sees the renamed object. A changed column type or nullability becomes an alteration of the renamed column, with its usual question (`--convert`, `--backfill`). Today both plan a drop and an add.
 - **A model `@@map` change with a field rename statement.** Refused today in both families, because the field would be renamed on a table the plan then drops. It becomes plannable: the table or collection rename runs first.
-- **Freed and reused.** A stored name freed by a rename may be taken by a new object in the same plan: a new model whose table is the old name of a renamed table, a new field whose column is the old name of a renamed column, a new enum member whose stored value is the old value of a member that moved. The SQL family plans these: the rename runs first and the new object is created empty. For enum values this means the check that refuses a statement when the destination still stores the old value (`stillStoredRefusal`) does not apply to a pair with the same coordinate. MongoDB plans them too, except where its overlap check refuses (see the refused table).
+- **Freed and reused.** A stored name freed by a rename may be taken by a new object in the same plan: a new model whose table is the old name of a renamed table, a new field whose column is the old name of a renamed column, a new enum member whose stored value is the old value of a member that moved. The SQL family plans these: the rename runs first and the new object is created empty. For enum values this means the check that refuses a statement when the destination still stores the old value (`stillStoredRefusal`) does not apply to a pair with the same coordinate. MongoDB plans a new field or key under a freed name, except where its overlap check refuses (see the refused table), but refuses a new collection under the name a collection rename frees, or a rename into it: a collection rename runs again after a stop only while its old collection exists and its new one does not, so once the old name exists again a stopped migration could not be run again to finish. The refusal gives two plans, the rename first and then what uses the old name.
 - **Reporting.** The rename is not a statement. It does not appear under `Statements applied` or in `appliedStatements`. It appears in the operation list.
 - **Rendering.** `migration.ts` contains the same facade calls a statement rename renders, and re-running the file writes the same `ops.json`.
 - **Questions.** Later questions about a renamed table or column are named by the origin model and field, as they are after a statement rename.
@@ -158,7 +158,7 @@ For `db update` the working schema is the live database, which may differ from t
 | Old absent, new absent | No operation and nothing recorded. The storage diff creates the object, as today. |
 | Old present, new present | Refused, with its own text. It says the likely cause, which on MongoDB is that the application wrote to the new collection before `db update` ran, and the fix: move those rows or documents into the old storage, or drop the new one, then run again. |
 
-"Old absent, new present" cannot lose data even when the new table is not the old one renamed: no operation is planned for it, and the storage diff then does what it does today.
+In "Old absent, new present" the planner takes the new table to be the old one renamed. No operation is planned for the table itself, but field renames, stored value replacements and the answers to `--delete` questions then act on it. So if a table or collection with the new name exists that was never the old one renamed, the plan rewrites it as if it were. This holds on every target.
 
 MongoDB document keys, keys inside subdocuments and stored values are not in the schema the planner reads. For them the protection is at apply time: `$rename` has the precheck "no document holds both keys" and touches only documents that hold the old key, and a replacement touches only the values that match. Running a stopped migration again finishes it.
 
@@ -226,6 +226,7 @@ Each pull request is one family: the rule, its refusals, its tests and journeys,
 - Removal of the by-hand advice and tests that the rule makes unreachable.
 - The new ADR and the other records listed above.
 - One upgrade instruction fragment per pull request.
+- MongoDB `createCollection` gets a postcheck (TML-3929, added to PR 2 with the operator's approval, 2026-11-24). It holds when the collection exists with every option the call sets, and with none it does not set, comparing only the given fields of the options MongoDB completes with defaults. It lets a re-run skip the creation it made, so the move routes no longer tell users to remove the creation from `migration.ts`. It changes every MongoDB `createCollection` that `migration.ts` emits, and the migration hash of the committed `examples/retail-store` initial migration.
 
 **Deliberately out, each with an entry in `deferred.md`:**
 
@@ -268,6 +269,7 @@ Each pull request is one family: the rule, its refusals, its tests and journeys,
 7. No `MIGRATION.PLANNING_FAILED` caused by a pair with the same coordinate carries `refusedStatement`, in the JSON error output, or the words "this statement".
 8. No test, journey, doc or message in the repository still says that a stored-name change is a drop and a create on PostgreSQL, SQLite or MongoDB.
 9. `git diff` of `packages/1-framework` shows only the CLI package, and nothing in it names a family or target.
+10. On MongoDB, a migration that stops after a `createCollection` finishes when run again, and a collection of that name made without the create's options still stops at the precheck: `test/integration/test/mongo/target-runner/runner-create-collection-reruns.test.ts`, the `createCollection` cases of `runner-postcheck-full-definition.test.ts`, and journey T6 in `stored-name-routes.mongo.e2e.test.ts`.
 
 ## Open questions
 

@@ -33,9 +33,12 @@ import {
 import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { unrewritableKeyReason } from './migration-factories';
+import { collectionControlPolicy } from './mongo-control-policy';
 import { temporaryValueOf } from './mongo-field-fills';
-import { type PlannedRewrite, rewriteRefusals } from './mongo-rewrite-refusals';
-import { collectionControlPolicy, modelAt, modelCoordinates } from './mongo-statement-planning';
+import { modelCoordinates } from './mongo-model-coordinates';
+import { type ArrivalOf, type PlannedRewrite, rewriteRefusals } from './mongo-rewrite-refusals';
+import { modelAt } from './mongo-statement-planning';
+
 import { rewriteCollectionOf } from './mongo-stored-key-planning';
 import {
   type StoredPlace,
@@ -84,6 +87,8 @@ interface StoredKeyFillInput {
   readonly schema: MongoSchemaIR;
   /** The schema the destination contract describes. */
   readonly destination: MongoSchemaIR;
+  /** How a model that blocks a rewrite arrives in its collection, for the refusal's earlier-migration route; `undefined` without an origin contract. */
+  readonly arrivalOf: ArrivalOf | undefined;
 }
 
 function byName<T>([a]: readonly [string, T], [b]: readonly [string, T]): number {
@@ -276,7 +281,9 @@ function unlistedRefusal(
   contracts: { readonly fromContract: ContractWithDomain; readonly contract: MongoContract },
 ): MigrationPlannerConflict {
   const byHand = (advice: string) =>
-    `Fill the key in ${placeText(place)} yourself, in a dataTransform operation of the migration.ts that migration plan writes or in mongosh, or ${advice}.`;
+    required.statement === undefined
+      ? `So ${advice}.`
+      : `Fill the key in ${placeText(place)} yourself, in a dataTransform operation of the migration.ts that migration plan writes or in mongosh, or ${advice}.`;
   if (place.reach.kind === 'containsItself') {
     return refused(
       required,
@@ -390,6 +397,9 @@ function plannedRewriteOf(fill: PlannedFill, contract: MongoContract): PlannedRe
     variant: fill.place.variant,
     model: fill.place.model,
     storedKey: { key: fieldText(fill.required, contract), together: fill.models },
+    renameStatement: undefined,
+    keepAdvice:
+      fill.required.statement === undefined ? 'make the field optional in the contract' : undefined,
   };
 }
 
@@ -449,6 +459,7 @@ export function planStoredKeyFills(
           plannedRewriteOf(fill, contract),
           contract,
           rewriteCollectionOf(input.schema, fill.place.collection),
+          input.arrivalOf,
         ),
       );
       fills.push({

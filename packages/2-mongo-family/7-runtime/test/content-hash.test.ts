@@ -1,6 +1,7 @@
 import type { PlanMeta } from '@internal/contract/types';
 import {
   AggregateWireCommand,
+  DeleteManyWireCommand,
   DeleteOneWireCommand,
   InsertOneWireCommand,
   UpdateOneWireCommand,
@@ -142,6 +143,61 @@ describe('computeMongoContentHash', () => {
         ]),
       });
       expect(await computeMongoContentHash(a)).not.toBe(await computeMongoContentHash(b));
+    });
+  });
+
+  describe('aggregate and bypassDocumentValidation', () => {
+    const pipeline = [{ $match: { active: true } }];
+
+    it('keeps the fields and hash of an aggregate without the option', async () => {
+      const command = new AggregateWireCommand('users', pipeline);
+      expect({
+        fields: Object.keys({ ...command }).sort(),
+        hash: await computeMongoContentHash(makeExec({ command })),
+      }).toEqual({
+        fields: ['collection', 'kind', 'pipeline'],
+        hash: 'sha512:502ac3ab70d837033870dc00c4ad3ac88e5f1351cbd76137faf89e46932f0a6105ffdef4f7b33a59b52eec0afdd43f17de2ef845d3a2875ebfd77e3d3aaaf74c',
+      });
+    });
+
+    it('stores the option only when it is true, and hashes it', async () => {
+      const off = new AggregateWireCommand('users', pipeline, { bypassDocumentValidation: false });
+      const on = new AggregateWireCommand('users', pipeline, { bypassDocumentValidation: true });
+      expect({
+        off: Object.keys({ ...off }).sort(),
+        on: on.bypassDocumentValidation,
+        sameHash:
+          (await computeMongoContentHash(makeExec({ command: on }))) ===
+          (await computeMongoContentHash(makeExec({ command: off }))),
+      }).toEqual({ off: ['collection', 'kind', 'pipeline'], on: true, sameHash: false });
+    });
+  });
+
+  describe('deleteMany and collation', () => {
+    const filter = { kind: 'sample' };
+
+    it('keeps the fields and hash of a delete without a collation', async () => {
+      const command = new DeleteManyWireCommand('events', filter);
+      expect({
+        fields: Object.keys({ ...command }).sort(),
+        hash: await computeMongoContentHash(makeExec({ command })),
+      }).toEqual({
+        fields: ['collection', 'filter', 'kind'],
+        hash: 'sha512:ae26a094087f58cd66ffad858da225596a57c06cf9d900e4f750204a0c2912b3d9f2f0903b2ae49e0108766ed91e819cbe020fee3b0d9a54077ed32942e5990c',
+      });
+    });
+
+    it('hashes a delete with a collation apart from one without', async () => {
+      const plain = new DeleteManyWireCommand('events', filter);
+      const collated = new DeleteManyWireCommand('events', filter, {
+        collation: { locale: 'simple' },
+      });
+      expect({
+        collation: collated.collation,
+        sameHash:
+          (await computeMongoContentHash(makeExec({ command: collated }))) ===
+          (await computeMongoContentHash(makeExec({ command: plain }))),
+      }).toEqual({ collation: { locale: 'simple' }, sameHash: false });
     });
   });
 

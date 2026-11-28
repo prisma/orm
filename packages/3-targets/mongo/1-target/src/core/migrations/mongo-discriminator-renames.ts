@@ -7,6 +7,7 @@ import {
 } from '@internal/framework-components/control';
 import { statementFlag } from './mongo-statement-flags';
 import { modelAt } from './mongo-statement-planning';
+import type { FieldRename } from './mongo-storage-renames';
 
 /** The origin base's discriminator, as the origin contract names it, and the `--rename` statements that move its values to the destination base's discriminator, after the `--rename` of the base itself when the base is renamed and no statement says so. */
 export interface DiscriminatorRename {
@@ -25,6 +26,7 @@ export function discriminatorRenameOf(
     readonly fromContract: ContractWithDomain;
     readonly contract: ContractWithDomain;
     readonly statements: readonly ResolvedMigrationStatement[];
+    readonly fieldRenames: readonly FieldRename[];
   },
 ): DiscriminatorRename | undefined {
   const from = origin === undefined ? undefined : modelAt(contracts.fromContract, origin);
@@ -33,13 +35,11 @@ export function discriminatorRenameOf(
   const newField = to?.discriminator?.field;
   if (origin === undefined || to === undefined || oldField === undefined || newField === undefined)
     return undefined;
-  const movedElsewhere = contracts.statements.some(
-    (statement) =>
-      statement.kind === 'rename' &&
-      statement.entity === 'field' &&
-      statement.from.namespaceId === origin.namespaceId &&
-      statement.from.model === origin.model &&
-      statement.from.field === oldField,
+  const movedElsewhere = contracts.fieldRenames.some(
+    (rename) =>
+      rename.from.namespaceId === origin.namespaceId &&
+      rename.from.model === origin.model &&
+      rename.from.field === oldField,
   );
   if (oldField === newField || Object.hasOwn(to.fields, oldField) || movedElsewhere)
     return undefined;

@@ -205,6 +205,61 @@ describe('MongoDriver', () => {
       expect(docs).toEqual([{ fullName: 'Ada' }]);
     });
 
+    it('reads with the collation an aggregate is given', async () => {
+      const db = seedClient.db(dbName);
+      const driver = MongoDriverImpl.fromDb(db);
+      const plain = 'driver_aggregate_collation';
+      await db.dropCollection(plain).catch(() => undefined);
+      await db.collection(plain).insertMany([{ kind: 'sample' }, { kind: 'Sample' }]);
+      const pipeline = [{ $match: { kind: 'sample' } }, { $project: { _id: 0, kind: 1 } }];
+
+      const rows = await collect(
+        driver.execute(
+          new AggregateWireCommand(plain, pipeline, { collation: { locale: 'en', strength: 2 } }),
+        ),
+      );
+
+      expect(rows).toHaveLength(2);
+    });
+
+    it('skips validation of a $merge when the aggregate sets bypassDocumentValidation', async () => {
+      const db = seedClient.db(dbName);
+      const driver = MongoDriverImpl.fromDb(db);
+      const source = 'driver_aggregate_bypass_source';
+      const closed = 'driver_aggregate_bypass_target';
+      await db.dropCollection(source).catch(() => undefined);
+      await db.dropCollection(closed).catch(() => undefined);
+      await db.createCollection(closed, {
+        validator: {
+          $jsonSchema: {
+            bsonType: 'object',
+            required: ['name'],
+            properties: { _id: { bsonType: 'objectId' }, name: { bsonType: 'string' } },
+            additionalProperties: false,
+          },
+        },
+        validationLevel: 'strict',
+        validationAction: 'error',
+      });
+      await db.collection(source).insertOne({ fullName: 'Ada' });
+      const pipeline = [{ $match: {} }, { $merge: { into: closed } }];
+
+      await expect(
+        collect(driver.execute(new AggregateWireCommand(source, pipeline))),
+      ).rejects.toThrow(/Document failed validation/);
+      await collect(
+        driver.execute(
+          new AggregateWireCommand(source, pipeline, { bypassDocumentValidation: true }),
+        ),
+      );
+
+      const docs = await db
+        .collection(closed)
+        .find({}, { projection: { _id: 0 } })
+        .toArray();
+      expect(docs).toEqual([{ fullName: 'Ada' }]);
+    });
+
     it('updates multiple documents and returns counts', async () => {
       const driver = await MongoDriverImpl.fromConnection(connectionUri, dbName);
       try {
@@ -249,6 +304,31 @@ describe('MongoDriver', () => {
       } finally {
         await driver.close();
       }
+    });
+
+    it("selects the documents with the collation it is given, in place of the collection's own", async () => {
+      const db = seedClient.db(dbName);
+      const driver = MongoDriverImpl.fromDb(db);
+      const collated = 'driver_delete_many_collation';
+      await db.dropCollection(collated).catch(() => undefined);
+      await db.createCollection(collated, { collation: { locale: 'en', strength: 2 } });
+      await db.collection(collated).insertMany([{ kind: 'sample' }, { kind: 'Sample' }]);
+
+      await collect(
+        driver.execute(
+          new DeleteManyWireCommand(
+            collated,
+            { kind: 'sample' },
+            { collation: { locale: 'simple' } },
+          ),
+        ),
+      );
+
+      const left = await db
+        .collection(collated)
+        .find({}, { projection: { _id: 0 } })
+        .toArray();
+      expect(left).toEqual([{ kind: 'Sample' }]);
     });
   });
 

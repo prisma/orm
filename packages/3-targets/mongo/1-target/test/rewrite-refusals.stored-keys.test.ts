@@ -13,9 +13,12 @@ function timeSeriesRefusal(kind: 'renameStoredKey' | 'removeStoredKey' | 'fillSt
       variant: undefined,
       model: undefined,
       storedKey: undefined,
+      keepAdvice: undefined,
+      renameStatement: undefined,
     },
     noModels,
     { timeSeries: true, validator: undefined },
+    undefined,
   );
 }
 
@@ -23,7 +26,7 @@ describe('rewrite refusals of keys inside a field', () => {
   it('refuse a key rename in a time-series collection', () => {
     expect(timeSeriesRefusal('renameStoredKey')).toEqual([
       {
-        kind: 'statementRefused',
+        kind: 'unsupportedOperation',
         summary:
           'Cannot rename a key inside field "sensor" in collection "readings": it is a time-series collection',
         why: "MongoDB updates the documents of a time-series collection only through its metaField, so the key cannot be renamed in the documents. Keep the key's name in the contract, then run this command again.",

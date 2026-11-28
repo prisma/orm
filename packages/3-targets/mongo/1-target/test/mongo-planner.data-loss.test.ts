@@ -158,26 +158,17 @@ describe('MongoDB planner, data loss', () => {
     ]);
   });
 
-  it('advises renaming the collection by hand when only the collection of a model that keeps its name changes', () => {
+  it('renames the collection of a model that keeps its name, which loses nothing, and drops the index the contract leaves out on the renamed collection', () => {
     const planned = plan(
       contractWith({ User: 'users', Event: 'events' }, 'from'),
       contractWith({ User: 'users', Event: 'occasions' }, 'to'),
     );
 
-    expect(
-      planned.dataLoss.map(({ operationIndex, subject, keepDataAdvice }) => ({
-        operation: planned.operations[operationIndex],
-        subject,
-        keepDataAdvice,
-      })),
-    ).toEqual([
-      {
-        operation: 'Drop collection events',
-        subject: { kind: 'model', namespaceId: asNamespaceId('__unbound__'), model: 'Event' },
-        keepDataAdvice:
-          'To keep its documents, rename collection "events" to "occasions" instead; a statement cannot rename the collection of a model that keeps its name. With db update, rename the collection in the database yourself, for example db.getCollection("events").renameCollection("occasions") in mongosh, then run db update. With migration plan, plan it, passing --delete Event to answer its question; in its migration.ts make renameCollection("events", "occasions") the first operation, imported with the other operations, delete the drop of "events", and delete the create of "occasions" if there is one; run node on that migration.ts so it writes ops.json again; then apply it with prisma db migrate.',
-      },
-    ]);
+    expect(planned).toEqual({
+      operations: ['Rename collection events to occasions', 'Drop index at_1 on occasions (at:1)'],
+      dataLoss: [],
+      accessChanges: [],
+    });
   });
 
   it('gives no advice when the model of the dropped collection is gone', () => {
@@ -185,7 +176,7 @@ describe('MongoDB planner, data loss', () => {
     expect(planned.dataLoss.map(({ keepDataAdvice }) => keepDataAdvice)).toEqual([undefined]);
   });
 
-  it('advises renaming the collection by hand when the plan creates the new collection only with its indexes', () => {
+  it('advises renaming the collection by hand when the plan does not rename it, because the new collection is not managed', () => {
     const result = planStatementsFixture({
       from: contract(
         'from',
@@ -195,19 +186,28 @@ describe('MongoDB planner, data loss', () => {
       to: contract(
         'to',
         { Event: { collection: 'occasions', fields: ['_id', 'name'] } },
-        { occasions: { unique: ['name'] } },
+        { occasions: { unique: ['name'], control: 'tolerated' } },
       ),
       schema: [schemaCollection('events', { unique: ['name'] })],
     });
-    const { labels, dataLoss } = planned(result);
 
-    expect({
-      creates: labels.filter((label) => label.startsWith('Create')),
-      advice: dataLoss.map(({ keepDataAdvice }) => keepDataAdvice),
-    }).toEqual({
-      creates: ['Create index name_1 on occasions (name:1)'],
-      advice: [
-        'To keep its documents, rename collection "events" to "occasions" instead; a statement cannot rename the collection of a model that keeps its name. With db update, rename the collection in the database yourself, for example db.getCollection("events").renameCollection("occasions") in mongosh, then run db update. With migration plan, plan it, passing --delete Event to answer its question; in its migration.ts make renameCollection("events", "occasions") the first operation, imported with the other operations, delete the drop of "events", and delete the create of "occasions" if there is one; run node on that migration.ts so it writes ops.json again; then apply it with prisma db migrate.',
+    expect(planned(result)).toEqual({
+      labels: [
+        'Drop index name_1 on events (name:1)',
+        'Create index name_1 on occasions (name:1)',
+        'Drop collection events',
+      ],
+      classes: ['widening', 'additive', 'destructive'],
+      applied: [],
+      dataLoss: [
+        {
+          operationIndex: 2,
+          subject: { kind: 'model', namespaceId: asNamespaceId('__unbound__'), model: 'Event' },
+          loss: 'drop',
+          label: 'Drop collection events',
+          keepDataAdvice:
+            'To keep its documents, rename collection "events" to "occasions" instead. The plan does not rename it: a plan renames the collection of a model that keeps its name only when the control policy of the collection is "managed" in both contracts. With db update, rename the collection in the database yourself, for example db.getCollection("events").renameCollection("occasions") in mongosh, then run db update. With migration plan, plan it, passing --delete Event to answer its question; in its migration.ts put renameCollection("events", "occasions") right after the drops of indexes on "events", if there are any, and before every other operation, imported with the other operations, delete the drop of "events", and delete the create of "occasions" if there is one; run node on that migration.ts so it writes ops.json again; then apply it with prisma db migrate.',
+        },
       ],
     });
   });

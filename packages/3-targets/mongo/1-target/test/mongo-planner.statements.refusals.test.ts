@@ -133,6 +133,21 @@ describe('MongoMigrationPlanner, statements it refuses', () => {
     ]);
   });
 
+  it('gives both routes for a time-series collection, each saying to stop writes until the source is dropped, and names a copy that is safe to run again after the drop', () => {
+    expect(
+      refusal(
+        plan({
+          from: profiles,
+          to: users,
+          schema: [schemaCollection('profiles', { timeseries: true })],
+          statements: [renameModel('Profile', 'User')],
+        }),
+      ).map(({ why }) => why),
+    ).toEqual([
+      'MongoDB cannot rename a time-series collection. Leave out this statement. With db update, first create collection "users" yourself with the time-series options of collection "profiles", which db.getCollectionInfos({ name: "profiles" }) shows in mongosh, stop writes to collections "profiles" and "users", copy the documents into it, and run db update again with --delete naming the model, which drops "profiles". Allow writes again only once it has run, re-runs included: a document written to "profiles" after the copy is dropped with it, and an $out stage replaces collection "users" with what it read, so a document written there while the copy runs is lost. With migration plan, plan with --delete naming the model; the migration.ts it writes creates collection "users", and there add a dataTransform right after that creation and before the drop of collection "profiles". Collection "users" is a time-series collection, which a $merge stage cannot write into, and an $out stage replaces everything it holds. So its run reads the documents collection "users" holds, adds those of collection "profiles" with a $unionWith stage, and writes them all back with an $out stage, which rewrites the whole collection:\n\n  rawAggregate("users", [\n    { $unionWith: "profiles" },\n    { $out: "users" },\n  ])\n\nThe copy has no check, so it runs again on every run of the migration; once collection "profiles" is dropped, it adds nothing. If the apply stops after the copy and before the drop, delete the documents of collection "profiles" or drop it yourself before you run db migrate again: otherwise the copy adds them to collection "users" a second time. Do not delete documents from collection "users" instead.\n\nThen run that migration.ts to emit its ops.json, stop writes to collections "profiles" and "users", and apply it with db migrate. Allow writes again only once it has applied, re-runs included: a document written to "profiles" after the copy is dropped with it, and an $out stage replaces collection "users" with what it read, so a document written there while the copy runs is lost.',
+    ]);
+  });
+
   it('refuses a collection name MongoDB rejects', () => {
     const to = (collection: string) =>
       contract('to', { User: { collection, fields: ['_id', 'name'] } }, { [collection]: {} });
@@ -199,36 +214,54 @@ describe('MongoMigrationPlanner, statements it refuses', () => {
     ]);
   });
 
-  it("refuses a field rename when the model's collection changes and no statement renames it", () => {
+  it("refuses a field rename when the model's collection changes and the plan does not rename it", () => {
+    const statement = renameField('Profile', 'name', 'Profile', 'fullName');
+    const from = contract(
+      'from',
+      { Profile: { collection: 'profiles', fields: ['_id', 'name'] } },
+      { profiles: { unique: ['name'], required: ['name'], control: 'tolerated' } },
+    );
     const to = contract(
       'to',
       { Profile: { collection: 'users', fields: ['_id', 'fullName'] } },
       { users: {} },
     );
+    expect(plan({ from, to, schema: profilesSchema, statements: [statement] })).toEqual({
+      kind: 'failure',
+      conflicts: [
+        {
+          kind: 'statementRefused',
+          summary:
+            'Cannot rename field "Profile.name" to "Profile.fullName": the model\'s collection changes from "profiles" to "users", and the plan does not rename it',
+          why: 'The plan renames a collection only when every model stored in it moves to the same new collection, its control policy is "managed" in both contracts, and the schema being planned from has the old collection and not the new one, so the field would be renamed in a collection the destination does not store the model in. Leave out this statement.',
+          refusedStatement: statement,
+        },
+      ],
+    });
+  });
+
+  it('refuses a field rename of a model that changes its name and collection with no model statement, and says which to add', () => {
     expect(
       refusal(
         plan({
           from: profiles,
-          to,
+          to: contract(
+            'to',
+            { User: { collection: 'users', fields: ['_id', 'fullName'] } },
+            { users: {} },
+          ),
           schema: profilesSchema,
-          statements: [renameField('Profile', 'name', 'Profile', 'fullName')],
+          statements: [renameField('Profile', 'name', 'User', 'fullName')],
         }),
-      ).map(({ summary }) => summary),
+      ),
     ).toEqual([
-      'Cannot rename field "Profile.name" to "Profile.fullName": the model\'s collection changes from "profiles" to "users", and no statement renames it',
+      {
+        kind: 'statementRefused',
+        summary:
+          'Cannot rename field "User.name" to "User.fullName": the model\'s collection changes from "profiles" to "users", and the plan does not rename it',
+        why: 'Add --rename Profile:User before this statement, so the collection is renamed with its documents.',
+      },
     ]);
-    expect(
-      refusal(
-        plan({
-          from: profiles,
-          to,
-          schema: profilesSchema,
-          statements: [renameField('Profile', 'name', 'Profile', 'fullName')],
-        }),
-      )[0]?.why,
-    ).toBe(
-      'A statement cannot rename the collection of a model that keeps its name. Rename the collection in a step of its own first: change only @@map and emit the contract. With db update, rename the collection in the database yourself, for example db.getCollection("profiles").renameCollection("users") in mongosh, then run db update. With migration plan, plan it, passing --delete Profile to answer its question; in its migration.ts make renameCollection("profiles", "users") the first operation, imported with the other operations, delete the drop of "profiles", and delete the create of "users" if there is one; run node on that migration.ts so it writes ops.json again; then apply it with prisma db migrate. Then change the field and run this statement again.',
-    );
   });
 });
 

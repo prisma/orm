@@ -22,9 +22,9 @@ import {
   documentsNotOfType,
   unrewritableFieldNameReason,
 } from './migration-factories';
+import { collectionControlPolicy } from './mongo-control-policy';
 import type { PlannedRewrite } from './mongo-rewrite-refusals';
 import {
-  collectionControlPolicy,
   embeddedModelReason,
   type ModelMatchInput,
   modelAt,
@@ -32,6 +32,7 @@ import {
   originFieldOf,
   originModelOf,
 } from './mongo-statement-planning';
+
 import type { TypeChange } from './mongo-type-changes';
 import { DataTransformCall } from './op-factory-call';
 
@@ -129,6 +130,8 @@ export function convertTransform(
       variant: change.variant,
       model: change.destination,
       storedKey: undefined,
+      keepAdvice: undefined,
+      renameStatement: undefined,
     },
   };
 }
@@ -148,7 +151,7 @@ function requiredInOrigin(
   }
   const origin = originModelOf(field, input.match);
   const model = origin === undefined ? undefined : modelAt(input.match.fromContract, origin);
-  const originField = originFieldOf(field, input.match.statements);
+  const originField = originFieldOf(field, input.match.fieldRenames);
   return model !== undefined && Object.hasOwn(model.fields, originField)
     ? model.fields[originField]?.nullable === false
     : false;
@@ -238,6 +241,8 @@ export function backfillTransform(
       variant,
       model: statement.field,
       storedKey: undefined,
+      keepAdvice: undefined,
+      renameStatement: undefined,
     },
   };
 }

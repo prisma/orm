@@ -4,6 +4,7 @@ import { MongoControlDriver } from '@internal/driver-mongo/control';
 import type {
   MigrationOperationPolicy,
   MigrationPlan,
+  MigrationPlanOperation,
   ResolvedMigrationStatement,
 } from '@internal/framework-components/control';
 import { buildFabricatedMigrationEdge } from '@internal/migration-tools/aggregate';
@@ -35,6 +36,10 @@ export function closedSchema(fields: readonly string[]) {
     ]),
     additionalProperties: false,
   };
+}
+
+export interface MigrationRunnerCallbacks {
+  onOperationStart?(operation: MigrationPlanOperation): void;
 }
 
 export interface ModelSpec {
@@ -194,16 +199,22 @@ export function useStatementsDatabase(dbName: string) {
       .insertMany(documents.map((document) => ({ ...document })));
   }
 
+  /** Signs the database as being at `contract`. */
+  async function initMarker(contract: MongoContract) {
+    await controlAdapter.initMarker(new MongoControlDriver(live(), connected()), 'app', {
+      storageHash: contract.storage.storageHash,
+      profileHash: 'p1',
+    });
+  }
+
   async function planAndRun(
     from: MongoContract,
     to: MongoContract,
     statements: readonly ResolvedMigrationStatement[] = [],
     frameworkComponents: Parameters<MongoMigrationPlanner['plan']>[0]['frameworkComponents'] = [],
+    options: { readonly initMarker: boolean } = { initMarker: true },
   ) {
-    await controlAdapter.initMarker(new MongoControlDriver(live(), connected()), 'app', {
-      storageHash: from.storage.storageHash,
-      profileHash: 'p1',
-    });
+    if (options.initMarker) await initMarker(from);
     const planned = new MongoMigrationPlanner().plan({
       contract: to,
       schema: await introspectSchema(live()),
@@ -216,14 +227,31 @@ export function useStatementsDatabase(dbName: string) {
     });
     if (planned.kind !== 'success') throw new Error(JSON.stringify(planned.conflicts, null, 2));
     const operations = planned.plan.operations as readonly AnyMongoMigrationOperation[];
+    return { planned, result: await runOperations(operations, from, to) };
+  }
+
+  /** Runs `operations`, serialized as `ops.json` holds them, as the migration from `from` to `to`. */
+  async function runOperations(
+    operations: readonly AnyMongoMigrationOperation[],
+    from: MongoContract,
+    to: MongoContract,
+    options: {
+      readonly policy?: MigrationOperationPolicy;
+      readonly callbacks?: MigrationRunnerCallbacks;
+      readonly client?: MongoClient;
+    } = {},
+  ) {
+    const client = options.client ?? connected();
     const plan: MigrationPlan = {
       targetId: 'mongo',
       operations: JSON.parse(serializeMongoOps(operations)),
       origin: { storageHash: from.storage.storageHash },
       destination: { storageHash: to.storage.storageHash },
     };
-    const result = await new MongoMigrationRunner(
-      controlAdapter.createRunnerDependencies(new MongoControlDriver(live(), connected())),
+    return new MongoMigrationRunner(
+      controlAdapter.createRunnerDependencies(
+        new MongoControlDriver(client.db(live().databaseName), client),
+      ),
     ).execute({
       plan,
       migrationEdges: [
@@ -234,10 +262,10 @@ export function useStatementsDatabase(dbName: string) {
         }),
       ],
       destinationContract: to,
-      policy,
+      policy: options.policy ?? policy,
+      ...(options.callbacks === undefined ? {} : { callbacks: options.callbacks }),
       frameworkComponents: [],
     });
-    return { planned, result };
   }
 
   async function furtherPlanLabels(to: MongoContract): Promise<readonly string[]> {
@@ -264,5 +292,19 @@ export function useStatementsDatabase(dbName: string) {
       .toArray();
   }
 
-  return { db: live, createClosed, planAndRun, furtherPlanLabels, documents };
+  const uri = (): string => {
+    if (replSet === undefined) throw new Error('The database is not started');
+    return replSet.getUri();
+  };
+
+  return {
+    db: live,
+    uri,
+    createClosed,
+    planAndRun,
+    initMarker,
+    runOperations,
+    furtherPlanLabels,
+    documents,
+  };
 }

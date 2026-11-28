@@ -32,6 +32,7 @@ import {
 } from '@internal/mongo-wire';
 import mongoRuntimeTarget from '@internal/target-mongo/runtime';
 import { blindCast } from '@internal/utils/casts';
+import { ifDefined } from '@internal/utils/defined';
 import { assertNever } from '@internal/utils/internal-error';
 import { structuralLowerFilter, structuralLowerPipeline } from './lowering';
 import { resolveDraftDoc } from './resolve-value';
@@ -160,7 +161,13 @@ class MongoAdapterImpl implements MongoAdapter {
           pipeline: structuralLowerPipeline(command.pipeline),
         };
       case 'rawAggregate':
-        return { kind: 'rawAggregate', collection: command.collection, pipeline: command.pipeline };
+        return {
+          kind: 'rawAggregate',
+          collection: command.collection,
+          pipeline: command.pipeline,
+          ...(command.bypassDocumentValidation === true ? { bypassDocumentValidation: true } : {}),
+          ...ifDefined('collation', command.collation),
+        };
       case 'rawInsertOne':
         return {
           kind: 'rawInsertOne',
@@ -191,7 +198,12 @@ class MongoAdapterImpl implements MongoAdapter {
       case 'rawDeleteOne':
         return { kind: 'rawDeleteOne', collection: command.collection, filter: command.filter };
       case 'rawDeleteMany':
-        return { kind: 'rawDeleteMany', collection: command.collection, filter: command.filter };
+        return {
+          kind: 'rawDeleteMany',
+          collection: command.collection,
+          filter: command.filter,
+          ...ifDefined('collation', command.collation),
+        };
       case 'rawFindOneAndUpdate':
         return {
           kind: 'rawFindOneAndUpdate',
@@ -287,7 +299,10 @@ class MongoAdapterImpl implements MongoAdapter {
           ),
         );
       case 'rawAggregate':
-        return new AggregateWireCommand(draft.collection, draft.pipeline);
+        return new AggregateWireCommand(draft.collection, draft.pipeline, {
+          ...(draft.bypassDocumentValidation === true ? { bypassDocumentValidation: true } : {}),
+          ...ifDefined('collation', draft.collation),
+        });
       case 'rawInsertOne':
         return new InsertOneWireCommand(draft.collection, draft.document);
       case 'rawInsertMany':
@@ -305,7 +320,11 @@ class MongoAdapterImpl implements MongoAdapter {
       case 'rawDeleteOne':
         return new DeleteOneWireCommand(draft.collection, draft.filter);
       case 'rawDeleteMany':
-        return new DeleteManyWireCommand(draft.collection, draft.filter);
+        return new DeleteManyWireCommand(
+          draft.collection,
+          draft.filter,
+          ifDefined('collation', draft.collation),
+        );
       case 'rawFindOneAndUpdate':
         return new FindOneAndUpdateWireCommand(
           draft.collection,

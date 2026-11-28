@@ -2,47 +2,19 @@ import type {
   MarkerOperations,
   MongoRunnerDependencies,
 } from '@internal/family-mongo/control-adapter';
-import type { CodecCallContext } from '@internal/framework-components/codec';
 import type {
-  MigrationOperationPolicy,
   MigrationPlan,
   MigrationRunnerExecutionChecks,
-  MigrationRunnerFailure,
 } from '@internal/framework-components/control';
-import {
-  type AggregateMigrationEdgeRef,
-  buildFabricatedMigrationEdge,
-} from '@internal/migration-tools/aggregate';
+import type { AggregateMigrationEdgeRef } from '@internal/migration-tools/aggregate';
 import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
-import type { MongoContract } from '@internal/mongo-contract';
-import type {
-  MongoAdapter,
-  MongoDdlPlan,
-  MongoLoweredDraft,
-  MongoQueryable,
-} from '@internal/mongo-lowering';
 import {
-  type AnyMongoInspectionCommand,
   type AnyMongoMigrationOperation,
   CollModCommand,
   MongoExistsExpr,
-  type MongoInspectionCommandVisitor,
 } from '@internal/mongo-query-ast/control';
-import {
-  AggregateCommand,
-  MongoFieldFilter,
-  MongoLimitStage,
-  MongoMatchStage,
-  type MongoQueryPlan,
-  RawAggregateCommand,
-  RawUpdateManyCommand,
-} from '@internal/mongo-query-ast/execution';
+import { RawAggregateCommand } from '@internal/mongo-query-ast/execution';
 import { MongoSchemaCollection, MongoSchemaIR } from '@internal/mongo-schema-ir';
-import type {
-  AnyMongoDdlWireCommand,
-  AnyMongoDmlWireCommand,
-  AnyMongoWireCommand,
-} from '@internal/mongo-wire';
 import { isStructuredError } from '@internal/utils/structured-error';
 import { ObjectId, UUID } from 'bson';
 import { MongoServerError } from 'mongodb';
@@ -52,268 +24,32 @@ import {
   createCollection,
   createIndex,
   dataTransform,
+  rawAggregate,
   rawUpdateMany,
   renameCollection,
   renameField,
   unsetField,
 } from '../src/core/migrations/migration-factories';
-import { serializeMongoOps } from '../src/core/migrations/mongo-ops-serializer';
 import { MongoMigrationRunner } from '../src/core/migrations/mongo-runner';
-
-type Row = Record<string, unknown>;
-type WireCommand = AnyMongoWireCommand;
-
-const ALL_POLICY: MigrationOperationPolicy = {
-  allowedOperationClasses: ['additive', 'widening', 'destructive', 'data'],
-};
-
-const NOOP_MARKER_OPS: MarkerOperations = {
-  markerLocation: '_prisma_migrations',
-  readMarker: async () => null,
-  initMarker: async () => {},
-  updateMarker: async () => true,
-  writeLedgerEntry: async () => {},
-};
-
-class EventLog {
-  readonly entries: string[] = [];
-  record(entry: string): void {
-    this.entries.push(entry);
-  }
-}
-
-class StubMongoDriver implements MongoQueryable {
-  readonly executeCalls: WireCommand[] = [];
-  private readonly responses: Row[][] = [];
-  private failure: unknown;
-
-  constructor(private readonly log?: EventLog) {}
-
-  failUpdateManyWith(error: unknown): void {
-    this.failure = error;
-  }
-
-  queueResponse(rows: Row[]): void {
-    this.responses.push(rows);
-  }
-
-  execute<R>(wireCommand: WireCommand): AsyncIterable<R> {
-    this.executeCalls.push(wireCommand);
-    this.log?.record(`dml:${wireCommand.kind}:${wireCommand.collection}`);
-    const failure = wireCommand.kind === 'updateMany' ? this.failure : undefined;
-    const rows = failure === undefined ? (this.responses.shift() ?? []) : [];
-    return (async function* () {
-      if (failure !== undefined) throw failure;
-      for (const row of rows) yield row as R;
-    })();
-  }
-
-  async run(_wireCommand: WireCommand): Promise<void> {}
-
-  async close(): Promise<void> {}
-}
-
-type DmlWireCommand = AnyMongoDmlWireCommand;
-
-class StubMongoAdapter implements MongoAdapter {
-  readonly loweredPlans: MongoQueryPlan[] = [];
-
-  structuralLower(plan: MongoQueryPlan): MongoLoweredDraft {
-    this.loweredPlans.push(plan);
-    const kind = plan.command.kind;
-    if (kind === 'aggregate' || kind === 'rawAggregate') {
-      return { kind: 'aggregate', collection: plan.collection, pipeline: [] };
-    }
-    return {
-      kind: 'updateMany',
-      collection: plan.collection,
-      filter: {},
-      update: {},
-      upsert: undefined,
-    };
-  }
-
-  async resolveParams(draft: MongoLoweredDraft, _ctx: CodecCallContext): Promise<DmlWireCommand> {
-    const wireKind =
-      draft.kind === 'aggregate' || draft.kind === 'rawAggregate' ? 'aggregate' : 'updateMany';
-    return { kind: wireKind, collection: draft.collection } as unknown as DmlWireCommand;
-  }
-
-  lower(plan: MongoDdlPlan, ctx: CodecCallContext): Promise<AnyMongoDdlWireCommand>;
-  lower(plan: MongoQueryPlan, ctx: CodecCallContext): Promise<AnyMongoDmlWireCommand>;
-  lower(plan: MongoQueryPlan | MongoDdlPlan, ctx: CodecCallContext): Promise<WireCommand> {
-    if ('collection' in plan) {
-      return this.resolveParams(this.structuralLower(plan), ctx);
-    }
-    const { command } = plan;
-    return Promise.resolve({
-      kind: command.kind,
-      collection: command.collection,
-    } as unknown as WireCommand);
-  }
-}
-
-class StubInspectionExecutor implements MongoInspectionCommandVisitor<Promise<Row[]>> {
-  readonly calls: AnyMongoInspectionCommand[] = [];
-  collections: Row[] = [];
-  indexes: Row[] = [];
-
-  async listIndexes(command: AnyMongoInspectionCommand): Promise<Row[]> {
-    this.calls.push(command);
-    return this.indexes;
-  }
-  async listCollections(command: AnyMongoInspectionCommand): Promise<Row[]> {
-    this.calls.push(command);
-    return this.collections;
-  }
-}
-
-const RUN_COLLECTION = 'users';
-const PLAN_META = {
-  target: 'mongo' as const,
-  storageHash: 'test',
-  lane: 'mongo-raw',
-};
-
-function makeCheckPlan(): MongoQueryPlan {
-  return {
-    collection: RUN_COLLECTION,
-    command: new AggregateCommand(RUN_COLLECTION, [
-      new MongoMatchStage(MongoFieldFilter.eq('status', null)),
-      new MongoLimitStage(1),
-    ]),
-    meta: { ...PLAN_META, lane: 'mongo-pipeline' },
-  };
-}
-
-function makeWriteCheckPlan(): MongoQueryPlan {
-  return {
-    collection: RUN_COLLECTION,
-    command: new RawUpdateManyCommand(
-      RUN_COLLECTION,
-      { status: { $exists: false } },
-      { $set: { status: 'active' } },
-    ),
-    meta: PLAN_META,
-  };
-}
-
-function makeRunPlan(): MongoQueryPlan {
-  return {
-    collection: RUN_COLLECTION,
-    command: new RawUpdateManyCommand(
-      RUN_COLLECTION,
-      { status: { $exists: false } },
-      { $set: { status: 'active' } },
-    ),
-    meta: PLAN_META,
-  };
-}
-
-function serializedOperations(ops: readonly AnyMongoMigrationOperation[]): readonly unknown[] {
-  return JSON.parse(serializeMongoOps(ops)) as readonly unknown[];
-}
-
-function makePlan(ops: readonly AnyMongoMigrationOperation[]): MigrationPlan {
-  return {
-    targetId: 'mongo',
-    destination: { storageHash: 'dest' },
-    // The runner's deserializer re-hydrates class instances from the JSON form,
-    // so callers always hand it a pre-serialized operations list.
-    operations: serializedOperations(ops) as unknown as MigrationPlan['operations'],
-  };
-}
-
-function synthEdges(plan: MigrationPlan): readonly AggregateMigrationEdgeRef[] {
-  return [
-    buildFabricatedMigrationEdge({
-      currentMarkerStorageHash: plan.origin?.storageHash,
-      destinationStorageHash: plan.destination.storageHash,
-      operationCount: plan.operations.length,
-    }),
-  ];
-}
-
-interface Harness {
-  readonly runner: MongoMigrationRunner;
-  readonly driver: StubMongoDriver;
-  readonly adapter: StubMongoAdapter;
-  readonly inspectionExecutor: StubInspectionExecutor;
-  readonly log: EventLog;
-  readonly ddlCalls: string[];
-}
-
-function makeHarness(): Harness {
-  const log = new EventLog();
-  const driver = new StubMongoDriver(log);
-  const adapter = new StubMongoAdapter();
-  const inspectionExecutor = new StubInspectionExecutor();
-  const ddlCalls: string[] = [];
-  const deps: MongoRunnerDependencies = {
-    inspectionExecutor,
-    adapter,
-    driver,
-    executeDdl: async (command) => {
-      ddlCalls.push(`ddl:${command.kind}:${command.collection}`);
-      log.record(`ddl:${command.kind}:${command.collection}`);
-    },
-    markerOps: NOOP_MARKER_OPS,
-    introspectSchema: async () => new MongoSchemaIR([], { fromDatabase: false }),
-  };
-  return {
-    runner: new MongoMigrationRunner(deps),
-    driver,
-    adapter,
-    inspectionExecutor,
-    log,
-    ddlCalls,
-  };
-}
-
-function makeContract(profileHash: string): MongoContract {
-  // The runner reads `profileHash` for marker writes and `storage` (via
-  // `verifyMongoSchema → contractToMongoSchemaIR`) for post-apply
-  // verification. Empty `collections` paired with the harness's empty
-  // `introspectSchema` stub produces a passing verify.
-  return {
-    profileHash,
-    storage: {
-      storageHash: 'dest',
-      namespaces: {
-        __unbound__: {
-          id: '__unbound__',
-          kind: 'mongo-namespace',
-          entries: { collection: {} },
-        },
-      },
-    },
-  } as unknown as MongoContract;
-}
-
-function failureFields(failure: MigrationRunnerFailure) {
-  return {
-    code: failure.code,
-    message: failure.message,
-    ...(failure.why === undefined ? {} : { why: failure.why }),
-    meta: failure.meta,
-  };
-}
-
-async function execute(
-  harness: Harness,
-  ops: readonly AnyMongoMigrationOperation[],
-  executionChecks?: MigrationRunnerExecutionChecks,
-) {
-  const plan = makePlan(ops);
-  return harness.runner.execute({
-    plan,
-    migrationEdges: synthEdges(plan),
-    destinationContract: makeContract('dest'),
-    policy: ALL_POLICY,
-    frameworkComponents: [],
-    ...(executionChecks ? { executionChecks } : {}),
-  });
-}
+import {
+  ALL_POLICY,
+  execute,
+  failureFields,
+  makeCheckPlan,
+  makeContract,
+  makeHarness,
+  makePlan,
+  makeRunPlan,
+  makeWriteCheckPlan,
+  NOOP_MARKER_OPS,
+  PLAN_META,
+  RUN_COLLECTION,
+  StubInspectionExecutor,
+  StubMongoAdapter,
+  StubMongoDriver,
+  serializedOperations,
+  synthEdges,
+} from './mongo-runner-harness';
 
 describe('MongoMigrationRunner.executeDmlOperation', () => {
   it('runs the DML wire command once when there are no checks to gate it', async () => {
@@ -931,7 +667,7 @@ describe('MongoMigrationRunner, a document rewrite without the privilege to skip
       code: 'MIGRATION.EXECUTION_FAILED',
       message:
         'Operation field.users.nickname.unset failed: the database user may not skip document validation',
-      why: 'Rewriting documents to fit the new schema skips document validation, because the old validator rejects the new shape. MongoDB refused it with error 13 (Unauthorized). Grant the user the bypassDocumentValidation action on the database, for example with the dbAdmin or restore role, then run the command again; operations that already ran are skipped. The failed apply changed nothing.',
+      why: 'Rewriting or copying documents to fit the new schema skips document validation, because the old validator rejects the new shape. MongoDB refused it with error 13 (Unauthorized). Grant the user the bypassDocumentValidation action on the database, for example with the dbAdmin or restore role. Then run the command again; operations that already ran are skipped. The failed apply changed nothing.',
       meta: {
         operationId: 'field.users.nickname.unset',
         mongoCode: 13,
@@ -1020,6 +756,26 @@ describe('MongoMigrationRunner, a document rewrite without the privilege to skip
     );
   });
 
+  it('gives a data transform whose copy skips validation the same advice', async () => {
+    const harness = makeHarness();
+    harness.driver.failAggregateWith(unauthorized());
+
+    const result = await execute(harness, [
+      dataTransform('move User to members', {
+        run: () =>
+          rawAggregate('users', [{ $match: { kind: 'user' } }, { $merge: { into: 'members' } }], {
+            bypassDocumentValidation: true,
+          }),
+      }),
+    ]);
+
+    expect(failureFields(result.assertNotOk())).toMatchObject({
+      message:
+        'Operation data_transform.move User to members failed: the database user may not skip document validation',
+      why: 'Rewriting or copying documents to fit the new schema skips document validation, because the old validator rejects the new shape. MongoDB refused it with error 13 (Unauthorized). Grant the user the bypassDocumentValidation action on the database, for example with the dbAdmin or restore role. Then run the command again; operations that already ran are skipped. The failed apply changed nothing.',
+    });
+  });
+
   it("names any other failure of a data transform's update, with the user's update as the place to fix it", async () => {
     const harness = makeHarness();
     harness.driver.failUpdateManyWith(unauthorized());
@@ -1030,7 +786,7 @@ describe('MongoMigrationRunner, a document rewrite without the privilege to skip
 
     expect(failureFields(result.assertNotOk())).toMatchObject({
       code: 'MIGRATION.EXECUTION_FAILED',
-      why: expect.stringContaining("change the update in the migration's migration.ts"),
+      why: expect.stringContaining("change it in the migration's migration.ts"),
       meta: {
         operationId: 'data_transform.backfill-status',
         mongoCode: 13,
@@ -1076,7 +832,7 @@ describe('MongoMigrationRunner, a collection rename stopped because the new coll
       code: 'MIGRATION.PRECHECK_FAILED',
       message:
         'Operation collection.events.rename(occasions) stopped: collection occasions already exists, so collection events cannot be renamed to it',
-      why: 'If occasions holds nothing you need, drop it, then run the command again; operations that already ran are skipped. If an earlier operation of the same migration created occasions, as a createIndex on occasions does, make renameCollection("events", "occasions") the first operation of its migration.ts, run node on that migration.ts, and then drop occasions and run the command again. The failed apply changed nothing.',
+      why: 'If occasions holds nothing you need, drop it, then run the command again; operations that already ran are skipped. If an earlier operation of the same migration created occasions, as a createIndex on occasions does, in its migration.ts put renameCollection("events", "occasions") right after the drops of indexes on "events", if there are any, and before every other operation, run node on that migration.ts, and then drop occasions and run the command again. If occasions is a temporary name that a refused rename suggested, you can instead delete this migration, give the model another temporary name that the database does not have, and plan again. The failed apply changed nothing.',
       meta: { operationId: 'collection.events.rename(occasions)', databaseUnchanged: true },
     });
   });
@@ -1085,26 +841,26 @@ describe('MongoMigrationRunner, a collection rename stopped because the new coll
 describe('MongoMigrationRunner, a DDL precheck that does not hold', () => {
   it('reports the failed check once, in meta.failedCheck', async () => {
     const harness = makeHarness();
-    harness.inspectionExecutor.collections = [{ name: 'orders' }];
+    harness.inspectionExecutor.indexes = [{ name: 'email_1', key: { name: 1 } }];
 
-    const result = await execute(harness, [createCollection('orders')], {
-      prechecks: true,
-      postchecks: false,
-      idempotencyChecks: false,
-    });
+    const result = await execute(
+      harness,
+      [createIndex('orders', [{ field: 'email', direction: 1 }], { name: 'email_1' })],
+      { prechecks: true, postchecks: false, idempotencyChecks: false },
+    );
 
     expect(failureFields(result.assertNotOk())).toEqual({
       code: 'MIGRATION.PRECHECK_FAILED',
       message:
-        'Operation collection.orders.create failed during precheck: collection orders does not exist',
-      why: 'Before operation collection.orders.create runs, it checks: collection orders does not exist. That check failed: the database already has collection "orders". The failed apply changed nothing.',
+        'Operation index.orders.create(email_1) failed during precheck: no index named email_1 exists on orders',
+      why: 'Before operation index.orders.create(email_1) runs, it checks: no index named email_1 exists on orders. That check failed: the database already has an index named "email_1" in "orders". The failed apply changed nothing.',
       meta: {
         databaseUnchanged: true,
         failedCheck: {
-          operationId: 'collection.orders.create',
+          operationId: 'index.orders.create(email_1)',
           phase: 'precheck',
-          description: 'collection orders does not exist',
-          expectation: { expects: 'absent', object: 'collection "orders"' },
+          description: 'no index named email_1 exists on orders',
+          expectation: { expects: 'absent', object: 'an index named "email_1" in "orders"' },
         },
       },
     });
@@ -1240,8 +996,10 @@ describe('MongoMigrationRunner, a DDL postcheck that does not hold', () => {
 describe('MongoMigrationRunner, a failure after an earlier space changed the database', () => {
   it('says the operations that ran stay applied, though this space changed nothing', async () => {
     const harness = makeHarness();
-    harness.inspectionExecutor.collections = [{ name: 'orders' }];
-    const plan = makePlan([createCollection('orders')]);
+    harness.inspectionExecutor.indexes = [{ name: 'email_1', key: { name: 1 } }];
+    const plan = makePlan([
+      createIndex('orders', [{ field: 'email', direction: 1 }], { name: 'email_1' }),
+    ]);
 
     const result = await harness.runner.execute({
       plan,
@@ -1259,7 +1017,7 @@ describe('MongoMigrationRunner, a failure after an earlier space changed the dat
       why: failure.why,
     }).toEqual({
       databaseUnchanged: false,
-      why: 'Before operation collection.orders.create runs, it checks: collection orders does not exist. That check failed: the database already has collection "orders". The operations that ran before the failure stay applied.',
+      why: 'Before operation index.orders.create(email_1) runs, it checks: no index named email_1 exists on orders. That check failed: the database already has an index named "email_1" in "orders". The operations that ran before the failure stay applied.',
     });
   });
 });

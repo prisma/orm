@@ -374,12 +374,6 @@ On MongoDB, when a model gets its first discriminator (`Task.type`) and a new va
 
 What is missing: a way to fill the variant's field after the discriminator is filled, without going by hand. That is the statement route of the entry above (`--backfill Bug.severity` for a variant whose documents exist), or a backfill whose selection the user can widen. Files: `backfillTransform` in `packages/3-targets/mongo/1-target/src/core/migrations/mongo-data-transforms.ts`, which builds the check and run of a backfill, and `newVariantFieldsAdvice` in `packages/3-targets/mongo/1-target/src/core/migrations/mongo-runner.ts`.
 
-## After a stored name is renamed by hand, db update on MongoDB still says the delete would lose values
-
-The advice for a stored-name-only rename (`--rename User.fullName:User.fullName`) says: with `db update`, rename it in the database yourself first, then run `db update`. On MongoDB, after the user renames the key in `mongosh`, `db update` still asks for `--delete User.fullName` and says it "would lose the values of field "User.fullName"". The old key is empty by then, so answering keeps the data, but the question does not say so. On Postgres the same advice leads to no question, because `db update` reads the live schema there.
-
-What is missing: `db update` on MongoDB plans from the origin contract, not from the documents, so it cannot know the old key is empty. Either the question would need to know that no document holds the field, or the advice would need to say that the question follows and that answering it keeps the data. Files: the delete questions in `packages/1-framework/3-tooling/cli/src/control-api/statements/resolve-statements.ts`, with the loss text in `lossText` in `packages/1-framework/3-tooling/cli/src/control-api/statements/plan-questions.ts`.
-
 ## A MongoDB validator names no root model, so roots are matched by position
 
 A collection that stores several root models gets a validator with one `anyOf` branch per root model, in name order, and no branch names its model. Code that compares two validators of the collection without the contracts matches roots by position: planning without an origin contract (type changes, the validator update's label) and the runner's advice after a failed document check (`fieldsTouched`). Roots of validators with different numbers of roots are no longer matched, so adding or removing a root model no longer compares one model's fields with another's. A change that keeps the number of roots can still pair the wrong roots: a root model renamed so that the name order changes (`Zebra` to `Aardvark` in a collection that also stores `Mole`), with or without `--rename`, or one root model removed and another added in the same plan. The rename is the more likely case, and with an origin contract it reaches the runner's advice. Nothing is lost: the validator change's document check runs before the validator is replaced.
@@ -400,6 +394,9 @@ This is a rename with no statement, paired by storage, which the design note and
 
 **Decided (Will, 2026-11-19):** ask. The removed model or member is asked about as removed: `--delete` lets its rows go, and `--rename` to the new model or member keeps them. Not built yet; it is its own change with an upgrade note.
 
+On MongoDB a removed root model and a new root model stored the same way are paired by storage (the rule of prisma/orm#31061). Such a pair gives no rename with no statement, but fills and type changes still match its fields by name. So when a field keeps its name and changes its stored name (`User { nick @map("n") }` to `Member { nick @map("nn") }`, both required by their validators), the plan removes `n` and asks about `User.nick`, plans no fill of `nn`, and the validator change's document check then stops the apply after `--delete User.nick` (round 4 probe Q1; with a field of another name stored as `nn`, a fill is planned). Asking about the removed model, as decided above, removes this case too.
+
+
 ## A rename statement for an enum value is refused where the same change without a statement is planned
 
 `stillStoredRefusal` (`packages/2-sql-family/9-family/src/core/migrations/enum-value-planning.ts`, line 278, called at lines 590–593) refuses `--rename Role.A:Role.V` when the destination enum still stores the old value of `A` under another member. When that member is new, the rows that hold the old value belong to `A`, which the statement renames, so the refusal is not needed: origin `A = "a"`, destination `V = "v"` and a new `N = "a"` is refused, while origin `A = "a"`, destination `A = "v"` and a new `N = "a"` (the member keeps its name, no statement) is planned, with the rows rewritten to `"v"` and `N` starting with no rows. Statements are stricter than the contract change they describe. The check should skip a holder the origin enum does not have, as the freed-and-reused case of the stored-name spec does.
@@ -414,7 +411,7 @@ A table or column rename that no statement asks for is refused when it swaps or 
 
 **Found:** stored-name renames, dispatch 5 (2026-11-18).
 
-`migration plan` returns `noOp` when the origin and destination storage hashes are equal (`packages/1-framework/3-tooling/cli/src/control-api/operations/migration-plan.ts`, around line 754). Two models that swap tables of the same shape, or two fields that swap columns of the same type, leave the storage section unchanged, so `migration plan` writes nothing and the rows read as the other model's. `db update` refuses the same swap. The same class as the enum entry above ("Members that trade stored values while the list of stored values stays the same"): a change to the domain part only. Fixing it is a framework CLI change.
+`migration plan` returns `noOp` when the origin and destination storage hashes are equal (`packages/1-framework/3-tooling/cli/src/control-api/operations/migration-plan.ts`, around line 754). Two models that swap tables of the same shape, or two fields that swap columns of the same type, leave the storage section unchanged, so `migration plan` writes nothing and the rows read as the other model's. `db update` refuses the same swap. MongoDB behaves the same way: two models that swap collections of the same shape, or two fields that swap stored names of the same type, keep the storage hash, so `migration plan` writes nothing, and a later `db update` refuses the swap, because the snapshot stored for that hash is the origin contract. The MongoDB refusal journeys (`test/integration/test/cli-journeys/stored-name-refusals.mongo.e2e.test.ts`) give the swapped models and fields different shapes for this reason. The same class as the enum entry above ("Members that trade stored values while the list of stored values stays the same"): a change to the domain part only. Fixing it is a framework CLI change.
 
 **Direction (Will, 2026-11-19):** do not remove the shortcut. When the storage is identical, the change has two readings the contracts cannot tell apart: the rows should trade places, or the user is correcting two mappings that were the wrong way round, where "No changes detected" is right. The cause is that the contract cannot express which one the user means, and the expressivity of PSL is the means to solve it. Not scheduled. Until then the acceptable result is to ask the user what they meant; today `db update` refuses and `migration plan` plans nothing. Note the earlier decision this touches: stating a change in the contract source (`@@hint(was: ...)`) was shelved, because the statement has to survive until every environment has consumed it (`design-notes.md`, "Why not the contract source"). A design here has to answer that. A CLI command that edits the contract source and then plans was considered and not wanted: `--rename` already states the change, and editing the source belongs to the editor.
 
@@ -458,7 +455,8 @@ No pair is made when the control policy is not `managed` on both sides, so the p
 
 **Found:** stored-name renames spec, 2026-11-18.
 
-- `KeepDataEdit.swapsValues` (`packages/1-framework/1-core/framework-components/src/control/migration-statements.ts`, line 196) is a framework type. After the MongoDB pull request no target produces a `KeepDataEdit` for a member that keeps its name. Remove the field, and the CLI code that only serves it (`twoRuns`, `keepsDataByCommand`, `sharesValueWithKeptMember`), when nothing reaches them. It is a framework interface change.
+- `KeepDataEdit.swapsValues` (`packages/1-framework/1-core/framework-components/src/control/migration-statements.ts`, line 196) is a framework type that nothing sets now. The CLI code that read it (`twoRuns` in `packages/1-framework/3-tooling/cli/src/utils/keep-data-edit-advice.ts`, `sharesValueWithKeptMember` and the kept-member branch of `keepsDataByCommand` in `packages/1-framework/3-tooling/cli/src/control-api/statements/plan-questions.ts`) was removed with the MongoDB stored-name renames, because no target asks about an enum member the destination keeps. Removing the field is a framework interface change.
+- Reading the callers for that removal found more that no target reaches. `MigrationDataLoss.keepDataEdit` (same file, line 188) is set by no planner: the only `KeepDataEdit` values come from the runners' apply-time `RowsHoldingValue.keepDataEdit`, which `runner-failure-advice.ts` prints and which never reaches the plan questions. So in `plan-questions.ts` the edits are always empty, `keepsDataByCommand` is always false, and `migrationPlanKeepDataEditAdvice` and `dbUpdateKeepDataEditAdvice` (`keep-data-edit-advice.ts`), with `keptSubjects` and `KeepDataEditAdvice`, are never called. Removing them together with `MigrationDataLoss.keepDataEdit` is a framework interface change; keeping them is right only if a planner is expected to give such edits again.
 - `MIGRATION.TABLE_NAME_CASE_CHANGED` (`packages/2-sql-family/9-family/src/core/migrations/table-name-case-guard.ts`) is in practice reached only without an origin contract now. Remove it once no supported upgrade path reaches the lowering rule.
 
 ## SQLite operation labels do not quote names
@@ -608,3 +606,119 @@ Under `--yes` the refusal now says "This command requires explicit consent for w
 **Found:** manual QA on SQLite, 2026-11-23, run as a user who knows their models and fields. The run used `@prisma/cli-engine` 0.10.1; the problem holds with 0.10.2.
 
 In a terminal, `db update` prints each progress step twice, as a `▸` line and then a `✔` line, so four lines come before the error. `migration plan` prints none.
+
+## MongoDB: a variant that gains its own collection leaves its documents in the base's collection
+
+**Found:** review of the MongoDB stored-name renames, step 1, 2026-11-24. This predates that work.
+
+When a variant gains its own `@@map` (its storage is split from its base's collection), the plan creates the new collection and moves nothing. The variant's documents stay in the base's collection and are read as the other models' documents there, and no question is asked, because the variant's discriminator value does not change (`packages/3-targets/mongo/1-target/src/core/migrations/mongo-variant-planning.ts:198`, `if (to === from) return undefined`) and the collection diff (`mongo-planner.ts:366`, `planCollectionDiff`) only creates the new collection. A plan that drops no collection has no question to attach advice to. Moving them is a data migration; the plan should at least ask about the documents left behind. The PSL interpreter refuses a variant whose `@@map` differs from its base's (`PSL_MONGO_VARIANT_SEPARATE_COLLECTION`), so a PSL contract does not reach this; whether a TypeScript contract does was not checked.
+
+## SQL has no "Add --rename A:B" hint for a field statement whose model's name and table both change
+
+**Found:** review of the MongoDB stored-name renames, step 1, 2026-11-24.
+
+On MongoDB, a field rename statement on a model whose name and collection both change, with no model statement, is refused with "Add --rename A:B before this statement, so the collection is renamed with its documents." (`packages/3-targets/mongo/1-target/src/core/migrations/mongo-statement-planning.ts`, `unrenamedCollectionWhy`). The SQL family gives the same-model text in that case, which says the plan does not rename the table and to leave out the statement, though adding the model statement is the fix. Give SQL the same hint.
+
+## SQL: a dropped table shared by several models asks about one of them
+
+**Found:** review of the MongoDB stored-name renames, step 2, 2026-11-24.
+
+When a table that several models store their rows in is dropped (for example single-table variants of different bases, or a variant moving out while the base is removed), the SQL family names one model in the question: the root model if there is one, else the first model in declaration order (`packages/2-sql-family/9-family/src/core/migrations/operation-subjects.ts`, the `models.find(({ isRoot }) => isRoot) ?? models[0]` lookup in the subject of a dropped table). `--delete` on that model then drops rows of models never named. MongoDB now asks about every root model stored in a dropped collection. SQL should do the same where several root models share a table.
+
+## MongoDB: `--rename` of a model that shares its collection has only a hand-written route
+
+**Found:** MongoDB stored-name renames, journeys, 2026-11-24.
+
+`--rename User:Member`, where `User` shares collection `users` with another root model and `Member` gets a collection of its own, is refused: a collection rename moves every document of the collection, and no discriminator tells the documents of the two models apart (`sharedCollectionRefusal` in `packages/3-targets/mongo/1-target/src/core/migrations/mongo-statement-planning.ts`, line 611). The advice is to leave out the statement, or to write the move as a hand-written migration. Before this work the rename moved the other model's documents too. Nothing is lost now, but there is no statement that moves one model's documents out of a shared collection; that is a data migration, which a plan does not write.
+
+## MongoDB `db update` after a collection renamed by hand lists a field statement before a `@map` rename
+
+**Found:** MongoDB stored-name renames, journeys, 2026-11-24.
+
+After a collection is renamed by hand, `db update --rename User.name:User.fullName` together with a changed `@map` on `User.email` lists `Rename field name to fullName` before `Rename field email to mail`. The order is the order in which the field renames are collected in `planStatements` (`fieldRenameCalls` in `packages/3-targets/mongo/1-target/src/core/migrations/mongo-statement-planning.ts`, line 272): statements first, then stored-name changes. The two renames touch different keys, so both apply and nothing is lost; the order only differs from the order of the contract's fields. Seen in `test/integration/test/cli-journeys/stored-name-shared-collections.mongo.e2e.test.ts`, C3.
+
+## The route and refusal text of stored-name renames is copied between the SQL family and the MongoDB target
+
+**Found:** system design review of the MongoDB stored-name renames, 2026-11-24.
+
+The refusals of swaps, chains, takeovers and shared storage, and their two-plan routes, are written twice, nearly word for word: in `packages/2-sql-family/9-family/src/core/migrations/storage-renames.ts`, `statement-planning.ts` and `enum-value-planning.ts`, and in `packages/3-targets/mongo/1-target/src/core/migrations/mongo-rename-conflicts.ts`, `mongo-statement-planning.ts` and `mongo-enum-value-planning.ts`. The copied pieces are `linkedChanges`, `temporaryNamesRoute`, `freeName`, `unused`, the `ORDER` sentence, the "both tables" / "both collections" text, `leaveOutShared` and the two-plan value route (`movesTwoPlans` on MongoDB). They cannot be shared: the only layer both may import is the framework domain (`@internal/utils` is in `packages/1-framework/0-foundation`, and `packages/0-shared` maps to the framework domain in `architecture.config.json`), which this work may not change. The cost is that the copies drift unless a change to one is made to both, and no test compares the two families' messages.
+
+## `renameRefused` builds refusals that are not renames
+
+**Found:** system design review of the MongoDB stored-name renames, 2026-11-24.
+
+`renameRefused` builds a refusal with the statement that asked for it, or as a contract change the plan cannot make when none did. Both families also use it for refusals that are not renames: on MongoDB the discriminator `--convert` refusals (`refusedChange` in `mongo-variant-planning.ts`), the overlap refusals (`mongo-rewrite-overlaps.ts`) and the key and value rewrite refusals (`refusalOf` in `mongo-rewrite-refusals.ts`); on SQL the `--backfill` refusals. A name such as `planRefusal` would say what it does. Rename it in both families in one change, so they stay alike.
+
+## MongoDB `FieldChange` is one rename, where SQL's `ColumnChange` groups renames
+
+**Found:** system design review of the MongoDB stored-name renames, 2026-11-24.
+
+When several root models of a shared collection rename one field to the same new name, MongoDB plans one `$rename` by merging equal calls (`sameFieldRename` in `mongo-statement-planning.ts`), and each model's `FieldChange` is checked on its own. SQL groups them in one `ColumnChange` with `renames`. The result is the same today; grouping would make the type say it.
+
+## A boolean enum with a `false` member cannot be emitted
+
+**Found:** MongoDB stored-name renames, round 2 fixes, 2026-11-24.
+
+`enumType('Flag', type.Boolean(), member('YES', true), member('NO', false))` in a MongoDB TypeScript contract fails `contract emit` with `CONTRACT.VALIDATION_FAILED`: "domain.namespaces.__unbound__.enum.Flag.members[1].value must be … (was missing)". The contract canonicalization omits default values, and it treats every `false` as one (`isDefaultValue` in `packages/1-framework/0-foundation/contract/src/canonicalization.ts`, around line 83), so the member's `value: false` is dropped. PSL cannot write a boolean enum at all. So no user contract reaches the boolean enum refusals today, and no CLI journey can show them; planner tests cover them. Fixing it is a framework change: keep `false` under enum members.
+
+## MongoDB renames are passed as several values, where SQL passes one `StorageRenames`
+
+**Found:** system design reviews of the MongoDB stored-name renames, rounds 1 and 2, 2026-11-24.
+
+The SQL family builds one `StorageRenames` (models, fields, table changes, column changes) and every later step reads it. The MongoDB planner threads the same facts as several values: `statements`, `models`, `collections` (`CollectionRenames`), `fieldRenames`, `fieldRenameCalls` and `renamedCollections` (`planStatements` in `packages/3-targets/mongo/1-target/src/core/migrations/mongo-statement-planning.ts`, and `mongo-planner.ts`). Model pairing now has one function (`modelPairOf`, which says whether a statement, the same coordinate or the same storage paired a model, and `givesRenamesWithNoStatement`, which says whether that pair gives renames no statement asks for), so the planner does not disagree with itself. It lives in `mongo-statement-planning.ts`, while `modelRenamesOf` and `CollectionRenames` are in `mongo-storage-renames.ts`; SQL keeps all of its pairing in `storage-renames.ts`. Moving it there is part of the larger change. Two related left-overs:
+
+- `planStatements` builds one `ModelMatchInput`, `pairing`, with `fieldRenames: []`, and four steps read it: `embedRelationRefusals`, `unstatedFieldRenamesOf`, the `sharesCollection` check of field renames and the `removes` check of takeover routes. They run before the field renames they would hold exist. Removing the placeholder needs a model-pairing input without field renames, which is part of the larger change above.
+- `plannedCollectionChanges` (`mongo-rename-conflicts.ts`) both decides which collection renames are planned and refuses the ones that cannot be, where SQL separates `plannedStorageRenames` from `storageRenameConflict`. The result is the same; the split would make each easier to read.
+
+Neither was done in the stored-name renames pull request, since each touches most of the MongoDB planner's steps.
+
+## A MongoDB root model that moves out of a shared collection starts empty, with no question
+
+**Found:** MongoDB stored-name renames, review rounds 1 to 3, 2026-11-24. This predates that work.
+
+`Admin` and `User` share collection `people`, and no discriminator tells their documents apart. When the destination stores `User` in a collection of its own (a changed `@@map`, or a rename statement left out), the plan creates the new collection and changes the validator of `people`, and asks nothing about the documents: `collectionDrops` in `packages/3-targets/mongo/1-target/src/core/migrations/mongo-planner.ts` asks only about collections the plan drops, and on `origin/main` the same. `User`'s documents stay in `people`, where `Admin` still reads them, and `User` starts with none. If `Admin`'s validator does not accept them, the validator change's document check stops the apply. When the moving model also changes a field's `@map`, the plan removes that key from the documents of `people` and asks about it (`Remove field user from collection people`), and when `Admin` holds the same key it refuses with "move the models to separate collections", which is what the change already does (round 3 probes Q3 and Q3b). A design for this case should cover both. The model that stays is planned as if the leaving model were gone: a `@map` change or an enum stored-value change of the staying model renames the key or replaces the value over every document of `people`, including those the leaving model left behind (round 5 probes R1 to R3), since only the models the destination stores in a collection count as sharing its documents. Removals, casts and fills of the staying model reach them the same way: with `Admin.status` removed while `User` moves out, the plan unsets `status` in `User`'s documents too, asked about only as `Admin.status` (round 7 probe P3; the same on `origin/main`). The stored-name renames spec defers this as a data migration ("a model leaving a shared collection"). Two attempts to ask about it were built and removed: a question needs an operation to attach to, which some plans do not have, and the framework has no kind of loss for data a plan leaves in place, so the question had to be answered with `--delete` although nothing was deleted. A fix needs a design, and may need a framework loss kind.
+
+## The CLI engine's `CLI.CONSENT_UNUSED` text does not say why nothing asked
+
+**Found:** manual QA of the MongoDB stored-name renames, round 1, 2026-11-24.
+
+A script that passed `--delete User` for a `@@map` change, as it had to before, now gets `--delete User was given but nothing in this run asked about User.` with the hint "Remove the flag, or spell the subject the way the command names it." The second hint suggests a typo; the cause is that the change is now planned with no question. The text that reaches users is written by the CLI engine (repository prisma/prisma-cli); the ORM's own copy (`errorConsentUnused` in `packages/1-framework/3-tooling/cli/src/utils/cli-errors.ts`) is used only for values the engine no longer holds, so changing it alone would make the two disagree. Change both together: say that the plan has no question about the subject, for example because the change is now planned with no question, before the spelling hint.
+
+## MongoDB chain routes move every member through a temporary name
+
+**Found:** manual QA of the MongoDB stored-name renames, round 1, 2026-11-24.
+
+For a chain of collection renames (`users` to `accounts` while `accounts` moves to `members`), the two-plan route gives every collection in the chain a temporary name, though only the one that takes the name another frees needs one (`collectionRoute` and `fieldRoute` in `packages/3-targets/mongo/1-target/src/core/migrations/mongo-rename-conflicts.ts`, through `temporaryNamesRoute`). The route works; it is one step longer than needed. The SQL family's route (`storage-renames.ts`) does the same, so change both together. Enum chains already move only the member that needs a temporary value.
+
+## A MongoDB time-series collection cannot be created from a contract
+
+**Found:** manual QA of the MongoDB stored-name renames, round 4 (finding 14), 2026-11-24. It is on `main` too: the planner's `createCollection` options for a collection come from `schemaCollectionToCreateCollectionOptions` (`packages/3-targets/mongo/1-target/src/core/migrations/op-factory-call.ts`), which on `main` and on this branch gives a time-series collection both `timeseries` and the contract's validator.
+
+On MongoDB 8.2.6 the first migration of a contract with a time-series model fails with `CLI.UNEXPECTED` and "'timeseries' is not allowed with 'validator'". Adding the validator afterwards fails too: `collMod` answers "option not supported on a time-series collection: validator". So no time-series collection can be created from a contract, and the time-series rename route, which creates the new collection, cannot be followed on that server. What is missing: the contract or the planner leaves the validator out for a time-series collection (and the verifier expects none), and the server's refusal is reported as a structured error, not `CLI.UNEXPECTED`.
+
+## The time-series rename route has no tested copy under migration plan
+
+**Found:** MongoDB stored-name renames, whole-branch review round 9 and manual QA round 4, 2026-11-24. The route predates that work.
+
+MongoDB cannot rename a time-series collection, so a rename statement for one is refused. Under `db update` the route is: create the new collection with the old one's time-series options, copy the documents, and run again with `--delete`. Under `migration plan` it is: plan with `--delete` and add a `dataTransform` right after the creation and before the drop. `$merge` cannot write into a time-series collection, so the route prints the copy as `rawAggregate("<to>", [{ $unionWith: "<from>" }, { $out: "<to>" }])`, which adds nothing once the drop has run, and says to drop the old collection or delete its documents by hand when the apply stops between the copy and the drop; the runner gives the same advice at that stop. A live runner test runs that copy and the plan's drop into a new time-series collection with no validator, stopped between them, and finds each document once after the re-run. No test follows the whole route, which starts from a time-series collection: it cannot be followed on MongoDB 8.2.6 until a time-series collection can be created from a contract (the entry above).
+
+
+## A field statement given without its model statement is refused by the CLI before the MongoDB planner sees it
+
+**Found:** MongoDB stored-name renames, review round 15 and manual QA round 7 (finding 26), 2026-11-25.
+
+The case: `User` shares collection `users` with `Admin` and moves to `Member` in `members`, and the user gives only `--rename Member.name:Member.fullName`, without `--rename User:Member`. The CLI's statement resolver (`readOldField` in `packages/1-framework/3-tooling/cli/src/control-api/statements/resolve-statements.ts`) finds the destination model `Member` with no counterpart in the origin and refuses the statement before planning, with: `the destination model "Member" has no counterpart in the origin contract: the origin has no model "Member" and no earlier statement renames a model to it`, and the fix `Rename the origin model to "Member" with its own --rename statement before this one, or check the names.` The user adds `--rename User:Member`, and the MongoDB planner then refuses both with one route that says to leave both out. So the user runs the command twice before they see the route; there is no dead end. The planner's own text for a field statement given alone (`sharedIfRenamed` in `mongo-statement-planning.ts`, which says the model statement "would be refused as well" and to leave this statement out too) is not reached from the CLI.
+
+Why deferred: the printed route is right, and the change is in how the framework CLI resolves field statements for every family, which is outside the MongoDB stored-name renames pull request. A fix could add "or leave out this statement" to the resolver's fix, which names no family, and then decide whether the planner's `sharedIfRenamed` branch is kept for callers that resolve statements another way.
+
+## The MongoDB collMod postcheck compares only the `$jsonSchema` of a validator that is only a `$jsonSchema`
+
+**Found:** CodeRabbit review of the MongoDB stored-name renames pull request, 2026-11-25. It is on `main`: `validatorBodyFilter` in `packages/3-targets/mongo/1-target/src/core/migrations/migration-factories.ts` came with prisma/orm#30752.
+
+The case: a `collMod` sets `{ $jsonSchema: X }`, and the collection already has `{ $jsonSchema: X, $expr: … }`. The postcheck compares `options.validator.$jsonSchema` only, so it holds, and the runner skips the `collMod`. The extra predicate stays, rejects writes the contract allows, and schema verification does not see it. The `createCollection` postcheck this branch adds compares the whole validator; the `collMod` postcheck still uses the body.
+
+Why deferred: changing it changes the checks of every `collMod` with a validator that `migration.ts` emits, and so the hash of migrations that hold one. That is a change of `main`'s postcheck rule, outside the stored-name renames. The fix is to compare `options.validator` whole, as the create postcheck now does, with a runner test of a collection whose validator adds a predicate.
+
+## `ops.json` stores an `ObjectId` as its hex string, so a filter "by `_id` values" matches nothing
+
+Found by the round 45 code review of the MongoDB stored-name renames (2026-11-27), older than that work and not run end to end. When a move's route says to select the moving models' documents by their `_id` values and those `_id`s are `ObjectId`s, the filter written in `migration.ts` is serialized into `ops.json` as hex strings. The copy and the delete then match no document. The route should say how to write such a filter so that it survives serialization, or the serializer should keep `ObjectId`s. Check it end to end before deciding.
