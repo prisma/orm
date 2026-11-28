@@ -214,7 +214,7 @@ These changes are not specific to a Prisma 7 schema. They apply to any Postgres 
 - `db.context`
 - `db.stack`
 
-Creating a client opens no connection; its only side effect is the `CONTRACT.CAPABILITIES_NOT_PROVIDED` warning, logged once when the client's connection does not provide a capability the contract requires. The pool is created on the first query, `db.runtime()` or `db.connect(...)`.
+Creating a client opens no connection; its only side effect is the `CONTRACT.CAPABILITIES_NOT_PROVIDED` warning, logged once when the client's connection does not provide a capability the contract requires, unless `verifyMarker: false` is passed. The pool is created on the first query, `db.runtime()` or `db.connect(...)`.
 Connection binding can be provided up front (`url`, `pg`, `binding`) or deferred via `db.connect(...)`.
 `postgres()` checks the database input when it is called and fails with `RUNTIME.BINDING_INVALID` if it is wrong: `null` or a value of the wrong type as `url`, `pg` or `binding`; more than one of them; a `url` that is empty, cannot be parsed or is not `postgres://` or `postgresql://`; a `binding` whose `kind` is not `'url'`, `'pgPool'` or `'pgClient'`; and a `binding` whose `url` is not such a string, or whose `pool` or `client` is not an object. The error never contains the value, so a connection string passed by mistake never puts its password in an error.
 
