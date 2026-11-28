@@ -32,7 +32,7 @@ import {
 } from '../../utils/cli-errors';
 import { RECORDED_CONTRACT_REF_FORMS } from '../../utils/contract-ref-forms';
 import { snapshotVerifierFor } from '../../utils/snapshot-content-verification';
-import { errorFromCaught, formatVersionFailure } from './caught-errors';
+import { errorFromCaught, readFailureReportedAsItself } from './caught-errors';
 import { buildReadAggregate } from './contract-space-aggregate-loader';
 
 function isEnoent(error: unknown): boolean {
@@ -213,8 +213,8 @@ export async function resolveContractRefToSnapshot(
       ),
     );
   } catch (error) {
-    const formatFailure = formatVersionFailure(error);
-    if (formatFailure !== undefined) return notOk(formatFailure);
+    const asItself = readFailureReportedAsItself(error);
+    if (asItself !== undefined) return notOk(asItself);
     if (MigrationToolsError.is(error)) {
       return notOk(error);
     }

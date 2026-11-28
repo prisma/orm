@@ -8,6 +8,7 @@ import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import { computeMigrationHash } from '@internal/migration-tools/hash';
 import { writeMigrationPackage } from '@internal/migration-tools/io';
 import type { MigrationMetadata } from '@internal/migration-tools/metadata';
+import { structuredError } from '@internal/utils/structured-error';
 import { join } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -168,6 +169,35 @@ describe('buildReadAggregate', () => {
     expect(result.failure).toMatchObject({
       code: 'CONTRACT.FORMAT_VERSION_NEWER',
       where: { path: contractPath },
+    });
+  });
+
+  it('loads the stand-in and gives the reason when the family refuses the type parameters of contract.json', async () => {
+    await writeContractFile(contractPath, CONTRACT_HASH);
+    await writeAppMigration(migrationsDir);
+    const config = makeConfig(contractPath);
+    vi.mocked(config.family.create).mockReturnValue({
+      deserializeContract: () => {
+        throw structuredError(
+          'CONTRACT.TYPE_PARAMS_INVALID',
+          'pg/varchar: length must be at least 1 (was 0)',
+          { meta: { dataType: 'pg/varchar', parameters: ['length'] } },
+        );
+      },
+    } as unknown as ReturnType<PrismaConfig['family']['create']>);
+
+    const result = await buildReadAggregate(config, { migrationsDir });
+
+    expect(
+      result.ok
+        ? {
+            contractRefusal: result.value.contractRefusal,
+            migrations: result.value.aggregate.app.graph().migrationByHash.size,
+          }
+        : result.failure,
+    ).toEqual({
+      contractRefusal: `${contractPath}: pg/varchar: length must be at least 1 (was 0)`,
+      migrations: 1,
     });
   });
 

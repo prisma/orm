@@ -25,10 +25,11 @@ describe('migrationPackageRepairActions', () => {
   });
 
   const appActions = () => migrationPackageRepairActions({ spaceId: 'app', packageDir, cwd });
-  const replan = {
+  const rerunWithNewHash = {
     kind: 'run-command',
-    label: `Or, if no database has applied this migration and no ref names where it or a later migration ends, delete the folder migrations/app/${DIR_NAME} and the folders of the migrations after it, then plan again from the contract it started from: the hash of the start snapshot its migration.ts imports, or @empty when it imports none`,
-    command: '{bin} migration plan --from <hash>',
+    label:
+      'Or, if no database has applied this migration, delete its migration.json if there is one and run this command, which writes migration.json and ops.json again with a new creation time, so the migration gets a new hash',
+    command: `node "migrations/app/${DIR_NAME}/migration.ts"`,
   };
 
   it('advises running migration.ts when migration.json keeps its createdAt, so the migration keeps its hash', async () => {
@@ -51,10 +52,10 @@ describe('migrationPackageRepairActions', () => {
     ['is not JSON', '{ not json'],
     ['has no createdAt', '{"from":null}'],
   ])(
-    'does not advise migration.ts when migration.json %s, which would change the migration hash',
+    'advises migration.ts only where no database has applied the migration when migration.json %s, since it gives the migration a new hash',
     async (_, content) => {
       if (content !== undefined) await writeFile(join(packageDir, 'migration.json'), content);
-      expect(appActions()).toEqual([RESTORE, replan]);
+      expect(appActions()).toEqual([RESTORE, rerunWithNewHash]);
     },
   );
 

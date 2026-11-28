@@ -12,11 +12,13 @@ import { describe, expect, it } from 'vitest';
 import { withTempDir } from '../utils/cli-test-helpers';
 import {
   engineError,
+  type JourneyContext,
   runContractEmit,
   runDbInit,
   runDbUpdate,
   runMigrationCheck,
   runMigrationPlan,
+  runMigrationStatus,
   setupJourney,
   timeouts,
   useDevDatabase,
@@ -105,6 +107,24 @@ async function reportedByDdlCommands(ctx: ReturnType<typeof setupJourney>) {
 }
 
 withTempDir(({ createTempDir }) => {
+  async function emitWithRefusedLength(connectionString: string): Promise<JourneyContext> {
+    const ctx = setupJourney({ connectionString, createTempDir, contractMode: 'psl' });
+    writeFileSync(join(ctx.testDir, 'contract.prisma'), LENGTH_SCHEMA, 'utf-8');
+    const emit = await runContractEmit(ctx);
+    expect(emit.exitCode, stripAnsi(emit.stderr)).toBe(0);
+
+    const contractJsonPath = join(ctx.testDir, 'contract.json');
+    const emitted = readFileSync(contractJsonPath, 'utf-8');
+    const lengthParams = /"typeParams": \{\s*"length": 10\s*\}/g;
+    expect(emitted.match(lengthParams)).toHaveLength(2);
+    writeFileSync(
+      contractJsonPath,
+      emitted.replace(lengthParams, '"typeParams": { "length": 0 }'),
+      'utf-8',
+    );
+    return ctx;
+  }
+
   describe('Journey: a contract default the codec now refuses', () => {
     const db = useDevDatabase();
 
@@ -135,25 +155,7 @@ withTempDir(({ createTempDir }) => {
     it(
       'reports type parameters the data type refuses as a contract error, not an unexpected one',
       async () => {
-        const ctx = setupJourney({
-          connectionString: db.connectionString,
-          createTempDir,
-          contractMode: 'psl',
-        });
-        writeFileSync(join(ctx.testDir, 'contract.prisma'), LENGTH_SCHEMA, 'utf-8');
-        const emit = await runContractEmit(ctx);
-        expect(emit.exitCode, stripAnsi(emit.stderr)).toBe(0);
-
-        const contractJsonPath = join(ctx.testDir, 'contract.json');
-        const emitted = readFileSync(contractJsonPath, 'utf-8');
-        const lengthParams = /"typeParams": \{\s*"length": 10\s*\}/g;
-        expect(emitted.match(lengthParams)).toHaveLength(2);
-        writeFileSync(
-          contractJsonPath,
-          emitted.replace(lengthParams, '"typeParams": { "length": 0 }'),
-          'utf-8',
-        );
-
+        const ctx = await emitWithRefusedLength(db.connectionString);
         const reported = await reportedByDdlCommands(ctx);
 
         const expected = {
@@ -167,6 +169,21 @@ withTempDir(({ createTempDir }) => {
           },
         };
         expect(reported).toEqual({ init: expected, update: expected, plan: expected });
+      },
+      timeouts.spinUpPpgDev,
+    );
+
+    it(
+      'lets migration status report type parameters the data type refuses and go on',
+      async () => {
+        const ctx = await emitWithRefusedLength(db.connectionString);
+
+        const status = await runMigrationStatus(ctx, ['--json']);
+
+        expect(status.exitCode, stripAnsi(status.stderr)).toBe(0);
+        expect(JSON.stringify(status.presented)).toMatch(
+          /Could not read contract: [^"]*contract\.json: pg\/varchar: length must be at least 1 \(was 0\)/,
+        );
       },
       timeouts.spinUpPpgDev,
     );

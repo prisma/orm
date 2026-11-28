@@ -25,7 +25,10 @@ import type {
 } from '@prisma/cli-engine/protocol';
 import { notOk, ok } from '@prisma/cli-engine/protocol';
 import { join } from 'pathe';
-import { errorFromCaught, formatVersionFailure } from '../control-api/operations/caught-errors';
+import {
+  errorFromCaught,
+  readFailureReportedAsItself,
+} from '../control-api/operations/caught-errors';
 import { mapContractAtError } from '../control-api/operations/contract-at-errors';
 import {
   loadContractSpaceAggregateForCli,
@@ -85,7 +88,7 @@ import { snapshotVerifierFor } from '../utils/snapshot-content-verification';
 import { dataLine } from './data-lines';
 import { perSpaceBlocks } from './db/migration-blocks';
 import { prepareMigrationRun } from './db/prepare';
-import { warnUnrecordedSnapshots } from './db/unrecorded-snapshots';
+import { unrecordedSnapshotWarning } from './db/unrecorded-snapshots';
 import { defineOrmCommand } from './define-command';
 import { dbFlag, permitPolicyChangeFlag } from './flags';
 import { displayPath, migrationsDirFor } from './migration/paths';
@@ -531,8 +534,8 @@ export function createMigrateCommand(
       try {
         appContract = familyInstance.deserializeContract(contractJson);
       } catch (error) {
-        const formatFailure = formatVersionFailure(error, contractPath);
-        if (formatFailure !== undefined) return notOk(normalizeError(formatFailure));
+        const asItself = readFailureReportedAsItself(error, contractPath);
+        if (asItself !== undefined) return notOk(normalizeError(asItself));
         return notOk(
           normalizeError(
             errorContractValidationFailed(
@@ -660,6 +663,7 @@ export function createMigrateCommand(
             } catch (error) {
               const mapped = mapContractAtError(error, {
                 artifactRole: 'to',
+                invocation: cliInvocation(ctx, args.flags.db),
                 ...(refEntry.hash === appContract.storage.storageHash
                   ? { atHeadOf: { spaceId: aggregate.app.spaceId, reachedByMigration: true } }
                   : {}),
@@ -723,14 +727,8 @@ export function createMigrateCommand(
           }
         }
 
-        await warnUnrecordedSnapshots({
-          report: ctx.report,
-          migrationsDir,
-          verifySnapshotContent: snapshotVerifierFor(ctx.config),
-          command: 'db migrate',
-          cwd: ctx.cwd,
-        });
         const applied = await client.migrate({
+          onUnrecordedSnapshot: unrecordedSnapshotWarning(ctx.report, 'db migrate', ctx.cwd),
           contract: applyContract,
           migrationsDir,
           invocation: {

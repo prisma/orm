@@ -32,8 +32,21 @@ export function markClientAbandoned(client: ClientEventSource): void {
   lostClients.add(client);
 }
 
-// pg exposes no public flags for a client's connection state, so the two functions below read
-// pg's own `_connected`, `_connecting`, `_ending` and `_queryable` fields.
+// pg exposes no public flags for a client's connection state, so the functions below read
+// pg's own `_connected`, `_connecting`, `_ending`, `_queryable` and `connection.stream` fields.
+
+/**
+ * Destroys a pg client's socket, as pg-pool does when a connect times out. Ending a client with no
+ * statement in flight otherwise sends Terminate and waits for a peer that may never answer. A client
+ * of another shape, such as pg-native's, is left as it is.
+ */
+export function destroySocket(client: object): void {
+  const connection = 'connection' in client ? client.connection : undefined;
+  if (typeof connection !== 'object' || connection === null || !('stream' in connection)) return;
+  const stream = connection.stream;
+  if (typeof stream !== 'object' || stream === null || !('destroy' in stream)) return;
+  if (typeof stream.destroy === 'function') stream.destroy();
+}
 
 /** Whether a pg `Client` has connected or begun connecting. */
 export function hasStartedConnecting(client: object): boolean {

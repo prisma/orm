@@ -190,10 +190,24 @@ export interface PlannerWarningsListener {
   readonly onPlannerWarnings?: (warnings: readonly MigrationPlannerConflict[]) => void;
 }
 
+/** A migration a run applies whose contract snapshot is present but cannot be read, and why. */
+export interface UnrecordedSnapshot {
+  readonly spaceId: string;
+  readonly dirName: string;
+  readonly path: string;
+  readonly reason: string;
+}
+
+/** Receives the migrations a run is about to apply without recording their contract. */
+export interface UnrecordedSnapshotListener {
+  /** Called before a run applies anything, once for each migration it applies whose contract snapshot is present but cannot be read: the database records no contract for that migration. */
+  readonly onUnrecordedSnapshot?: (unrecorded: UnrecordedSnapshot) => void;
+}
+
 /**
  * Options for the dbInit operation.
  */
-export interface DbInitOptions extends PlannerWarningsListener {
+export interface DbInitOptions extends PlannerWarningsListener, UnrecordedSnapshotListener {
   /** The command line the advice of a failure repeats: its directory, `--config` and whether `--db` was given. */
   readonly invocation: CliInvocation;
   /** Contract or unvalidated JSON - validated at runtime via familyInstance.deserializeContract() */
@@ -230,7 +244,7 @@ export interface UnreadableStoredFile {
 /**
  * Options for the dbUpdate operation.
  */
-export interface DbUpdateOptions extends PlannerWarningsListener {
+export interface DbUpdateOptions extends PlannerWarningsListener, UnrecordedSnapshotListener {
   /** Called when the contract snapshot the database's marker names cannot be read: the run plans on without the contract the database is at. */
   readonly onUnreadableOrigin?: (unreadable: UnreadableStoredFile) => void;
   /** The command line the advice of a failure repeats: its directory, `--config` and whether `--db` was given. */
@@ -690,7 +704,7 @@ export type MigrateTarget =
  * just resolves the descriptor surface (config, refs, contract
  * envelope, app-space migration packages) and hands the inputs in.
  */
-export interface MigrateOptions {
+export interface MigrateOptions extends UnrecordedSnapshotListener {
   /** The command line the advice of a failure repeats: its directory, `--config` and whether `--db` was given. */
   readonly invocation: CliInvocation;
   /** Already-validated app contract (the canonical "where we are heading" hash). */

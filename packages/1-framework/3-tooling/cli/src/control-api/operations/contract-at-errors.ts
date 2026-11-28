@@ -10,6 +10,7 @@ import {
 } from '../../utils/cli-errors';
 import { contractValidationMeta } from '../../utils/contract-validation-meta';
 import { type SnapshotHead, snapshotRewriteAt } from '../../utils/next-actions';
+import type { CliInvocation } from '../../utils/printed-command';
 
 export function mapContractAtError(
   error: unknown,
@@ -17,6 +18,8 @@ export function mapContractAtError(
     readonly artifactRole?: 'from' | 'to';
     /** The space whose head the snapshot is at, when it is: a command writes that snapshot again once it is deleted. */
     readonly atHeadOf?: SnapshotHead;
+    /** The command line whose `--config` and `--db` the advice repeats. */
+    readonly invocation?: CliInvocation;
   },
 ): Result<never, CliStructuredError> {
   const rewrittenBy = (filePath: string) =>
@@ -26,6 +29,7 @@ export function mapContractAtError(
           rewrittenBy: snapshotRewriteAt(
             options.atHeadOf,
             relative(process.cwd(), dirname(filePath)),
+            options.invocation,
           ),
         };
   if (MigrationToolsError.is(error)) {

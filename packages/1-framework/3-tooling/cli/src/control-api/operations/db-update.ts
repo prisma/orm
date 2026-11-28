@@ -22,6 +22,7 @@ import type {
   OnControlProgress,
   PlannerWarningsListener,
   UnreadableStoredFile,
+  UnrecordedSnapshotListener,
 } from '../types';
 import { executeRun } from './db-run';
 import { DB_UPDATE_POLICY } from './db-update-policy';
@@ -35,7 +36,8 @@ import { DB_UPDATE_POLICY } from './db-update-policy';
  * whether each that would change access may run, before it applies anything.
  */
 export interface ExecuteDbUpdateOptions<TFamilyId extends string, TTargetId extends string>
-  extends PlannerWarningsListener {
+  extends PlannerWarningsListener,
+    UnrecordedSnapshotListener {
   readonly driver: ControlDriverInstance<TFamilyId, TTargetId>;
   readonly adapter: ControlAdapterInstance<TFamilyId, TTargetId>;
   readonly familyInstance: ControlFamilyInstance<TFamilyId, unknown>;
@@ -124,6 +126,7 @@ export async function executeDbUpdate<TFamilyId extends string, TTargetId extend
     ...ifDefined('emittedContractHash', options.emittedContractHash),
     ...ifDefined('verifySnapshotContent', options.verifySnapshotContent),
     ...ifDefined('onPlannerWarnings', options.onPlannerWarnings),
+    ...ifDefined('onUnrecordedSnapshot', options.onUnrecordedSnapshot),
     ...ifDefined('onUnreadableOrigin', options.onUnreadableOrigin),
     ...ifDefined('onProgress', options.onProgress),
   })) as DbUpdateResult;

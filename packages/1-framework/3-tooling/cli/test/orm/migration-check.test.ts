@@ -255,8 +255,8 @@ describe('migration check', () => {
         {
           kind: 'run-command',
           label:
-            'Or, if no database has applied this migration and no ref names where it or a later migration ends, delete the folder migrations/app/20250102T0000_broken and the folders of the migrations after it, then plan again from the contract it started from: the hash of the start snapshot its migration.ts imports, or @empty when it imports none',
-          command: 'prisma-test migration plan --from <hash>',
+            'Or, if no database has applied this migration, delete its migration.json if there is one and run this command, which writes migration.json and ops.json again with a new creation time, so the migration gets a new hash',
+          command: 'node "migrations/app/20250102T0000_broken/migration.ts"',
         },
       ]);
     });
@@ -293,6 +293,31 @@ describe('migration check', () => {
       ]);
     });
 
+    it('advises restoring the migration an unreachable one starts after before deleting it, which a database may have applied', async () => {
+      const dir = await projectDir();
+      await seedMigration(join(dir, 'migrations'), {
+        dirName: '20250103T0000_orphan',
+        from: HASH_UNPRODUCED,
+      });
+
+      const run = await harness(ormConfig()).run(['migration', 'check', '--json'], {
+        cwd: dir,
+      });
+
+      const document = run.presented?.data as MigrationCheckResult;
+      expect(document.failures[0]?.nextActions).toEqual([
+        {
+          kind: 'user-choice',
+          label: `Restore from version control the migration that ends at ${HASH_UNPRODUCED}, if one was deleted`,
+        },
+        {
+          kind: 'user-choice',
+          label: 'Or, if no database has applied it, delete the unreachable migration',
+        },
+        { kind: 'user-choice', label: 'Or re-emit a migration that connects it to the graph' },
+      ]);
+    });
+
     it('keeps the published json document, with typed next actions and no fix prose', async () => {
       const dir = await projectDir();
       await seedMigration(join(dir, 'migrations'));
@@ -313,8 +338,13 @@ describe('migration check', () => {
           why: `Ref "staging" points at ${HASH_UNPRODUCED} which does not exist in the migration graph`,
           nextActions: [
             {
+              kind: 'user-choice',
+              label: `Restore from version control the migration that ends at ${HASH_UNPRODUCED}, if one was deleted`,
+            },
+            {
               kind: 'run-command',
-              label: 'Point the ref at a graph node',
+              label:
+                'Or point the ref at a graph node. The ref then names a different contract, so whatever uses the ref, such as a deploy that migrates a database to it, changes with it',
               command: '{bin} migration ref set staging <valid-hash>',
             },
             { kind: 'user-choice', label: 'Or delete the ref' },
@@ -322,6 +352,25 @@ describe('migration check', () => {
         },
       ]);
       expect(JSON.stringify(document)).not.toContain('"fix"');
+    });
+
+    it('does not advise naming a contract by hand for a dangling db ref', async () => {
+      const dir = await projectDir();
+      await seedMigration(join(dir, 'migrations'));
+      await seedDanglingRef(join(dir, 'migrations'), 'db');
+
+      const run = await harness(ormConfig()).run(['migration', 'check', '--json'], {
+        cwd: dir,
+      });
+
+      const document = run.presented?.data as MigrationCheckResult;
+      expect(document.failures[0]?.nextActions).toEqual([
+        {
+          kind: 'user-choice',
+          label: `Restore from version control the migration that ends at ${HASH_UNPRODUCED}, if one was deleted`,
+        },
+        { kind: 'user-choice', label: 'Or delete the ref' },
+      ]);
     });
 
     it('names the migration package on the line the human renderer prints', async () => {

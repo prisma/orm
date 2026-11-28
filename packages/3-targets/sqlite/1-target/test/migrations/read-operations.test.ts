@@ -54,7 +54,7 @@ describe('readSqliteOperations', () => {
     expect(readSqliteOperations([rebuild])).toEqual([rebuild]);
   });
 
-  it('reads the schema name that releases up to 8.0.0-rc.19 wrote into target details, as details without it', () => {
+  it('reads the schema name that releases up to 8.0.0-rc.20 wrote into target details, as details without it', () => {
     const op = structuredClone(rebuild);
     Reflect.set(op.target.details, 'schema', 'main');
     expect(readSqliteOperations([op])).toEqual([rebuild]);
@@ -171,7 +171,7 @@ describe('readSqliteOperations', () => {
     expect(readSqliteOperations(written)).toEqual(written);
   });
 
-  it('reads the recording of what the SQLite planner wrote before 8.0.0-rc.20', () => {
+  it('reads the recording of what the SQLite planner wrote up to 8.0.0-rc.20', () => {
     const golden = JSON.parse(
       readFileSync(
         join(repoRoot, 'test/integration/test/planner-golden/fixtures/sqlite/planned.golden.json'),

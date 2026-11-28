@@ -1,52 +1,48 @@
-import { readdir } from 'node:fs/promises';
-import { CONTRACT_SNAPSHOTS_DIRNAME } from '@internal/framework-components/control';
 import {
   contractSnapshotDir,
   readContractSnapshotJson,
   type SnapshotContentVerifier,
 } from '@internal/migration-tools/contract-snapshot-store';
 import { MigrationToolsError } from '@internal/migration-tools/errors';
-import { readMigrationsDir } from '@internal/migration-tools/io';
 import { isInternalError } from '@internal/utils/internal-error';
 import { join } from 'pathe';
+import type { UnrecordedSnapshot } from '../types';
 import { reasonOf } from './caught-errors';
-
-/** A migration whose contract snapshot is present but cannot be read, so a database that applies the migration records no contract for it. */
-export interface UnrecordedSnapshot {
-  readonly spaceId: string;
-  readonly dirName: string;
-  readonly path: string;
-  readonly reason: string;
-}
+import type { OrderedResolution } from './run-migration';
 
 /**
- * Every migration in `migrationsDir` whose contract snapshot is present but cannot be read: not JSON, the JSON `null`, or content that does not match its hash. Loading a migration treats such a snapshot as absent, so the database commands apply the migration without it. A migrations directory a command cannot load yields nothing here; that command refuses it itself.
+ * Each migration on the path a run applies whose contract snapshot is present but cannot be read: not JSON, the JSON `null`, or content that does not match its hash. Loading a migration treats such a snapshot as absent, so the run applies the migration and the database records no contract for it.
  */
-export async function unrecordedSnapshots(
+export async function unrecordedSnapshotsOnPath(
+  resolutions: readonly OrderedResolution[],
   migrationsDir: string,
   verifySnapshotContent: SnapshotContentVerifier | undefined,
 ): Promise<readonly UnrecordedSnapshot[]> {
-  try {
-    const entries = await readdir(migrationsDir, { withFileTypes: true });
-    const spaceIds = entries
-      .filter((entry) => entry.isDirectory() && entry.name !== CONTRACT_SNAPSHOTS_DIRNAME)
-      .map((entry) => entry.name)
-      .sort();
-    const found: UnrecordedSnapshot[] = [];
-    for (const spaceId of spaceIds) {
-      const { packages } = await readMigrationsDir(join(migrationsDir, spaceId), {
-        migrationsDir,
-        ...(verifySnapshotContent === undefined ? {} : { verifySnapshotContent }),
-      });
-      for (const pkg of packages) {
-        if (pkg.endContractJson !== undefined) continue;
-        const reason = await snapshotProblem(migrationsDir, pkg.metadata.to, verifySnapshotContent);
-        if (reason !== undefined) found.push({ spaceId, dirName: pkg.dirName, ...reason });
-      }
+  const found: UnrecordedSnapshot[] = [];
+  for (const { spaceId, entry } of resolutions) {
+    for (const edge of entry.migrationEdges) {
+      if (edge.destinationContractJson !== undefined) continue;
+      const problem = await snapshotProblem(migrationsDir, edge.to, verifySnapshotContent);
+      if (problem !== undefined) found.push({ spaceId, dirName: edge.dirName, ...problem });
     }
-    return found;
-  } catch {
-    return [];
+  }
+  return found;
+}
+
+/** Hands `listener` each migration on the path whose snapshot the run cannot record; nothing is read without a listener. */
+export async function reportUnrecordedSnapshots(
+  resolutions: readonly OrderedResolution[],
+  migrationsDir: string,
+  verifySnapshotContent: SnapshotContentVerifier | undefined,
+  listener: ((unrecorded: UnrecordedSnapshot) => void) | undefined,
+): Promise<void> {
+  if (listener === undefined) return;
+  for (const unrecorded of await unrecordedSnapshotsOnPath(
+    resolutions,
+    migrationsDir,
+    verifySnapshotContent,
+  )) {
+    listener(unrecorded);
   }
 }
 

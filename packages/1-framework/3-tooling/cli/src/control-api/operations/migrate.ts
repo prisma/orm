@@ -65,6 +65,7 @@ import type {
   MigrateTarget,
   OnControlProgress,
   PerSpaceExecutionEntry,
+  UnrecordedSnapshotListener,
 } from '../types';
 import {
   type BuildAggregateInputs,
@@ -96,6 +97,7 @@ import {
   runnerFailureFacts,
 } from './run-migration';
 import { migrationWithUnfilledPlaceholders } from './unfilled-placeholders';
+import { reportUnrecordedSnapshots } from './unrecorded-snapshots';
 
 /**
  * Inputs for the aggregate-walking `migrate` control-api
@@ -106,7 +108,8 @@ import { migrationWithUnfilledPlaceholders } from './unfilled-placeholders';
  * is the single descriptor-free seam between the CLI and the
  * aggregate runtime.
  */
-export interface ExecuteMigrateOptions<TFamilyId extends string, TTargetId extends string> {
+export interface ExecuteMigrateOptions<TFamilyId extends string, TTargetId extends string>
+  extends UnrecordedSnapshotListener {
   readonly driver: ControlDriverInstance<TFamilyId, TTargetId>;
   readonly familyInstance: ControlFamilyInstance<TFamilyId, unknown>;
   /** Already-validated app contract (the canonical "where we are heading" hash). */
@@ -389,6 +392,12 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
     return notOk(errorMigrationHasUnfilledPlaceholders(unfilled, options.invocation));
   }
 
+  await reportUnrecordedSnapshots(
+    collectOrdered(applyOrder, perSpacePlans),
+    migrationsDir,
+    options.verifySnapshotContent,
+    options.onUnrecordedSnapshot,
+  );
   const applied = await runMigration({
     aggregate,
     perSpacePlans,

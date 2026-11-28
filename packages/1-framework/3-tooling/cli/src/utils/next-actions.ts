@@ -4,6 +4,7 @@ import { contractSnapshotDir } from '@internal/migration-tools/contract-snapshot
 import { APP_UPGRADE_GUIDES_URL } from '@internal/utils/upgrade-guides';
 import type { NextAction } from '@prisma/cli-engine/protocol';
 import { join, relative } from 'pathe';
+import { type CliInvocation, cliCommand } from './printed-command';
 
 /**
  * The typed remediation the CLI attaches to its own errors and findings.
@@ -44,7 +45,7 @@ export function migrationTsKeepsItsHash(packageDir: string): boolean {
 }
 
 /**
- * How a migration package whose files are wrong is put right. It is restored from version control. An application migration's `migration.json` and `ops.json` are written again by its `migration.ts` when that keeps the migration's hash; otherwise a migration no database has applied is planned again. An extension's migration has no `migration.ts`: it comes with the extension, and `contract emit` writes a migration folder that is missing from the installed extension.
+ * How a migration package whose files are wrong is put right. It is restored from version control. An application migration's `migration.json` and `ops.json` are written again by its `migration.ts`. That keeps the migration's hash when `migration.json` keeps its `createdAt`; otherwise it gives the migration a new hash, which only the ledger of a database that applied it records, so it is advised only where no database has. An extension's migration has no `migration.ts`: it comes with the extension, and `contract emit` writes a migration folder that is missing from the installed extension.
  */
 export function migrationPackageRepairActions(place: MigrationPackagePlace): NextAction[] {
   const restore = chooseAction('Restore the migration package from version control');
@@ -58,24 +59,20 @@ export function migrationPackageRepairActions(place: MigrationPackagePlace): Nex
       chooseAction('Or install a version of the extension that ships its migrations'),
     ];
   }
-  if (!migrationTsKeepsItsHash(place.packageDir)) {
-    return [restore, replanAction(relative(place.cwd, place.packageDir))];
-  }
+  const runMigrationTs = `node "${relative(place.cwd, join(place.packageDir, 'migration.ts'))}"`;
   return [
     restore,
-    runCommandAction(
-      'Or write migration.json and ops.json again from its migration.ts',
-      `node "${relative(place.cwd, join(place.packageDir, 'migration.ts'))}"`,
-    ),
+    migrationTsKeepsItsHash(place.packageDir)
+      ? runCommandAction(
+          'Or write migration.json and ops.json again from its migration.ts',
+          runMigrationTs,
+        )
+      : runCommandAction(MIGRATION_TS_WITH_NEW_HASH, runMigrationTs),
   ];
 }
 
-function replanAction(packageDir: string): NextAction {
-  return runCommandAction(
-    `Or, if no database has applied this migration and no ref names where it or a later migration ends, delete the folder ${packageDir} and the folders of the migrations after it, then plan again from the contract it started from: the hash of the start snapshot its migration.ts imports, or @empty when it imports none`,
-    '{bin} migration plan --from <hash>',
-  );
-}
+const MIGRATION_TS_WITH_NEW_HASH =
+  'Or, if no database has applied this migration, delete its migration.json if there is one and run this command, which writes migration.json and ops.json again with a new creation time, so the migration gets a new hash';
 
 /** A contract snapshot in the migrations directory, the space it belongs to, and that space's head: the emitted contract's hash for the application, the installed extension's for an extension. */
 export interface SnapshotPlace {
@@ -112,8 +109,12 @@ export interface SnapshotHead {
   readonly reachedByMigration: boolean;
 }
 
-/** How the snapshot at the head of a space, in `snapshotDirectory`, is written again once deleted. */
-export function snapshotRewriteAt(head: SnapshotHead, snapshotDirectory: string): SnapshotRewrite {
+/** How the snapshot at the head of a space, in `snapshotDirectory`, is written again once deleted. The command repeats the `--config` and `--db` of `invocation`, so it acts on the same database. */
+export function snapshotRewriteAt(
+  head: SnapshotHead,
+  snapshotDirectory: string,
+  invocation?: CliInvocation,
+): SnapshotRewrite {
   if (head.spaceId !== APP_SPACE_ID) {
     return {
       snapshotDirectory,
@@ -122,23 +123,27 @@ export function snapshotRewriteAt(head: SnapshotHead, snapshotDirectory: string)
         'emits contract.json from the contract source and writes the snapshot again from the installed extension',
     };
   }
+  const database =
+    invocation?.dbGiven === true ? 'the database --db names' : 'the configured database';
   return head.reachedByMigration
     ? {
         snapshotDirectory,
-        command: '{bin} db migrate --advance-ref db',
-        effect:
-          'applies any pending migrations to the configured database, then moves the db ref to contract.json and writes the snapshot again from it',
+        command: cliCommand(invocation, 'db migrate', ['--advance-ref', 'db']),
+        effect: `applies any pending migrations to ${database}, then moves the db ref to contract.json and writes the snapshot again from it`,
       }
     : {
         snapshotDirectory,
-        command: '{bin} db sign',
-        effect:
-          'checks that the configured database matches contract.json and records that in the database, then moves the db ref to contract.json and writes the snapshot again from it',
+        command: cliCommand(invocation, 'db sign'),
+        effect: `checks that ${database} matches contract.json and records that in the database, then moves the db ref to contract.json and writes the snapshot again from it`,
       };
 }
 
 /** The ref that records which contract the configured database is at; moving it by hand makes the next plan start from a contract the database is not at. */
-const DATABASE_REF = 'db';
+export const DATABASE_REF = 'db';
+
+/** What moving a ref other than `db` changes, said wherever advice names `migration ref set` for one. */
+export const REF_MOVE_EFFECT =
+  'The ref then names a different contract, so whatever uses the ref, such as a deploy that migrates a database to it, changes with it';
 
 /**
  * How a contract snapshot this release cannot read is put right: restoring a file edited by hand, the application's upgrade instructions when an earlier release wrote it, writing it again when a command does, and moving each ref that names it other than the `db` ref. An extension's snapshot comes from the extension, so the application's upgrade instructions are not offered for it.
@@ -172,7 +177,7 @@ export function snapshotRepairActions(
       .filter((name) => name !== DATABASE_REF)
       .map((name) =>
         runCommandAction(
-          `Or point the ref "${name}" at a migration whose snapshot this release reads`,
+          `Or point the ref "${name}" at a migration whose snapshot this release reads. ${REF_MOVE_EFFECT}`,
           `{bin} migration ref set ${name} <hash>`,
         ),
       ),

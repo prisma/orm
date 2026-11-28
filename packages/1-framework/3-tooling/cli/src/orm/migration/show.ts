@@ -18,7 +18,10 @@ import { notOk, ok } from '@prisma/cli-engine/protocol';
 import { relative } from 'pathe';
 import type { MigrationShowResult, ShowMigration } from '../../commands/json/schemas';
 import { createControlClient } from '../../control-api/client';
-import { errorFromCaught, formatVersionFailure } from '../../control-api/operations/caught-errors';
+import {
+  errorFromCaught,
+  readFailureReportedAsItself,
+} from '../../control-api/operations/caught-errors';
 import { loadContractSpaceAggregateForCli } from '../../control-api/operations/contract-space-aggregate-loader';
 import { resolveMigrationRef } from '../../control-api/operations/ref-resolution';
 import {
@@ -275,8 +278,8 @@ export const migrationShowCommand = defineOrmCommand({
     try {
       appContract = familyInstance.deserializeContract(castAs<unknown>(JSON.parse(contractJson)));
     } catch (error) {
-      const formatFailure = formatVersionFailure(error, contractPath);
-      if (formatFailure !== undefined) return notOk(normalizeError(formatFailure));
+      const asItself = readFailureReportedAsItself(error, contractPath);
+      if (asItself !== undefined) return notOk(normalizeError(asItself));
       return notOk(
         normalizeError(
           errorContractValidationFailed(

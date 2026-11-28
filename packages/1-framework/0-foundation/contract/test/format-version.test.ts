@@ -276,24 +276,43 @@ describe('readFormatVersion', () => {
 
     describe('in a migration.json or ref file no release wrote', () => {
       const migrationAdvice = {
-        fix: 'No release of Prisma wrote this file. Restore it from version control. If no database has applied the migration and no ref names where it or a later migration ends, you can instead delete its folder and the folders of the migrations after it, then plan again from the contract it started from with `{bin} migration plan --from <hash>`, where the hash is that of the start snapshot its migration.ts imports, or @empty when it imports none.',
+        fix: 'No release of Prisma wrote this file. Restore it from version control. If no database has applied the migration, you can instead delete this migration.json and run `node <migration folder>/migration.ts`, which writes migration.json and ops.json again with a new creation time, so the migration gets a new hash.',
         nextActions: [
           { kind: 'user-choice', label: 'Restore the file from version control' },
           {
             kind: 'run-command',
             label:
-              'Or, if no database has applied the migration and no ref names where it or a later migration ends, delete its folder and those of the migrations after it, then plan again from the contract it started from',
-            command: '{bin} migration plan --from <hash>',
+              'Or, if no database has applied the migration, delete this migration.json and run this command, which writes migration.json and ops.json again with a new creation time, so the migration gets a new hash',
+            command: 'node <migration folder>/migration.ts',
           },
         ],
       };
       const refAdvice = {
-        fix: 'No release of Prisma wrote this file. Restore it from version control, or delete the file and set the ref again with `{bin} migration ref set <name> <contract>`.',
+        fix: 'No release of Prisma wrote this file. Restore it from version control. Or delete the file and write it again. For the db ref, which records the contract the database is at, run `{bin} db migrate --advance-ref db`, which applies any pending migrations to the configured database and then moves the db ref to the contract the database is at; when no migration ends at contract.json, run `{bin} db sign` instead, which checks that the configured database matches contract.json, records that in the database and moves the db ref to contract.json. For the head ref of an extension, run `{bin} contract emit`, which emits contract.json from the contract source and writes the head ref again from the installed extension. For any other ref, set it again to the contract it named with `{bin} migration ref set <name> <contract>`; whatever uses the ref, such as a deploy that migrates a database to it, uses the contract you name.',
         nextActions: [
           { kind: 'user-choice', label: 'Restore the file from version control' },
           {
             kind: 'run-command',
-            label: 'Or delete the file and set the ref again',
+            label:
+              'Or, for the db ref, delete the file and run this command, which applies any pending migrations to the configured database, then moves the db ref to the contract the database is at',
+            command: '{bin} db migrate --advance-ref db',
+          },
+          {
+            kind: 'run-command',
+            label:
+              'Or, for the db ref when no migration ends at contract.json, delete the file and run this command, which checks that the configured database matches contract.json and records that in the database, then moves the db ref to contract.json',
+            command: '{bin} db sign',
+          },
+          {
+            kind: 'run-command',
+            label:
+              'Or, for the head ref of an extension, delete the file and run this command, which emits contract.json from the contract source and writes the head ref again from the installed extension',
+            command: '{bin} contract emit',
+          },
+          {
+            kind: 'run-command',
+            label:
+              'Or, for any other ref, delete the file and set the ref again to the contract it named; whatever uses the ref, such as a deploy that migrates a database to it, uses the contract you name',
             command: '{bin} migration ref set <name> <contract>',
           },
         ],

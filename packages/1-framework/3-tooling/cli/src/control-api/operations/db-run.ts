@@ -98,6 +98,7 @@ import type {
   PerSpaceExecutionEntry,
   PlannerWarningsListener,
   UnreadableStoredFile,
+  UnrecordedSnapshotListener,
 } from '../types';
 import {
   type ChangedStorageEntity,
@@ -131,6 +132,7 @@ import {
   runMigration,
   runnerFailureFacts,
 } from './run-migration';
+import { reportUnrecordedSnapshots } from './unrecorded-snapshots';
 
 /**
  * Span IDs emitted via `onProgress` during the run flow.
@@ -152,7 +154,8 @@ const SPAN_IDS = {
  * descriptor-import boundary; everything downstream is descriptor-free.
  */
 export interface ExecuteRunSharedOptions<TFamilyId extends string, TTargetId extends string>
-  extends PlannerWarningsListener {
+  extends PlannerWarningsListener,
+    UnrecordedSnapshotListener {
   readonly driver: ControlDriverInstance<TFamilyId, TTargetId>;
   readonly adapter: ControlAdapterInstance<TFamilyId, TTargetId>;
   readonly familyInstance: ControlFamilyInstance<TFamilyId, unknown>;
@@ -635,6 +638,12 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
   // differs (planFromDiff + resolveRecordedPath via planMigration here;
   // resolveRecordedPath only for migrate). Each caller produces
   // perSpacePlans differently; this helper handles the shared run tail.
+  await reportUnrecordedSnapshots(
+    orderedResolutions,
+    migrationsDir,
+    options.verifySnapshotContent,
+    options.onUnrecordedSnapshot,
+  );
   const applied = await runMigration({
     aggregate,
     perSpacePlans: planned.perSpace,

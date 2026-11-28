@@ -7,7 +7,7 @@ import type {
   ControlFamilyInstance,
   ControlTargetDescriptor,
 } from '@internal/framework-components/control';
-import { isStructuredError } from '@internal/utils/structured-error';
+import { isStructuredError, structuredError } from '@internal/utils/structured-error';
 import { describe, expect, it } from 'vitest';
 import { createControlClient } from '../../src/control-api/client';
 
@@ -163,5 +163,29 @@ describe('ControlClient structured error codes', () => {
     expect(isStructuredError(error)).toBe(true);
     expect(error).toMatchObject({ code: 'CONTRACT.VALIDATION_FAILED', cause });
     expect((error as Error).message).toBe('bad contract shape');
+  });
+
+  it('raises a data type refusing the type parameters of the contract as itself', async () => {
+    const refusal = structuredError(
+      'CONTRACT.TYPE_PARAMS_INVALID',
+      'pg/varchar: length must be at least 1 (was 0)',
+      { meta: { dataType: 'pg/varchar', parameters: ['length'] } },
+    );
+    const { mockFamily, mockTarget, mockAdapter, mockDriverDescriptor } = createMockComponents({
+      deserializeContract: () => {
+        throw refusal;
+      },
+    });
+    const client = createControlClient({
+      family: mockFamily,
+      target: mockTarget,
+      adapter: mockAdapter,
+      driver: mockDriverDescriptor,
+    });
+    const error = await capture(() =>
+      client.verify({ contract: {}, connection: 'postgres://test' }),
+    );
+    await client.close();
+    expect(error).toBe(refusal);
   });
 });

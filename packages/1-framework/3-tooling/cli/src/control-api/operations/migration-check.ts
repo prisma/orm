@@ -60,11 +60,13 @@ import {
 } from '../../utils/migration-path-target';
 import {
   chooseAction,
+  DATABASE_REF,
   migrationPackageRepairActions,
+  REF_MOVE_EFFECT,
   runCommandAction,
   snapshotRepairActions,
 } from '../../utils/next-actions';
-import { formatVersionFailure, reasonOf } from './caught-errors';
+import { readFailureReportedAsItself, reasonOf } from './caught-errors';
 import { mapContractAtError } from './contract-at-errors';
 import { unreadableFiles } from './contract-space-aggregate-loader';
 
@@ -360,7 +362,10 @@ function checkReachability(space: CheckSpace): readonly CheckFailure[] {
         where: migrationPathRelative(space.cwd, pkg.dirPath),
         why: `Migration "${pkg.dirName}" starts from ${pkg.metadata.from} which no other migration produces`,
         nextActions: [
-          chooseAction('Delete the unreachable migration'),
+          chooseAction(
+            `Restore from version control the migration that ends at ${pkg.metadata.from}, if one was deleted`,
+          ),
+          chooseAction('Or, if no database has applied it, delete the unreachable migration'),
           chooseAction('Or re-emit a migration that connects it to the graph'),
         ],
       });
@@ -379,10 +384,17 @@ function checkDanglingRefs(space: CheckSpace): readonly CheckFailure[] {
         where: relative(space.cwd, join(space.refsDir, `${name}.json`)),
         why: `Ref "${name}" points at ${entry.hash} which does not exist in the migration graph`,
         nextActions: [
-          runCommandAction(
-            'Point the ref at a graph node',
-            `{bin} migration ref set ${name} <valid-hash>`,
+          chooseAction(
+            `Restore from version control the migration that ends at ${entry.hash}, if one was deleted`,
           ),
+          ...(name === DATABASE_REF
+            ? []
+            : [
+                runCommandAction(
+                  `Or point the ref at a graph node. ${REF_MOVE_EFFECT}`,
+                  `{bin} migration ref set ${name} <valid-hash>`,
+                ),
+              ]),
           chooseAction('Or delete the ref'),
         ],
       });
@@ -395,9 +407,10 @@ async function checkSpace(space: CheckSpace): Promise<readonly CheckFailure[]> {
   const snapshotFailures = await Promise.all(
     space.packages.map((pkg) => checkSnapshotConsistency(space, pkg, space.projectMigrationsDir)),
   );
-  const graphReadInFull = space.unreadableMigrations.length === 0;
+  const missingFiles = checkManifestFilesPresent(space);
+  const graphReadInFull = space.unreadableMigrations.length === 0 && missingFiles.length === 0;
   return [
-    ...checkManifestFilesPresent(space),
+    ...missingFiles,
     ...snapshotFailures.filter((f): f is CheckFailure => f !== null),
     ...(graphReadInFull ? [...checkReachability(space), ...checkDanglingRefs(space)] : []),
   ];
@@ -471,8 +484,8 @@ export async function loadAggregateIntegrityViolations(
     });
     return ok(aggregate.checkIntegrity({ declaredExtensions, checkContracts: true }));
   } catch (error) {
-    const formatFailure = formatVersionFailure(error, contractPath);
-    if (formatFailure !== undefined) return notOk(formatFailure);
+    const asItself = readFailureReportedAsItself(error, contractPath);
+    if (asItself !== undefined) return notOk(asItself);
     if (
       MigrationToolsError.is(error) &&
       error.code === 'MIGRATION.CONTRACT_DESERIALIZATION_FAILED'
