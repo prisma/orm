@@ -159,6 +159,11 @@ export function deserializeTestContract(json: unknown = contractJson): Contract 
   return postgresContractSerializer.deserializeContract(json) as Contract;
 }
 
+/** A mutable copy of `contract` in the form contract.json stores it. */
+export function storedTestContract(contract: Contract): Record<string, unknown> {
+  return JSON.parse(JSON.stringify(postgresContractSerializer.serializeContract(contract)));
+}
+
 const baseTestContract = deserializeTestContract();
 
 export type TestContract = Contract;
@@ -398,7 +403,7 @@ export interface MockRuntime extends RuntimeQueryable {
  * exercised on a polymorphic target.
  */
 export function buildMixedPolyContract(): TestContract {
-  const raw = JSON.parse(JSON.stringify(getTestContract()));
+  const raw = JSON.parse(JSON.stringify(contractJson));
 
   const domainModels = unboundDomainModels(raw);
   domainModels['Task'] = {
@@ -574,7 +579,7 @@ export function buildMixedPolyContract(): TestContract {
  * so no joins — only discriminator + variant base-table column projection).
  */
 export function buildStiPolyContract(): TestContract {
-  const raw = JSON.parse(JSON.stringify(getTestContract()));
+  const raw = JSON.parse(JSON.stringify(contractJson));
   const domainModels = unboundDomainModels(raw);
 
   const userModel = domainModels['User']!;

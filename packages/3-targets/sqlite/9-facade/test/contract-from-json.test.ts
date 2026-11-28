@@ -30,12 +30,28 @@ describe('contractFromJson', () => {
   });
 
   it('throws the structured validation error for invalid JSON', () => {
-    expect(() => contractFromJson({ target: 'sqlite' })).toThrow(
+    expect(() => contractFromJson({ formatVersion: 1, target: 'sqlite' })).toThrow(
       expect.objectContaining({
         name: 'ContractValidationError',
         code: 'CONTRACT.VALIDATION_FAILED',
       }),
     );
+  });
+
+  it('refuses a contract written by a newer release, passed to contractFromJson or a client', () => {
+    const newer = { ...fixtureContractJson, formatVersion: 2 };
+    const refusal = expect.objectContaining({ code: 'CONTRACT.FORMAT_VERSION_NEWER' });
+    expect(() => contractFromJson(newer)).toThrow(refusal);
+    expect(() => sqliteStatic({ contract: newer as unknown as Contract })).toThrow(refusal);
+  });
+
+  it('refuses a stored contract with no format version passed straight to a client', () => {
+    const { formatVersion: _, ...withoutVersion } = fixtureContractJson;
+    const refusal = expect.objectContaining({ code: 'CONTRACT.FORMAT_VERSION_MISSING' });
+    expect(() => sqliteStatic({ contract: withoutVersion as unknown as Contract })).toThrow(
+      refusal,
+    );
+    expect(() => sqlite({ contract: withoutVersion as unknown as Contract })).toThrow(refusal);
   });
 });
 

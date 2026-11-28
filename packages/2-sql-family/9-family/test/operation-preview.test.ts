@@ -97,6 +97,7 @@ describe('SqlControlFamilyInstance OperationPreviewCapable', () => {
     const stack = {
       family: sqlFamilyDescriptor,
       target: {
+        readOperations: (operations: readonly unknown[]) => operations,
         targetId: 'postgres',
         familyId: 'sql',
         kind: 'target',

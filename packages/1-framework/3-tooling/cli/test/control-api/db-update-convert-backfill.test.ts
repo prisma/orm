@@ -14,7 +14,7 @@ import { contractOf } from './statements/statement-fixtures';
 function contractAt(storageHash: string, namespaces: Parameters<typeof contractOf>[0]): Contract {
   const contract = contractOf(namespaces);
   return {
-    schemaVersion: '1',
+    formatVersion: 1,
     target: 'postgres',
     targetFamily: 'sql',
     ...contract,

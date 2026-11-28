@@ -1,0 +1,66 @@
+[
+  {
+    "id": "table.telemetry_event",
+    "label": "Create table \"telemetry_event\"",
+    "summary": "Creates table \"telemetry_event\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "__unbound__",
+        "objectType": "table",
+        "name": "telemetry_event"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"telemetry_event\" does not exist",
+        "sql": "SELECT to_regclass('\"telemetry_event\"') IS NULL"
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"telemetry_event\"",
+        "sql": "CREATE TABLE \"telemetry_event\" (\n  \"agent\" text,\n  \"arch\" text NOT NULL,\n  \"command\" text NOT NULL,\n  \"databaseTarget\" text,\n  \"extensions\" jsonb NOT NULL,\n  \"flags\" jsonb NOT NULL,\n  \"id\" BIGSERIAL NOT NULL,\n  \"ingestedAt\" timestamptz DEFAULT (now()) NOT NULL,\n  \"installationId\" text NOT NULL,\n  \"os\" text NOT NULL,\n  \"packageManager\" text,\n  \"runtimeName\" text NOT NULL,\n  \"runtimeVersion\" text NOT NULL,\n  \"tsVersion\" text,\n  \"version\" text NOT NULL,\n  PRIMARY KEY (\"id\")\n)"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"telemetry_event\" exists",
+        "sql": "SELECT to_regclass('\"telemetry_event\"') IS NOT NULL"
+      }
+    ]
+  },
+  {
+    "id": "index.telemetry_event.telemetry_event_ingestedAt_idx",
+    "label": "Create index \"telemetry_event_ingestedAt_idx\" on \"telemetry_event\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "__unbound__",
+        "objectType": "index",
+        "name": "telemetry_event_ingestedAt_idx",
+        "table": "telemetry_event"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"telemetry_event_ingestedAt_idx\" does not exist",
+        "sql": "SELECT to_regclass('\"telemetry_event_ingestedAt_idx\"') IS NULL"
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"telemetry_event_ingestedAt_idx\"",
+        "sql": "CREATE INDEX \"telemetry_event_ingestedAt_idx\" ON \"telemetry_event\" (\"ingestedAt\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"telemetry_event_ingestedAt_idx\" exists",
+        "sql": "SELECT to_regclass('\"telemetry_event_ingestedAt_idx\"') IS NOT NULL"
+      }
+    ]
+  }
+]

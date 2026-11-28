@@ -18,12 +18,17 @@ import type { Contract } from '@internal/contract/types';
 import type { SqlControlExtensionDescriptor } from '@internal/family-sql/control';
 import type { ContractSpace } from '@internal/framework-components/control';
 import type { SqlStorage } from '@internal/sql-contract/types';
+import postgresTargetDescriptor from '@internal/target-postgres/control';
+import { blindCast } from '@internal/utils/casts';
 import { TEST_SPACE_ID } from './constants';
 import { testContractSpaceContract } from './contract';
 import { testContractSpaceBaselineMigration, testContractSpaceHeadRef } from './migrations';
 
 const testContractSpace: ContractSpace<Contract<SqlStorage>> = {
-  contractJson: testContractSpaceContract,
+  contractJson: blindCast<
+    Contract<SqlStorage>,
+    'an extension descriptor carries its stored contract.json'
+  >(postgresTargetDescriptor.contractSerializer.serializeContract(testContractSpaceContract)),
   migrations: [testContractSpaceBaselineMigration],
   headRef: testContractSpaceHeadRef,
 };

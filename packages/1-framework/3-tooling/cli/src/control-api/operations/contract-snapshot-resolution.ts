@@ -4,6 +4,7 @@
 
 import { readFile } from 'node:fs/promises';
 import type { PrismaConfig } from '@internal/config/config-types';
+import { convertContractDocument } from '@internal/contract/internal/format-version';
 import {
   contractSnapshotDir,
   readContractSnapshotJson,
@@ -31,7 +32,7 @@ import {
 } from '../../utils/cli-errors';
 import { RECORDED_CONTRACT_REF_FORMS } from '../../utils/contract-ref-forms';
 import { snapshotVerifierFor } from '../../utils/snapshot-content-verification';
-import { errorFromCaught } from './caught-errors';
+import { errorFromCaught, readFailureReportedAsItself } from './caught-errors';
 import { buildReadAggregate } from './contract-space-aggregate-loader';
 
 function isEnoent(error: unknown): boolean {
@@ -182,10 +183,9 @@ export async function resolveContractRefToSnapshot(
         ),
       );
     }
-    const defaultContract = blindCast<
-      Record<string, unknown>,
-      'narrowed to a non-null, non-array object by the shape check above'
-    >(parsed);
+    const defaultContract = {
+      ...convertContractDocument(parsed, { path: options.contractPathAbsolute }),
+    };
     const storage = defaultContract['storage'];
     const storageHash =
       storage !== null && typeof storage === 'object'
@@ -213,6 +213,8 @@ export async function resolveContractRefToSnapshot(
       ),
     );
   } catch (error) {
+    const asItself = readFailureReportedAsItself(error);
+    if (asItself !== undefined) return notOk(asItself);
     if (MigrationToolsError.is(error)) {
       return notOk(error);
     }

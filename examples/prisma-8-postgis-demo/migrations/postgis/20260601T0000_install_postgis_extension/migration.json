@@ -1,4 +1,5 @@
 {
+  "formatVersion": 1,
   "from": null,
   "to": "2db551a8a5619d0d97710f29130eaea0eccbdd5238f015ee9d18408d438e0f8a",
   "providedInvariants": ["postgis:install-postgis-v1"],

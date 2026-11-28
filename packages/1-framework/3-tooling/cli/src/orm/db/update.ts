@@ -4,7 +4,8 @@ import {
   type MigrationPlannerConflict,
   migrationSubjectJson,
 } from '@internal/framework-components/control';
-import { readMigrationsDir } from '@internal/migration-tools/io';
+import { MigrationToolsError } from '@internal/migration-tools/errors';
+import { readMigrationPackage, readMigrationsDir } from '@internal/migration-tools/io';
 import { reconstructGraph } from '@internal/migration-tools/migration-graph';
 import { readRefs } from '@internal/migration-tools/refs';
 import { spaceMigrationDirectory, spaceRefsDirectory } from '@internal/migration-tools/spaces';
@@ -17,6 +18,7 @@ import {
   notOk,
   ok,
 } from '@prisma/cli-engine/protocol';
+import { dirname, join, relative } from 'pathe';
 import { errorFromCaught } from '../../control-api/operations/caught-errors';
 import {
   type ResolveContractRefToSnapshotSuccess,
@@ -63,6 +65,7 @@ import type {
   MigrationCommandResult,
   RemovedNamespaceJson,
 } from '../../utils/formatters/migrations';
+import { snapshotRewriteAt } from '../../utils/next-actions';
 import { errorPermitPolicyChangeNeedsRef } from '../../utils/policy-errors';
 import {
   type CliInvocation,
@@ -72,7 +75,7 @@ import {
 } from '../../utils/printed-command';
 import { defineOrmCommand } from '../define-command';
 import { dbFlag, permitPolicyChangeFlag } from '../flags';
-import { migrationsDirFor } from '../migration/paths';
+import { displayPath, migrationsDirFor } from '../migration/paths';
 import { normalizeError } from '../normalize-error';
 import { promptPlanQuestions } from '../plan-question-prompt';
 import { controlProgressReporter } from '../progress';
@@ -80,6 +83,7 @@ import { dbUpdateStatementVerbs } from '../statement-verbs';
 import { migrationResultBlocks, migrationResultNextActions } from './migration-blocks';
 import { plannerWarningsCollector } from './planner-warnings';
 import { prepareMigrationRun } from './prepare';
+import { unrecordedSnapshotWarning } from './unrecorded-snapshots';
 
 function updatePresentations(inputs: {
   readonly document: MigrationCommandResult;
@@ -418,6 +422,18 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
       const { client, contractPath, dbConnection, migrationsDir, refsDir } = prepared.value;
       const contractJson = destination?.contractJson ?? prepared.value.contractJson;
       const snapshotContractPath = destination?.contractJsonPath ?? contractPath;
+      const destinationRewrite =
+        destination?.source === 'snapshot' &&
+        destination.hash === storageHashOf(prepared.value.contractJson)
+          ? snapshotRewriteAt(
+              {
+                spaceId: APP_SPACE_ID,
+                reachedByMigration: true,
+              },
+              relative(process.cwd(), dirname(destination.contractJsonPath)),
+              cliInvocation(ctx, args.flags.db),
+            )
+          : undefined;
 
       const refName = computeRefAdvancementName({
         ...ifDefined('advanceRef', args.flags.advanceRef),
@@ -431,6 +447,9 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
           contractJsonPath: snapshotContractPath,
           config: ctx.config,
           client,
+          ...(destination?.source === 'snapshot'
+            ? { snapshot: { rewrittenBy: destinationRewrite } }
+            : {}),
         });
         if (!preflight.ok) {
           return notOk(normalizeError(preflight.failure));
@@ -451,6 +470,7 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
           ...unansweredConsents(ctx.statements),
         ].map(statementFlag);
         const result = await client.dbUpdate({
+          onUnrecordedSnapshot: unrecordedSnapshotWarning(ctx.report, 'db update', ctx.cwd),
           contract: contractJson,
           mode,
           migrationsDir,
@@ -465,6 +485,12 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
           },
           ...ifDefined('emittedContractHash', storageHashOf(prepared.value.contractJson)),
           onPlannerWarnings: plannerWarnings.onPlannerWarnings,
+          onUnreadableOrigin: ({ path, reason }) =>
+            ctx.report({
+              kind: 'message',
+              severity: 'warn',
+              text: `Could not read the contract snapshot ${displayPath(path, ctx.cwd)}, which holds the contract the database is at: ${reason}. db update plans without it, so the questions about data it would lose name what they remove by its storage name, and a rename statement cannot be resolved.`,
+            }),
           onProgress: controlProgressReporter(ctx.report),
         });
         if (!result.ok) {
@@ -515,10 +541,19 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
         ) {
           return notOk(
             normalizeError(
-              errorContractValidationFailed(`Contract validation failed: ${error.message}`, {
-                where: { path: contractPath },
-                meta: contractValidationMeta(error),
-              }),
+              errorContractValidationFailed(
+                `Contract at ${snapshotContractPath} failed to deserialize: ${error.message}`,
+                {
+                  where: { path: snapshotContractPath },
+                  meta: contractValidationMeta(error),
+                  ...(destination?.source === 'snapshot'
+                    ? {
+                        artifact: 'snapshot' as const,
+                        ...ifDefined('rewrittenBy', destinationRewrite),
+                      }
+                    : {}),
+                },
+              ),
             ),
           );
         }
@@ -588,7 +623,10 @@ async function migrationPlanIfReachable(
   }
   const { client, dbConnection, migrationsDir } = prepared.value;
   const emittedHash = storageHashOf(prepared.value.contractJson);
-  const space = await readPlanSpace(migrationsDir, emittedHash).catch(() => undefined);
+  const space = await readPlanSpace(migrationsDir, emittedHash).catch(
+    (error: unknown) =>
+      `The CLI could not read the migrations: ${MigrationToolsError.is(error) ? error.why : causeText(error)}`,
+  );
   const readMarker = async () => {
     await client.connect(dbConnection, {
       existingDatabaseOnly: true,
@@ -609,16 +647,13 @@ async function migrationPlanIfReachable(
       : read.kind === 'failed'
         ? { kind: 'unknown', reason: `The CLI could not read the database: ${read.cause}` }
         : databasePositionOf(read.marker?.storageHash);
-  if (space !== undefined) {
+  if (typeof space !== 'string') {
     return read?.kind === 'read'
       ? migrationPlanForDatabase(space, read.marker, end)
       : migrationPlanArguments(space, position, end);
   }
   return {
-    from: migrationPlanChoice(
-      undefined,
-      position.kind === 'unknown' ? position.reason : 'The CLI could not read the migrations',
-    ),
+    from: migrationPlanChoice(undefined, space),
     to: migrationPlanTo({ ...NO_MIGRATIONS, ...ifDefined('emittedHash', emittedHash) }, end),
   };
 }
@@ -642,7 +677,11 @@ async function readPlanSpace(
   emittedHash: string | undefined,
 ): Promise<PlanSpace> {
   const appDir = spaceMigrationDirectory(migrationsDir, APP_SPACE_ID);
-  const { packages } = await readMigrationsDir(appDir, { migrationsDir });
+  const { packages, problems } = await readMigrationsDir(appDir, { migrationsDir });
+  const [problem] = problems;
+  if (problem !== undefined) {
+    await readMigrationPackage(join(appDir, problem.dirName), { migrationsDir });
+  }
   return {
     graph: reconstructGraph(packages),
     refs: await readRefs(spaceRefsDirectory(appDir)),

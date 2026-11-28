@@ -23,7 +23,7 @@ import { ok } from '@internal/utils/result';
  */
 export function emittableContract(): Contract {
   return {
-    schemaVersion: '1.0.0',
+    formatVersion: 1,
     target: 'postgres',
     targetFamily: 'sql',
     roots: {},

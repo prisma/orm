@@ -1,0 +1,324 @@
+[
+  {
+    "id": "table.comments",
+    "label": "Create table comments",
+    "summary": "Creates table comments with required columns",
+    "operationClass": "additive",
+    "target": {
+      "id": "sqlite",
+      "details": {
+        "objectType": "table",
+        "name": "comments"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"comments\" does not exist",
+        "sql": "stub",
+        "params": [],
+        "expectation": {
+          "expects": "absent",
+          "object": "table \"comments\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"comments\"",
+        "sql": "stub",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"comments\" exists",
+        "sql": "stub",
+        "params": [],
+        "expectation": {
+          "expects": "present",
+          "object": "table \"comments\""
+        }
+      },
+      {
+        "description": "verify table \"comments\" has exactly its columns",
+        "sql": "SELECT (SELECT COUNT(*) FROM pragma_table_info('comments')) = 3 AND (SELECT COUNT(*) FROM pragma_table_info('comments') WHERE (name, LOWER(type), \"notnull\", pk) IN (VALUES ('body', 'text', 1, 0), ('id', 'integer', 1, 1), ('post_id', 'integer', 1, 0))) = 3"
+      }
+    ]
+  },
+  {
+    "id": "table.items",
+    "label": "Create table items",
+    "summary": "Creates table items with required columns",
+    "operationClass": "additive",
+    "target": {
+      "id": "sqlite",
+      "details": {
+        "objectType": "table",
+        "name": "items"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"items\" does not exist",
+        "sql": "stub",
+        "params": [],
+        "expectation": {
+          "expects": "absent",
+          "object": "table \"items\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"items\"",
+        "sql": "stub",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"items\" exists",
+        "sql": "stub",
+        "params": [],
+        "expectation": {
+          "expects": "present",
+          "object": "table \"items\""
+        }
+      },
+      {
+        "description": "verify table \"items\" has exactly its columns",
+        "sql": "SELECT (SELECT COUNT(*) FROM pragma_table_info('items')) = 3 AND (SELECT COUNT(*) FROM pragma_table_info('items') WHERE (name, LOWER(type), \"notnull\", pk) IN (VALUES ('id', 'integer', 1, 1), ('label', 'text', 1, 0), ('name', 'text', 1, 0))) = 3"
+      }
+    ]
+  },
+  {
+    "id": "table.posts",
+    "label": "Create table posts",
+    "summary": "Creates table posts with required columns",
+    "operationClass": "additive",
+    "target": {
+      "id": "sqlite",
+      "details": {
+        "objectType": "table",
+        "name": "posts"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"posts\" does not exist",
+        "sql": "stub",
+        "params": [],
+        "expectation": {
+          "expects": "absent",
+          "object": "table \"posts\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"posts\"",
+        "sql": "stub",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"posts\" exists",
+        "sql": "stub",
+        "params": [],
+        "expectation": {
+          "expects": "present",
+          "object": "table \"posts\""
+        }
+      },
+      {
+        "description": "verify table \"posts\" has exactly its columns",
+        "sql": "SELECT (SELECT COUNT(*) FROM pragma_table_info('posts')) = 4 AND (SELECT COUNT(*) FROM pragma_table_info('posts') WHERE (name, LOWER(type), \"notnull\", pk) IN (VALUES ('id', 'integer', 1, 1), ('title', 'text', 1, 0), ('user_id', 'integer', 1, 0), ('views', 'integer', 1, 0))) = 4"
+      }
+    ]
+  },
+  {
+    "id": "table.profiles",
+    "label": "Create table profiles",
+    "summary": "Creates table profiles with required columns",
+    "operationClass": "additive",
+    "target": {
+      "id": "sqlite",
+      "details": {
+        "objectType": "table",
+        "name": "profiles"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"profiles\" does not exist",
+        "sql": "stub",
+        "params": [],
+        "expectation": {
+          "expects": "absent",
+          "object": "table \"profiles\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"profiles\"",
+        "sql": "stub",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"profiles\" exists",
+        "sql": "stub",
+        "params": [],
+        "expectation": {
+          "expects": "present",
+          "object": "table \"profiles\""
+        }
+      },
+      {
+        "description": "verify table \"profiles\" has exactly its columns",
+        "sql": "SELECT (SELECT COUNT(*) FROM pragma_table_info('profiles')) = 3 AND (SELECT COUNT(*) FROM pragma_table_info('profiles') WHERE (name, LOWER(type), \"notnull\", pk) IN (VALUES ('bio', 'text', 1, 0), ('id', 'integer', 1, 1), ('user_id', 'integer', 1, 0))) = 3"
+      }
+    ]
+  },
+  {
+    "id": "table.typed_rows",
+    "label": "Create table typed_rows",
+    "summary": "Creates table typed_rows with required columns",
+    "operationClass": "additive",
+    "target": {
+      "id": "sqlite",
+      "details": {
+        "objectType": "table",
+        "name": "typed_rows"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"typed_rows\" does not exist",
+        "sql": "stub",
+        "params": [],
+        "expectation": {
+          "expects": "absent",
+          "object": "table \"typed_rows\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"typed_rows\"",
+        "sql": "stub",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"typed_rows\" exists",
+        "sql": "stub",
+        "params": [],
+        "expectation": {
+          "expects": "present",
+          "object": "table \"typed_rows\""
+        }
+      },
+      {
+        "description": "verify table \"typed_rows\" has exactly its columns",
+        "sql": "SELECT (SELECT COUNT(*) FROM pragma_table_info('typed_rows')) = 5 AND (SELECT COUNT(*) FROM pragma_table_info('typed_rows') WHERE (name, LOWER(type), \"notnull\", pk) IN (VALUES ('active', 'integer', 1, 0), ('created_at', 'text', 1, 0), ('id', 'integer', 1, 1), ('label', 'text', 1, 0), ('metadata', 'text', 0, 0))) = 5"
+      }
+    ]
+  },
+  {
+    "id": "table.users",
+    "label": "Create table users",
+    "summary": "Creates table users with required columns",
+    "operationClass": "additive",
+    "target": {
+      "id": "sqlite",
+      "details": {
+        "objectType": "table",
+        "name": "users"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"users\" does not exist",
+        "sql": "stub",
+        "params": [],
+        "expectation": {
+          "expects": "absent",
+          "object": "table \"users\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"users\"",
+        "sql": "stub",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"users\" exists",
+        "sql": "stub",
+        "params": [],
+        "expectation": {
+          "expects": "present",
+          "object": "table \"users\""
+        }
+      },
+      {
+        "description": "verify table \"users\" has exactly its columns",
+        "sql": "SELECT (SELECT COUNT(*) FROM pragma_table_info('users')) = 4 AND (SELECT COUNT(*) FROM pragma_table_info('users') WHERE (name, LOWER(type), \"notnull\", pk) IN (VALUES ('email', 'text', 1, 0), ('id', 'integer', 1, 1), ('invited_by_id', 'integer', 0, 0), ('name', 'text', 1, 0))) = 4"
+      }
+    ]
+  },
+  {
+    "id": "removeStoredValue.task.state.archived",
+    "label": "Remove value \"archived\" from column \"state\" of \"task\"",
+    "operationClass": "destructive",
+    "target": {
+      "id": "sqlite",
+      "details": {
+        "objectType": "column",
+        "name": "state",
+        "table": "task"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure column \"state\" of \"task\" takes NULL, or no row holds \"archived\" in it",
+        "sql": "SELECT (SELECT COUNT(*) > 0 FROM pragma_table_info('task') WHERE name = 'state' AND \"notnull\" = 0) OR NOT EXISTS (SELECT 1 FROM \"task\" WHERE \"state\" = ?1) AS result",
+        "params": ["archived"],
+        "meta": {
+          "rowsHoldingValue": {
+            "enumValue": {
+              "enum": "Status",
+              "member": "ARCHIVED"
+            },
+            "value": "archived",
+            "table": "task",
+            "column": "state",
+            "storedValue": "archived"
+          }
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "remove value \"archived\" from column \"state\"",
+        "sql": "UPDATE \"task\" SET \"state\" = NULL WHERE \"state\" = ?1",
+        "params": ["archived"]
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify no row of \"task\" holds value \"archived\" in column \"state\"",
+        "sql": "SELECT NOT EXISTS (SELECT 1 FROM \"task\" WHERE \"state\" = ?1) AS result",
+        "params": ["archived"]
+      }
+    ]
+  }
+]

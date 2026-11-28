@@ -108,7 +108,7 @@ async function writeSeededMigration(
   await writeMigrationPackage(join(migrationsDir, 'app', dirName), metadata, ops);
   if (options.withSnapshot) {
     await writeContractSnapshot(migrationsDir, edge.to, {
-      contractJson: { storage: { storageHash: edge.to } },
+      contractJson: { formatVersion: 1, storage: { storageHash: edge.to } },
       contractDts: 'export type Contract = unknown;\n',
     });
   }

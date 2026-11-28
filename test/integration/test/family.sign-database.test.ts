@@ -93,8 +93,9 @@ describe('family instance signSpaces', () => {
         }
 
         const contract = createTestContract();
-        const validatedContract = new PostgresContractSerializer().deserializeContract(
-          contract,
+        const serializer = new PostgresContractSerializer();
+        const validatedContract = serializer.deserializeContract(
+          serializer.serializeContract(contract),
         ) as Contract<SqlStorage>;
 
         const driver = await postgresDriverDescriptor.create(connectionString);
@@ -175,8 +176,9 @@ describe('family instance signSpaces', () => {
         }
 
         const contract = createTestContract();
-        const validatedContract = new PostgresContractSerializer().deserializeContract(
-          contract,
+        const serializer = new PostgresContractSerializer();
+        const validatedContract = serializer.deserializeContract(
+          serializer.serializeContract(contract),
         ) as Contract<SqlStorage>;
 
         const driver = await postgresDriverDescriptor.create(connectionString);
@@ -241,8 +243,9 @@ describe('family instance signSpaces', () => {
         });
 
         const contract = createTestContract();
-        const validatedContract = new PostgresContractSerializer().deserializeContract(
-          contract,
+        const serializer = new PostgresContractSerializer();
+        const validatedContract = serializer.deserializeContract(
+          serializer.serializeContract(contract),
         ) as Contract<SqlStorage>;
 
         const driver = await postgresDriverDescriptor.create(connectionString);
@@ -303,8 +306,9 @@ describe('family instance signSpaces', () => {
           `);
         });
 
-        const validatedContract = new PostgresContractSerializer().deserializeContract(
-          createTestContract(),
+        const serializer = new PostgresContractSerializer();
+        const validatedContract = serializer.deserializeContract(
+          serializer.serializeContract(createTestContract()),
         ) as Contract<SqlStorage>;
 
         const driver = await postgresDriverDescriptor.create(connectionString);
@@ -376,8 +380,9 @@ describe('family instance signSpaces', () => {
         }
 
         const contract = createTestContract();
-        const validatedContract = new PostgresContractSerializer().deserializeContract(
-          contract,
+        const serializer = new PostgresContractSerializer();
+        const validatedContract = serializer.deserializeContract(
+          serializer.serializeContract(contract),
         ) as Contract<SqlStorage>;
 
         const driver = await postgresDriverDescriptor.create(connectionString);

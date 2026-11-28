@@ -87,6 +87,7 @@ const BARE_DECIMAL = { precision: 10, scale: 0 } as const;
 
 /** The precision and scale of `decimal`: at most 65 digits, at most 30 of them after the point. */
 export const mysqlDecimalParams = arktype({
+  '+': 'reject',
   'precision?': 'number.integer >= 1 & number.integer <= 65',
   'scale?': 'number.integer >= 0 & number.integer <= 30',
 }).narrow((params, ctx) => {
@@ -282,6 +283,7 @@ export const mysqlJson = sqlDataType('mysql/json', {
 
 /** The length of `varchar`, which MySQL requires, up to the largest it accepts. */
 export const mysqlVarcharParams = arktype({
+  '+': 'reject',
   length: 'number.integer >= 1 & number.integer <= 65535',
 });
 
@@ -294,6 +296,7 @@ export const mysqlVarchar = sqlDataType('mysql/varchar', {
 
 /** The length of `char`, at most 255; a bare `char` is `char(1)`. */
 export const mysqlCharParams = arktype({
+  '+': 'reject',
   'length?': 'number.integer >= 1 & number.integer <= 255',
 });
 
@@ -310,6 +313,7 @@ export const mysqlChar = sqlDataType('mysql/char', {
 
 /** The fractional-second precision of `datetime`, `timestamp` and `time`, 0 to 6; MySQL prints a precision of 0 as the bare type. */
 export const mysqlDatetimeParams = arktype({
+  '+': 'reject',
   'precision?': 'number.integer >= 0 & number.integer <= 6',
 });
 
@@ -465,6 +469,7 @@ export const mysqlTime = sqlDataType('mysql/time', {
 
 /** The length of the `varchar` a duration column is stored in. A codec reference with none, as a raw parameter writes, reads and writes the same values. */
 export const mysqlDurationParams = arktype({
+  '+': 'reject',
   'length?': 'number.integer >= 1 & number.integer <= 65535',
 });
 
@@ -477,6 +482,7 @@ export const mysqlDuration = sqlDataType('mysql/duration', {
 
 /** The members of a native enum column, in the order they are declared. */
 export const mysqlEnumParams = arktype({
+  '+': 'reject',
   'values?': 'string[]',
 });
 

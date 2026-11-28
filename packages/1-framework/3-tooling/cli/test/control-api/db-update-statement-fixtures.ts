@@ -30,7 +30,7 @@ export const DESTINATION_HASH = 'b'.repeat(64);
 
 export function contractWithModels(storageHash: string, models: readonly string[]): Contract {
   return {
-    schemaVersion: '1',
+    formatVersion: 1,
     target: 'postgres',
     targetFamily: 'sql',
     storage: { storageHash, tables: {}, namespaces: {} },
@@ -162,7 +162,7 @@ export async function migrationsDirWithSnapshot(contract: Contract | undefined):
   const migrationsDir = join(dir, 'migrations');
   if (contract !== undefined) {
     await writeContractSnapshot(migrationsDir, contract.storage.storageHash, {
-      contractJson: contract,
+      contractJson: { formatVersion: 1, ...contract },
       contractDts: '',
     });
   }
@@ -177,6 +177,10 @@ export function update(options: {
   readonly destination?: Contract;
   readonly mode?: 'plan' | 'apply';
   readonly unreadableOrigin?: boolean;
+  readonly onUnreadableOrigin?: (unreadable: {
+    readonly path: string;
+    readonly reason: string;
+  }) => void;
   readonly verifySnapshotContent?: SnapshotContentVerifier;
   readonly migrations: TargetMigrationsCapability<
     'sql',
@@ -199,6 +203,9 @@ export function update(options: {
     answerQuestions: async () => [],
     targetId: 'postgres',
     statements: [...renameStatements(options.renames), ...(options.fieldStatements ?? [])],
+    ...(options.onUnreadableOrigin === undefined
+      ? {}
+      : { onUnreadableOrigin: options.onUnreadableOrigin }),
     ...(options.verifySnapshotContent === undefined
       ? {}
       : { verifySnapshotContent: options.verifySnapshotContent }),

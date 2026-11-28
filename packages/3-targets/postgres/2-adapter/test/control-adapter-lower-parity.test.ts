@@ -23,6 +23,7 @@ import {
 } from './helpers/composed-adapter';
 
 const contract = new SqlContractSerializer().deserializeContract({
+  formatVersion: 1,
   target: 'postgres',
   targetFamily: 'sql',
   profileHash: 'test-profile',

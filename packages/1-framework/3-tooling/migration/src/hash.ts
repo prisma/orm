@@ -84,13 +84,22 @@ function sha256Hex(input: string): string {
  *
  * The `migrationHash` field on the metadata is stripped before hashing
  * so the function can be used both at write time (when no hash exists
- * yet) and at verify time (rehashing an already-attested record).
+ * yet) and at verify time (rehashing an already-attested record). So is
+ * `formatVersion`: it describes the file, not the migration, so writing the
+ * same migration in another format version keeps its hash.
  */
 export function computeMigrationHash(
-  metadata: Omit<MigrationMetadata, 'migrationHash'> & { readonly migrationHash?: string },
+  metadata: Omit<MigrationMetadata, 'migrationHash'> & {
+    readonly migrationHash?: string;
+    readonly formatVersion?: number;
+  },
   ops: MigrationOps,
 ): string {
-  const { migrationHash: _migrationHash, ...strippedMeta } = metadata;
+  const {
+    migrationHash: _migrationHash,
+    formatVersion: _formatVersion,
+    ...strippedMeta
+  } = metadata;
 
   const canonicalMetadata = canonicalizeJson(strippedMeta);
   const canonicalOps = canonicalizeJson(ops);

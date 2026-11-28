@@ -35,6 +35,7 @@ import {
 import { citextPackMeta } from '../core/descriptor-meta';
 
 const citextContractSpace = contractSpaceFromJson<Contract<SqlStorage>>({
+  spaceId: CITEXT_SPACE_ID,
   contractJson,
   migrations: [
     {

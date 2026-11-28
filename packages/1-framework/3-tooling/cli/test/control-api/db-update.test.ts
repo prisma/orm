@@ -126,7 +126,7 @@ function createMockMigrations(overrides?: {
 }
 
 const dummyContract = {
-  schemaVersion: '1',
+  formatVersion: 1,
   target: 'postgres',
   storage: { storageHash: 'dummy', tables: {}, namespaces: {} },
 } as unknown as Contract;

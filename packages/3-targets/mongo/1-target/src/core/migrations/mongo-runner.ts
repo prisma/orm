@@ -1971,16 +1971,17 @@ export class MongoMigrationRunner {
     progress: ApplyProgress,
   ): Promise<Result<MigrationRunnerPerSpaceSuccessValue, MongoMigrationRunnerFailure>> {
     const { inspectionExecutor, adapter, driver, executeDdl, markerOps } = this.deps;
+    // Plans produced by the contract-space-aware planner stamp `spaceId`
+    // onto the plan; plans without one fall through to the application's
+    // well-known space.
+    const space = options.plan.spaceId ?? APP_SPACE_ID;
     const operations = deserializeMongoOps(
       blindCast<
         readonly unknown[],
         'framework migration plans serialize operations as a readonly JSON entry array'
       >(options.plan.operations),
+      { space, migrations: options.migrationEdges },
     );
-    // Plans produced by the contract-space-aware planner stamp `spaceId`
-    // onto the plan; plans without one fall through to the application's
-    // well-known space.
-    const space = options.plan.spaceId ?? APP_SPACE_ID;
     progress.operations = operations;
 
     const policyCheck = this.enforcePolicyCompatibility(options.policy, operations);

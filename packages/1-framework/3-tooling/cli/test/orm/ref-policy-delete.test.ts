@@ -26,13 +26,14 @@ const FULL = {
 
 describe('ref policy delete', () => {
   it('removes a setting named as the output names it, and keeps the rest in the ref format', async () => {
-    const { dir, path } = await projectWithRef('production', { extra: 1, ...FULL });
+    const { dir, path } = await projectWithRef('production', FULL);
 
     const run = await runPolicy(dir, ['delete', 'production', 'dataProtection.dataLoss']);
 
     expect(run.exitCode).toBe(0);
     expect(await readText(path)).toBe(
       refFileText({
+        formatVersion: 1,
         hash: HASH_A,
         invariants: [],
         policies: {
@@ -260,6 +261,31 @@ describe('ref policy delete', () => {
       expect(run.exitCode).toBe(2);
       expect(run.json.at(-1)).toMatchObject({ envelope: { ok: false, error: { code } } });
       expect(await Promise.all([path, brokenPath, headPath].map(readText))).toEqual(before);
+    });
+
+    it('for a ref file with a field the ref format does not have', async () => {
+      const unknownField = JSON.stringify({ ...FULL, extra: 1 });
+      const { dir, path } = await projectWithRef('production', unknownField);
+
+      const run = await runPolicy(dir, ['delete', 'production', 'change', '--json']);
+
+      expect(run.exitCode).toBe(2);
+      expect(run.json.at(-1)).toMatchObject({
+        envelope: {
+          ok: false,
+          error: {
+            code: 'MIGRATION.INVALID_REF_FILE',
+            why: expect.stringContaining('extra must be removed'),
+          },
+          nextActions: [
+            {
+              kind: 'user-choice',
+              label: expect.stringContaining('{ "formatVersion": 1, "hash"'),
+            },
+          ],
+        },
+      });
+      expect(await readText(path)).toBe(unknownField);
     });
 
     it('for a ref that does not exist', async () => {

@@ -34,7 +34,7 @@ describe('a stand-in for the Prisma Postgres pooler, which accepts only DateStyl
   afterAll(async () => {
     await pooler.close();
     await database.close();
-  });
+  }, timeouts.spinUpPpgDev);
 
   it('refuses a connection whose startup options set lc_monetary', async () => {
     const client = new pg.Client({

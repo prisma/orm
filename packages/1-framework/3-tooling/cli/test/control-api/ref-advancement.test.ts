@@ -24,7 +24,7 @@ const PROFILE_HASH = `${'c'.repeat(64)}`;
 function sampleContractIR(storageHash: string = HASH_A): ContractIR {
   return {
     contract: {
-      schemaVersion: '1',
+      formatVersion: 1,
       targetFamily: 'sql',
       target: 'postgres',
       profileHash: PROFILE_HASH,
@@ -255,6 +255,31 @@ describe('preflightRefAdvancement', () => {
         why: expect.stringContaining('storage.storageHash must be a string'),
         where: { path: contractJsonPath },
       });
+    }
+  });
+
+  it('advises a stored snapshot the family rejects as a snapshot, not by emitting the contract', async () => {
+    const client = fakeClient(
+      notOk({
+        code: 'CONTRACT_VALIDATION_FAILED',
+        summary: 'Contract validation failed',
+        why: 'zzz must be removed',
+      }),
+    );
+
+    const result = await preflightRefAdvancement({
+      name: 'db',
+      contractJson,
+      contractJsonPath,
+      config,
+      client,
+      snapshot: { rewrittenBy: undefined },
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.failure.fix).toContain('follow the app upgrade instructions');
+      expect(result.failure.fix).not.toContain('contract emit');
     }
   });
 

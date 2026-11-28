@@ -51,7 +51,7 @@ import { contractSnapshotDir, writeContractSnapshot } from '../src/contract-snap
 const STORAGE_HASH = 'a'.repeat(64);
 
 function contractFixture(storageHash: string) {
-  return { storage: { storageHash }, target: 'postgres' };
+  return { formatVersion: 1, storage: { storageHash }, target: 'postgres' };
 }
 
 describe('writeContractSnapshot atomic-write failure handling', () => {

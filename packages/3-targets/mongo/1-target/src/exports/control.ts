@@ -3,6 +3,7 @@ export { FilterEvaluator } from '../core/migrations/filter-evaluator';
 export {
   deserializeMongoOp,
   deserializeMongoOps,
+  type MongoOperationsLocation,
   serializeMongoOps,
 } from '../core/migrations/mongo-ops-serializer';
 export type { PlanCallsResult } from '../core/migrations/mongo-planner';

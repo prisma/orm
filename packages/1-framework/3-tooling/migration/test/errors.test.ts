@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import {
   errorBundleNotFoundForGraphNode,
   errorContractDeserializationFailed,
+  errorContractSnapshotContentMismatch,
   errorContractSnapshotHashMismatch,
   errorContractSnapshotMissing,
   errorDescribeInvalidMetadata,
@@ -318,7 +319,7 @@ describe('errorContractDeserializationFailed', () => {
 describe('errorInvalidRefFile', () => {
   it('describes the ref file when no policy is at fault', () => {
     expect(errorInvalidRefFile('/m/app/refs/prod.json', 'bad').fix).toBe(
-      'Make the ref file valid JSON of the form { "hash": "<64 hex chars>", "invariants": ["..."] }, with an optional "policies" object.',
+      'Make the ref file valid JSON of the form { "formatVersion": 1, "hash": "<64 hex chars>", "invariants": ["..."] }, with an optional "policies" object.',
     );
   });
 
@@ -361,5 +362,19 @@ describe('errorInvalidRefFile', () => {
         { path: 'extra', problem: 'must be removed' },
       ]).fix,
     ).toBe('Set policies.change[1] to "migrate" or "reconcile". Remove policies.extra.');
+  });
+});
+
+describe('errorContractSnapshotContentMismatch', () => {
+  it('advises restoring the snapshot, or deleting it and writing it again, never re-running a command over it', () => {
+    const error = errorContractSnapshotContentMismatch({
+      storageHash: 'a'.repeat(64),
+      computedHash: 'b'.repeat(64),
+      jsonPath: `/p/migrations/snapshots/${'a'.repeat(64)}/contract.json`,
+    });
+
+    expect(error.fix).toBe(
+      'Restore the snapshot from version control. If it is the snapshot of the emitted contract or the head snapshot of an extension, you can instead delete its folder and write it again, since a command writes a snapshot only where none exists. For the emitted contract, run `{bin} db migrate --advance-ref db` when a migration ends at it, which first applies any pending migrations to the configured database, or `{bin} db sign` when none does, which first checks that the configured database matches contract.json and records that in the database; each then moves the db ref to contract.json and writes the snapshot from it. For an extension, run `{bin} contract emit`, which also emits contract.json from the contract source.',
+    );
   });
 });

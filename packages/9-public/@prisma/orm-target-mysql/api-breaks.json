@@ -131,8 +131,8 @@
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "8e6270864a3cbcfb",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+    "fingerprint": "f3a0fadadadf8583",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). The descriptor also gives `readOperations`, which reads a migration's `ops.json` and refuses a key the format does not define (prisma/orm#31200)."
   },
   {
     "path": "./target",
@@ -158,8 +158,8 @@
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "8e6270864a3cbcfb",
-    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+    "fingerprint": "f3a0fadadadf8583",
+    "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218). The descriptor also gives `readOperations`, which reads a migration's `ops.json` and refuses a key the format does not define (prisma/orm#31200)."
   },
   {
     "path": "./target/control",

@@ -80,6 +80,7 @@ const geometryControlPlaneHooks: CodecControlHooks = {
 };
 
 const postgisContractSpace = contractSpaceFromJson<Contract<SqlStorage>>({
+  spaceId: POSTGIS_SPACE_ID,
   contractJson,
   migrations: [
     { dirName: POSTGIS_BASELINE_MIGRATION_NAME, metadata: baselineMetadata, ops: baselineOps },

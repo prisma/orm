@@ -196,14 +196,14 @@ describe('MongoContractSerializerBase', () => {
     });
   });
 
-  describe('serializeContract (default identity)', () => {
-    it('returns the contract value as a JsonObject without copying', () => {
+  describe('serializeContract', () => {
+    it('prints the contract value in format version 1', () => {
       const serializer = new RecordingSerializer();
       const wrapped: Wrapped = { contract: makeValidContractJson() as unknown as MongoContract };
 
       const serialized: JsonObject = serializer.serializeContract(wrapped);
 
-      expect(serialized).toBe(wrapped as unknown as JsonObject);
+      expect(serialized).toEqual({ formatVersion: 1, ...wrapped });
     });
   });
 });

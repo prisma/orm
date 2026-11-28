@@ -7,6 +7,7 @@ import { assertHashIsGraphNode, isGraphNode } from '@internal/migration-tools/mi
 import type { ContractRef } from '@internal/migration-tools/ref-resolution';
 import { parseContractRef } from '@internal/migration-tools/ref-resolution';
 import type { NamedRef, Refs } from '@internal/migration-tools/refs';
+import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import {
   CliStructuredError,
@@ -171,10 +172,17 @@ async function resolveContractRef(
       contract: at.contract,
     });
   } catch (error) {
-    return mapContractAtError(
-      error,
-      options?.artifactRole !== undefined ? { artifactRole: options.artifactRole } : undefined,
-    );
+    return mapContractAtError(error, {
+      ...ifDefined('artifactRole', options?.artifactRole),
+      ...(space.headRef?.hash === hash
+        ? {
+            atHeadOf: {
+              spaceId: space.spaceId,
+              reachedByMigration: space.packages.some((pkg) => pkg.metadata.to === hash),
+            },
+          }
+        : {}),
+    });
   }
 }
 

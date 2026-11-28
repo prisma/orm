@@ -431,7 +431,7 @@ describe('migration list', () => {
         join(postgisDir, 'contract.json'),
         JSON.stringify({
           storage: { storageHash: HASH_POSTGIS },
-          schemaVersion: '1.0.0',
+          formatVersion: 1,
           target: 'postgres',
           targetFamily: 'sql',
         }),

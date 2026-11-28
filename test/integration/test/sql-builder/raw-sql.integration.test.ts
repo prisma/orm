@@ -29,7 +29,10 @@ import { setupTestDatabase } from '../utils';
 import { contract } from './fixtures/contract';
 import type { Contract } from './fixtures/generated/contract';
 
-const sqlContract = new PostgresContractSerializer().deserializeContract(contract) as Contract;
+const serializer = new PostgresContractSerializer();
+const sqlContract = serializer.deserializeContract(
+  serializer.serializeContract(contract),
+) as Contract;
 
 type TestStackInstance = ExecutionStackInstance<
   'sql',

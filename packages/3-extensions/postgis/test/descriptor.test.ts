@@ -116,9 +116,7 @@ describe('postgis extension descriptor', () => {
     expect(() =>
       assertDescriptorSelfConsistency({
         extensionId: POSTGIS_SPACE_ID,
-        target: space.contractJson.target,
-        targetFamily: space.contractJson.targetFamily,
-        storage: space.contractJson.storage,
+        contractJson: space.contractJson,
         headRefHash: space.headRef.hash,
         ...sqlContractCanonicalizationHooks,
       }),

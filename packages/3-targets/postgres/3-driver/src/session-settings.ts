@@ -1,6 +1,7 @@
 import type { SessionSettings } from '@internal/framework-components/components';
 import { Client, type ClientBase, type ClientConfig, Pool, type PoolConfig } from 'pg';
 import { parse } from 'pg-connection-string';
+import { timedStatement } from './timed-statement';
 
 /** The settings pg's `ConnectionParameters` reads from a parsed connection string, except `binary`, which a pg client also applies to every query when it is in the client's own settings. Any other query parameter is not a connection setting, and pg ignores it in a connection string. */
 const CONNECTION_SETTINGS = [
@@ -103,12 +104,15 @@ export class SessionSettingsGuard {
     return this.#entries.length > 0 && !this.#ensured.has(client);
   }
 
-  /** Sets the settings on a client that {@link SessionSettingsGuard.needs} them. */
-  async ensure(client: ClientBase): Promise<void> {
+  /** Sets the settings on a client that {@link SessionSettingsGuard.needs} them, within `timeLimitMillis` when it is given. */
+  async ensure(client: ClientBase, timeLimitMillis?: number): Promise<void> {
     const calls = this.#entries.map(
       (_, index) => `set_config($${index * 2 + 1}, $${index * 2 + 2}, false)`,
     );
-    await client.query(`SELECT ${calls.join(', ')}`, this.#entries.flat());
+    const statement = { text: `SELECT ${calls.join(', ')}`, values: this.#entries.flat() };
+    await client.query(
+      timeLimitMillis === undefined ? statement : timedStatement(statement, timeLimitMillis),
+    );
     this.#ensured.add(client);
   }
 

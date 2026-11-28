@@ -5,11 +5,12 @@
  *
  * Offline-only: reads migrations/ from disk + contract.json, no DB, no PGlite.
  */
-import { cp, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { loadContractSpaceAggregate } from '@prisma/orm-postgres/migration-tools/aggregate';
 import { computeMigrationHash } from '@prisma/orm-postgres/migration-tools/hash';
+import { writeMigrationPackage } from '@prisma/orm-postgres/migration-tools/io';
 import { PostgresContractSerializer } from '@prisma/orm-postgres/target/runtime';
 import { timeouts } from '@repo/test-utils';
 import { join } from 'pathe';
@@ -91,10 +92,11 @@ describe('demo migration integrity — guard verification', () => {
         ...baseMetadata,
         migrationHash: computeMigrationHash(baseMetadata, []),
       };
-      const noopDir = join(tmpMigrationsDir, 'app', '20260609T0000_noop_selfedge');
-      await mkdir(noopDir, { recursive: true });
-      await writeFile(join(noopDir, 'migration.json'), JSON.stringify(noopMigration, null, 2));
-      await writeFile(join(noopDir, 'ops.json'), JSON.stringify([]));
+      await writeMigrationPackage(
+        join(tmpMigrationsDir, 'app', '20260609T0000_noop_selfedge'),
+        noopMigration,
+        [],
+      );
 
       const appContract = await loadAppContract();
       const aggregate = await loadContractSpaceAggregate({

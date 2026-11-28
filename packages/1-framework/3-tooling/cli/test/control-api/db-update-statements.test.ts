@@ -292,4 +292,41 @@ describe('executeDbUpdate with statements', () => {
     expect(without.calls).toEqual([{ fromContract: null, origin: null, statements: [] }]);
     expect(withoutSnapshot.ok && withoutSnapshot.value.appliedStatements).toEqual([]);
   });
+
+  it('says which origin snapshot it could not read and why, and plans on without it', async () => {
+    const { migrations, calls } = recordingMigrations();
+    const migrationsDir = await migrationsDirWithSnapshot(origin);
+    const warnings: { readonly path: string; readonly reason: string }[] = [];
+    const result = await update({
+      migrationsDir,
+      marker: markerAt(ORIGIN_HASH),
+      renames: [],
+      unreadableOrigin: true,
+      onUnreadableOrigin: (unreadable) => warnings.push(unreadable),
+      migrations,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(calls).toEqual([{ fromContract: null, origin: null, statements: [] }]);
+    expect(warnings).toEqual([
+      {
+        path: join(contractSnapshotDir(migrationsDir, ORIGIN_HASH), 'contract.json'),
+        reason: expect.stringContaining('unknown contract format'),
+      },
+    ]);
+  });
+
+  it('says nothing when the origin snapshot is absent', async () => {
+    const { migrations } = recordingMigrations();
+    const warnings: unknown[] = [];
+    await update({
+      migrationsDir: await migrationsDirWithSnapshot(undefined),
+      marker: markerAt(ORIGIN_HASH),
+      renames: [],
+      onUnreadableOrigin: (unreadable) => warnings.push(unreadable),
+      migrations,
+    });
+
+    expect(warnings).toEqual([]);
+  });
 });

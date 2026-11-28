@@ -10,6 +10,7 @@ import { MongoContractSerializer } from '@internal/family-mongo/ir';
 import type { AuthoringTypeConstructorDescriptor } from '@internal/framework-components/authoring';
 import { createDataTypeLookup, emptyCodecLookup } from '@internal/framework-components/codec';
 import { EMPTY_GENERATOR_FUNCTIONS } from '@internal/framework-components/components';
+import type { MongoContract } from '@internal/mongo-contract';
 import {
   describeUnsupportedMongoAttribute,
   interpretPslDocumentToMongoContract,
@@ -211,6 +212,8 @@ function valueObjectRef(namespaceId: string, entityName: string) {
   };
 }
 
+const mongoSerializer = new MongoContractSerializer();
+
 describeWithMongoDB('value objects: end-to-end Mongo', (ctx) => {
   it('PSL → interpret → validate → ORM create and read', async () => {
     const result = interpretMongoPsl(mongoPsl);
@@ -225,7 +228,9 @@ describeWithMongoDB('value objects: end-to-end Mongo', (ctx) => {
     expect(userFields['homeAddress']!.type.kind).toBe('valueObject');
 
     const validated = {
-      contract: new MongoContractSerializer().deserializeContract(contract),
+      contract: mongoSerializer.deserializeContract(
+        mongoSerializer.serializeContract(contract as MongoContract),
+      ),
     };
 
     const context = executionContextFor(validated.contract);
@@ -259,7 +264,11 @@ describeWithMongoDB('value objects: end-to-end Mongo', (ctx) => {
     const result = interpretMongoPsl(mongoPsl);
     if (!result.ok) throw new Error(`Interpretation failed: ${result.failure.summary}`);
 
-    const validated = { contract: new MongoContractSerializer().deserializeContract(result.value) };
+    const validated = {
+      contract: mongoSerializer.deserializeContract(
+        mongoSerializer.serializeContract(result.value as MongoContract),
+      ),
+    };
     const context = executionContextFor(validated.contract);
     const orm = mongoOrm({ context, runtime: ctx.runtime });
     const userCollection = orm['User']!;
@@ -299,7 +308,11 @@ type Address {
     const result = interpretMongoPsl(schema);
     if (!result.ok) throw new Error(`Interpretation failed: ${result.failure.summary}`);
 
-    const validated = { contract: new MongoContractSerializer().deserializeContract(result.value) };
+    const validated = {
+      contract: mongoSerializer.deserializeContract(
+        mongoSerializer.serializeContract(result.value as MongoContract),
+      ),
+    };
     const context = executionContextFor(validated.contract);
     const orm = mongoOrm({ context, runtime: ctx.runtime });
     const userCollection = orm['User']!;

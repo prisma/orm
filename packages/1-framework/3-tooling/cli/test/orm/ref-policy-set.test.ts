@@ -13,12 +13,12 @@ import {
 afterEach(cleanupRefProjects);
 
 describe('ref policy set', () => {
-  it('writes only the named settings, in the ref format, keeping the other fields and dropping unknown keys', async () => {
+  it('writes only the named settings, in the ref format, keeping the other fields', async () => {
     const { dir, path } = await projectWithRef('production', {
-      extra: true,
       policies: { dataProtection: { accessWidening: 'access-widening-permitted' } },
       invariants: ['split-user-name'],
       hash: HASH_A,
+      formatVersion: 1,
     });
 
     const run = await runPolicy(dir, [
@@ -33,6 +33,7 @@ describe('ref policy set', () => {
     expect(run.exitCode).toBe(0);
     expect(await readText(path)).toBe(
       refFileText({
+        formatVersion: 1,
         hash: HASH_A,
         invariants: ['split-user-name'],
         policies: {
@@ -218,7 +219,12 @@ describe('ref policy set', () => {
 
   it('writes nothing when every declared value would stay the same', async () => {
     const handWritten = JSON.stringify(
-      { hash: HASH_A, invariants: [], policies: { change: ['reconcile', 'migrate'] } },
+      {
+        formatVersion: 1,
+        hash: HASH_A,
+        invariants: [],
+        policies: { change: ['reconcile', 'migrate'] },
+      },
       null,
       4,
     );
@@ -331,6 +337,31 @@ describe('ref policy set', () => {
         },
       });
       expect(await readText(path)).toBe(before);
+    });
+
+    it('for a ref file with a field the ref format does not have', async () => {
+      const unknownField = JSON.stringify({ ...PLAIN_REF, extra: true });
+      const { dir, path } = await projectWithRef('production', unknownField);
+
+      const run = await runPolicy(dir, ['set', 'production', '--data-loss', 'forbidden', '--json']);
+
+      expect(run.exitCode).toBe(2);
+      expect(run.json.at(-1)).toMatchObject({
+        envelope: {
+          ok: false,
+          error: {
+            code: 'MIGRATION.INVALID_REF_FILE',
+            why: expect.stringContaining('extra must be removed'),
+          },
+          nextActions: [
+            {
+              kind: 'user-choice',
+              label: expect.stringContaining('{ "formatVersion": 1, "hash"'),
+            },
+          ],
+        },
+      });
+      expect(await readText(path)).toBe(unknownField);
     });
 
     it('for a ref file that is not valid', async () => {

@@ -81,6 +81,15 @@ export {
   subjectsOfCalls,
   unknownCallNames,
 } from '../core/migrations/operation-subjects';
+export type {
+  SqlOperationsLocation,
+  SqlOperationsReader,
+  SqlTargetOperationsFormat,
+} from '../core/migrations/operations-reader';
+export {
+  createSqlOperationsReader,
+  SQL_OPERATIONS_OPEN_PLACES,
+} from '../core/migrations/operations-reader';
 export {
   createMigrationPlan,
   plannerFailure,
@@ -227,6 +236,8 @@ export {
   unconvertedFieldOf,
 } from '../core/migrations/unconverted-field';
 export { UnfilledValue } from '../core/migrations/unfilled-value';
+export type { DocumentPlace, UnknownKeyProbe } from '../core/migrations/unknown-key-probe';
+export { probeUnknownKeys } from '../core/migrations/unknown-key-probe';
 export {
   planValueObjectFieldFills,
   type StoredKeyFill,

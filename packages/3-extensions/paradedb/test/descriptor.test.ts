@@ -111,9 +111,7 @@ describe('paradedb extension descriptor', () => {
     expect(() =>
       assertDescriptorSelfConsistency({
         extensionId: PARADEDB_SPACE_ID,
-        target: space.contractJson.target,
-        targetFamily: space.contractJson.targetFamily,
-        storage: space.contractJson.storage,
+        contractJson: space.contractJson,
         headRefHash: space.headRef.hash,
         ...sqlContractCanonicalizationHooks,
       }),

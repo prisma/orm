@@ -25,7 +25,6 @@ import {
   withFailingSpace,
 } from '@internal/framework-components/control';
 import type { SqlControlDriverInstance } from '@internal/sql-contract/types';
-import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError, isInternalError } from '@internal/utils/internal-error';
 import { notOk, ok, okVoid, type Result } from '@internal/utils/result';
@@ -34,6 +33,7 @@ import { mysqlError } from '../errors';
 import { withMarkerLock } from '../marker-lock';
 import type { Op } from './operations';
 import type { MysqlPlanTargetDetails } from './planner-target-details';
+import { readMysqlOperations } from './read-operations';
 
 type Options = SqlMigrationRunnerExecuteOptions<MysqlPlanTargetDetails>;
 type Driver = SqlControlDriverInstance<string>;
@@ -169,10 +169,10 @@ class MysqlMigrationRunner implements SqlMigrationRunner<MysqlPlanTargetDetails>
       );
     }
     const space = options.plan.spaceId;
-    const operations = blindCast<
-      readonly Op[],
-      'the MySQL planner and migration class produce MySQL operations; MigrationPlan.operations uses the wider framework type to admit promises'
-    >(await Promise.all(options.plan.operations));
+    const operations = readMysqlOperations(await Promise.all(options.plan.operations), {
+      space,
+      migrations: options.migrationEdges,
+    });
 
     const destinationCheck = this.#checkDestination(
       options.plan.destination,

@@ -90,8 +90,9 @@ describe('emitter integration', () => {
       expect(result.contractDts).toContain('LaneCodecTypes');
 
       const contractJson = JSON.parse(result.contractJson);
+      expect(Object.keys(contractJson)[0]).toBe('formatVersion');
       expect(contractJson).toMatchObject({
-        schemaVersion: '1',
+        formatVersion: 1,
         targetFamily: 'sql',
         target: 'postgres',
         profileHash: expect.stringMatching(/^[a-f0-9]{64}$/),

@@ -9,6 +9,7 @@ import {
   deserializeTestContract,
   getTestContext,
   getTestContract,
+  storedTestContract,
 } from './helpers';
 
 type SoleNamespaceModels<T extends Contract> =
@@ -67,7 +68,7 @@ export function withReturningCapability(contract: TestContract = baseContract): 
 }
 
 export function withoutDefaultInInsert(contract: TestContract = baseContract): TestContract {
-  const raw = JSON.parse(JSON.stringify(contract)) as Record<string, unknown>;
+  const raw = storedTestContract(contract);
   const capabilities = raw['capabilities'] as Record<string, Record<string, unknown>> | undefined;
   if (capabilities?.['sql']) {
     delete capabilities['sql']['defaultInInsert'];
@@ -79,7 +80,7 @@ export function withoutCapabilityKeys(
   contract: TestContract,
   keys: readonly string[],
 ): TestContract {
-  const raw = JSON.parse(JSON.stringify(contract)) as Record<string, unknown>;
+  const raw = storedTestContract(contract);
   const capabilities = raw['capabilities'] as Record<string, Record<string, unknown>> | undefined;
   for (const group of Object.values(capabilities ?? {})) {
     for (const key of keys) delete group[key];

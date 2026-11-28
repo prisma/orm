@@ -111,7 +111,9 @@ export function widgetContract(parts: WidgetParts = {}): Overrides {
 
 export function deserialize(overrides: Overrides): Contract<SqlStorage> {
   return blindCast<Contract<SqlStorage>, 'the Postgres serializer yields a SQL contract'>(
-    new PostgresContractSerializer().deserializeContract(createSqlContract(overrides)),
+    new PostgresContractSerializer().deserializeContract(
+      JSON.parse(JSON.stringify({ formatVersion: 1, ...createSqlContract(overrides) })),
+    ),
   );
 }
 
@@ -122,7 +124,7 @@ export function deserializeEdited(
 ): Contract<SqlStorage> {
   return blindCast<Contract<SqlStorage>, 'the Postgres serializer yields a SQL contract'>(
     new PostgresContractSerializer().deserializeContract(
-      JSON.parse(edit(JSON.stringify(createSqlContract(overrides)))),
+      JSON.parse(edit(JSON.stringify({ formatVersion: 1, ...createSqlContract(overrides) }))),
     ),
   );
 }

@@ -23,7 +23,7 @@ const HASH_B = `${'b'.repeat(64)}`;
 
 function contractJsonForHash(storageHash: string): Record<string, unknown> {
   return {
-    schemaVersion: '1.0.0',
+    formatVersion: 1,
     targetFamily: 'sql',
     target: 'postgres',
     storage: { storageHash },
@@ -188,7 +188,7 @@ describe('executeMigrateShowPlan', () => {
   it('advises --to with the ref name when the target is a ref', async () => {
     await writeFile(
       join(appMigrationsDir, 'refs', 'staging.json'),
-      JSON.stringify({ hash: HASH_A, invariants: [] }),
+      JSON.stringify({ formatVersion: 1, hash: HASH_A, invariants: [] }),
     );
 
     const result = await executeMigrateShowPlan({

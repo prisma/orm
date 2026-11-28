@@ -1,4 +1,4 @@
-import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import type { PrismaConfig } from '@internal/config/config-types';
 import type { MigrationPlanOperation } from '@internal/framework-components/control';
 import {
@@ -22,7 +22,7 @@ const HASH_FLOAT = `${'f'.repeat(64)}`;
 
 function contractJsonForHash(storageHash: string): Record<string, unknown> {
   return {
-    schemaVersion: '1.0.0',
+    formatVersion: 1,
     targetFamily: 'sql',
     target: 'postgres',
     storage: { storageHash },
@@ -134,6 +134,28 @@ describe('resolveContractRefToSnapshot', () => {
         ref: { name: 'floating', hash: HASH_FLOAT, invariants: [] },
       });
     }
+  });
+
+  it('falls back to an emitted contract a release candidate wrote, converted to format version 1', async () => {
+    await seedBaselineMigration();
+    await writeRef(refsDir, 'floating', { hash: HASH_FLOAT, invariants: [] });
+    const { formatVersion: _, ...contract } = contractJsonForHash(HASH_FLOAT);
+    const releaseCandidateFile = JSON.stringify({ schemaVersion: '1', ...contract });
+    await writeFile(contractPathAbsolute, releaseCandidateFile);
+    const result = await resolveContractRefToSnapshot({
+      config,
+      migrationsDir,
+      refInput: 'floating',
+      contractPathAbsolute,
+      argument: 'the contract argument',
+      fallbackToEmitted: true,
+    });
+    expect(result).toMatchObject({
+      ok: true,
+      value: { source: 'emitted', contractJson: contractJsonForHash(HASH_FLOAT) },
+    });
+    expect(result.ok && result.value.contractJson).not.toHaveProperty('schemaVersion');
+    expect(await readFile(contractPathAbsolute, 'utf-8')).toBe(releaseCandidateFile);
   });
 
   it('refuses a non-matching fallback with the exact "No contract file found" envelope', async () => {

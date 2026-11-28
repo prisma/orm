@@ -21,6 +21,7 @@ describe('pgvector cast policy', () => {
     const adapter = createComposedPostgresAdapter({ extensions: [pgvectorRuntime] });
 
     const vectorContract = new SqlContractSerializer().deserializeContract({
+      formatVersion: 1,
       target: 'postgres',
       targetFamily: 'sql',
       profileHash: 'vector-cast-policy',

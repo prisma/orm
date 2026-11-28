@@ -76,7 +76,7 @@ async function setupFixture(): Promise<Fixture> {
   writeProjectManifest(cwd);
   const endContract = {
     storage: { storageHash: HASH_B },
-    schemaVersion: '1.0.0',
+    formatVersion: 1,
     target: 'postgres',
     targetFamily: 'sql',
   };
@@ -84,7 +84,7 @@ async function setupFixture(): Promise<Fixture> {
     join(cwd, 'contract.json'),
     JSON.stringify({
       storage: { storageHash: HASH_A },
-      schemaVersion: '1.0.0',
+      formatVersion: 1,
       target: 'postgres',
       targetFamily: 'sql',
     }),

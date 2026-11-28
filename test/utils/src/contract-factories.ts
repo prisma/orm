@@ -55,6 +55,9 @@ const DEFAULT_SQL_STORAGE = {
 
 type StorageWithoutHash = Omit<StorageBase, 'storageHash'>;
 
+/** Prisma builds a contract's storage as an object of an IR class; the contracts these factories make are built in memory too. */
+class InMemoryStorage {}
+
 function withValueObjects(
   storage: StorageWithoutHash,
   valueObjects: Record<string, ContractValueObject> | undefined,
@@ -94,10 +97,7 @@ export function createContract<TStorage extends StorageBase = StorageBase>(
     ...ifDefined('sortStorage', overrides.sortStorage),
   });
 
-  const storage = {
-    ...rawStorage,
-    storageHash,
-  } as TStorage;
+  const storage = Object.assign(new InMemoryStorage(), rawStorage, { storageHash }) as TStorage;
 
   const computedProfileHash =
     overrides.profileHash ?? computeProfileHash({ target, targetFamily, capabilities });
