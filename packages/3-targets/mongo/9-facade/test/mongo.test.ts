@@ -472,6 +472,15 @@ describe('mongo() facade', () => {
     );
   });
 
+  it('threads the log option to createMongoRuntime', async () => {
+    const log = { info() {}, warn() {}, error() {} };
+    const db = mongo({ contract: fakeContract, url: 'mongodb://localhost:27017/mydb', log });
+
+    await db.runtime();
+
+    expect(mocks.createMongoRuntime).toHaveBeenCalledWith(expect.objectContaining({ log }));
+  });
+
   it('omits middleware from createMongoRuntime args when not configured', async () => {
     const db = mongo({ contract: fakeContract, url: 'mongodb://localhost:27017/mydb' });
 

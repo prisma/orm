@@ -1,6 +1,6 @@
 import type { ContractEnumAccessor } from '@internal/contract/enum-accessor';
 import type { ProfileHashBase, StorageHashBase } from '@internal/contract/types';
-import type { AsyncIterableResult } from '@internal/framework-components/runtime';
+import type { AsyncIterableResult, RuntimeLog } from '@internal/framework-components/runtime';
 import type { MongoContractWithTypeMaps, MongoTypeMaps } from '@internal/mongo-contract';
 import type {
   CreateInput,
@@ -21,7 +21,7 @@ import {
   model,
   type,
 } from '../src/exports/contract-builder';
-import type { MongoClient } from '../src/runtime/mongo';
+import type { MongoClient, MongoOptions } from '../src/runtime/mongo';
 import type { MongoStaticContext } from '../src/static/mongo-static';
 
 type UserRow = IncludedRow<Contract, 'User', NoIncludes>;
@@ -273,4 +273,8 @@ test('db.runtime().query(plan) is typed AsyncIterableResult<Row>', async () => {
   const runtime = await enumDb.runtime();
   const result = runtime.query(queryPlan);
   expectTypeOf(result).toEqualTypeOf<AsyncIterableResult<QueryRow>>();
+});
+
+test('mongo() takes the same log as the SQL clients', () => {
+  expectTypeOf<MongoOptions<Contract>['log']>().toEqualTypeOf<RuntimeLog | undefined>();
 });
