@@ -10,7 +10,8 @@ const recorded = vi.hoisted(() => ({
   disposals: [] as unknown[],
 }));
 
-vi.mock('pg', () => {
+vi.mock('pg', async () => {
+  const { EventEmitter } = await import('node:events');
   function recordingQuery(connection: number) {
     return vi.fn(async (request: string | { readonly text: string }) => {
       recorded.statements.push({
@@ -22,14 +23,18 @@ vi.mock('pg', () => {
       return { rows: [], rowCount: 0 };
     });
   }
-  class Pool {
-    on = vi.fn().mockReturnThis();
-    connect = vi.fn(async () => ({
-      query: recordingQuery(++recorded.connections),
-      release: vi.fn((reason?: unknown) => recorded.disposals.push(reason)),
-      on: vi.fn(),
-      off: vi.fn(),
-    }));
+  /** Opens a client on each checkout and, as pg-pool does, emits `connect` for it. */
+  class Pool extends EventEmitter {
+    connect = vi.fn(async () => {
+      const client = {
+        query: recordingQuery(++recorded.connections),
+        release: vi.fn((reason?: unknown) => recorded.disposals.push(reason)),
+        on: vi.fn(),
+        off: vi.fn(),
+      };
+      this.emit('connect', client);
+      return client;
+    });
     end = vi.fn().mockResolvedValue(undefined);
     totalCount = 0;
     idleCount = 0;

@@ -1,81 +1,26 @@
-import { once } from 'node:events';
-import { createConnection, createServer, type Server, type Socket } from 'node:net';
 import { SqlConnectionError } from '@internal/sql-errors';
 import { createDevDatabase, timeouts } from '@repo/test-utils';
 import { Client, Pool } from 'pg';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import postgresControlDriverDescriptor from '../src/exports/control';
 import { createBoundDriverFromBinding } from '../src/postgres-driver';
+import {
+  type DyingConnectionsProxy,
+  startDyingConnectionsProxy,
+  targetOf,
+  throughProxy,
+} from './dying-connections-proxy';
 import { queryRows } from './sql-queryable-test-utils';
 
-/** A TCP proxy in front of the database that can cut every connection, now or on the next query. */
-interface CuttingProxy {
-  readonly port: number;
-  cutNow(): void;
-  cutOnNextQuery(): void;
-  close(): Promise<void>;
-}
-
-async function startProxy(target: { host: string; port: number }): Promise<CuttingProxy> {
-  const sockets = new Set<Socket>();
-  let cutPending = false;
-  const cutNow = () => {
-    for (const socket of sockets) socket.destroy();
-  };
-  const server: Server = createServer((downstream) => {
-    const upstream = createConnection(target);
-    sockets.add(downstream);
-    sockets.add(upstream);
-    let startedUp = false;
-    downstream.on('data', (chunk: Buffer) => {
-      if (startedUp && cutPending) {
-        cutPending = false;
-        cutNow();
-        return;
-      }
-      upstream.write(chunk);
-    });
-    upstream.on('data', (chunk: Buffer) => {
-      if (chunk.includes(Buffer.from('Z'))) startedUp = true;
-      downstream.write(chunk);
-    });
-    for (const socket of [downstream, upstream]) {
-      socket.on('close', () => {
-        sockets.delete(socket);
-        downstream.destroy();
-        upstream.destroy();
-      });
-      socket.on('error', () => undefined);
-    }
-  });
-  server.listen(0, '127.0.0.1');
-  await once(server, 'listening');
-  const address = server.address();
-  if (address === null || typeof address === 'string') throw new Error('proxy has no port');
-  return {
-    port: address.port,
-    cutNow,
-    cutOnNextQuery: () => {
-      cutPending = true;
-    },
-    close: async () => {
-      cutNow();
-      await new Promise<void>((resolve) => server.close(() => resolve()));
-    },
-  };
-}
-
-let proxy: CuttingProxy;
+let proxy: DyingConnectionsProxy;
 let closeDatabase: () => Promise<void>;
 let connectionString: string;
 
 beforeEach(async () => {
   const database = await createDevDatabase();
   closeDatabase = () => database.close();
-  const url = new URL(database.connectionString);
-  proxy = await startProxy({ host: url.hostname, port: Number(url.port) });
-  url.host = `127.0.0.1:${proxy.port}`;
-  connectionString = url.toString();
+  proxy = await startDyingConnectionsProxy(targetOf(database.connectionString));
+  connectionString = throughProxy(database.connectionString, proxy.port);
 }, timeouts.spinUpPpgDev);
 
 afterEach(async () => {
