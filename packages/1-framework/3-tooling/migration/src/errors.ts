@@ -10,9 +10,11 @@ import {
 import { ifDefined } from '@internal/utils/defined';
 import type { NextAction } from '@internal/utils/structured-error';
 import { isStructuredError } from '@internal/utils/structured-error';
-import { APP_UPGRADE_GUIDES_URL } from '@internal/utils/upgrade-guides';
+import { APP_UPGRADE_GUIDES_URL, UPGRADE_GUIDES_URL } from '@internal/utils/upgrade-guides';
 import { basename, dirname, relative } from 'pathe';
 import type { MigrationGraph } from './graph';
+
+const EXTENSION_UPGRADE_GUIDES_URL = `${UPGRADE_GUIDES_URL}/extension`;
 
 /**
  * Build the canonical "re-emit this package" remediation hint.
@@ -206,8 +208,22 @@ export function errorDescriptorHeadHashMismatch(args: {
     'MIGRATION.DESCRIPTOR_HEAD_HASH_MISMATCH',
     "Extension descriptor's headRef.hash does not match its contractJson",
     {
-      why: `Extension "${extensionId}" publishes a \`contractSpace\` whose \`headRef.hash\` (${headRefHash}) does not match the canonical hash recomputed from \`contractSpace.contractJson\` (${recomputedHash}). This means the extension descriptor was published with stale \`headRef.hash\` — typically because the contract was bumped without rerunning the extension's emit pipeline.`,
-      fix: 'Re-run the extension authoring pipeline so `contractJson.storage.storageHash` and `headRef.hash` agree, then republish the extension. If you are the extension author and you intentionally bumped `contractJson`, recompute and update `headRef.hash` (and refresh any on-disk migration metadata that derives from it).',
+      why: `The extension "${extensionId}" names its contract by the hash ${headRefHash}, but this release of Prisma computes ${recomputedHash} for it. The extension was most likely built for an earlier release of Prisma 8, whose hash rules differ; otherwise its contract changed without its build running again.`,
+      fix: `In an application, upgrade "${extensionId}" to its version for this release of Prisma, as the app upgrade instructions say (${APP_UPGRADE_GUIDES_URL}); if there is none, ask its author to publish one. Its author follows the extension upgrade instructions of each release since the one it was built for, which rewrite every contract hash (${EXTENSION_UPGRADE_GUIDES_URL}), or, if it was built for this release, runs its build again, and publishes a new version.`,
+      nextActions: [
+        {
+          kind: 'open-url',
+          label:
+            'In an application, upgrade the extension to its version for this release, as the app upgrade instructions say',
+          url: APP_UPGRADE_GUIDES_URL,
+        },
+        {
+          kind: 'open-url',
+          label:
+            "If you are the extension's author, follow the extension upgrade instructions, which rewrite every contract hash, and publish a new version",
+          url: EXTENSION_UPGRADE_GUIDES_URL,
+        },
+      ],
       meta: { extensionId, recomputedHash, headRefHash },
     },
   );

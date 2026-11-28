@@ -1,6 +1,6 @@
 import { ContractValidationError } from '@internal/contract/contract-validation-error';
 import { CliStructuredError } from '@internal/errors/control';
-import { APP_UPGRADE_GUIDES_URL } from '@internal/utils/upgrade-guides';
+import { APP_UPGRADE_GUIDES_URL, UPGRADE_GUIDES_URL } from '@internal/utils/upgrade-guides';
 import { join } from 'pathe';
 import { describe, expect, it } from 'vitest';
 import {
@@ -363,6 +363,34 @@ describe('errorInvalidRefFile', () => {
         { path: 'extra', problem: 'must be removed' },
       ]).fix,
     ).toBe('Set policies.change[1] to "migrate" or "reconcile". Remove policies.extra.');
+  });
+});
+
+describe('errorDescriptorHeadHashMismatch', () => {
+  it('names an extension built for an earlier release as the likely cause, and tells the application and the author what to do', () => {
+    const error = errorDescriptorHeadHashMismatch({
+      extensionId: 'vectors',
+      recomputedHash: 'a'.repeat(64),
+      headRefHash: 'b'.repeat(64),
+    });
+    expect({ why: error.why, fix: error.fix, nextActions: error.nextActions }).toEqual({
+      why: `The extension "vectors" names its contract by the hash ${'b'.repeat(64)}, but this release of Prisma computes ${'a'.repeat(64)} for it. The extension was most likely built for an earlier release of Prisma 8, whose hash rules differ; otherwise its contract changed without its build running again.`,
+      fix: `In an application, upgrade "vectors" to its version for this release of Prisma, as the app upgrade instructions say (${APP_UPGRADE_GUIDES_URL}); if there is none, ask its author to publish one. Its author follows the extension upgrade instructions of each release since the one it was built for, which rewrite every contract hash (${UPGRADE_GUIDES_URL}/extension), or, if it was built for this release, runs its build again, and publishes a new version.`,
+      nextActions: [
+        {
+          kind: 'open-url',
+          label:
+            'In an application, upgrade the extension to its version for this release, as the app upgrade instructions say',
+          url: APP_UPGRADE_GUIDES_URL,
+        },
+        {
+          kind: 'open-url',
+          label:
+            "If you are the extension's author, follow the extension upgrade instructions, which rewrite every contract hash, and publish a new version",
+          url: `${UPGRADE_GUIDES_URL}/extension`,
+        },
+      ],
+    });
   });
 });
 
