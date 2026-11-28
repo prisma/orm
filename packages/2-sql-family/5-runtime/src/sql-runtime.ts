@@ -1,5 +1,6 @@
 import type { Contract } from '@internal/contract/types';
 import {
+  type ActivityContext,
   type ActivityContextFields,
   type ActivityParent,
   AsyncIterableResult,
@@ -237,7 +238,7 @@ type SqlStatementActivityRun = StatementActivityRun<
  * The route a client activity's statements and transaction take to the database. A subclass whose statements run on its own sessions, such as role sessions, builds one and starts activities on it with `startActivityOnRoute`.
  */
 export interface ActivityRoute {
-  readonly scope: 'runtime' | 'connection' | 'transaction';
+  readonly scope: ActivityContext['scope'];
   /** The parent of an activity started on the route itself. */
   parent(): ActivityParent | undefined;
   query<Row>(plan: SqlOrmPlan<Row>, options: ActivityExecuteOptions): AsyncIterableResult<Row>;

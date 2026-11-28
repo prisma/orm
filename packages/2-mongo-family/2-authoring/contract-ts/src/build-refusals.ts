@@ -36,7 +36,7 @@ export type BaseKey = Extract<RefusalKey, { readonly kind: 'base' }>;
 export type CollectionSettingsKey = Extract<RefusalKey, { readonly kind: 'collectionSettings' }>;
 
 /** What a variant's restatement of a base field changes, which the collection's validator, written from the base, would refuse. */
-export type RestatedFieldDifference = 'storedName' | 'type' | 'nullable' | 'many';
+export type RestatedFieldDifference = 'storedName' | 'type' | 'nullable' | 'many' | (string & {});
 
 /** What a definition names with a name that cannot be an object's own key. */
 export type UnsupportedNameSubject =
@@ -58,7 +58,8 @@ export type IndexShapeRule =
   | 'ttl-with-wildcard'
   | 'projection-without-wildcard'
   | 'collation-without-locale'
-  | 'second-text-index';
+  | 'second-text-index'
+  | (string & {});
 
 /** Why the builder refuses part of a definition, keyed by the part. Each source words the refusal itself. */
 export type BuildRefusal =
@@ -254,9 +255,10 @@ export type BuildRefusal =
   | { readonly kind: 'variantWithoutValue'; readonly key: BaseKey; readonly baseModel: string }
   | {
       readonly kind: 'validator';
-      readonly key: RefusalKey;
+      readonly key: RefusalKey | undefined;
       readonly refusal: MongoContractRefusal;
-    };
+    }
+  | { readonly kind: '%future added value'; readonly key: RefusalKey | undefined };
 
 /** Something the builder accepts but the author probably did not mean, or a warning the source collected. */
 export type BuildWarning = { readonly kind: 'source'; readonly warning: AuthoringWarning };
@@ -270,7 +272,7 @@ export function valueObjectFieldKey(valueObject: string, field: string): FieldKe
 }
 
 /** The key of a validator refusal: the part of the definition its subject names. */
-export function validatorRefusalKey(refusal: MongoContractRefusal): RefusalKey {
+export function validatorRefusalKey(refusal: MongoContractRefusal): RefusalKey | undefined {
   switch (refusal.kind) {
     case 'embeddedModelHasVariants':
       return { kind: 'relation', model: refusal.modelName, relation: refusal.relationName };
@@ -283,5 +285,8 @@ export function validatorRefusalKey(refusal: MongoContractRefusal): RefusalKey {
       return { kind: 'field', owner: refusal.owner, field: refusal.fieldName };
     case 'documentId':
       return modelFieldKey(refusal.modelName, refusal.fieldName);
+    default:
+      refusal.kind satisfies '%future added value';
+      return undefined;
   }
 }

@@ -120,6 +120,8 @@ jobs:
       - name: Check the committed API lists match the build
         id: api-check
         run: pnpm api:check
+      - name: Check every exported set of values is open or declared
+        run: pnpm api:sets
       - name: Upload the API lists CI generated
         if: failure() && steps.api-check.outcome == 'failure'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

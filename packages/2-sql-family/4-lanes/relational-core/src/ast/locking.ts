@@ -11,7 +11,8 @@ export type LockConflict =
   | 'subquery'
   | 'include'
   | 'includeRefinement'
-  | 'mutation';
+  | 'mutation'
+  | (string & {});
 
 /** The `ORM.LOCK_INCOMPATIBLE` error for a lock refused because of `conflict`. */
 export function lockIncompatible(conflict: LockConflict, message: string): StructuredError {

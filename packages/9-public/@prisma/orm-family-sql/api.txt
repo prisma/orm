@@ -1501,7 +1501,7 @@
 ./contract-ts/contract-builder: type ManyOptions = { readonly elementsNullable: false; } | { readonly elementsNullable: true; }
 ./contract-ts/contract-builder: type MergeEnums<ScaffoldEnums extends Record<string, EnumTypeHandle>, FactoryEnums extends Record<string, EnumTypeHandle>> = LiteralEnums<ScaffoldEnums> & LiteralEnums<FactoryEnums>
 ./contract-ts/contract-builder: type ModelLike = { readonly stageOne: { readonly modelName?: string; readonly namespace?: string | undefined; readonly fields: Record<string, ScalarFieldBuilder>; readonly relations: Record<string, RelationBuilder<RelationState>>; }; readonly __attributes: ModelAttributesSpec | undefined; readonly __sql: SqlStageSpec | undefined; readonly __duplicateNames: undefined; buildAttributesSpec(): ModelAttributesSpec | undefined; buildSqlSpec(): SqlStageSpec | undefined; }
-./contract-ts/contract-builder: type SharedTableRefusal<ForeignKey> = { readonly kind: 'defaultedForeignKey'; readonly variant: string; readonly foreignKey: ForeignKey; readonly columns: readonly string[]; } | { readonly kind: 'foreignKey'; readonly variant: string; readonly foreignKey: ForeignKey; readonly columns: readonly string[]; readonly other: string; readonly otherIsBase: boolean; readonly otherDeclaresOne: boolean; } | { readonly kind: 'index'; readonly variant: string; readonly index: IndexNode; readonly namedDifferentlyBy: string | undefined; } | { readonly kind: 'unique'; readonly variant: string; readonly unique: UniqueConstraintNode; }
+./contract-ts/contract-builder: type SharedTableRefusal<ForeignKey> = { readonly kind: '%future added value'; readonly variant: string; } | { readonly kind: 'defaultedForeignKey'; readonly variant: string; readonly foreignKey: ForeignKey; readonly columns: readonly string[]; } | { readonly kind: 'foreignKey'; readonly variant: string; readonly foreignKey: ForeignKey; readonly columns: readonly string[]; readonly other: string; readonly otherIsBase: boolean; readonly otherDeclaresOne: boolean; } | { readonly kind: 'index'; readonly variant: string; readonly index: IndexNode; readonly namedDifferentlyBy: string | undefined; } | { readonly kind: 'unique'; readonly variant: string; readonly unique: UniqueConstraintNode; }
 ./contract-ts/contract-builder: type SqlNamespaceFactory = (input: SqlNamespaceInput) => SqlNamespaceBase
 ./contract-ts/contract-builder: type TargetFieldRef<ModelName extends string = string, FieldName extends string = string, TSpaceId extends string = string> = { readonly kind: 'targetFieldRef'; readonly source: TargetFieldRefSource; readonly modelName: ModelName; readonly fieldName: FieldName; readonly spaceId?: TSpaceId extends '<self>' ? never : TSpaceId; readonly namespaceId?: string; readonly tableName?: string; readonly columnName?: string; }
 ./contract-ts: class ContractModelBuilder, constructor(stageOne: { readonly modelName?: ModelName; readonly namespace?: Namespace; readonly fields: Fields; readonly relations: Relations; }, attributesFactory?: StageInput<AttributeContext<Fields>, AttributesSpec> | undefined, sqlFactory?: StageInput<SqlContext<Fields, IndexTypes>, SqlSpec> | undefined, spaceId?: TSpaceId | undefined, tableName?: string | undefined)
@@ -1740,7 +1740,7 @@
 ./contract-ts: type ManyOptions = { readonly elementsNullable: false; } | { readonly elementsNullable: true; }
 ./contract-ts: type MergeEnums<ScaffoldEnums extends Record<string, EnumTypeHandle>, FactoryEnums extends Record<string, EnumTypeHandle>> = LiteralEnums<ScaffoldEnums> & LiteralEnums<FactoryEnums>
 ./contract-ts: type ModelLike = { readonly stageOne: { readonly modelName?: string; readonly namespace?: string | undefined; readonly fields: Record<string, ScalarFieldBuilder>; readonly relations: Record<string, RelationBuilder<RelationState>>; }; readonly __attributes: ModelAttributesSpec | undefined; readonly __sql: SqlStageSpec | undefined; readonly __duplicateNames: undefined; buildAttributesSpec(): ModelAttributesSpec | undefined; buildSqlSpec(): SqlStageSpec | undefined; }
-./contract-ts: type SharedTableRefusal<ForeignKey> = { readonly kind: 'defaultedForeignKey'; readonly variant: string; readonly foreignKey: ForeignKey; readonly columns: readonly string[]; } | { readonly kind: 'foreignKey'; readonly variant: string; readonly foreignKey: ForeignKey; readonly columns: readonly string[]; readonly other: string; readonly otherIsBase: boolean; readonly otherDeclaresOne: boolean; } | { readonly kind: 'index'; readonly variant: string; readonly index: IndexNode; readonly namedDifferentlyBy: string | undefined; } | { readonly kind: 'unique'; readonly variant: string; readonly unique: UniqueConstraintNode; }
+./contract-ts: type SharedTableRefusal<ForeignKey> = { readonly kind: '%future added value'; readonly variant: string; } | { readonly kind: 'defaultedForeignKey'; readonly variant: string; readonly foreignKey: ForeignKey; readonly columns: readonly string[]; } | { readonly kind: 'foreignKey'; readonly variant: string; readonly foreignKey: ForeignKey; readonly columns: readonly string[]; readonly other: string; readonly otherIsBase: boolean; readonly otherDeclaresOne: boolean; } | { readonly kind: 'index'; readonly variant: string; readonly index: IndexNode; readonly namedDifferentlyBy: string | undefined; } | { readonly kind: 'unique'; readonly variant: string; readonly unique: UniqueConstraintNode; }
 ./contract-ts: type SqlNamespaceFactory = (input: SqlNamespaceInput) => SqlNamespaceBase
 ./contract-ts: type TargetFieldRef<ModelName extends string = string, FieldName extends string = string, TSpaceId extends string = string> = { readonly kind: 'targetFieldRef'; readonly source: TargetFieldRefSource; readonly modelName: ModelName; readonly fieldName: FieldName; readonly spaceId?: TSpaceId extends '<self>' ? never : TSpaceId; readonly namespaceId?: string; readonly tableName?: string; readonly columnName?: string; }
 ./contract-ts: type TypeScriptContractFromPathOptions = (ConfigTarget & TypeScriptContractSpecifierOptions) | (ConfigTarget & { readonly defaultControlPolicy?: never; readonly createNamespace?: never; })
@@ -3271,7 +3271,7 @@
 ./family/control: interface WorkingSchemaOrigins, required method originTable(current: ModelTable): ModelTable
 ./family/control: type DefaultResolver = (def: ColumnDefault, column: DefaultResolverColumn) => ColumnDefault
 ./family/control: type DocumentPlace = readonly string[]
-./family/control: type FieldEvent = 'added' | 'altered' | 'dropped'
+./family/control: type FieldEvent = 'added' | 'altered' | 'dropped' | (string & {})
 ./family/control: type FieldStorageEffect = { readonly kind: 'renameColumn'; readonly table: ModelTable; readonly from: string; readonly to: string; } | { readonly kind: 'unchanged'; }
 ./family/control: type JsonPathStep = { readonly kind: 'member'; readonly name: string; } | { readonly kind: 'wildcard'; }
 ./family/control: type ModelStorageEffect = { readonly kind: 'moveNamespace'; readonly from: ModelTable; readonly to: ModelTable; } | { readonly kind: 'renameTable'; readonly rename: TableRename; } | { readonly kind: 'unchanged'; }
@@ -3282,10 +3282,10 @@
 ./family/control: type SameName = (left: string, right: string) => boolean
 ./family/control: type SqlDatabaseCapabilitiesNotProvidedFn = (input: { readonly contract: Contract<SqlStorage>; readonly schema: SqlSchemaIRNode; }) => DatabaseCapabilitiesNotProvided | undefined
 ./family/control: type SqlDefaultFunctionName = 'autoincrement' | 'now'
-./family/control: type SqlMigrationRunnerErrorCode = 'MIGRATION.DATABASE_CAPABILITIES_NOT_PROVIDED' | 'MIGRATION.DESTINATION_CONTRACT_MISMATCH' | 'MIGRATION.EXECUTION_FAILED' | 'MIGRATION.FOREIGN_KEY_VIOLATION' | 'MIGRATION.MARKER_CAS_FAILURE' | 'MIGRATION.MARKER_ORIGIN_MISMATCH' | 'MIGRATION.POLICY_VIOLATION' | 'MIGRATION.POSTCHECK_FAILED' | 'MIGRATION.PRECHECK_FAILED' | 'MIGRATION.SCHEMA_VERIFY_FAILED'
+./family/control: type SqlMigrationRunnerErrorCode = 'MIGRATION.DATABASE_CAPABILITIES_NOT_PROVIDED' | 'MIGRATION.DESTINATION_CONTRACT_MISMATCH' | 'MIGRATION.EXECUTION_FAILED' | 'MIGRATION.FOREIGN_KEY_VIOLATION' | 'MIGRATION.MARKER_CAS_FAILURE' | 'MIGRATION.MARKER_ORIGIN_MISMATCH' | 'MIGRATION.POLICY_VIOLATION' | 'MIGRATION.POSTCHECK_FAILED' | 'MIGRATION.PRECHECK_FAILED' | 'MIGRATION.SCHEMA_VERIFY_FAILED' | (`MIGRATION.${string}` & {})
 ./family/control: type SqlMigrationRunnerResult = Result<SqlMigrationRunnerSuccessValue, SqlMigrationRunnerFailure>
 ./family/control: type SqlOperationsReader<TTargetDetails> = (operations: readonly unknown[], location?: SqlOperationsLocation) => readonly SqlMigrationPlanOperation<TTargetDetails>[]
-./family/control: type SqlPlannerConflictKind = 'controlPolicySuppressedCall' | 'foreignKeyConflict' | 'indexIncompatible' | 'missingButNonAdditive' | 'nullabilityConflict' | 'rlsPolicyIncompatible' | 'statementRefused' | 'tableNameCaseChanged' | 'typeMismatch' | 'unsupportedOperation'
+./family/control: type SqlPlannerConflictKind = 'controlPolicySuppressedCall' | 'foreignKeyConflict' | 'indexIncompatible' | 'missingButNonAdditive' | 'nullabilityConflict' | 'rlsPolicyIncompatible' | 'statementRefused' | 'tableNameCaseChanged' | 'typeMismatch' | 'unsupportedOperation' | (string & {})
 ./family/control: type SqlPlannerResult<TTargetDetails> = SqlPlannerFailureResult | SqlPlannerSuccessResult<TTargetDetails>
 ./family/control: type SqlQuotingRules = readonly SqlQuote[]
 ./family/control: type SqlSchemaDiffFn = (input: SqlSchemaDiffInput) => SqlSchemaDiffResult
@@ -3293,7 +3293,7 @@
 ./family/control: type StatementOperations = { readonly kind: 'planned'; readonly operationIndexes: readonly number[]; } | { readonly kind: 'plannedWithDiff'; }
 ./family/control: type StoredEnumValue = number | string
 ./family/control: type StoredRewrite = StoredKeyFill | StoredKeyRewrite | StoredValueRewrite | VariantRowRewrite
-./family/control: type UnnamedFieldFill = 'refuse' | 'temporaryValue'
+./family/control: type UnnamedFieldFill = 'refuse' | 'temporaryValue' | (string & {})
 ./family/diff: function arraysEqual(a: readonly string[], b: readonly string[]): boolean
 ./family/diff: function classifyDiffSubjectGranularity(issue: SchemaDiffIssue, granularityOf: (nodeKind: string) => DiffSubjectGranularity): DiffSubjectGranularity | undefined
 ./family/diff: function classifySqlDiffIssue(issue: SchemaDiffIssue, granularityOf: (nodeKind: string) => DiffSubjectGranularity): VerifierIssueCategory
@@ -3395,7 +3395,7 @@
 ./family/psl-build: type ColumnTypeOf = (tableName: string, columnName: string) => PslTypeCall
 ./family/psl-build: type ColumnTypeReadsDefault = (tableName: string, column: SqlColumnIR, type: PslTypeCall) => Promise<boolean>
 ./family/psl-build: type DefaultMappingResult = { readonly attribute: string; }
-./family/psl-build: type GeneratorCallRefusal = { readonly kind: 'no-function' | 'on-list'; readonly phase: GeneratorPhase; readonly generator: ExecutionMutationDefaultValue; } | { readonly kind: 'reads-back-differently'; readonly phase: GeneratorPhase; readonly generator: ExecutionMutationDefaultValue; readonly text: string; readonly readBack: ExecutionMutationDefaultValue | undefined; readonly refusedBecause: string | undefined; }
+./family/psl-build: type GeneratorCallRefusal = { readonly kind: '%future added value'; readonly phase: GeneratorPhase; readonly generator: ExecutionMutationDefaultValue; } | { readonly kind: 'no-function' | 'on-list'; readonly phase: GeneratorPhase; readonly generator: ExecutionMutationDefaultValue; } | { readonly kind: 'reads-back-differently'; readonly phase: GeneratorPhase; readonly generator: ExecutionMutationDefaultValue; readonly text: string; readonly readBack: ExecutionMutationDefaultValue | undefined; readonly refusedBecause: string | undefined; }
 ./family/psl-build: type GeneratorCallsResult = { readonly ok: false; readonly refusal: GeneratorCallRefusal; } | { readonly ok: true; readonly calls: readonly PhaseCallText[]; }
 ./family/psl-build: type InferredTypeConstructors = ReadonlyMap<string, InferredTypeConstructor>
 ./family/psl-infer: function buildChildRelationField(fieldName: string, parentModelName: string, fk: SqlForeignKeyIR, optional: boolean, relationName?: string, hostTable?: SqlTableIR): RelationField
@@ -4107,9 +4107,9 @@
 ./family: type DefaultMappingResult = { readonly attribute: string; }
 ./family: type DefaultResolver = (def: ColumnDefault, column: DefaultResolverColumn) => ColumnDefault
 ./family: type DocumentPlace = readonly string[]
-./family: type FieldEvent = 'added' | 'altered' | 'dropped'
+./family: type FieldEvent = 'added' | 'altered' | 'dropped' | (string & {})
 ./family: type FieldStorageEffect = { readonly kind: 'renameColumn'; readonly table: ModelTable; readonly from: string; readonly to: string; } | { readonly kind: 'unchanged'; }
-./family: type GeneratorCallRefusal = { readonly kind: 'no-function' | 'on-list'; readonly phase: GeneratorPhase; readonly generator: ExecutionMutationDefaultValue; } | { readonly kind: 'reads-back-differently'; readonly phase: GeneratorPhase; readonly generator: ExecutionMutationDefaultValue; readonly text: string; readonly readBack: ExecutionMutationDefaultValue | undefined; readonly refusedBecause: string | undefined; }
+./family: type GeneratorCallRefusal = { readonly kind: '%future added value'; readonly phase: GeneratorPhase; readonly generator: ExecutionMutationDefaultValue; } | { readonly kind: 'no-function' | 'on-list'; readonly phase: GeneratorPhase; readonly generator: ExecutionMutationDefaultValue; } | { readonly kind: 'reads-back-differently'; readonly phase: GeneratorPhase; readonly generator: ExecutionMutationDefaultValue; readonly text: string; readonly readBack: ExecutionMutationDefaultValue | undefined; readonly refusedBecause: string | undefined; }
 ./family: type GeneratorCallsResult = { readonly ok: false; readonly refusal: GeneratorCallRefusal; } | { readonly ok: true; readonly calls: readonly PhaseCallText[]; }
 ./family: type InferredRelations = { readonly relationsByTable: ReadonlyMap<string, readonly RelationField[]>; }
 ./family: type InferredTypeConstructors = ReadonlyMap<string, InferredTypeConstructor>
@@ -4124,10 +4124,10 @@
 ./family: type SqlDatabaseCapabilitiesNotProvidedFn = (input: { readonly contract: Contract<SqlStorage>; readonly schema: SqlSchemaIRNode; }) => DatabaseCapabilitiesNotProvided | undefined
 ./family: type SqlDefaultFunctionName = 'autoincrement' | 'now'
 ./family: type SqlEntityHydrationFactory = (entry: unknown) => unknown
-./family: type SqlMigrationRunnerErrorCode = 'MIGRATION.DATABASE_CAPABILITIES_NOT_PROVIDED' | 'MIGRATION.DESTINATION_CONTRACT_MISMATCH' | 'MIGRATION.EXECUTION_FAILED' | 'MIGRATION.FOREIGN_KEY_VIOLATION' | 'MIGRATION.MARKER_CAS_FAILURE' | 'MIGRATION.MARKER_ORIGIN_MISMATCH' | 'MIGRATION.POLICY_VIOLATION' | 'MIGRATION.POSTCHECK_FAILED' | 'MIGRATION.PRECHECK_FAILED' | 'MIGRATION.SCHEMA_VERIFY_FAILED'
+./family: type SqlMigrationRunnerErrorCode = 'MIGRATION.DATABASE_CAPABILITIES_NOT_PROVIDED' | 'MIGRATION.DESTINATION_CONTRACT_MISMATCH' | 'MIGRATION.EXECUTION_FAILED' | 'MIGRATION.FOREIGN_KEY_VIOLATION' | 'MIGRATION.MARKER_CAS_FAILURE' | 'MIGRATION.MARKER_ORIGIN_MISMATCH' | 'MIGRATION.POLICY_VIOLATION' | 'MIGRATION.POSTCHECK_FAILED' | 'MIGRATION.PRECHECK_FAILED' | 'MIGRATION.SCHEMA_VERIFY_FAILED' | (`MIGRATION.${string}` & {})
 ./family: type SqlMigrationRunnerResult = Result<SqlMigrationRunnerSuccessValue, SqlMigrationRunnerFailure>
 ./family: type SqlOperationsReader<TTargetDetails> = (operations: readonly unknown[], location?: SqlOperationsLocation) => readonly SqlMigrationPlanOperation<TTargetDetails>[]
-./family: type SqlPlannerConflictKind = 'controlPolicySuppressedCall' | 'foreignKeyConflict' | 'indexIncompatible' | 'missingButNonAdditive' | 'nullabilityConflict' | 'rlsPolicyIncompatible' | 'statementRefused' | 'tableNameCaseChanged' | 'typeMismatch' | 'unsupportedOperation'
+./family: type SqlPlannerConflictKind = 'controlPolicySuppressedCall' | 'foreignKeyConflict' | 'indexIncompatible' | 'missingButNonAdditive' | 'nullabilityConflict' | 'rlsPolicyIncompatible' | 'statementRefused' | 'tableNameCaseChanged' | 'typeMismatch' | 'unsupportedOperation' | (string & {})
 ./family: type SqlPlannerResult<TTargetDetails> = SqlPlannerFailureResult | SqlPlannerSuccessResult<TTargetDetails>
 ./family: type SqlQuotingRules = readonly SqlQuote[]
 ./family: type SqlSchemaDiffFn = (input: SqlSchemaDiffInput) => SqlSchemaDiffResult
@@ -4135,7 +4135,7 @@
 ./family: type StatementOperations = { readonly kind: 'planned'; readonly operationIndexes: readonly number[]; } | { readonly kind: 'plannedWithDiff'; }
 ./family: type StoredEnumValue = number | string
 ./family: type StoredRewrite = StoredKeyFill | StoredKeyRewrite | StoredValueRewrite | VariantRowRewrite
-./family: type UnnamedFieldFill = 'refuse' | 'temporaryValue'
+./family: type UnnamedFieldFill = 'refuse' | 'temporaryValue' | (string & {})
 ./operations: function createSqlOperationRegistry(): SqlOperationRegistry
 ./operations: interface SqlLoweringSpec
 ./operations: interface SqlLoweringSpec, readonly required property targetFamily: 'sql'
@@ -5140,7 +5140,7 @@
 ./relational-core/ast: type JoinOnExpr = AnyExpression | EqColJoinOn
 ./relational-core/ast: type JsonObjectEntry = { readonly key: string; readonly value: AnyJsonValueProjection; }
 ./relational-core/ast: type LimitOffsetValue = AnyExpression | number
-./relational-core/ast: type LockConflict = 'aggregate' | 'distinct' | 'distinctOn' | 'groupBy' | 'having' | 'include' | 'includeRefinement' | 'mutation' | 'subquery'
+./relational-core/ast: type LockConflict = 'aggregate' | 'distinct' | 'distinctOn' | 'groupBy' | 'having' | 'include' | 'includeRefinement' | 'mutation' | 'subquery' | (string & {})
 ./relational-core/ast: type LockOptionCapabilities = typeof lockOptionCapabilities
 ./relational-core/ast: type LockStrength = 'forKeyShare' | 'forNoKeyUpdate' | 'forShare' | 'forUpdate'
 ./relational-core/ast: type LockStrengthCapabilities = typeof lockStrengthCapabilities
@@ -6306,7 +6306,7 @@
 ./relational-core: type JoinOnExpr = AnyExpression | EqColJoinOn
 ./relational-core: type JsonObjectEntry = { readonly key: string; readonly value: AnyJsonValueProjection; }
 ./relational-core: type LimitOffsetValue = AnyExpression | number
-./relational-core: type LockConflict = 'aggregate' | 'distinct' | 'distinctOn' | 'groupBy' | 'having' | 'include' | 'includeRefinement' | 'mutation' | 'subquery'
+./relational-core: type LockConflict = 'aggregate' | 'distinct' | 'distinctOn' | 'groupBy' | 'having' | 'include' | 'includeRefinement' | 'mutation' | 'subquery' | (string & {})
 ./relational-core: type LockOptionCapabilities = typeof lockOptionCapabilities
 ./relational-core: type LockStrength = 'forKeyShare' | 'forNoKeyUpdate' | 'forShare' | 'forUpdate'
 ./relational-core: type LockStrengthCapabilities = typeof lockStrengthCapabilities
@@ -6467,7 +6467,7 @@
 ./runtime: interface ActivityHandle<K extends ClientActivityKind> extends RuntimeQueryable, ActivitySource, ActivitySourceTarget
 ./runtime: interface ActivityRoute
 ./runtime: interface ActivityRoute, readonly required property runtimeWork: boolean
-./runtime: interface ActivityRoute, readonly required property scope: 'connection' | 'runtime' | 'transaction'
+./runtime: interface ActivityRoute, readonly required property scope: ActivityContext['scope']
 ./runtime: interface ActivityRoute, readonly required property transaction: <R>(parent: ActivityParent, fn: (tx: TransactionContext) => PromiseLike<R>, options?: RuntimeTransactionOptions) => Promise<R>
 ./runtime: interface ActivityRoute, required method execute(plan: SqlExecutionPlan<unknown> | SqlQueryPlan<unknown>, options: ActivityExecuteOptions): Promise<SqlStatementStats>
 ./runtime: interface ActivityRoute, required method parent(): ActivityParent | undefined
@@ -6620,7 +6620,7 @@
 ./runtime: type SqlRuntimeAdapterInstance<TTargetId extends string = string> = RuntimeAdapterInstance<'sql', TTargetId> & Adapter<AnyQueryAst, Contract<SqlStorage>, LoweredStatement>
 ./runtime: type SqlRuntimeDriverInstance<TTargetId extends string = string> = RuntimeDriverInstance<'sql', TTargetId> & SqlDriver<unknown>
 ./runtime: type StackProvides<TContract extends Contract<SqlStorage>, Stack extends StackDescriptors> = NoneMissing<CapabilitiesNotProvided<TContract['capabilities'], Stack['target']['databaseCapabilities'], Stack['adapter']['capabilities'], Stack['driver']['capabilities'], Stack['target']['retiredCapabilities']>, '', " is required by the contract but not provided by this client's connection">
-./runtime: type TelemetryOutcome = 'runtime-error' | 'success'
+./runtime: type TelemetryOutcome = 'runtime-error' | 'success' | (string & {})
 ./runtime: type VerifyMarkerOption = 'onFirstUse' | false
 ./schema-ir/naming: const CHECK_KINDS: readonly CheckKind[]
 ./schema-ir/naming: const WIRE_NAME_PREFIX_MAX_BYTES = 54
@@ -6867,7 +6867,7 @@
 ./schema-ir/types: interface SqlUniqueIRInput, readonly optional property dependsOn?: readonly SchemaNodeRef[]
 ./schema-ir/types: interface SqlUniqueIRInput, readonly optional property name?: string
 ./schema-ir/types: interface SqlUniqueIRInput, readonly required property columns: readonly string[]
-./schema-ir/types: type RelationalSchemaNodeKind = (typeof RelationalSchemaNodeKind)[keyof typeof RelationalSchemaNodeKind]
+./schema-ir/types: type RelationalSchemaNodeKind = (string & {}) | (typeof RelationalSchemaNodeKind)[keyof typeof RelationalSchemaNodeKind]
 ./schema-ir/types: type SqlAnnotations = { readonly [namespace: string]: unknown; }
 ./schema-ir/types: type SqlColumnType = Pick<SqlColumnIR, 'catalogText' | 'many' | 'reportedType' | 'storedType' | 'storedTypeParams'>
 ./schema-ir/types: type SqlDefaultValue = DataTypeValue | readonly (DataTypeValue | null)[]
@@ -7090,7 +7090,7 @@
 ./schema-ir: interface SqlUniqueIRInput, readonly optional property dependsOn?: readonly SchemaNodeRef[]
 ./schema-ir: interface SqlUniqueIRInput, readonly optional property name?: string
 ./schema-ir: interface SqlUniqueIRInput, readonly required property columns: readonly string[]
-./schema-ir: type RelationalSchemaNodeKind = (typeof RelationalSchemaNodeKind)[keyof typeof RelationalSchemaNodeKind]
+./schema-ir: type RelationalSchemaNodeKind = (string & {}) | (typeof RelationalSchemaNodeKind)[keyof typeof RelationalSchemaNodeKind]
 ./schema-ir: type SqlAnnotations = { readonly [namespace: string]: unknown; }
 ./schema-ir: type SqlColumnType = Pick<SqlColumnIR, 'catalogText' | 'many' | 'reportedType' | 'storedType' | 'storedTypeParams'>
 ./schema-ir: type SqlDefaultValue = DataTypeValue | readonly (DataTypeValue | null)[]

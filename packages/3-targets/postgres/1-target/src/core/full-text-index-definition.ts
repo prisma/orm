@@ -44,7 +44,8 @@ export type FullTextIndexProblem =
   | { readonly kind: 'empty-group'; readonly position: number }
   | { readonly kind: 'duplicate-field'; readonly field: string }
   | { readonly kind: 'not-text'; readonly field: string; readonly codecId: string | undefined }
-  | { readonly kind: 'unique' };
+  | { readonly kind: 'unique' }
+  | { readonly kind: '%future added value' };
 
 /**
  * The rules of a full-text index, stated once: one to four weight groups, none empty, each field
@@ -84,6 +85,7 @@ function carriesFullTextTraits(traits: readonly string[] | undefined): boolean {
   return traits !== undefined && FULL_TEXT_COLUMN_TRAITS.every((trait) => traits.includes(trait));
 }
 
+/** Words a problem `fullTextIndexProblems` returned. A user hands back what it gave them, which may be of a kind a later release adds; that kind is worded by its name. */
 export function describeFullTextIndexProblem(
   subject: string,
   problem: FullTextIndexProblem,
@@ -102,6 +104,10 @@ export function describeFullTextIndexProblem(
       return `${subject} indexes text columns, but "${fieldLabel(problem.field)}" is ${problem.codecId === undefined ? 'not a stored scalar field' : `stored as \`${problem.codecId}\``}.`;
     case 'unique':
       return `${subject} is unique, but Postgres builds no unique gin index.`;
+    default: {
+      const later: '%future added value' = problem.kind;
+      return `${subject} breaks a full-text index rule this version does not name ("${later}").`;
+    }
   }
 }
 

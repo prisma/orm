@@ -67,7 +67,8 @@ export type MongoContractRefusal =
       /** The BSON types the field can hold that an `_id` cannot have. */
       readonly forbidden: readonly string[];
       readonly reason: string;
-    };
+    }
+  | { readonly kind: '%future added value' };
 
 export interface MongoContractRefusalsInput {
   readonly models: Record<string, ContractModel<MongoModelStorage>>;

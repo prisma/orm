@@ -21,7 +21,8 @@ export const RelationalSchemaNodeKind = {
 } as const;
 
 export type RelationalSchemaNodeKind =
-  (typeof RelationalSchemaNodeKind)[keyof typeof RelationalSchemaNodeKind];
+  | (typeof RelationalSchemaNodeKind)[keyof typeof RelationalSchemaNodeKind]
+  | (string & {});
 
 /**
  * The one real map from a relational `nodeKind` to the framework-neutral
@@ -47,7 +48,7 @@ const RELATIONAL_NODE_GRANULARITY: Readonly<
   [RelationalSchemaNodeKind.check]: 'auxiliary',
 };
 
-function isRelationalSchemaNodeKind(nodeKind: string): nodeKind is RelationalSchemaNodeKind {
+function isRelationalSchemaNodeKind(nodeKind: string): boolean {
   return Object.hasOwn(RELATIONAL_NODE_GRANULARITY, nodeKind);
 }
 
@@ -58,12 +59,15 @@ function isRelationalSchemaNodeKind(nodeKind: string): nodeKind is RelationalSch
  * than through this family-level map.
  */
 export function relationalNodeGranularity(nodeKind: string): DiffSubjectGranularity {
-  if (!isRelationalSchemaNodeKind(nodeKind)) {
+  const granularity = isRelationalSchemaNodeKind(nodeKind)
+    ? RELATIONAL_NODE_GRANULARITY[nodeKind]
+    : undefined;
+  if (granularity === undefined) {
     throw new InternalError(
       `relationalNodeGranularity: unrecognized relational node kind "${nodeKind}"`,
     );
   }
-  return RELATIONAL_NODE_GRANULARITY[nodeKind];
+  return granularity;
 }
 
 /**

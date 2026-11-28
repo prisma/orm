@@ -996,7 +996,7 @@
 ./adapter/sql-renderer: interface ProposedRow
 ./adapter/sql-renderer: interface ProposedRow, readonly required property alias: string | undefined
 ./adapter/sql-renderer: interface ProposedRow, readonly required property column: (quotedColumn: string) => string
-./adapter/sql-renderer: type ReturningStatement = 'delete' | 'insert' | 'update'
+./adapter/sql-renderer: type ReturningStatement = 'delete' | 'insert' | 'update' | (string & {})
 ./adapter: class MysqlSqlRenderer
 ./adapter: class MysqlSqlRenderer, constructor(codecs: MysqlCodecDescriptorRegistry, target: Pick<MysqlRuntimeTargetMeta<string>, 'displayName' | 'targetId'>)
 ./adapter: class MysqlSqlRenderer, protected readonly required property target: Pick<MysqlRuntimeTargetMeta<string>, 'displayName' | 'targetId'>
@@ -1046,7 +1046,7 @@
 ./adapter: type MysqlCatalogReader = (driver: SqlControlDriverInstance<string>) => Promise<MysqlCatalogRows>
 ./adapter: type MysqlRuntimeAdapterDescriptor<TargetId extends string = 'mysql'> = SqlRuntimeAdapterDescriptor<TargetId, MysqlRuntimeAdapterInstance<TargetId>>
 ./adapter: type MysqlRuntimeAdapterInstance<TargetId extends string = 'mysql'> = RuntimeAdapterInstance<'sql', TargetId> & ReturnType<typeof createMysqlAdapter<TargetId>>
-./adapter: type ReturningStatement = 'delete' | 'insert' | 'update'
+./adapter: type ReturningStatement = 'delete' | 'insert' | 'update' | (string & {})
 ./driver/control: class MysqlControlDriver extends MysqlControlDriverFor<'mysql'>
 ./driver/control: class MysqlControlDriver, constructor(connection: Connection)
 ./driver/control: export default = const mysqlDriverDescriptor: ControlDriverDescriptor<'sql', 'mysql', MysqlControlDriver>

@@ -71,7 +71,7 @@ export interface ResolveIdentityValueInput {
  *                   `codecId` differs. Codec-id changes are a v1 non-goal:
  *                   when only `codecId` differs, no `'altered'` event fires.
  */
-export type FieldEvent = 'added' | 'dropped' | 'altered';
+export type FieldEvent = 'added' | 'dropped' | 'altered' | (string & {});
 
 /**
  * Context passed to {@link CodecControlHooks.onFieldEvent}.
@@ -270,7 +270,8 @@ export type SqlPlannerConflictKind =
   | 'unsupportedOperation'
   | 'controlPolicySuppressedCall'
   | 'tableNameCaseChanged'
-  | 'statementRefused';
+  | 'statementRefused'
+  | (string & {});
 
 export interface SqlPlannerConflictLocation {
   readonly namespaceId?: string;
@@ -431,7 +432,8 @@ export type SqlMigrationRunnerErrorCode =
   | 'MIGRATION.POSTCHECK_FAILED'
   | 'MIGRATION.SCHEMA_VERIFY_FAILED'
   | 'MIGRATION.FOREIGN_KEY_VIOLATION'
-  | 'MIGRATION.EXECUTION_FAILED';
+  | 'MIGRATION.EXECUTION_FAILED'
+  | (`MIGRATION.${string}` & {});
 
 export interface SqlMigrationRunnerFailure extends MigrationRunnerFailure {
   readonly code: SqlMigrationRunnerErrorCode;

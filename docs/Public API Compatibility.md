@@ -7,6 +7,7 @@ CI checks every pull request for changes that would break code written against t
 | What you see fail | Job | What it checks |
 | --- | --- | --- |
 | [`api.txt` is out of date](#apitxt-is-out-of-date) | `Lint` (`pnpm api:check`) | Each published package's committed `api.txt` matches the build |
+| [A set of values is neither open nor declared](#sets-of-values) | `Lint` (`pnpm api:sets`) | Every exported set of values is open, or declared in `packages/9-public/value-sets.json` as closed, an input, a type parameter or pending |
 | [The description does not name a change](#the-description-does-not-name-a-change) | `API changes named` | A pull request that changes an `api.txt` names each changed export in its description, with a reason |
 | [A break against the last release](#a-break-against-the-last-release) | `API compatibility` (`pnpm api:compat`) | Code written against the last release still compiles against the build |
 | [The last release's example apps fail](#the-last-releases-example-apps-fail) | `API compatibility` (`pnpm api:compat:examples`) | The example apps, as they were at the last release, compile against the build |
@@ -160,6 +161,37 @@ export type Ea_Options<T> = Options<T>;                // an alias that passes i
 Keep the `typeof` annotation on a constant. Without it, TypeScript writes out the value's type for an object or a primitive, and the check can no longer see that the two names are one thing. An `interface Ea_Options extends Options {}` is not recognised either.
 
 A level on a member, such as a method named `preview_run` on a class, is not read: the member is checked like its class. Its break is permitted, so record it as `allowed`.
+
+## Sets of values
+
+An exported type that lists the values of something is a set of values: a union of error codes, a union of objects told apart by a literal `kind`, or a property whose type is written as such a union. Each set is one of four kinds:
+
+- **Open:** we may add a value in any 8.x release. Its type carries a catch-all member, so a user's `never` exhaustiveness check does not compile and a new value falls to their default branch.
+- **Closed:** it changes only in a major version.
+- **Input:** users only pass its values to us, such as an option or a codec's `jsonType`. Adding a value never breaks them, and a catch-all member would remove their spelling check, so it stays a plain union.
+- **Type parameter:** it keys other types, such as the built-in kinds that key a contract view's entries. It stays a plain union.
+
+Which way the values flow decides the kind. A set users receive from us and may switch over is open or closed: error and refusal codes are open, and so is any set an extension can add to.
+
+The catch-all member of an open set:
+
+- A union of strings gets `(string & {})`, which keeps the named values in editor completion.
+- A union of codes under a prefix gets a template with an unbounded placeholder, such as `` (`MIGRATION.${string}` & {}) ``.
+- A union of numbers gets `(number & {})`.
+- A union of objects gets a member whose `kind` is `'%future added value'`, which keeps narrowing on `kind` working.
+
+Limits of the object sentinel:
+
+- It carries only the members every kind has, such as `key`, so code that reads them still compiles.
+- It suits a union users only receive. On a union users also pass in, it lets them pass a value that cannot exist.
+- It cannot carry the methods of a union of classes, which is one reason the syntax-tree unions are closed.
+- Where our own code switches over an open set of objects, its default branch assigns the kind to the sentinel's type (`const later: '%future added value' = refusal.kind`), so a kind we add without a case still fails to compile. For an open set of strings or numbers no such check is possible.
+
+`pnpm api:sets` reads the `api.txt` lists and fails on a set that has no catch-all member and is not in `packages/9-public/value-sets.json`. Each entry names its package and its type, or `Type.property` for a property, with a reason and one of four statuses: `closed`, `input`, `type-parameter` or `pending`.
+
+- `pending` is allowed only for a set in the framework domain (`packages/1-framework`) while we agree whether this work may change it. It carries the status we recommend in `recommended`.
+- `pending` fails once the root `package.json` version is not a prerelease, so release 8.0, which is published as `8.0.1`, cannot be cut with one.
+- The check also fails on an entry that names no exported set or names an open one, and on two entries for one set.
 
 ## Recording a break you mean
 

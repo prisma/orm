@@ -1,11 +1,13 @@
 import { enumMemberError } from '@internal/contract-authoring';
 import type { AuthoringWarning } from '@internal/framework-components/authoring';
 import type { MongoContractRefusal } from '@internal/mongo-contract';
+import { InternalError } from '@internal/utils/internal-error';
 import { type StructuredError, structuredError } from '@internal/utils/structured-error';
 import type {
   BuildRefusal,
   BuildWarning,
   FieldKey,
+  IndexShapeRule,
   RestatedFieldDifference,
 } from './build-refusals';
 import { contractError } from './contract-errors';
@@ -25,10 +27,16 @@ function codecRefusalError(
       meta: { ...meta, codecId },
     });
   }
-  return contractError('CONTRACT.PACK_CONTRIBUTION_INVALID', `${subject} ${refusal.reason}`, {
-    fix: 'Use a codec whose data type is a MongoDB data type, declared with mongoDataType.',
-    meta: { ...meta, codecId, dataType: refusal.dataType, reason: 'data-type-not-mongo' },
-  });
+  if (refusal.kind === 'notMongoDataType') {
+    return contractError('CONTRACT.PACK_CONTRIBUTION_INVALID', `${subject} ${refusal.reason}`, {
+      fix: 'Use a codec whose data type is a MongoDB data type, declared with mongoDataType.',
+      meta: { ...meta, codecId, dataType: refusal.dataType, reason: 'data-type-not-mongo' },
+    });
+  }
+  const later: '%future added value' = refusal.kind;
+  throw new InternalError(
+    `The contract builder words every codec refusal of its own release, not "${later}".`,
+  );
 }
 
 function validatorRefusalError(refusal: MongoContractRefusal): StructuredError {
@@ -104,6 +112,12 @@ function validatorRefusalError(refusal: MongoContractRefusal): StructuredError {
           },
         },
       );
+    default: {
+      const later: '%future added value' = refusal.kind;
+      throw new InternalError(
+        `The contract builder words every validator refusal of its own release, not "${later}".`,
+      );
+    }
   }
 }
 
@@ -124,7 +138,7 @@ function ownerLabelOf(key: FieldKey): string {
   return `${key.owner.kind === 'model' ? 'Model' : 'Value object'} "${key.owner.name}" field "${key.field}"`;
 }
 
-const INDEX_SHAPE_MESSAGES = {
+const INDEX_SHAPE_MESSAGES: Readonly<Record<IndexShapeRule, string>> = {
   'unique-wildcard': 'is unique and has a wildcard key; a unique index cannot use a wildcard.',
   'wildcard-with-type':
     'combines a wildcard key with a hashed, 2d or 2dsphere key, which MongoDB does not allow.',
@@ -135,7 +149,7 @@ const INDEX_SHAPE_MESSAGES = {
   'collation-without-locale': 'sets a collation without a locale; a collation needs a locale.',
   'second-text-index':
     'is a second text index in its collection; MongoDB allows one text index per collection.',
-} as const;
+};
 
 function discriminatorFieldError(
   refusal: Extract<BuildRefusal, { kind: 'discriminatorField' }>,
@@ -380,7 +394,7 @@ export function refusalError(refusal: BuildRefusal): StructuredError {
     case 'indexShape':
       return contractError(
         'CONTRACT.INDEX_INVALID',
-        `Model "${refusal.key.model}" index ${refusal.signature} ${INDEX_SHAPE_MESSAGES[refusal.rule]}`,
+        `Model "${refusal.key.model}" index ${refusal.signature} ${(Object.hasOwn(INDEX_SHAPE_MESSAGES, refusal.rule) ? INDEX_SHAPE_MESSAGES[refusal.rule] : undefined) ?? `breaks the index rule "${refusal.rule}".`}`,
         {
           meta: {
             modelName: refusal.key.model,
@@ -649,6 +663,12 @@ export function refusalError(refusal: BuildRefusal): StructuredError {
       );
     case 'validator':
       return validatorRefusalError(refusal.refusal);
+    default: {
+      const later: '%future added value' = refusal.kind;
+      throw new InternalError(
+        `The contract builder words every refusal of its own release, not "${later}".`,
+      );
+    }
   }
 }
 
@@ -667,5 +687,7 @@ function differenceWording(difference: RestatedFieldDifference): string {
       return 'nullability';
     case 'many':
       return 'list shape';
+    default:
+      return difference;
   }
 }

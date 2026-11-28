@@ -1,12 +1,66 @@
 [
   {
+    "path": "./contract",
+    "export": "FieldBsonTypeRefusal",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "9d278abbf4089a47",
+    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
+  },
+  {
+    "path": "./contract",
+    "export": "MongoContractRefusal",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "e5b733af2d2cea39",
+    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
+  },
+  {
+    "path": "./contract",
+    "export": "SameKindOfDocument",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "5fbbc7c224d3b0da",
+    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
+  },
+  {
+    "path": "./contract",
+    "export": "fieldBsonTypeRefusalOf",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "8c2fb8f46898d817",
+    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
+  },
+  {
+    "path": "./contract",
+    "export": "mongoContractRefusalsOf",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "0f79bf7902f73397",
+    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
+  },
+  {
+    "path": "./contract",
+    "export": "sameKindOfDocumentIn",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "0b6d028bae5771c7",
+    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
+  },
+  {
     "path": "./contract-ts",
     "export": "BuildFailure",
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "fe4daf96da7cad36",
-    "reason": "A MongoDB contract now refuses a field, relation or PSL enum named __proto__ (prisma/orm#31185)."
+    "fingerprint": "67d3b58e222e07e5",
+    "reason": "A MongoDB contract now refuses a field, relation or PSL enum named __proto__ (prisma/orm#31185). The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
   },
   {
     "path": "./contract-ts",
@@ -14,8 +68,26 @@
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "b2725ef4b317d1a8",
-    "reason": "A MongoDB contract now refuses a field, relation or PSL enum named __proto__ (prisma/orm#31185)."
+    "fingerprint": "1d4e53c256e4231a",
+    "reason": "A MongoDB contract now refuses a field, relation or PSL enum named __proto__ (prisma/orm#31185). The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md. A validator refusal's key is now undefined when the refusal is of a kind the builder cannot place."
+  },
+  {
+    "path": "./contract-ts",
+    "export": "IndexShapeRule",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "82ea9dec9c2bc392",
+    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
+  },
+  {
+    "path": "./contract-ts",
+    "export": "RestatedFieldDifference",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "109d97b81284b366",
+    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
   },
   {
     "path": "./contract-ts",
@@ -23,8 +95,8 @@
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "3d4c70a5f41ba61c",
-    "reason": "A MongoDB contract now refuses a field, relation or PSL enum named __proto__ (prisma/orm#31185)."
+    "fingerprint": "a3a930fe32adc62a",
+    "reason": "A MongoDB contract now refuses a field, relation or PSL enum named __proto__ (prisma/orm#31185). The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
   },
   {
     "path": "./contract-ts/contract-builder",
@@ -32,8 +104,8 @@
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "fe4daf96da7cad36",
-    "reason": "A MongoDB contract now refuses a field, relation or PSL enum named __proto__ (prisma/orm#31185)."
+    "fingerprint": "67d3b58e222e07e5",
+    "reason": "A MongoDB contract now refuses a field, relation or PSL enum named __proto__ (prisma/orm#31185). The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
   },
   {
     "path": "./contract-ts/contract-builder",
@@ -41,8 +113,26 @@
     "test": "type",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "b2725ef4b317d1a8",
-    "reason": "A MongoDB contract now refuses a field, relation or PSL enum named __proto__ (prisma/orm#31185)."
+    "fingerprint": "1d4e53c256e4231a",
+    "reason": "A MongoDB contract now refuses a field, relation or PSL enum named __proto__ (prisma/orm#31185). The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md. A validator refusal's key is now undefined when the refusal is of a kind the builder cannot place."
+  },
+  {
+    "path": "./contract-ts/contract-builder",
+    "export": "IndexShapeRule",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "82ea9dec9c2bc392",
+    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
+  },
+  {
+    "path": "./contract-ts/contract-builder",
+    "export": "RestatedFieldDifference",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "109d97b81284b366",
+    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
   },
   {
     "path": "./contract-ts/contract-builder",
@@ -50,8 +140,17 @@
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
-    "fingerprint": "3d4c70a5f41ba61c",
-    "reason": "A MongoDB contract now refuses a field, relation or PSL enum named __proto__ (prisma/orm#31185)."
+    "fingerprint": "a3a930fe32adc62a",
+    "reason": "A MongoDB contract now refuses a field, relation or PSL enum named __proto__ (prisma/orm#31185). The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
+  },
+  {
+    "path": "./family",
+    "export": "MarkerSwapFailure",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "75eb202496eea361",
+    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
   },
   {
     "path": "./family",
@@ -145,6 +244,15 @@
   },
   {
     "path": "./family",
+    "export": "markerSwapFailure",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "1d8141cf8cdd4ea2",
+    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
+  },
+  {
+    "path": "./family",
     "export": "mongoFamilyDescriptor",
     "test": "value",
     "kind": "break",
@@ -160,6 +268,15 @@
     "lastRelease": "8.0.0-rc.25",
     "fingerprint": "dca2823440f60bb2",
     "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./family/control",
+    "export": "MarkerSwapFailure",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "75eb202496eea361",
+    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
   },
   {
     "path": "./family/control",
@@ -196,6 +313,15 @@
     "lastRelease": "8.0.0-rc.25",
     "fingerprint": "1c9444bb6aaa2779",
     "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
+  },
+  {
+    "path": "./family/control",
+    "export": "markerSwapFailure",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "1d8141cf8cdd4ea2",
+    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
   },
   {
     "path": "./family/control",

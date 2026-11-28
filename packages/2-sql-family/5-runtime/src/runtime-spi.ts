@@ -40,7 +40,7 @@ export interface RuntimeFamilyAdapter<TContract = unknown> {
  */
 export type VerifyMarkerOption = 'onFirstUse' | false;
 
-export type TelemetryOutcome = 'success' | 'runtime-error';
+export type TelemetryOutcome = 'success' | 'runtime-error' | (string & {});
 
 export interface RuntimeTelemetryEvent {
   readonly lane: string;

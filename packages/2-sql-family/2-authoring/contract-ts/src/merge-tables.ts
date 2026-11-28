@@ -1,4 +1,5 @@
 import type { ForeignKeyAuthoringInput } from '@internal/sql-contract/foreign-key-materialization';
+import { InternalError } from '@internal/utils/internal-error';
 import type { TableProperties } from './contract-definition';
 import { contractError } from './contract-errors';
 import type { ColumnSite } from './declaration-sites';
@@ -309,6 +310,12 @@ function refusalError(
         columns: first.columns,
       },
     });
+  }
+  if (first.kind !== 'unique' && first.kind !== 'index') {
+    const later: '%future added value' = first.kind;
+    throw new InternalError(
+      `The table merge words every shared-table refusal of its own release, not "${later}".`,
+    );
   }
   const unscoped = refusals
     .filter(

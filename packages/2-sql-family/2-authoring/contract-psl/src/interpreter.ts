@@ -2366,6 +2366,12 @@ function stiRefusalDiagnostic(
         : `Models "${variant}" and "${refusal.other}" share the table of their base model "${base}" (single-table inheritance) and declare different foreign keys on (${columns}). Every row would have to satisfy both; give each variant its own column.`;
     return { code: PSL_FOREIGN_KEY_CONFLICT_ON_STI_VARIANT, message, ...at };
   }
+  if (refusal.kind !== 'unique' && refusal.kind !== 'index') {
+    const later: '%future added value' = refusal.kind;
+    throw new InternalError(
+      `The PSL interpreter words every shared-table refusal of its own release, not "${later}".`,
+    );
+  }
   if (discriminatorColumn === undefined || baseDecl.value === undefined) return undefined;
   const label = site?.label ?? (refusal.kind === 'unique' ? '@@unique' : '@@index');
   const shared = `Model "${variant}" shares the table of its base model "${base}" (single-table inheritance)`;
@@ -3063,10 +3069,12 @@ export function interpretPslDocumentToSqlContract(
         ? refusal.foreignKey
         : refusal.kind === 'unique'
           ? refusal.unique
-          : refusal.index;
+          : refusal.kind === 'index'
+            ? refusal.index
+            : undefined;
     const diagnostic = stiRefusalDiagnostic(stiRefusal, {
       baseDecl,
-      site: constraintSites.get(node),
+      site: node === undefined ? undefined : constraintSites.get(node),
       discriminatorColumn: discriminatorColumnOf(
         baseDecl,
         discriminatorDeclarations,

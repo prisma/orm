@@ -6,7 +6,8 @@ Spec: [spec.md](spec.md). Stream plan: `projects/ga-compatibility/plan.md` on br
 
 | Slice | State | Pull request |
 | --- | --- | --- |
-| 1. Open and closed sets | Not started | |
+| 1. Open and closed sets, outside the framework domain | In review | prisma/orm#31246 |
+| 1b. Open and closed sets in the framework domain | Waits for agreement to change that domain; the framework sets are listed `pending` with a recommended status | |
 | 2. Error codes do not disappear | Merged | prisma/orm#31245 |
 | 3. The name rule | Proposal with Will | |
 | 4. Interfaces users implement | Not started | |
@@ -21,6 +22,7 @@ Spec: [spec.md](spec.md). Stream plan: `projects/ga-compatibility/plan.md` on br
 - List closed sets, with reasons, in a file the check reads. Expected closed sets: maturity levels, `CodecTrait` (ADR 214 relies on it staying closed), the SQL aggregate alphabet `AggregateFn` (ADR 020).
 - Add a check, run in CI beside the API check, that fails on an exported set that is neither open nor listed closed. Its test plants an unmarked set and sees it fail.
 - Record the type changes in each package's `api-breaks.json`.
+- Before the cut of 8.0, `packages/9-public/value-sets.json` has no entry with status `pending`. This is item 22 of `planning/rollout-8.0.md` on branch `planning/prisma-8-ga`, owned by this project.
 
 ### 2. Error codes do not disappear
 

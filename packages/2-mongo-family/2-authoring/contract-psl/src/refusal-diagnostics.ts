@@ -9,6 +9,7 @@ import type {
   BuildRefusal,
   FieldKey,
   IndexNode,
+  IndexShapeRule,
   RestatedFieldDifference,
 } from '@internal/mongo-contract-ts/contract-builder';
 import type { DiagnosticSource, FieldSymbol, PslDiagnostic, PslSpan } from '@internal/psl-parser';
@@ -153,7 +154,9 @@ function relationNullabilityDiagnostic(
   );
 }
 
-const INDEX_SHAPE_MESSAGES = {
+const INDEX_SHAPE_MESSAGES: Readonly<
+  Record<Exclude<IndexShapeRule, 'wildcard-with-type'>, (model: string) => string>
+> = {
   'unique-wildcard': () => 'Unique indexes cannot use wildcard() fields',
   'hashed-several-fields': () => 'Hashed indexes must have exactly one field',
   'ttl-with-wildcard': () => 'expireAfterSeconds cannot be combined with wildcard() fields',
@@ -162,7 +165,7 @@ const INDEX_SHAPE_MESSAGES = {
   'collation-without-locale': () => 'collationLocale is required when using collation options',
   'second-text-index': (model: string) =>
     `Only one @@textIndex is allowed per collection (model "${model}")`,
-} as const;
+};
 
 function validatorDiagnostic(
   refusal: MongoContractRefusal,
@@ -208,6 +211,12 @@ function validatorDiagnostic(
     }
     case 'embeddedModelHasVariants':
       throw new InternalError('A PSL schema writes no embed relations.');
+    default: {
+      const later: '%future added value' = refusal.kind;
+      throw new InternalError(
+        `The PSL interpreter words every validator refusal of its own release, not "${later}".`,
+      );
+    }
   }
 }
 
@@ -371,7 +380,10 @@ export function refusalDiagnostic(
             'PSL_INVALID_INDEX',
             refusal.rule === 'wildcard-with-type'
               ? `wildcard() fields cannot be combined with type: ${wildcardTypeOf(site.index)}`
-              : INDEX_SHAPE_MESSAGES[refusal.rule](model),
+              : ((Object.hasOwn(INDEX_SHAPE_MESSAGES, refusal.rule)
+                  ? INDEX_SHAPE_MESSAGES[refusal.rule]?.(model)
+                  : undefined) ??
+                  `Index on model "${model}" breaks the index rule "${refusal.rule}"`),
           );
         case 'indexScopeConflict':
           return at(
@@ -543,6 +555,12 @@ export function refusalDiagnostic(
     case 'baseUnknown':
     case 'variantWithoutValue':
       throw new InternalError(`A PSL definition cannot be refused with "${refusal.kind}".`);
+    default: {
+      const later: '%future added value' = refusal.kind;
+      throw new InternalError(
+        `The PSL interpreter words every refusal of its own release, not "${later}".`,
+      );
+    }
   }
 }
 
@@ -569,5 +587,7 @@ function differenceWording(difference: RestatedFieldDifference): string {
       return 'optionality';
     case 'many':
       return 'list shape';
+    default:
+      return difference;
   }
 }

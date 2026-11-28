@@ -50,7 +50,7 @@ import { assertPlaceholdersMatchParams } from './placeholders';
 export type MysqlContract = Contract<SqlStorage>;
 
 /** A statement that can carry `RETURNING`. */
-export type ReturningStatement = 'insert' | 'update' | 'delete';
+export type ReturningStatement = 'insert' | 'update' | 'delete' | (string & {});
 
 const ARTICLED_STATEMENT: Readonly<Record<ReturningStatement, string>> = {
   insert: 'an insert',
@@ -209,7 +209,7 @@ export class MysqlSqlRenderer {
 
   /** Why `RETURNING` on `statement` is refused: MySQL has none, so the SQL family's ORM reads written rows back with a select when the contract does not report `returning`. */
   protected returningRefusal(statement: ReturningStatement): string {
-    return `${this.target.displayName} cannot return the rows ${ARTICLED_STATEMENT[statement]} writes; it has no RETURNING`;
+    return `${this.target.displayName} cannot return the rows ${(Object.hasOwn(ARTICLED_STATEMENT, statement) ? ARTICLED_STATEMENT[statement] : undefined) ?? `a ${statement}`} writes; it has no RETURNING`;
   }
 
   /** Why an ordered JSON array is refused, or `undefined` where the renderer builds it, as MySQL's does. */

@@ -82,6 +82,15 @@
   },
   {
     "path": "./target",
+    "export": "FullTextIndexProblem",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "694d0f7ae59a2e1e",
+    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
+  },
+  {
+    "path": "./target",
     "export": "Migration",
     "test": "constructor",
     "kind": "break",
@@ -145,6 +154,15 @@
   },
   {
     "path": "./target",
+    "export": "PostgresSchemaNodeKind",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "21637f448e66dc0f",
+    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
+  },
+  {
+    "path": "./target",
     "export": "TypeScriptRenderablePostgresMigration",
     "test": "type",
     "kind": "break",
@@ -199,12 +217,30 @@
   },
   {
     "path": "./target",
+    "export": "fullTextIndexProblems",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "4530c1b622b3500b",
+    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
+  },
+  {
+    "path": "./target",
     "export": "planIssues",
     "test": "value",
     "kind": "break",
     "lastRelease": "8.0.0-rc.25",
     "fingerprint": "253b218ba133cbfb",
     "reason": "The PostgreSQL schema tree holds the server's version as the number `serverVersionNumber`, read from `server_version_num`, in place of the text `pgVersion` (prisma/orm#31218)."
+  },
+  {
+    "path": "./target",
+    "export": "resolveIdentityValue",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "d21c7b510b365c09",
+    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
   },
   {
     "path": "./target/control",
@@ -225,6 +261,24 @@
     "reason": "The PostgreSQL schema tree holds the server's version as the number `serverVersionNumber`, read from `server_version_num`, in place of the text `pgVersion` (prisma/orm#31218)."
   },
   {
+    "path": "./target/full-text-index-authoring",
+    "export": "FullTextIndexProblem",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "694d0f7ae59a2e1e",
+    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
+  },
+  {
+    "path": "./target/full-text-index-authoring",
+    "export": "fullTextIndexProblems",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "4530c1b622b3500b",
+    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
+  },
+  {
     "path": "./target/issue-planner",
     "export": "coalesceSubtreeIssues",
     "test": "value",
@@ -288,6 +342,15 @@
     "reason": "A schema difference's cause can now be `database-capabilities-not-provided`, for a database that lacks a capability the contract requires (prisma/orm#31218)."
   },
   {
+    "path": "./target/planner-identity-values",
+    "export": "resolveIdentityValue",
+    "test": "value",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "d21c7b510b365c09",
+    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
+  },
+  {
     "path": "./target/planner-produced-postgres-migration",
     "export": "TypeScriptRenderablePostgresMigration",
     "test": "type",
@@ -340,5 +403,14 @@
     "lastRelease": "8.0.0-rc.25",
     "fingerprint": "5dbf14c81618daa1",
     "reason": "The PostgreSQL schema tree holds the server's version as the number `serverVersionNumber`, read from `server_version_num`, in place of the text `pgVersion` (prisma/orm#31218)."
+  },
+  {
+    "path": "./target/types",
+    "export": "PostgresSchemaNodeKind",
+    "test": "type",
+    "kind": "break",
+    "lastRelease": "8.0.0-rc.25",
+    "fingerprint": "21637f448e66dc0f",
+    "reason": "The set now carries a catch-all member, so a later 8.x release may add a value and code that switches over it needs a default branch; see \"Sets of values\" in docs/Public API Compatibility.md."
   }
 ]
