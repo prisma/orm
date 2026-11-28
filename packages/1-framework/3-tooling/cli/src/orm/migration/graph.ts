@@ -28,6 +28,7 @@ import { dataLine } from '../data-lines';
 import { defineOrmCommand } from '../define-command';
 import { normalizeError } from '../normalize-error';
 import { displayPath, migrationsDirFor } from './paths';
+import { contractRefusalDiagnostics, unreadableFileDiagnostics } from './unreadable-files';
 
 /**
  * The `--dot` document. DOT is not a `--format` value — the engine owns that
@@ -120,7 +121,10 @@ export const migrationGraphCommand = defineOrmCommand({
     }
 
     const migrationsDir = migrationsDirFor(ctx.config);
-    const loaded = await buildReadAggregate(ctx.config, { migrationsDir });
+    const loaded = await buildReadAggregate(ctx.config, {
+      migrationsDir,
+      whenFileUnreadable: 'report',
+    });
     if (!loaded.ok) {
       return notOk(normalizeError(loaded.failure));
     }
@@ -170,7 +174,13 @@ export const migrationGraphCommand = defineOrmCommand({
 
     return ok(
       ctx.present(
-        { data: document },
+        {
+          data: document,
+          diagnostics: [
+            ...contractRefusalDiagnostics(loaded.value.contractRefusal),
+            ...unreadableFileDiagnostics(aggregate, migrationsDir, ctx.cwd),
+          ],
+        },
         graphPresentations({
           document,
           tree,

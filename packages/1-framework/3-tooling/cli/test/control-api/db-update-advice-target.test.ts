@@ -57,7 +57,7 @@ function contractAt(storageHash: string, geoPoint: readonly string[], status: re
   });
   return {
     ...base,
-    schemaVersion: '1',
+    formatVersion: 1,
     target: 'postgres',
     targetFamily: 'sql',
     storage: { ...base.storage, storageHash },

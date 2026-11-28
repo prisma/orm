@@ -1,10 +1,13 @@
 import { readFile } from 'node:fs/promises';
 import type { PrismaConfig } from '@internal/config/config-types';
-import { castAs } from '@internal/utils/casts';
+import { convertContractDocument } from '@internal/contract/internal/format-version';
 import { ifDefined } from '@internal/utils/defined';
 import type { CliStructuredError, Result } from '@prisma/cli-engine/protocol';
 import { notOk, ok } from '@prisma/cli-engine/protocol';
-import { errorFromCaught } from '../../control-api/operations/caught-errors';
+import {
+  errorFromCaught,
+  readFailureReportedAsItself,
+} from '../../control-api/operations/caught-errors';
 import type { ControlClient, CreateControlClient } from '../../control-api/types';
 import {
   errorConfigValidation,
@@ -34,7 +37,7 @@ export interface PreparedMigrationRun {
   readonly refsDir: string;
 }
 
-/** Reads the emitted contract as the raw document the control API validates. */
+/** Reads the emitted contract as the raw document the control API validates, after reading its format version. */
 export async function readContractDocument(
   contractPath: string,
 ): Promise<Result<Record<string, unknown>, CliStructuredError>> {
@@ -55,12 +58,15 @@ export async function readContractDocument(
     );
   }
   try {
-    return ok(castAs<Record<string, unknown>>(JSON.parse(content)));
+    const document = convertContractDocument(JSON.parse(content), { path: contractPath });
+    return ok({ ...document });
   } catch (error) {
+    const asItself = readFailureReportedAsItself(error, contractPath);
+    if (asItself !== undefined) return notOk(normalizeError(asItself));
     return notOk(
       normalizeError(
         errorContractValidationFailed(
-          `Contract JSON is invalid: ${error instanceof Error ? error.message : String(error)}`,
+          `Contract at ${contractPath} failed to deserialize: ${error instanceof Error ? error.message : String(error)}`,
           { where: { path: contractPath } },
         ),
       ),

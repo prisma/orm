@@ -1,3 +1,4 @@
+import { isContractBuiltInMemory } from '@internal/contract/internal/format-version';
 import type { Contract } from '@internal/contract/types';
 import { validateContractOnce } from '@internal/contract/validate-once';
 import type { SqlStorage } from '@internal/sql-contract/types';
@@ -33,6 +34,8 @@ export function validateSqliteContract<TContract extends Contract<SqlStorage>>(
   contract: TContract,
 ): TContract {
   return validateContractOnce(contract, validator, () =>
-    serializer.deserializeContract<TContract>(serializer.serializeContract(contract)),
+    serializer.deserializeContract<TContract>(
+      isContractBuiltInMemory(contract) ? serializer.serializeContract(contract) : contract,
+    ),
   );
 }

@@ -48,6 +48,7 @@ import {
   contractSnapshotTypesSpecifier,
 } from '@internal/framework-components/control';
 import { snapshotsImportPathFrom } from '@internal/migration-tools/contract-snapshot-store';
+import { parseRefDocument, printRefDocument } from '@internal/migration-tools/refs';
 import { refreshContractSnapshot } from './refresh-contract-snapshot.mjs';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -186,14 +187,17 @@ function reemitMigrationArtifacts(extDir, migrationTsPath) {
 }
 
 /**
- * Rewrite `migrations/refs/head.json`, replacing `hash` with `newHash`
- * and preserving the existing `invariants` array verbatim. The file is
+ * Rewrite `migrations/refs/head.json` through the ref file format, replacing
+ * `hash` with `newHash` and preserving the existing `invariants` array verbatim. The file is
  * then passed through `biome format` (via stdin) so the output matches
  * the committed canonical format: short arrays inline, trailing newline.
  */
 function repinHeadRef(headRefPath, newHash) {
-  const existing = readJson(headRefPath);
-  const updated = { hash: newHash, invariants: existing.invariants };
+  const existing = parseRefDocument(readJson(headRefPath), headRefPath);
+  if (!existing.ok) {
+    throw new Error(`regen-extension-migrations: ${headRefPath} is invalid: ${existing.failure}`);
+  }
+  const updated = printRefDocument({ hash: newHash, invariants: existing.value.invariants });
   writeFileSync(headRefPath, JSON.stringify(updated, null, 2), 'utf8');
   biomeFormatInPlace(headRefPath);
 }

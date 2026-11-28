@@ -1107,10 +1107,13 @@
 ./family/ir: abstract class MongoSchemaVerifierBase<TContract extends { readonly storage: MongoStorage; readonly defaultControlPolicy?: ControlPolicy; }, TSchema> implements SchemaVerifier<TContract, TSchema>
 ./family/ir: class MongoContractSerializer extends MongoContractSerializerBase<MongoContract>
 ./family/ir: class MongoContractSerializer, protected required method constructTargetContract(validated: MongoContract): MongoContract
+./family/ir: class MongoContractSerializer, protected required method printContractV1(contract: MongoContract): JsonObject
 ./family/ir: class MongoContractSerializerBase, abstract protected required method constructTargetContract(validated: MongoContract): TContract
 ./family/ir: class MongoContractSerializerBase, constructor(validatorFragments?: ReadonlyMap<string, Type<unknown>>, packEntityKinds?: readonly AnyEntityKindDescriptor[])
 ./family/ir: class MongoContractSerializerBase, protected required method hydrateMongoContract(contract: MongoContract): MongoContract
+./family/ir: class MongoContractSerializerBase, protected required method parseContractV1(document: unknown): TContract
 ./family/ir: class MongoContractSerializerBase, protected required method parseMongoContractStructure(json: unknown): MongoContract
+./family/ir: class MongoContractSerializerBase, protected required method printContractV1(contract: TContract): JsonObject
 ./family/ir: class MongoContractSerializerBase, required method deserializeContract<T extends TContract = TContract>(json: unknown): T
 ./family/ir: class MongoContractSerializerBase, required method serializeContract(contract: TContract): JsonObject
 ./family/ir: class MongoContractSerializerBase, required property shouldPreserveEmpty: PreserveEmptyPredicate
@@ -1148,10 +1151,13 @@
 ./family: class Migration, readonly required property targetId: "mongo"
 ./family: class MongoContractSerializer extends MongoContractSerializerBase<MongoContract>
 ./family: class MongoContractSerializer, protected required method constructTargetContract(validated: MongoContract): MongoContract
+./family: class MongoContractSerializer, protected required method printContractV1(contract: MongoContract): JsonObject
 ./family: class MongoContractSerializerBase, abstract protected required method constructTargetContract(validated: MongoContract): TContract
 ./family: class MongoContractSerializerBase, constructor(validatorFragments?: ReadonlyMap<string, Type<unknown>>, packEntityKinds?: readonly AnyEntityKindDescriptor[])
 ./family: class MongoContractSerializerBase, protected required method hydrateMongoContract(contract: MongoContract): MongoContract
+./family: class MongoContractSerializerBase, protected required method parseContractV1(document: unknown): TContract
 ./family: class MongoContractSerializerBase, protected required method parseMongoContractStructure(json: unknown): MongoContract
+./family: class MongoContractSerializerBase, protected required method printContractV1(contract: TContract): JsonObject
 ./family: class MongoContractSerializerBase, required method deserializeContract<T extends TContract = TContract>(json: unknown): T
 ./family: class MongoContractSerializerBase, required method serializeContract(contract: TContract): JsonObject
 ./family: class MongoContractSerializerBase, required property shouldPreserveEmpty: PreserveEmptyPredicate

@@ -11,6 +11,8 @@
 
 The rest of the body — offline planning via contract-to-schemaIR conversion, graph-topology ordering, direct SQL on disk, transactional apply with resume semantics, and "from" contract resolution — remains accurate.
 
+**Amended by** [ADR 331](ADR%20331%20-%20Stored%20files%20carry%20a%20format%20version%2C%20and%20a%20reader%20refuses%20one%20it%20does%20not%20know.md): `migration.json` and ref files carry `formatVersion`.
+
 ## Context
 
 Prisma Next models migrations as directed edges between contract hashes (ADR 001). The planner, runner, marker, and ledger infrastructure existed for `db init` (bootstrap a fresh DB from a contract) and `db update` (push changes to a live DB). However, there was no way to persist migration edges to disk, which is required for:

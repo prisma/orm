@@ -55,6 +55,8 @@ If either precondition is unmet, stop and surface the issue. Do **not** try to a
    echo "$CURRENT → $NEXT"
    ```
 
+   For release 8.0 itself, set `NEXT=8.0.1` by hand. The helper cannot leave the release candidates: from `8.0.0-rc.N` it returns the next release candidate. [The releasing page](../../docs/oss/releasing.md#procedure-release-80) has the whole procedure for that release.
+
    (`$NEXT` is only for naming the branch and PR — the authoritative bump in step 3 recomputes it inside the fresh `origin/main` worktree. The command above runs the helper from *your* checkout, which may be older than `origin/main`; step 3 therefore ends by verifying the two agree.)
 
 2. **Create a fresh worktree off `origin/main`.** Use the convention `release/<version>` for both the branch and the sibling worktree path:
@@ -66,7 +68,7 @@ If either precondition is unmet, stop and surface the issue. Do **not** try to a
 
    This is what makes the skill safe to invoke from any worktree: the bump happens against a fresh checkout of `origin/main`, not against the maintainer's current branch. The branch name encodes the target version so reviewers can tell at a glance what the PR ships.
 
-3. **Bump.** From the new worktree, run `pnpm bump-version`. The script reads the root `package.json` `version` from `git show HEAD:package.json` (in this worktree, HEAD is `origin/main`), computes the next release version, and writes it to every workspace `package.json` via `scripts/set-version.ts`.
+3. **Bump.** From the new worktree, run `pnpm bump-version`. (For release 8.0 itself, run `node scripts/set-version.ts 8.0.1` here instead, for the same reason as in step 1.) The script reads the root `package.json` `version` from `git show HEAD:package.json` (in this worktree, HEAD is `origin/main`), computes the next release version, and writes it to every workspace `package.json` via `scripts/set-version.ts`.
 
    Note: `bump-version` requires `node_modules` to resolve its dependencies (e.g. `pathe`). If the fresh worktree has no `node_modules`, run `pnpm install --frozen-lockfile --ignore-scripts` first.
 

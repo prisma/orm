@@ -63,7 +63,11 @@ function writeRefFile(
   const refsDir = join(ctx.testDir, 'migrations', 'app', 'refs');
   mkdirSync(refsDir, { recursive: true });
   const file = join(refsDir, `${name}.json`);
-  writeFileSync(file, `${JSON.stringify({ hash, invariants }, null, 2)}\n`, 'utf-8');
+  writeFileSync(
+    file,
+    `${JSON.stringify({ formatVersion: 1, hash, invariants }, null, 2)}\n`,
+    'utf-8',
+  );
 }
 
 /**

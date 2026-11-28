@@ -49,6 +49,7 @@ describe('db sign', () => {
       expect(await refHashOf(dir, 'db')).toBe(HASH_A);
       const storeDir = contractSnapshotDir(join(dir, 'migrations'), HASH_A);
       expect(JSON.parse(await readFile(join(storeDir, 'contract.json'), 'utf-8'))).toEqual({
+        formatVersion: 1,
         storage: { storageHash: HASH_A },
         target: 'postgres',
       });
@@ -129,7 +130,7 @@ describe('db sign', () => {
 
     it('snapshots the contract it read once, even when contract.json is rewritten after the read', async () => {
       const dir = await projectDir();
-      const rewritten = { storage: { storageHash: HASH_B }, target: 'postgres' };
+      const rewritten = { formatVersion: 1, storage: { storageHash: HASH_B }, target: 'postgres' };
       const family = ormConfig()['family'] as Record<string, unknown>;
       const rewritingFamily = {
         ...family,
@@ -151,6 +152,7 @@ describe('db sign', () => {
       expect(await refHashOf(dir, 'db')).toBe(HASH_A);
       const storeDir = contractSnapshotDir(join(dir, 'migrations'), HASH_A);
       expect(JSON.parse(await readFile(join(storeDir, 'contract.json'), 'utf-8'))).toEqual({
+        formatVersion: 1,
         storage: { storageHash: HASH_A },
         target: 'postgres',
       });
@@ -249,7 +251,7 @@ describe('db sign', () => {
 
       expect(run.exitCode).toBe(0);
       expect(mocks.renderContractDts).toHaveBeenCalledWith({
-        contract: { storage: { storageHash: HASH_A }, target: 'postgres' },
+        contract: { formatVersion: 1, storage: { storageHash: HASH_A }, target: 'postgres' },
         typesModule: '@acme/orm-db/contract-types',
       });
       const storeDir = contractSnapshotDir(join(dir, 'migrations'), HASH_A);
@@ -339,7 +341,7 @@ describe('db sign', () => {
         migrationHash: computeMigrationHash(base, ops),
       };
       await writeMigrationPackage(join(dir, 'migrations', 'app', dirName), metadata, ops);
-      const snapshotB = { storage: { storageHash: HASH_B }, target: 'postgres' };
+      const snapshotB = { formatVersion: 1, storage: { storageHash: HASH_B }, target: 'postgres' };
       await writeContractSnapshot(join(dir, 'migrations'), HASH_B, {
         contractJson: snapshotB,
         contractDts: SNAPSHOT_B_DTS,

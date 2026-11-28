@@ -75,13 +75,16 @@ describe('loadContractSpaceAggregate', () => {
   ): Promise<void> {
     const refsDir = join(migrationsDir, spaceId, 'refs');
     await mkdir(refsDir, { recursive: true });
-    await writeFile(join(refsDir, 'head.json'), JSON.stringify(headRef, null, 2));
+    await writeFile(
+      join(refsDir, 'head.json'),
+      JSON.stringify({ formatVersion: 1, ...headRef }, null, 2),
+    );
   }
 
   /** Write a contract snapshot store entry keyed by `storageHash`. */
   async function writeContractSnapshotEntry(storageHash: string, contract: unknown): Promise<void> {
     await writeContractSnapshot(migrationsDir, storageHash, {
-      contractJson: contract,
+      contractJson: { formatVersion: 1, ...(contract as Record<string, unknown>) },
       contractDts: 'export type Contract = unknown;\n',
     });
   }
@@ -116,7 +119,7 @@ describe('loadContractSpaceAggregate', () => {
         'not json',
       );
       await writeFile(join(migrationsDir, 'beta', '20260101T0000_broken', 'ops.json'), '[]');
-      await writeHeadRef('beta', { hash: 'b1', invariants: [] });
+      await writeHeadRef('beta', { hash: 'b'.repeat(64), invariants: [] });
 
       const aggregate = await load();
       expect(aggregate.listSpaces()).toEqual(['app', 'alpha', 'beta']);
@@ -201,7 +204,7 @@ describe('loadContractSpaceAggregate', () => {
     it('reports headRefNotInGraph for a migration-backed space whose head hash is not in graph', async () => {
       // A loadable package with a known graph node, but head.json points elsewhere.
       await writePackage('backed', '20260101T0000_init', { from: null, to: 'b1' });
-      await writeHeadRef('backed', { hash: 'not-in-graph', invariants: [] });
+      await writeHeadRef('backed', { hash: 'f'.repeat(64), invariants: [] });
 
       const aggregate = await load();
       const violations = aggregate.checkIntegrity();
@@ -309,7 +312,7 @@ describe('loadContractSpaceAggregate', () => {
       await writeHeadRef('cipherstash', { hash: headHash, invariants: [] });
       await writeContractSnapshotEntry(headHash, extContract);
       const rewrite = await writeContractSnapshot(migrationsDir, headHash, {
-        contractJson: { ...extContract, rewritten: true },
+        contractJson: { formatVersion: 1, ...extContract, rewritten: true },
         contractDts: 'export type Contract = unknown;\n',
       });
       expect(rewrite.written).toBe(false);
@@ -361,10 +364,10 @@ describe('loadContractSpaceAggregate', () => {
         'not json',
       );
       await writeFile(join(migrationsDir, 'beta', '20260101T0000_broken', 'ops.json'), '[]');
-      await writeHeadRef('beta', { hash: 'b1', invariants: [] });
+      await writeHeadRef('beta', { hash: 'b'.repeat(64), invariants: [] });
       // gamma: loadable package but head.json points to a hash not in graph → headRefNotInGraph.
       await writePackage('gamma', '20260101T0000_init', { from: null, to: 'g1' });
-      await writeHeadRef('gamma', { hash: 'not-in-graph', invariants: [] });
+      await writeHeadRef('gamma', { hash: 'f'.repeat(64), invariants: [] });
 
       const violations = (await load()).checkIntegrity();
 
@@ -467,8 +470,8 @@ describe('loadContractSpaceAggregate', () => {
       expect(violationsOfKind(gated, 'disjointness').map((v) => v.element)).toContain(
         `${UNBOUND_NAMESPACE_ID}.user`,
       );
-      expect(violationsOfKind(gated, 'contractUnreadable').map((v) => v.spaceId)).toContain(
-        'broken',
+      expect(violationsOfKind(gated, 'contractUnreadable')).toContainEqual(
+        expect.objectContaining({ spaceId: 'broken', hash: brokenHash }),
       );
     });
   });
@@ -528,6 +531,38 @@ describe('loadContractSpaceAggregate', () => {
       ).toContainEqual({ spaceId: 'beta', refName: 'head' });
       expect(violationsOfKind(violations, 'headRefMissing').map((v) => v.spaceId)).not.toContain(
         'beta',
+      );
+    });
+
+    it('reports a head.json with a field the format does not know as that refusal, naming the file', async () => {
+      await writePackage('beta', '20260101T0000_init', { from: null, to: 'b1' });
+      const refsDir = join(migrationsDir, 'beta', 'refs');
+      await mkdir(refsDir, { recursive: true });
+      const headPath = join(refsDir, 'head.json');
+      await writeFile(
+        headPath,
+        JSON.stringify({ formatVersion: 1, hash: 'b1', invariants: [], note: 'x' }),
+      );
+
+      const aggregate = await load();
+      const violations = aggregate.checkIntegrity({ checkContracts: true });
+
+      expect(violationsOfKind(violations, 'refUnreadable')).toContainEqual(
+        expect.objectContaining({
+          spaceId: 'beta',
+          refName: 'head',
+          path: headPath,
+          detail: expect.stringContaining('note'),
+        }),
+      );
+      expect(violations.filter((v) => 'spaceId' in v && v.spaceId === 'beta')).toEqual([
+        expect.objectContaining({ kind: 'refUnreadable' }),
+      ]);
+      expect(() => aggregate.space('beta')?.contract()).toThrow(
+        expect.objectContaining({
+          code: 'MIGRATION.INVALID_REF_FILE',
+          meta: expect.objectContaining({ path: headPath }),
+        }),
       );
     });
 

@@ -6,16 +6,19 @@ import { describe, expect, it } from 'vitest';
 import { TestSqlContractSerializer } from './test-sql-contract-serializer';
 
 function makeContractJson(entries: Record<string, Record<string, unknown>>) {
-  return createSqlContract({
-    storage: {
-      namespaces: {
-        [UNBOUND_NAMESPACE_ID]: {
-          id: UNBOUND_NAMESPACE_ID,
-          entries,
+  return {
+    formatVersion: 1,
+    ...createSqlContract({
+      storage: {
+        namespaces: {
+          [UNBOUND_NAMESPACE_ID]: {
+            id: UNBOUND_NAMESPACE_ID,
+            entries,
+          },
         },
       },
-    },
-  });
+    }),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -76,6 +79,7 @@ describe('SqlContractSerializer — fail-closed at validation boundary', () => {
 describe('SqlContractSerializer — fail-closed at hydration boundary', () => {
   it('throws on a raw namespace with an unregistered entries key, error names the kind', () => {
     const json = {
+      formatVersion: 1,
       targetFamily: 'sql',
       target: 'sql',
       profileHash: 'test',

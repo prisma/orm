@@ -1,4 +1,10 @@
 import { ContractValidationError } from '@internal/contract/contract-validation-error';
+import {
+  CONTRACT_FORMAT,
+  NEWEST_CONTRACT_FORMAT_VERSION,
+  type NewestContractFormatVersion,
+  readStoredDocument,
+} from '@internal/contract/internal/format-version';
 import { isPlainRecord } from '@internal/contract/is-plain-record';
 import type { Contract } from '@internal/contract/types';
 import { withDerivedToOneRelationNullability } from '@internal/contract-authoring';
@@ -40,6 +46,12 @@ const NamespaceRawSchema = type({
 
 export type SqlEntityHydrationFactory = (entry: unknown) => unknown;
 
+/** One version of the `contract.json` format: its parser and its printer. The in-memory contract is the same for every version. */
+interface SqlContractFormat<TContract> {
+  parse(document: unknown): TContract;
+  print(contract: TContract): JsonObject;
+}
+
 /**
  * A `contract.json` written before to-one relations recorded `nullable` (rc.9 and earlier)
  * loads with the flag derived from storage: nullable when any local FK column is nullable or
@@ -76,13 +88,14 @@ function withSqlToOneRelationNullability(contract: Contract<SqlStorage>): Contra
  *    defaults to identity. Targets that need to attach target-only
  *    fields (e.g. target-specific derived storage fields) override it.
  *
- * Default `serializeContract` is identity over the contract — concrete
- * SQL targets ship JSON-clean class instances, so the contract value
- * can be stringified directly. The non-enumerable family-level `kind`
- * discriminator on `SqlNode` instances stays out of the persisted
- * envelope automatically. Targets that need to canonicalize on the way
- * out (key ordering, dropping computed-only fields) override
- * `serializeContract` directly.
+ * `deserializeContract` reads the file's format version first and hands the
+ * file to the unit for that version; `serializeContract` prints the
+ * version this release writes. The version 1 printer is identity over the
+ * contract — concrete SQL targets ship JSON-clean class instances, so the
+ * value can be stringified directly. The non-enumerable family-level `kind`
+ * discriminator on `SqlNode` instances stays out of the persisted envelope
+ * automatically. Targets that need to canonicalize on the way out (key
+ * ordering, dropping computed-only fields) override `printContractV1`.
  */
 export abstract class SqlContractSerializerBase<TContract extends Contract<SqlStorage>>
   implements ContractSerializer<TContract>
@@ -103,16 +116,34 @@ export abstract class SqlContractSerializerBase<TContract extends Contract<SqlSt
       packEntityKinds.length > 0 ? createSqlContractSchema(this.entryKinds) : undefined;
   }
 
+  private readonly contractFormats: Readonly<
+    Record<NewestContractFormatVersion, SqlContractFormat<TContract>>
+  > = {
+    1: {
+      parse: (document) => this.parseContractV1(document),
+      print: (contract) => ({ formatVersion: 1, ...this.printContractV1(contract) }),
+    },
+  };
+
   deserializeContract<T extends TContract = TContract>(json: unknown): T {
-    const validated = withSqlToOneRelationNullability(this.parseSqlContractStructure(json));
-    const hydrated = this.hydrateSqlStorage(validated);
+    const { formatVersion, document } = readStoredDocument(json, CONTRACT_FORMAT);
     return blindCast<
       T,
       'target serializer constructTargetContract returns the requested contract subtype'
-    >(this.constructTargetContract(hydrated));
+    >(this.contractFormats[formatVersion].parse(document));
   }
 
   serializeContract(contract: TContract): JsonObject {
+    return this.contractFormats[NEWEST_CONTRACT_FORMAT_VERSION].print(contract);
+  }
+
+  protected parseContractV1(document: unknown): TContract {
+    const validated = withSqlToOneRelationNullability(this.parseSqlContractStructure(document));
+    return this.constructTargetContract(this.hydrateSqlStorage(validated));
+  }
+
+  /** The contract in version 1 of the file format, without the `formatVersion` field. Targets that serialize their namespaces themselves override it. */
+  protected printContractV1(contract: TContract): JsonObject {
     return blindCast<
       JsonObject,
       'SQL contract instances are JSON-clean envelopes and stringify to the persisted contract object'

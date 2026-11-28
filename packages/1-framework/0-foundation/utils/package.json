@@ -51,6 +51,7 @@
     "./suppress-idle-connection-errors": "./dist/suppress-idle-connection-errors.mjs",
     "./text": "./dist/text.mjs",
     "./types": "./dist/types.mjs",
+    "./upgrade-guides": "./dist/upgrade-guides.mjs",
     "./package.json": "./package.json"
   },
   "engines": {

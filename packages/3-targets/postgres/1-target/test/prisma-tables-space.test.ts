@@ -51,13 +51,10 @@ describe("the Postgres target's contract space for Prisma's own tables", () => {
 
   it('passes the self-consistency check', () => {
     const space = prismaTablesSpace();
-    const contract = space.contractJson as Contract<SqlStorage>;
     expect(() =>
       assertDescriptorSelfConsistency({
         extensionId: PRISMA_SPACE_ID,
-        target: contract.target,
-        targetFamily: contract.targetFamily,
-        storage: contract.storage,
+        contractJson: space.contractJson,
         headRefHash: space.headRef.hash,
         ...sqlContractCanonicalizationHooks,
       }),

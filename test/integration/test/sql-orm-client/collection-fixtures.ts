@@ -8,6 +8,7 @@ import {
   deserializeTestContract,
   getTestContext,
   getTestContract,
+  printTestContract,
 } from './helpers';
 
 type SoleNamespaceModels<T extends Contract> =
@@ -58,7 +59,7 @@ export function withReturningCapability(contract: TestContract = baseContract): 
 }
 
 export function withoutDefaultInInsert(contract: TestContract = baseContract): TestContract {
-  const raw = JSON.parse(JSON.stringify(contract)) as Record<string, unknown>;
+  const raw = JSON.parse(JSON.stringify(printTestContract(contract))) as Record<string, unknown>;
   const capabilities = raw['capabilities'] as Record<string, Record<string, unknown>> | undefined;
   if (capabilities?.['sql']) {
     delete capabilities['sql']['defaultInInsert'];

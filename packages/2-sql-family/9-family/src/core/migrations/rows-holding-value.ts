@@ -11,17 +11,40 @@ import { type } from 'arktype';
 import { marksOfMigration } from './required-column';
 import type { SqlMigrationPlanOperationStep } from './types';
 
-const RowsHoldingValueMeta = type({
-  rowsHoldingValue: {
-    enumValue: { 'namespaceId?': 'string', enum: 'string', member: 'string' },
-    value: 'string | number',
-    'codecRef?': { codecId: 'string', 'typeParams?': 'unknown' },
-    table: 'string',
-    column: 'string',
-    storedValue: 'string | number',
-    'path?': 'string',
-  },
+const EnumValueJson = type({
+  '+': 'reject',
+  'namespaceId?': 'string',
+  enum: 'string',
+  member: 'string',
 });
+
+const CodecRefJson = type({ '+': 'reject', codecId: 'string', 'typeParams?': 'unknown' });
+
+/** What a step's `meta.rowsHoldingValue` holds in an `ops.json`; a codec's `typeParams` stay open. */
+export const RowsHoldingValueJson = type({
+  '+': 'reject',
+  enumValue: EnumValueJson,
+  value: 'string | number',
+  'codecRef?': CodecRefJson,
+  table: 'string',
+  column: 'string',
+  storedValue: 'string | number',
+  'path?': 'string',
+});
+
+/**
+ * The mark 8.0.0-rc.21 and rc.22 wrote, before it named its column and stored value. Those
+ * releases took the table and column from the operation's target details and the stored value from
+ * the check's first parameter.
+ */
+export const EarlierRowsHoldingValueJson = type({
+  '+': 'reject',
+  enumValue: EnumValueJson,
+  value: 'string | number',
+  'codecRef?': CodecRefJson,
+});
+
+const RowsHoldingValueMeta = type({ rowsHoldingValue: RowsHoldingValueJson });
 
 /**
  * The enum value a removal check guards, with its stored value as the contract stores it and the

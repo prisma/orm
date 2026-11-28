@@ -1,4 +1,9 @@
 import { readFile } from 'node:fs/promises';
+import {
+  CONTRACT_FORMAT,
+  type NewestContractFormatVersion,
+  readStoredDocument,
+} from '@internal/contract/internal/format-version';
 import type { ControlTargetDescriptor } from '@internal/framework-components/control';
 import { hasMigrations } from '@internal/framework-components/control';
 import type { NoInvariantPathStructuralEdge } from '@internal/migration-tools/errors';
@@ -160,7 +165,7 @@ export function getTargetMigrations(target: ControlTargetDescriptor<string, stri
  */
 export interface ContractEnvelope {
   readonly storageHash: string;
-  readonly schemaVersion: string;
+  readonly formatVersion: NewestContractFormatVersion;
   readonly target: string;
   readonly targetFamily: string;
   readonly profileHash?: string;
@@ -168,8 +173,10 @@ export interface ContractEnvelope {
 }
 
 /**
- * Reads and parses contract.json, validating the framework-level envelope
- * fields (storageHash, schemaVersion, target, targetFamily).
+ * Reads and parses contract.json, reading its format version first and
+ * converting it to the newest one, then validating the framework-level
+ * envelope fields (storageHash, target, targetFamily). A format version this
+ * release cannot read throws a format version error naming the file.
  *
  * Family-specific validation (storage structure, codec mappings, etc.)
  * happens downstream in the control client via the family instance.
@@ -179,9 +186,19 @@ export async function readContractEnvelope(config: {
 }): Promise<ContractEnvelope> {
   const contractPath = resolveContractPath(config);
   const content = await readFile(contractPath, 'utf-8');
-  const json = JSON.parse(content) as Record<string, unknown>;
+  const parsed: unknown = JSON.parse(content);
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    throw new CliStructuredError(
+      'CONTRACT.VALIDATION_FAILED',
+      `Contract at ${relative(process.cwd(), contractPath)} is not a JSON object. Run \`{bin} contract emit\` to regenerate.`,
+      { where: { path: contractPath } },
+    );
+  }
+  const { formatVersion, document: json } = readStoredDocument(parsed, CONTRACT_FORMAT, {
+    path: contractPath,
+  });
 
-  const { schemaVersion, target, targetFamily, profileHash } = json;
+  const { target, targetFamily, profileHash } = json;
   const storage = json['storage'] as Record<string, unknown> | undefined;
   const storageHash = storage?.['storageHash'];
 
@@ -189,13 +206,6 @@ export async function readContractEnvelope(config: {
     throw new CliStructuredError(
       'CONTRACT.VALIDATION_FAILED',
       `Contract at ${relative(process.cwd(), contractPath)} is missing a valid storage.storageHash. Run \`{bin} contract emit\` to regenerate.`,
-      { where: { path: contractPath } },
-    );
-  }
-  if (typeof schemaVersion !== 'string') {
-    throw new CliStructuredError(
-      'CONTRACT.VALIDATION_FAILED',
-      `Contract at ${relative(process.cwd(), contractPath)} is missing schemaVersion.`,
       { where: { path: contractPath } },
     );
   }
@@ -217,7 +227,7 @@ export async function readContractEnvelope(config: {
   return {
     ...json,
     storageHash,
-    schemaVersion,
+    formatVersion,
     target,
     targetFamily,
     ...(typeof profileHash === 'string' ? { profileHash } : {}),

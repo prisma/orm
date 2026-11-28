@@ -6,7 +6,7 @@ import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { ifDefined } from '@internal/utils/defined';
 import type { Diagnostic, NextAction, StructuredError } from '@internal/utils/structured-error';
 import { docsUrlFor } from '@internal/utils/structured-error';
-import { APP_UPGRADE_GUIDES_URL } from './upgrade-guides';
+import { APP_UPGRADE_GUIDES_URL } from '@internal/utils/upgrade-guides';
 
 /**
  * CLI error envelope for output formatting.
@@ -228,8 +228,55 @@ export function errorContractValidationFailed(
     readonly cause?: unknown;
     /** What the refusal is about, such as the columns whose defaults were refused. */
     readonly meta?: Record<string, unknown> | undefined;
+    /** Which file was refused: the emitted contract (the default), or a contract snapshot in the migrations directory. */
+    readonly artifact?: 'contract' | 'snapshot';
+    /** For a snapshot a command writes again once it is deleted: the snapshot's folder, that command, and everything it does, ending with writing the snapshot. */
+    readonly rewrittenBy?: {
+      readonly snapshotDirectory: string;
+      readonly command: string;
+      readonly effect: string;
+    };
   },
 ): CliStructuredError {
+  if (options?.artifact === 'snapshot') {
+    const rewrite = options.rewrittenBy;
+    return new CliStructuredError('CONTRACT.VALIDATION_FAILED', 'Contract validation failed', {
+      why: reason,
+      fix: [
+        'If the file was edited by hand, restore it from version control.',
+        `If an earlier release wrote this snapshot, follow the app upgrade instructions of each release since, which rewrite the contract and its migration snapshots: ${APP_UPGRADE_GUIDES_URL}.`,
+        ...(rewrite === undefined
+          ? []
+          : [
+              `Or delete ${rewrite.snapshotDirectory} and run \`${rewrite.command}\`, which ${rewrite.effect}.`,
+            ]),
+      ].join(' '),
+      nextActions: [
+        {
+          kind: 'user-choice',
+          label: 'If the file was edited by hand, restore it from version control',
+        },
+        {
+          kind: 'open-url',
+          label: 'If an earlier release wrote the snapshot, follow the app upgrade instructions',
+          url: APP_UPGRADE_GUIDES_URL,
+        },
+        ...(rewrite === undefined
+          ? []
+          : [
+              {
+                kind: 'run-command' as const,
+                label: `Or delete ${rewrite.snapshotDirectory} and run this command, which ${rewrite.effect}`,
+                command: rewrite.command,
+              },
+            ]),
+      ],
+      docsUrl: docsUrlFor('CONTRACT.VALIDATION_FAILED'),
+      ...(options.where ? { where: options.where } : {}),
+      ...ifDefined('cause', options.cause),
+      ...ifDefined('meta', options.meta),
+    });
+  }
   return new CliStructuredError('CONTRACT.VALIDATION_FAILED', 'Contract validation failed', {
     why: reason,
     fix: `If an earlier release emitted this contract, follow the app upgrade instructions of each release since, which rewrite the contract and its migration snapshots: ${APP_UPGRADE_GUIDES_URL}. If this release emitted it, re-run \`{bin} contract emit\`, or fix the contract file if you edited it, and try again`,

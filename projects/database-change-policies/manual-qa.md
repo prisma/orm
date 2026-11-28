@@ -15,14 +15,14 @@ What it checks: the `migration ref policy show`, `set` and `delete` commands, as
 ### Part A: the commands as a user
 
 1. `migration ref set production <hash>`; `migration ref policy show production` and `--json`. Expect every setting "not declared" and `null` in JSON.
-2. `set` each setting, in short and long forms (`--data-loss forbidden`, `--access-widening access-widening-with-consent`, `--change migrate --change migrate`, `--change reconcile --change migrate --json`). After each, read the file: key order `hash`, `invariants`, `policies`, then `change`, `dataProtection` (`dataLoss`, `accessWidening`); two-space JSON; hash and invariants kept.
+2. `set` each setting, in short and long forms (`--data-loss forbidden`, `--access-widening access-widening-with-consent`, `--change migrate --change migrate`, `--change reconcile --change migrate --json`). After each, read the file: key order `formatVersion`, `hash`, `invariants`, `policies`, then `change`, `dataProtection` (`dataLoss`, `accessWidening`); two-space JSON; hash and invariants kept.
 3. No-op runs: `set` a value already declared, `delete` a setting not declared. Expect exit 0, "Nothing changed", file not written.
 4. Loosening runs: `--data-loss permitted` after `forbidden`, `--change` adding `reconcile`. Expect `loosens` and, for a `forbidden` level, the "no longer checks plans" sentence.
 5. `delete` by both name forms (`dataProtection.dataLoss`, `access-widening`), several at once, and the last setting (expect `policies` removed).
 6. Bad input: `set` with no flag, `--data-loss strict`, `--data-loss access-widening-forbidden`, `--access-widening data-loss-permitted --json`, `--change deploy`, `--change ""`, `delete` with no setting, `delete production dataLoss`. Expect `CLI.INVALID_ARGUMENTS` naming the allowed values, file unchanged.
 7. `head` for each command (expect "The head ref cannot declare policies"); missing ref `staging` (expect `MIGRATION.UNKNOWN_REF`); a ref file with an invalid policy value and one with broken JSON (expect `MIGRATION.INVALID_REF_FILE`, file not written).
 8. Another ref file invalid: `set` on a different ref still succeeds.
-9. A ref file with an unknown top-level key and invariants: `set` keeps invariants, drops the unknown key.
+9. A ref file with an unknown top-level key and invariants: `set` fails with `MIGRATION.INVALID_REF_FILE` and leaves the file as it was.
 10. `migration ref delete staging data-loss` (the word `policy` missing): fails, ref kept.
 11. `migration ref list` shows declared policies in the human table; data lines and `--json` unchanged.
 12. Compare checksums from setup step 5: nothing outside the ref files changed.

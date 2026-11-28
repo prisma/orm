@@ -41,6 +41,11 @@ import { PostgresRole } from '../src/core/postgres-role';
 import { PostgresSchema, postgresCreateNamespace } from '../src/core/postgres-schema';
 import { postgresDataTypeSupport } from './fixtures/postgres-data-type-support';
 
+/** A contract as a stored `contract.json` holds it: with its format version. */
+function storedContract(contract: unknown): unknown {
+  return { formatVersion: 1, ...(contract as Record<string, unknown>) };
+}
+
 const postgresCodecLookup = createPostgresBuiltinCodecLookup();
 
 const assembled = assembleAuthoringContributions([
@@ -499,10 +504,10 @@ describe('PostgresContractSerializer rls round-trip survives serialize → deser
     const serializer = new PostgresContractSerializer();
     const input = makeContractWithAllThreeKinds();
 
-    const contract = serializer.deserializeContract(input);
+    const contract = serializer.deserializeContract(storedContract(input));
     const json = serializer.serializeContract(contract);
     const reparsed = JSON.parse(JSON.stringify(json)) as typeof json;
-    const roundTripped = serializer.deserializeContract(reparsed);
+    const roundTripped = serializer.deserializeContract(storedContract(reparsed));
 
     const ns = roundTripped.storage.namespaces['public'] as PostgresSchema;
     expect(ns).toBeInstanceOf(PostgresSchema);
@@ -519,7 +524,9 @@ describe('PostgresContractSerializer rls round-trip survives serialize → deser
 
   it('serializes the marker under entries.rls with its enumerable kind', () => {
     const serializer = new PostgresContractSerializer();
-    const contract = serializer.deserializeContract(makeContractWithAllThreeKinds());
+    const contract = serializer.deserializeContract(
+      storedContract(makeContractWithAllThreeKinds()),
+    );
     const json = serializer.serializeContract(contract);
     const storage = (json as { storage: { namespaces: Record<string, unknown> } }).storage;
     const publicNs = storage.namespaces['public'] as {
@@ -538,7 +545,7 @@ describe('PostgresContractSerializer rls round-trip survives serialize → deser
     const serializer = new PostgresContractSerializer();
     const interpreted = result.value as Contract<SqlStorage>;
     const json = JSON.parse(JSON.stringify(serializer.serializeContract(interpreted))) as unknown;
-    const roundTripped = serializer.deserializeContract(json);
+    const roundTripped = serializer.deserializeContract(storedContract(json));
 
     const ns = roundTripped.storage.namespaces['public'] as PostgresSchema;
     expect(ns.rls['profile']).toBeInstanceOf(PostgresRlsEnablement);

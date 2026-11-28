@@ -41,19 +41,26 @@ async function fileContent(name: string): Promise<unknown> {
 describe('a ref that declares policies', () => {
   it('round-trips through writeRef and readRef', async () => {
     await writeRef(refsDir, 'production', PRODUCTION);
-    expect(await fileContent('production')).toEqual(PRODUCTION);
+    expect(await fileContent('production')).toEqual({ formatVersion: 1, ...PRODUCTION });
     expect(await readRef(refsDir, 'production')).toEqual(PRODUCTION);
   });
 
   it('reads a partial declaration', async () => {
     const entry = { hash: HASH_A, invariants: [], policies: { change: ['migrate'] } };
-    await writeFile(join(refsDir, 'production.json'), JSON.stringify(entry));
+    await writeFile(
+      join(refsDir, 'production.json'),
+      JSON.stringify({ formatVersion: 1, ...entry }),
+    );
     expect(await readRef(refsDir, 'production')).toEqual(entry);
   });
 
   it('writes no policies key when the entry has none', async () => {
     await writeRef(refsDir, 'staging', { hash: HASH_A, invariants: [] });
-    expect(await fileContent('staging')).toEqual({ hash: HASH_A, invariants: [] });
+    expect(await fileContent('staging')).toEqual({
+      formatVersion: 1,
+      hash: HASH_A,
+      invariants: [],
+    });
   });
 
   it.each([
@@ -97,7 +104,7 @@ describe('a ref that declares policies', () => {
     async (_, policies, fix) => {
       await writeFile(
         join(refsDir, 'production.json'),
-        JSON.stringify({ hash: HASH_A, invariants: [], policies }),
+        JSON.stringify({ formatVersion: 1, hash: HASH_A, invariants: [], policies }),
       );
       await expect(readRef(refsDir, 'production')).rejects.toMatchObject({
         code: 'MIGRATION.INVALID_REF_FILE',
@@ -115,14 +122,18 @@ describe('advanceRef', () => {
   it('writes a new ref with no invariants', async () => {
     const written = await advanceRef(refsDir, 'db', HASH_B);
     expect(written).toEqual({ hash: HASH_B, invariants: [] });
-    expect(await fileContent('db')).toEqual({ hash: HASH_B, invariants: [] });
+    expect(await fileContent('db')).toEqual({ formatVersion: 1, hash: HASH_B, invariants: [] });
   });
 
   it('moves an existing ref and keeps its invariants and policies', async () => {
     await writeRef(refsDir, 'production', PRODUCTION);
     const written = await advanceRef(refsDir, 'production', HASH_B);
     expect(written).toEqual({ ...PRODUCTION, hash: HASH_B });
-    expect(await fileContent('production')).toEqual({ ...PRODUCTION, hash: HASH_B });
+    expect(await fileContent('production')).toEqual({
+      formatVersion: 1,
+      ...PRODUCTION,
+      hash: HASH_B,
+    });
   });
 
   it('moves a nested ref', async () => {

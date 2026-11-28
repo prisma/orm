@@ -9,7 +9,7 @@ const CIPHER_HASH = 'c'.repeat(64);
 const PGVECTOR_HASH = 'd'.repeat(64);
 
 function makeContract(storageHash: string): unknown {
-  return { storage: { storageHash } };
+  return { formatVersion: 1, storage: { storageHash } };
 }
 
 describe('gatherDiskContractSpaceState', () => {

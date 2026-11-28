@@ -1,3 +1,4 @@
+import { structuredError } from '@internal/utils/structured-error';
 import { createSqlContract } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { resolveRecordedPath } from '../../../src/aggregate/strategies/resolve-recorded-path';
@@ -91,6 +92,39 @@ describe('resolveRecordedPath', () => {
         ],
         asked: [['table.events', 'policy.events.drop'], ['rls.events.disable']],
       },
+    );
+  });
+
+  it('names the migration and space of an operation the family refuses to read', () => {
+    const middleHash = 'cipher-middle';
+    const headHash = 'cipher-head';
+    const first = createAttestedPackage('20260101T0000_init', { from: null, to: middleHash });
+    const second = createAttestedPackage('20260102T0000_next', { from: middleHash, to: headHash });
+
+    expect(() =>
+      resolveRecordedPath({
+        aggregateTargetId: 'postgres',
+        space: makeSpace([first, second], headHash),
+        currentMarker: null,
+        storageNameOf: (operation) => operation.id,
+        accessChangesOf: (operations) => {
+          if (operations === second.ops) {
+            throw structuredError('MIGRATION.INVALID_OPERATION_ENTRY', 'malformed', {
+              why: 'Operation 0 is not in a format this release of Prisma reads: zzz must be removed.',
+              fix: 'restore it',
+              meta: { index: 0 },
+            });
+          }
+          return [];
+        },
+      }),
+    ).toThrow(
+      expect.objectContaining({
+        code: 'MIGRATION.INVALID_OPERATION_ENTRY',
+        why: 'In migration "20260102T0000_next" of space "cipherstash": Operation 0 is not in a format this release of Prisma reads: zzz must be removed.',
+        fix: 'restore it',
+        meta: { index: 0, migration: '20260102T0000_next', space: 'cipherstash' },
+      }),
     );
   });
 

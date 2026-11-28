@@ -1,8 +1,8 @@
-import { APP_UPGRADE_GUIDES_URL } from '@internal/errors/control';
 import {
   type MigrationRunnerFailure,
   migrationRunnerFailure,
 } from '@internal/framework-components/control';
+import { APP_UPGRADE_GUIDES_URL } from '@internal/utils/upgrade-guides';
 import { describe, expect, it } from 'vitest';
 import { prismaSpaceRunnerFailureError } from '../../src/utils/prisma-space-failure';
 

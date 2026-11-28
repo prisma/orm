@@ -15,6 +15,7 @@ import {
   errorMigrationContractViewMissing,
   errorOperationsNotArray,
 } from './errors';
+import { printMigrationMetadataDocument } from './formats/migration-metadata/versions';
 import { computeMigrationHash } from './hash';
 import { deriveProvidedInvariants } from './invariants';
 import type { MigrationMetadata } from './metadata';
@@ -26,8 +27,8 @@ export interface MigrationMeta {
   readonly to: string;
 }
 
-// `from` rejects empty strings to mirror `MigrationMetadataSchema` in
-// `./io.ts`. Without this match, an authored migration could `describe()` with
+// `from` rejects empty strings to mirror the version 1 `migration.json` schema in
+// `./formats/migration-metadata/v1.ts`. Without this match, an authored migration could `describe()` with
 // `from: ''` and pass `buildMigrationArtifacts`'s validation, only to have
 // `readMigrationPackage` reject the resulting `migration.json` later — the
 // two validators must agree on the legal value space.
@@ -228,8 +229,8 @@ export function isDirectEntrypoint(importMetaUrl: string): boolean {
  * decide how to persist them — write to disk, print in dry-run, ship
  * over the wire — without coupling artifact construction to file I/O.
  *
- * `metadataJson` is `JSON.stringify(metadata, null, 2)` — the canonical
- * on-disk shape that the arktype loader-schema in `./io` validates.
+ * `metadataJson` is the `migration.json` document this release writes for
+ * `metadata`, with its format version, which the readers in `./io` parse.
  */
 export interface MigrationArtifacts {
   readonly opsJson: string;
@@ -306,6 +307,6 @@ export async function buildMigrationArtifacts(
   return {
     opsJson: JSON.stringify(ops, null, 2),
     metadata,
-    metadataJson: JSON.stringify(metadata, null, 2),
+    metadataJson: JSON.stringify(printMigrationMetadataDocument(metadata), null, 2),
   };
 }

@@ -13,6 +13,7 @@ import { sqliteAdapterDescriptorMeta } from '../src/core/descriptor-meta';
 import type { SqliteContract } from '../src/core/types';
 
 const contract = new SqlContractSerializer().deserializeContract({
+  formatVersion: 1,
   target: 'sqlite',
   targetFamily: 'sql',
   profileHash: 'test-profile',

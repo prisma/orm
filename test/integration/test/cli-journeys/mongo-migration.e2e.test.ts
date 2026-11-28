@@ -73,7 +73,7 @@ function writeRefFile(
   mkdirSync(refsDir, { recursive: true });
   writeFileSync(
     join(refsDir, `${name}.json`),
-    `${JSON.stringify({ hash, invariants }, null, 2)}\n`,
+    `${JSON.stringify({ formatVersion: 1, hash, invariants }, null, 2)}\n`,
     'utf-8',
   );
 }

@@ -181,10 +181,16 @@ describe('canonicalizeContractToObject', () => {
     expect(jsonSchema['additionalProperties']).toBe(false);
   });
 
-  it('includes schemaVersion when provided', () => {
-    const result = canonicalizeContractToObject(minimal(), { schemaVersion: '1.0' });
-    expect(result['schemaVersion']).toBe('1.0');
-    expect(Object.keys(result)[0]).toBe('schemaVersion');
+  it('puts the format version the serializer prints first', () => {
+    const result = canonicalizeContractToObjectRaw(minimal(), {
+      serializeContract: (c) => ({ ...(c as unknown as JsonObject), formatVersion: 1 }),
+    });
+    expect(result['formatVersion']).toBe(1);
+    expect(Object.keys(result)[0]).toBe('formatVersion');
+  });
+
+  it('carries no format version the serializer does not print', () => {
+    expect(canonicalizeContractToObject(minimal())).not.toHaveProperty('formatVersion');
   });
 
   it('includes roots when provided', () => {

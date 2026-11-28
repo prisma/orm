@@ -31,6 +31,11 @@ import {
   postgresCreateNamespace,
 } from '../src/core/postgres-schema';
 
+/** A contract as a stored `contract.json` holds it: with its format version. */
+function storedContract(contract: unknown): unknown {
+  return { formatVersion: 1, ...(contract as Record<string, unknown>) };
+}
+
 function makeValidContractJson() {
   return createSqlContract({
     storage: {
@@ -93,14 +98,14 @@ function makeContractWithTablesJson() {
 describe('PostgresContractSerializer', () => {
   it('deserializes a valid SQL contract envelope', () => {
     const serializer = new PostgresContractSerializer();
-    const contract = serializer.deserializeContract(makeValidContractJson());
+    const contract = serializer.deserializeContract(storedContract(makeValidContractJson()));
     expect(contract.targetFamily).toBe('sql');
     expect(contract.storage.namespaces[UNBOUND_NAMESPACE_ID]!.entries.table ?? {}).toEqual({});
   });
 
   it('hydrates JSON storage into the SQL Contract IR class hierarchy', () => {
     const serializer = new PostgresContractSerializer();
-    const contract = serializer.deserializeContract(makeContractWithTablesJson());
+    const contract = serializer.deserializeContract(storedContract(makeContractWithTablesJson()));
 
     expect(contract.storage).toBeInstanceOf(SqlStorage);
     const namespace = contract.storage.namespaces[UNBOUND_NAMESPACE_ID];
@@ -132,12 +137,12 @@ describe('PostgresContractSerializer', () => {
   it('rejects an invalid contract (family-shared structural validation runs)', () => {
     const serializer = new PostgresContractSerializer();
     const bad = { ...makeValidContractJson(), targetFamily: 'mongo' };
-    expect(() => serializer.deserializeContract(bad)).toThrow();
+    expect(() => serializer.deserializeContract(storedContract(bad))).toThrow();
   });
 
   it('serializeContract round-trips a JSON-clean contract', () => {
     const serializer = new PostgresContractSerializer();
-    const contract = serializer.deserializeContract(makeContractWithTablesJson());
+    const contract = serializer.deserializeContract(storedContract(makeContractWithTablesJson()));
     const json = serializer.serializeContract(contract);
     const reparsed = JSON.parse(JSON.stringify(json));
     expect(reparsed).toMatchObject({
@@ -215,7 +220,7 @@ describe('PostgresContractSerializer', () => {
       }
     }
 
-    const contract = new RegistryDispatchProbeSerializer().deserializeContract({});
+    const contract = new RegistryDispatchProbeSerializer().deserializeContract(storedContract({}));
     expect(contract.storage.types?.['fake_thing']).toBe(sentinel);
   });
 });
@@ -272,7 +277,7 @@ describe('control-policy round-trip fidelity', () => {
     const serializer = new PostgresContractSerializer();
     const input = makeMixedControlContractJson();
 
-    const contract = serializer.deserializeContract(input);
+    const contract = serializer.deserializeContract(storedContract(input));
     const reparsed = JSON.parse(JSON.stringify(serializer.serializeContract(contract)));
 
     expect(reparsed.defaultControlPolicy).toBe('tolerated');
@@ -402,10 +407,10 @@ describe('role + policy round-trip', () => {
     const serializer = new PostgresContractSerializer();
     const input = makeContractWithRolesAndPolicies();
 
-    const contract = serializer.deserializeContract(input);
+    const contract = serializer.deserializeContract(storedContract(input));
     const json = serializer.serializeContract(contract);
     const reparsed = JSON.parse(JSON.stringify(json));
-    const roundTripped = serializer.deserializeContract(reparsed);
+    const roundTripped = serializer.deserializeContract(storedContract(reparsed));
 
     const ns = roundTripped.storage.namespaces[UNBOUND_NAMESPACE_ID] as PostgresSchema;
     expect(ns).toBeInstanceOf(PostgresSchema);
@@ -445,9 +450,11 @@ describe('role + policy round-trip', () => {
     const serializer = new PostgresContractSerializer();
     const input = makeContractWithRolesAndPolicies();
 
-    const contract = serializer.deserializeContract(input);
+    const contract = serializer.deserializeContract(storedContract(input));
     const json = serializer.serializeContract(contract);
-    const roundTripped = serializer.deserializeContract(JSON.parse(JSON.stringify(json)));
+    const roundTripped = serializer.deserializeContract(
+      storedContract(JSON.parse(JSON.stringify(json))),
+    );
 
     const ns = roundTripped.storage.namespaces[UNBOUND_NAMESPACE_ID] as PostgresSchema;
     const role = ns.role['app_user']!;
@@ -467,7 +474,7 @@ describe('role + policy round-trip', () => {
       },
     });
 
-    const contract = serializer.deserializeContract(input);
+    const contract = serializer.deserializeContract(storedContract(input));
     const ns = contract.storage.namespaces[UNBOUND_NAMESPACE_ID];
     expect(ns).toBe(PostgresSchema.unbound);
   });
@@ -494,7 +501,7 @@ describe('role + policy round-trip', () => {
       },
     });
 
-    const contract = serializer.deserializeContract(input);
+    const contract = serializer.deserializeContract(storedContract(input));
     const ns = contract.storage.namespaces[UNBOUND_NAMESPACE_ID];
     expect(ns).not.toBe(PostgresSchema.unbound);
     expect(ns).toBeInstanceOf(PostgresSchema);
@@ -518,7 +525,7 @@ describe('role + policy round-trip', () => {
       },
     });
 
-    const contract = serializer.deserializeContract(input);
+    const contract = serializer.deserializeContract(storedContract(input));
     const ns = contract.storage.namespaces[UNBOUND_NAMESPACE_ID];
     expect(ns).not.toBe(PostgresSchema.unbound);
     expect(ns?.entries['role']).toMatchObject({
@@ -565,7 +572,7 @@ describe('role + policy round-trip', () => {
       },
     });
 
-    expect(() => serializer.deserializeContract(input)).toThrow();
+    expect(() => serializer.deserializeContract(storedContract(input))).toThrow();
   });
 
   it('rejects a malformed role entry (non-external control)', () => {
@@ -591,14 +598,14 @@ describe('role + policy round-trip', () => {
       },
     });
 
-    expect(() => serializer.deserializeContract(input)).toThrow();
+    expect(() => serializer.deserializeContract(storedContract(input))).toThrow();
   });
 
   it('serialized role carries its control policy, defaulted to external', () => {
     const serializer = new PostgresContractSerializer();
     const input = makeContractWithRolesAndPolicies();
 
-    const contract = serializer.deserializeContract(input);
+    const contract = serializer.deserializeContract(storedContract(input));
     const json = serializer.serializeContract(contract);
     const reparsed = JSON.parse(JSON.stringify(json));
 
@@ -615,7 +622,7 @@ describe('role + policy round-trip', () => {
     const serializer = new PostgresContractSerializer();
     const input = makeContractWithRolesAndPolicies();
 
-    const contract = serializer.deserializeContract(input);
+    const contract = serializer.deserializeContract(storedContract(input));
     const json = serializer.serializeContract(contract);
     const reparsed = JSON.parse(JSON.stringify(json));
 
@@ -675,7 +682,7 @@ describe('role + policy round-trip', () => {
       },
     });
 
-    expect(() => serializer.deserializeContract(input)).toThrow();
+    expect(() => serializer.deserializeContract(storedContract(input))).toThrow();
   });
 });
 
@@ -722,7 +729,7 @@ describe('native_enum + valueSet round-trip', () => {
     const serializer = new PostgresContractSerializer();
     const input = makeContractWithNativeEnum();
 
-    const contract = serializer.deserializeContract(input);
+    const contract = serializer.deserializeContract(storedContract(input));
     const ns = contract.storage.namespaces['auth'] as PostgresSchema;
     expect(ns).toBeInstanceOf(PostgresSchema);
 
@@ -740,10 +747,10 @@ describe('native_enum + valueSet round-trip', () => {
     const serializer = new PostgresContractSerializer();
     const input = makeContractWithNativeEnum();
 
-    const contract = serializer.deserializeContract(input);
+    const contract = serializer.deserializeContract(storedContract(input));
     const json = serializer.serializeContract(contract);
     const reparsed = JSON.parse(JSON.stringify(json));
-    const roundTripped = serializer.deserializeContract(reparsed);
+    const roundTripped = serializer.deserializeContract(storedContract(reparsed));
 
     const ns = roundTripped.storage.namespaces['auth'] as PostgresSchema;
     expect(ns).toBeInstanceOf(PostgresSchema);
@@ -762,7 +769,7 @@ describe('native_enum + valueSet round-trip', () => {
     const serializer = new PostgresContractSerializer();
     const input = makeContractWithNativeEnum();
 
-    const contract = serializer.deserializeContract(input);
+    const contract = serializer.deserializeContract(storedContract(input));
     const json = serializer.serializeContract(contract);
     const reparsed = JSON.parse(JSON.stringify(json));
 
@@ -797,7 +804,7 @@ describe('native_enum + valueSet round-trip', () => {
       },
     });
 
-    const contract = serializer.deserializeContract(input);
+    const contract = serializer.deserializeContract(storedContract(input));
     const ns = contract.storage.namespaces['auth'] as PostgresSchema;
     expect(ns).toBeInstanceOf(PostgresSchema);
     expect(ns.entries.native_enum).toBeUndefined();
@@ -833,7 +840,7 @@ describe('native_enum + valueSet round-trip', () => {
       },
     });
 
-    const contract = serializer.deserializeContract(input);
+    const contract = serializer.deserializeContract(storedContract(input));
     const json = serializer.serializeContract(contract);
     const reparsed = JSON.parse(JSON.stringify(json));
 
@@ -883,7 +890,7 @@ describe('native_enum + valueSet round-trip', () => {
       },
     });
 
-    expect(() => serializer.deserializeContract(input)).toThrow();
+    expect(() => serializer.deserializeContract(storedContract(input))).toThrow();
   });
 
   it('rejects a native_enum entry with the wrong kind literal', () => {
@@ -908,6 +915,6 @@ describe('native_enum + valueSet round-trip', () => {
       },
     });
 
-    expect(() => serializer.deserializeContract(input)).toThrow();
+    expect(() => serializer.deserializeContract(storedContract(input))).toThrow();
   });
 });

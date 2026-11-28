@@ -25,7 +25,10 @@ import type {
 } from '@prisma/cli-engine/protocol';
 import { notOk, ok } from '@prisma/cli-engine/protocol';
 import { join } from 'pathe';
-import { errorFromCaught } from '../control-api/operations/caught-errors';
+import {
+  errorFromCaught,
+  readFailureReportedAsItself,
+} from '../control-api/operations/caught-errors';
 import { mapContractAtError } from '../control-api/operations/contract-at-errors';
 import {
   loadContractSpaceAggregateForCli,
@@ -85,6 +88,7 @@ import { snapshotVerifierFor } from '../utils/snapshot-content-verification';
 import { dataLine } from './data-lines';
 import { perSpaceBlocks } from './db/migration-blocks';
 import { prepareMigrationRun } from './db/prepare';
+import { unrecordedSnapshotWarning } from './db/unrecorded-snapshots';
 import { defineOrmCommand } from './define-command';
 import { dbFlag, permitPolicyChangeFlag } from './flags';
 import { displayPath, migrationsDirFor } from './migration/paths';
@@ -531,6 +535,8 @@ export function createMigrateCommand(
       try {
         appContract = familyInstance.deserializeContract(contractJson);
       } catch (error) {
+        const asItself = readFailureReportedAsItself(error, contractPath);
+        if (asItself !== undefined) return notOk(normalizeError(asItself));
         return notOk(
           normalizeError(
             errorContractValidationFailed(
@@ -658,7 +664,13 @@ export function createMigrateCommand(
                 'contract.json',
               );
             } catch (error) {
-              const mapped = mapContractAtError(error, { artifactRole: 'to' });
+              const mapped = mapContractAtError(error, {
+                artifactRole: 'to',
+                invocation: cliInvocation(ctx, args.flags.db),
+                ...(refEntry.hash === appContract.storage.storageHash
+                  ? { atHeadOf: { spaceId: aggregate.app.spaceId, reachedByMigration: true } }
+                  : {}),
+              });
               if (!mapped.ok) {
                 return notOk(normalizeError(mapped.failure));
               }
@@ -719,6 +731,7 @@ export function createMigrateCommand(
         }
 
         const applied = await client.migrate({
+          onUnrecordedSnapshot: unrecordedSnapshotWarning(ctx.report, 'db migrate', ctx.cwd),
           contract: applyContract,
           migrationsDir,
           invocation: {

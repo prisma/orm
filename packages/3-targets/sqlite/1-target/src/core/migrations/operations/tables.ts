@@ -435,9 +435,14 @@ export function storageClassCheck(
   };
 }
 
-const ConversionCopyMeta = type({
-  conversionCopy: { table: 'string', expressions: 'Record<string, string>' },
+/** What a step's `meta.conversionCopy` holds in an `ops.json`. */
+export const ConversionCopyJson = type({
+  '+': 'reject',
+  table: 'string',
+  expressions: 'Record<string, string>',
 });
+
+const ConversionCopyMeta = type({ conversionCopy: ConversionCopyJson });
 
 /**
  * The table a rebuild's copy step reads and the copy expression of each column its conversions

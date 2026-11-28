@@ -46,7 +46,7 @@ Hosted runtimes (e.g., PPg services) have additional security constraints:
 
 - Must not evaluate TS contracts; JSON-only allowed for security
 - Must accept only canonical contract JSON from trusted sources
-- Must validate `contract.canonicalVersion` and `schemaVersion` before processing
+- Must validate `contract.canonicalVersion` and `formatVersion` before processing
 - Must not execute untrusted codecs or custom extensions without explicit policy
 
 ## Requirements for alternate runtimes

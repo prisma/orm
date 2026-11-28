@@ -1,6 +1,7 @@
 {
-  "targetFamily": "mongo",
+  "formatVersion": 1,
   "target": "mongo",
+  "targetFamily": "mongo",
   "roots": {
     "posts": {
       "namespace": "__unbound__",
@@ -83,8 +84,8 @@
       }
     }
   },
-  "extensions": {},
   "capabilities": {},
+  "extensions": {},
   "profileHash": "251b3ce23f6c9f561892e7c1af9d2cc941a13d64ba1aa7226b90036b09568cc3",
   "meta": {},
   "storage": {

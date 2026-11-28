@@ -405,6 +405,7 @@ describe('MigrationCLI.run', () => {
     createControlStackMock.mockReturnValue({ adapter: { create: () => ({}) } });
 
     const existing = {
+      formatVersion: 1,
       from: 'from',
       to: 'to',
       migrationHash: null,
@@ -427,6 +428,29 @@ describe('MigrationCLI.run', () => {
     // MigrationCLI.run must rewrite it to a real `...` digest —
     // otherwise readMigrationPackage() would reject the package.
     expect(manifest.migrationHash).toMatch(/^/);
+  });
+
+  it('preserves createdAt from a migration.json a release candidate wrote, and writes it in the newest format version', async () => {
+    loadConfigMock.mockResolvedValue(ok(okConfig));
+    createControlStackMock.mockReturnValue({ adapter: { create: () => ({}) } });
+    const createdAt = '2026-01-15T10:00:00.000Z';
+    writeFileSync(
+      join(workDir, 'migration.json'),
+      JSON.stringify({ from: 'from', to: 'to', migrationHash: null, createdAt }),
+    );
+
+    const exitCode = await MigrationCLI.run(pathToFileURL(migrationFile).href, FakeMigration, {
+      argv: entrypointArgv(),
+      stdout: new BufferStream(),
+      stderr: new BufferStream(),
+    });
+
+    const manifest = JSON.parse(readFileSync(join(workDir, 'migration.json'), 'utf-8'));
+    expect({
+      exitCode,
+      formatVersion: manifest.formatVersion,
+      createdAt: manifest.createdAt,
+    }).toEqual({ exitCode: 0, formatVersion: 1, createdAt });
   });
 
   it('exits non-zero with MIGRATION.INVALID_JSON when migration.json is unparseable', async () => {
@@ -453,6 +477,42 @@ describe('MigrationCLI.run', () => {
     const onDisk = readFileSync(join(workDir, 'migration.json'), 'utf-8');
     expect(onDisk).toBe(malformed);
   });
+
+  it.each([
+    [
+      'with the old schemaVersion field',
+      { schemaVersion: '1', from: null, to: 'sha256:x', createdAt: '2026-01-01T00:00:00.000Z' },
+      'MIGRATION.FORMAT_VERSION_MISSING',
+    ],
+    [
+      'a newer release wrote',
+      { formatVersion: 2, from: null, to: 'sha256:x' },
+      'MIGRATION.FORMAT_VERSION_NEWER',
+    ],
+  ])(
+    'refuses an existing migration.json %s, naming it, and writes nothing',
+    async (_, existing, code) => {
+      loadConfigMock.mockResolvedValue(ok(okConfig));
+      createControlStackMock.mockReturnValue({ adapter: { create: () => ({}) } });
+      const metadataPath = join(workDir, 'migration.json');
+      const written = JSON.stringify(existing);
+      writeFileSync(metadataPath, written);
+
+      const stdout = new BufferStream();
+      const stderr = new BufferStream();
+      const exitCode = await MigrationCLI.run(pathToFileURL(migrationFile).href, FakeMigration, {
+        argv: entrypointArgv(),
+        stdout,
+        stderr,
+      });
+
+      expect(exitCode).toBe(1);
+      expect(stderr.text).toContain(code);
+      expect(stderr.text).toContain(metadataPath);
+      expect(() => readFileSync(join(workDir, 'ops.json'))).toThrow();
+      expect(readFileSync(metadataPath, 'utf-8')).toBe(written);
+    },
+  );
 
   it('writes an error a library raised with a structured code with that code', async () => {
     loadConfigMock.mockResolvedValue(ok(okConfig));

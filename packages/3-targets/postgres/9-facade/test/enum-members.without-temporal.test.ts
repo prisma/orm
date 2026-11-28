@@ -1,4 +1,5 @@
 import 'temporal-polyfill/full/global';
+import { PostgresContractSerializer } from '@internal/target-postgres/runtime';
 import { describe, expect, it } from 'vitest';
 import {
   defineContract,
@@ -19,22 +20,24 @@ const InstantLevel = enumType(
 
 const contractJson: unknown = JSON.parse(
   JSON.stringify(
-    defineContract(
-      {
-        requiredCapabilities: [...postgres18, ...postgresDriver],
-        enums: { TextLevel, InstantLevel },
-      },
-      ({ field, model, gen, type }) => ({
-        models: {
-          Reading: model('Reading', {
-            fields: {
-              id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
-              text: field.namedType(TextLevel),
-              instant: field.namedType(InstantLevel),
-            },
-          }),
+    new PostgresContractSerializer().serializeContract(
+      defineContract(
+        {
+          requiredCapabilities: [...postgres18, ...postgresDriver],
+          enums: { TextLevel, InstantLevel },
         },
-      }),
+        ({ field, model, gen, type }) => ({
+          models: {
+            Reading: model('Reading', {
+              fields: {
+                id: field.column(type.Char(36)).id().onCreate(gen.uuid()),
+                text: field.namedType(TextLevel),
+                instant: field.namedType(InstantLevel),
+              },
+            }),
+          },
+        }),
+      ),
     ),
   ),
 );

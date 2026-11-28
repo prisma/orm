@@ -16,19 +16,26 @@ const literalKindSchema = type("'literal'");
 const functionKindSchema = type("'function'");
 const ControlPolicySchema = type("'managed' | 'tolerated' | 'external' | 'observed'");
 
-export const ColumnDefaultLiteralSchema = type.declare<ColumnDefaultLiteral>().type({
-  kind: literalKindSchema,
-  value: 'string | number | boolean | null | unknown[] | Record<string, unknown>',
-});
+export const ColumnDefaultLiteralSchema = type
+  .declare<ColumnDefaultLiteral>()
+  .type({
+    kind: literalKindSchema,
+    value: 'string | number | boolean | null | unknown[] | Record<string, unknown>',
+  })
+  .onUndeclaredKey('reject');
 
-export const ColumnDefaultFunctionSchema = type.declare<ColumnDefaultFunction>().type({
-  kind: functionKindSchema,
-  expression: 'string',
-});
+export const ColumnDefaultFunctionSchema = type
+  .declare<ColumnDefaultFunction>()
+  .type({
+    kind: functionKindSchema,
+    expression: 'string',
+  })
+  .onUndeclaredKey('reject');
 
 export const ColumnDefaultSchema = ColumnDefaultLiteralSchema.or(ColumnDefaultFunctionSchema);
 
 const StorageValueSetRefSchema = type({
+  '+': 'reject',
   plane: "'storage'",
   namespaceId: 'string',
   entityKind: "'valueSet'",
@@ -66,23 +73,31 @@ const StorageColumnSchema = type({
  * ordered `values` array of codec-encoded permitted values.
  */
 export const StorageValueSetSchema = type({
+  '+': 'reject',
   kind: "'valueSet'",
   values: type('string | number | boolean | null | unknown[] | Record<string, unknown>')
     .array()
     .readonly(),
 });
 
-const PrimaryKeySchema = type.declare<PrimaryKeyInput>().type({
-  columns: type.string.array().readonly(),
-  'name?': 'string',
-});
+const PrimaryKeySchema = type
+  .declare<PrimaryKeyInput>()
+  .type({
+    columns: type.string.array().readonly(),
+    'name?': 'string',
+  })
+  .onUndeclaredKey('reject');
 
-const UniqueConstraintSchema = type.declare<UniqueConstraintInput>().type({
-  columns: type.string.array().readonly(),
-  'name?': 'string',
-});
+const UniqueConstraintSchema = type
+  .declare<UniqueConstraintInput>()
+  .type({
+    columns: type.string.array().readonly(),
+    'name?': 'string',
+  })
+  .onUndeclaredKey('reject');
 
 export const IndexSchema = type({
+  '+': 'reject',
   name: 'string',
   'prefix?': 'string',
   'columns?': type.string.array().readonly(),
@@ -120,14 +135,17 @@ export const ForeignKeyIndexSchema = type
       .or({ '+': 'reject', unique: type.string.array().readonly() }),
   );
 
-export const ForeignKeySchema = type.declare<ForeignKeyInput>().type({
-  source: ForeignKeySourceSchema,
-  target: ForeignKeyReferenceSchema,
-  'name?': 'string',
-  'onDelete?': ReferentialActionSchema,
-  'onUpdate?': ReferentialActionSchema,
-  'index?': ForeignKeyIndexSchema.or('boolean'),
-});
+export const ForeignKeySchema = type
+  .declare<ForeignKeyInput>()
+  .type({
+    source: ForeignKeySourceSchema,
+    target: ForeignKeyReferenceSchema,
+    'name?': 'string',
+    'onDelete?': ReferentialActionSchema,
+    'onUpdate?': ReferentialActionSchema,
+    'index?': ForeignKeyIndexSchema.or('boolean'),
+  })
+  .onUndeclaredKey('reject');
 
 export const CheckConstraintSchema = type({
   '+': 'reject',

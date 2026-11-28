@@ -81,8 +81,10 @@
     "./contract/contract-validation-error": "./dist/contract__contract-validation-error.mjs",
     "./contract/default-namespace": "./dist/contract__default-namespace.mjs",
     "./contract/enum-accessor": "./dist/contract__enum-accessor.mjs",
+    "./contract/format-version": "./dist/contract__format-version.mjs",
     "./contract/hashing": "./dist/contract__hashing.mjs",
     "./contract/hashing-utils": "./dist/contract__hashing-utils.mjs",
+    "./contract/internal/format-version": "./dist/contract__internal__format-version.mjs",
     "./contract/is-plain-record": "./dist/contract__is-plain-record.mjs",
     "./contract/resolve-domain-model": "./dist/contract__resolve-domain-model.mjs",
     "./contract/types": "./dist/contract__types.mjs",
@@ -219,6 +221,7 @@
     "./utils/suppress-idle-connection-errors": "./dist/utils__suppress-idle-connection-errors.mjs",
     "./utils/text": "./dist/utils__text.mjs",
     "./utils/types": "./dist/utils__types.mjs",
+    "./utils/upgrade-guides": "./dist/utils__upgrade-guides.mjs",
     "./vite-plugin-contract-emit": "./dist/vite-plugin-contract-emit.mjs",
     "./package.json": "./package.json"
   },

@@ -9,6 +9,7 @@ A ref declares the policies its database should have:
 ```json
 // migrations/app/refs/production.json
 {
+  "formatVersion": 1,
   "hash": "4b1c…e09a",
   "invariants": [],
   "policies": {

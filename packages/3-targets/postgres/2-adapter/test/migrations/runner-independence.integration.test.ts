@@ -168,11 +168,11 @@ describe('migration apply runner independence from the contract snapshot store -
       // would, then materialise the packages (migration.json + ops.json
       // only — the runner never reads the store).
       await writeContractSnapshot(migrationsDir, STORAGE_HASH_C1, {
-        contractJson: contractC1,
+        contractJson: { formatVersion: 1, ...contractC1 },
         contractDts: '// placeholder\nexport {};\n',
       });
       await writeContractSnapshot(migrationsDir, STORAGE_HASH_C2, {
-        contractJson: contractC2,
+        contractJson: { formatVersion: 1, ...contractC2 },
         contractDts: '// placeholder\nexport {};\n',
       });
 

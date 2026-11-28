@@ -13,6 +13,7 @@ import { computeMigrationHash } from '@internal/migration-tools/hash';
 import { materialiseMigrationPackage } from '@internal/migration-tools/io';
 import { emitContractSpaceArtifacts } from '@internal/migration-tools/spaces';
 import { SqlStorage } from '@internal/sql-contract/types';
+import { SqliteContractSerializer } from '@internal/target-sqlite/runtime';
 import { sqliteCreateNamespace } from '@internal/target-sqlite/types';
 import { applicationDomainOf, timeouts } from '@repo/test-utils';
 import { join } from 'pathe';
@@ -57,6 +58,7 @@ const EXT_BASELINE_DIR = '20260101T0000_create_helper';
 // Stable 64-hex-char storage hashes: the contract-snapshot store keys its
 // on-disk directory by `storageHashHex(storage.storageHash)`, which requires
 // a well-formed 64-hex value.
+const serializer = new SqliteContractSerializer();
 const EXT_STORAGE_HASH_V1 = '1'.repeat(64);
 const EXT_STORAGE_HASH_V2 = '2'.repeat(64);
 
@@ -187,7 +189,7 @@ async function writeExtensionContractSpaceArtifacts(args: {
   await mkdir(migrationsDir, { recursive: true });
 
   await emitContractSpaceArtifacts(migrationsDir, EXT_SPACE_ID, {
-    contract: args.contract,
+    contract: serializer.serializeContract(args.contract),
     contractDts: '// placeholder\nexport {};\n',
     headRef: { hash: args.headHash, invariants: [...args.invariants] },
   });
@@ -235,7 +237,7 @@ function buildExtensionPack(args: {
     targetId: 'sqlite',
     version: '0.0.0-test',
     contractSpace: {
-      contractJson: args.contractJson,
+      contractJson: serializer.serializeContract(args.contractJson),
       migrations: [],
       headRef: { hash: args.headHash, invariants: [] },
     },
@@ -356,7 +358,7 @@ describe('db init / db update aggregate pipeline (CLI) - sqlite', {
     // (null→v1, v1→v2); the marker is at v1 so only the second edge
     // walks.
     await emitContractSpaceArtifacts(baseline.migrationsDir, EXT_SPACE_ID, {
-      contract: extContractV2,
+      contract: serializer.serializeContract(extContractV2),
       contractDts: '// placeholder\nexport {};\n',
       headRef: { hash: extContractV2.storage.storageHash, invariants: [] },
     });
@@ -659,7 +661,7 @@ describe('db init / db update aggregate pipeline (CLI) - sqlite', {
 
     // Bump extension to v2 with a *failing* op.
     await emitContractSpaceArtifacts(baseline.migrationsDir, EXT_SPACE_ID, {
-      contract: extContractV2,
+      contract: serializer.serializeContract(extContractV2),
       contractDts: '// placeholder\nexport {};\n',
       headRef: { hash: extContractV2.storage.storageHash, invariants: [] },
     });

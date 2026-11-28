@@ -1,9 +1,10 @@
 import type { Contract } from '@internal/contract/types';
 import type { SqlControlTargetDescriptor } from '@internal/family-sql/control';
 import type { SqlControlAdapter } from '@internal/family-sql/control-adapter';
-import type {
-  ControlTargetInstance,
-  MigrationRunner,
+import {
+  type ControlTargetInstance,
+  type MigrationRunner,
+  PRISMA_SPACE_ID,
 } from '@internal/framework-components/control';
 import { contractSpaceFromJson } from '@internal/migration-tools/spaces';
 import type { SqlStorage } from '@internal/sql-contract/types';
@@ -26,6 +27,7 @@ import { createPostgresMigrationPlanner } from '../core/migrations/planner';
 import type { PostgresPlanTargetDetails } from '../core/migrations/planner-target-details';
 import { postgresContractToSchema } from '../core/migrations/postgres-contract-to-schema';
 import { PostgresSchemaVerifier } from '../core/migrations/postgres-schema-verifier';
+import { readPostgresOperations } from '../core/migrations/read-operations';
 import { createPostgresMigrationRunner } from '../core/migrations/runner';
 import { PostgresContractSerializer } from '../core/postgres-contract-serializer';
 import { inferPostgresPslContract } from '../core/psl-infer/infer-psl-contract';
@@ -37,6 +39,7 @@ import {
 } from '../core/schema-ir/schema-node-kinds';
 
 const prismaTablesSpace = contractSpaceFromJson<Contract<SqlStorage>>({
+  spaceId: PRISMA_SPACE_ID,
   contractJson,
   migrations: [
     {
@@ -78,6 +81,7 @@ function createPostgresTargetDescriptor(): SqlControlTargetDescriptor<
     classifySubjectGranularity: postgresDiffSubjectGranularity,
     classifyEntityKind: postgresDiffSubjectEntityKind,
     accessChangesOf: recordedAccessChangesOf,
+    readOperations: readPostgresOperations,
     migrations: {
       createPlanner(adapter: SqlControlAdapter<'postgres'>) {
         return createPostgresMigrationPlanner(adapter);

@@ -1,6 +1,6 @@
-import { APP_UPGRADE_GUIDES_URL } from '@internal/errors/control';
 import type { MigrationRunnerFailure } from '@internal/framework-components/control';
 import { docsUrlFor } from '@internal/utils/structured-error';
+import { APP_UPGRADE_GUIDES_URL } from '@internal/utils/upgrade-guides';
 import { ActionableCliError, type CliStructuredError } from './cli-errors';
 import { chooseAction } from './next-actions';
 

@@ -39,6 +39,7 @@ export function mongoContractJson(params: {
   );
   const collections = params.storageCollections ?? { items: {} };
   return {
+    formatVersion: 1,
     targetFamily: 'mongo',
     target: 'mongo',
     profileHash: 'test',

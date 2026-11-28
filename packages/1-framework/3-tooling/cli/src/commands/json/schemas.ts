@@ -109,10 +109,18 @@ const missingInvariantsDiagnosticSchema = type({
   message: 'string',
 });
 
+const unreadableFileDiagnosticSchema = type({
+  code: '"MIGRATION.CHECK_PACKAGE_UNLOADABLE" | "MIGRATION.CHECK_REF_UNREADABLE"',
+  severity: '"warn" | "info"',
+  message: 'string',
+  hints: 'string[]',
+});
+
 export const statusDiagnosticSchema = contractUnreadableDiagnosticSchema
   .or(markerNotInHistoryDiagnosticSchema)
   .or(markerPoliciesUnreadableDiagnosticSchema)
-  .or(missingInvariantsDiagnosticSchema);
+  .or(missingInvariantsDiagnosticSchema)
+  .or(unreadableFileDiagnosticSchema);
 
 export type StatusDiagnosticJson = typeof statusDiagnosticSchema.infer;
 

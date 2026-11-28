@@ -22,7 +22,6 @@ Manual ContractIR creation:
 
 ```typescript
 const ir: ContractIR = {
-  schemaVersion: '1',
   targetFamily: 'sql',
   target: 'postgres',
   models: {},
@@ -72,7 +71,6 @@ Use factory functions when:
 ## Required Fields
 
 All `ContractIR` fields are required (non-optional). The factory function ensures all fields are present:
-- `schemaVersion`: string
 - `targetFamily`: string
 - `target`: string
 - `models`: Record<string, unknown> (can be empty `{}`)

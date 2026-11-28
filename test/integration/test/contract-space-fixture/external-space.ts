@@ -12,7 +12,9 @@ import type { SqlControlExtensionDescriptor } from '@internal/family-sql/control
 import type { ContractSpace } from '@internal/framework-components/control';
 import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonicalization-hooks';
 import { SqlStorage } from '@internal/sql-contract/types';
+import postgresTargetDescriptor from '@internal/target-postgres/control';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
+import { blindCast } from '@internal/utils/casts';
 
 const TARGET = 'postgres' as const;
 const TARGET_FAMILY = 'sql' as const;
@@ -73,7 +75,10 @@ const testExternalSpaceContract: Contract<SqlStorage> = {
 };
 
 const testExternalSpace: ContractSpace<Contract<SqlStorage>> = {
-  contractJson: testExternalSpaceContract,
+  contractJson: blindCast<
+    Contract<SqlStorage>,
+    'an extension descriptor carries its stored contract.json'
+  >(postgresTargetDescriptor.contractSerializer.serializeContract(testExternalSpaceContract)),
   migrations: [],
   headRef: { hash: TEST_EXTERNAL_HEAD_HASH, invariants: [] },
 };

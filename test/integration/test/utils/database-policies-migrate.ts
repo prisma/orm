@@ -298,7 +298,12 @@ export function definePolicyMigrateJourneys(withProject: WithPolicyProject, time
         mkdirSync(appRefsDir(project), { recursive: true });
         writeFileSync(
           refPath,
-          JSON.stringify({ hash: base, invariants: [], policies: { change: ['migrat'] } }),
+          JSON.stringify({
+            formatVersion: 1,
+            hash: base,
+            invariants: [],
+            policies: { change: ['migrat'] },
+          }),
         );
 
         const refused = await runMigrate(project.ctx, [

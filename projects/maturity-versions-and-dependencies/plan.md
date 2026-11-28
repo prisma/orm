@@ -20,7 +20,7 @@ Slices 1 to 4 are in the order of what cannot be changed after release `8.0`; sl
 | 5 | Every release's notes have a "How to upgrade" section | prisma/orm | nothing | the next release candidate after slice 1 |
 | 6, [TML-3956](https://linear.app/prisma-company/issue/TML-3956) | Apps that create-prisma generates list the platform packages | prisma/create-prisma | the first release of prisma/orm that contains slice 1 | create-prisma's move to that release |
 
-Status: slice 1 merged in prisma/orm#31204, and slice 2 in prisma/orm#31212. Slice 4's draft can be written while slice 3 is built. Slice 5 is independent of the others and starts after slice 1's pull request.
+Status: slice 1 merged in prisma/orm#31204, and slice 2 in prisma/orm#31212. Slice 4 is no longer part of this project (decided on 2026-11-27): the maturity levels on prisma.io belong to the compatibility stream's project for the public versioning policy, and what an application installs belongs to the GA plan's docs stream. A hand-over lists what each must say and its source on `main`. Slice 5 is dropped (decided on 2026-11-27): after release `8.0` an upgrade within Prisma 8 needs no changes for anything that is GA, so per-release upgrade instructions matter only for the release candidates, and no more work goes into them. The release notes already say, for each breaking change, what the reader must do. Slice 3 is one documentation pull request, in review. Slice 4's draft can be written while slice 3 is built. Slice 5 is independent of the others and starts after slice 1's pull request.
 
 ### 6. Apps that create-prisma generates list the platform packages
 
@@ -97,6 +97,19 @@ Agreed with the operator on 2026-11-25, through the stream. From the next releas
 ### 3. Cutting release `8.0` as `8.0.1`, one package alone, and an older major
 
 **After this slice:** a maintainer can cut release `8.0`, published as `8.0.1`, release a fix to one package, and release a fix to an older major, each with one command and a dry run that shows what will be published.
+
+**Built as one pull request, documentation only.** In review. What it does, and what was decided on the way (2026-11-27):
+
+- **The procedure for cutting release `8.0`,** in `docs/oss/releasing.md`, with a short one for later releases. No new command was needed: `node scripts/set-version.ts 8.0.1` already writes the plan, and the release skill is used with the target version set by hand. The release notes tell every user what to write in `package.json`, because an update does not move an exact release-candidate entry.
+- **The old release candidates are deprecated by a command in the procedure,** run by a maintainer after the publish. No script generates the list.
+- **The upgrade-guide check is unchanged.** The release skill already writes an empty guide when a release has nothing to say, and the users' upgrade flow reads its steps from the guide folders, so every release keeps a guide.
+- **A fix ships in the next release.** The team works on the expectation that anything on `main` can be released at any time. Not built: a fix to one package alone, release branches, and a release of an older major. That machinery is revisited only if the expectation about `main` changes.
+- **Nothing is built for a guide corrected after its release.** `prisma skills sync` is the only thing that moves skill files into a project, and the problem is not worth a mechanism or a process. The answer is to write the guides correctly.
+- **How long a major receives fixes** is already on the user page. `SECURITY.md` is rewritten on the day of release `8.0`, as a row of the procedure's table.
+- **ParadeDB** is published as `0.18.0` at release `8.0` unless it has left the repository by then. The procedure says what the release notes tell its users in either case.
+- **A small correction to the upgrade flows:** a caret is written only at the newest release, because a caret at an earlier step lets the install jump past it.
+
+The bullets below are the plan as first written. Where they describe a fix to one package, an older major, their dry runs, a deprecation script, reading guides from the newest release, or a change to the upgrade-guide check, they are not built.
 
 - **Cutting `8.0.1`** and any later minor or major, from the release skill. The repository's version, the git tag and the GitHub release are `8.0.1`; no package is published as `8.0.0`.
 - **Packages that move down from `rc`** (the design's section 2.1): at `8.0.1` each is published at its level, and every earlier release candidate of it is marked deprecated on the registry with a message that says where the package went. The trial showed that Yarn and Bun do not print that message, so the release notes and the upgrade instructions say it too.

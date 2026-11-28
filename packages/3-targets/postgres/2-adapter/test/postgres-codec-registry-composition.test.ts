@@ -70,6 +70,7 @@ const fixtureDataTypes = (descriptors: readonly { readonly dataType?: string }[]
     .map((id) => writtenFixtureTypes.get(id) ?? dataType(id, { read: (json) => json }));
 
 const contract = new SqlContractSerializer().deserializeContract({
+  formatVersion: 1,
   target: 'postgres',
   targetFamily: 'sql',
   profileHash: 'sha256:postgres-codec-registry-composition',

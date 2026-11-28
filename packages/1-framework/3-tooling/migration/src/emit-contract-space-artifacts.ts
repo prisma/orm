@@ -2,6 +2,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { canonicalizeJson } from '@internal/framework-components/utils';
 import { join } from 'pathe';
 import { writeContractSnapshot } from './contract-snapshot-store';
+import { parseRefDocument, printRefDocument } from './formats/ref/versions';
 import type { ContractSpaceHeadRef } from './read-contract-space-head-ref';
 import { assertValidSpaceId, spaceRefsDirectory } from './space-layout';
 
@@ -66,6 +67,9 @@ export async function emitContractSpaceArtifacts(
   const refsDir = spaceRefsDirectory(dir);
   await mkdir(refsDir, { recursive: true });
 
+  const headPath = join(refsDir, 'head.json');
+  const headOnDisk = await canonicalHeadOnDisk(headPath);
+
   const writtenPaths: string[] = [];
   const snapshot = await writeContractSnapshot(projectMigrationsDir, inputs.headRef.hash, {
     contractJson: inputs.contract,
@@ -74,26 +78,27 @@ export async function emitContractSpaceArtifacts(
   if (snapshot.written) writtenPaths.push(snapshot.dir);
 
   const sortedInvariants = [...inputs.headRef.invariants].sort();
-  const headJson = canonicalizeJson({
-    hash: inputs.headRef.hash,
-    invariants: sortedInvariants,
-  });
-  const headPath = join(refsDir, 'head.json');
-  if ((await canonicalHeadOnDisk(headPath)) !== headJson) {
+  const headJson = canonicalizeJson(
+    printRefDocument({ hash: inputs.headRef.hash, invariants: sortedInvariants }),
+  );
+  if (headOnDisk !== headJson) {
     await writeFile(headPath, `${headJson}\n`);
     writtenPaths.push(headPath);
   }
   return { writtenPaths };
 }
 
+/** The head ref on disk, printed as this release writes it; undefined when it is absent or corrupt. A format version this release cannot read is an error. */
 async function canonicalHeadOnDisk(headPath: string): Promise<string | undefined> {
+  let onDisk: unknown;
   try {
-    const onDisk: { hash?: unknown; invariants?: unknown } = JSON.parse(
-      await readFile(headPath, 'utf-8'),
-    );
-    if (!Array.isArray(onDisk.invariants)) return undefined;
-    return canonicalizeJson({ hash: onDisk.hash, invariants: [...onDisk.invariants].sort() });
+    onDisk = JSON.parse(await readFile(headPath, 'utf-8'));
   } catch {
     return undefined;
   }
+  const content = parseRefDocument(onDisk, headPath);
+  if (!content.ok) return undefined;
+  return canonicalizeJson(
+    printRefDocument({ ...content.value, invariants: [...content.value.invariants].sort() }),
+  );
 }

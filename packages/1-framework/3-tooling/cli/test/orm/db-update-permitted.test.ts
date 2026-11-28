@@ -35,7 +35,7 @@ beforeEach(() => {
   writeProjectManifest(projectDir);
   writeFileSync(
     join(projectDir, 'contract.json'),
-    JSON.stringify({ storage: { storageHash: DEST_HASH } }),
+    JSON.stringify({ formatVersion: 1, storage: { storageHash: DEST_HASH } }),
   );
   writeFileSync(join(projectDir, 'contract.d.ts'), 'export type Contract = never;\n');
   mocks.renderContractDts

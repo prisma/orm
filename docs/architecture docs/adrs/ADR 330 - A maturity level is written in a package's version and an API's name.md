@@ -207,7 +207,7 @@ The release scripts compute these ranges, and a check before publishing refuses 
 | An extension | a GA package | That release or any later one: `^8.3.0` | An application can move to `8.6` and keep an extension built for `8.3`. An extension maintained outside this repository is not published with our releases at all. |
 | An extension | a package below GA | The same minor: `~8.3.0-ea.0` | A package below GA may change in the next minor, so the extension cannot promise to work with it. |
 
-The third row assumes the extension uses only GA functions. An extension that calls a function below GA, such as `preview_search`, must accept that package within one minor only (`~8.3.0`), because the function may change in the next.
+The third row assumes the extension uses only the GA functions of that package. For an extension or a library integration in this repository that is a rule: none of them, whatever its own level, uses an API below GA of a GA package. The release scripts rely on it: they write the caret because the accepted package is GA and the accepting package is an extension, a library integration or a package with its own version, and they do not read its code. No check enforces the rule; reviewers do. An extension maintained outside this repository may use such an API, such as `preview_search`. It must then accept that package within one minor only (`~8.3.0`), because the function may change in the next.
 
 ## What goes in an application's package.json
 

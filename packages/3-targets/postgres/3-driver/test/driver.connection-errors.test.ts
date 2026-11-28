@@ -18,12 +18,17 @@ function fakeClient(query: (client: EventEmitter) => Promise<unknown>) {
   });
 }
 
+/** A pool that opens a client on each checkout and, as pg-pool does, emits `connect` for it. */
 function fakePool(connect: () => Promise<unknown>): Pool {
-  return {
-    connect: vi.fn(connect),
+  const events = new EventEmitter();
+  return Object.assign(events, {
+    connect: vi.fn(async () => {
+      const client = await connect();
+      events.emit('connect', client);
+      return client;
+    }),
     end: vi.fn(async () => {}),
-    on: () => undefined,
-  } as unknown as Pool;
+  }) as unknown as Pool;
 }
 
 const codeLessError = () => new Error('Connection terminated unexpectedly');
