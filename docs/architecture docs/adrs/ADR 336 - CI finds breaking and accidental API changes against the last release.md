@@ -3,7 +3,7 @@
 **Status:** Accepted
 **Date:** 2026-11-27
 **Domain:** Guardrails & CI
-**Related:** [ADR 242 — Public npm surface](ADR%20242%20-%20Public%20npm%20surface%20-%20single%20%40prisma%20scope%20with%20consolidated%20publish%20packages.md) (which packages are published), [Versioning](../../oss/versioning.md) (the compatibility promise, maturity levels, and how a release is versioned), [Public API compatibility checks](../../Public%20API%20Compatibility.md) (the contributor guide)
+**Related:** [ADR 341 — A set of values that may grow is open, and its type says so](ADR%20341%20-%20A%20set%20of%20values%20that%20may%20grow%20is%20open%2C%20and%20its%20type%20says%20so.md) (which sets may gain a value, checked by `pnpm api:sets`), [ADR 242 — Public npm surface](ADR%20242%20-%20Public%20npm%20surface%20-%20single%20%40prisma%20scope%20with%20consolidated%20publish%20packages.md) (which packages are published), [Versioning](../../oss/versioning.md) (the compatibility promise, maturity levels, and how a release is versioned), [Public API compatibility checks](../../Public%20API%20Compatibility.md) (the contributor guide)
 
 ---
 
