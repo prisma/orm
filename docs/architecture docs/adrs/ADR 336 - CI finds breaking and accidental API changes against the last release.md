@@ -247,7 +247,8 @@ Reviewers, people and agents, then judge what CI cannot: whether each addition i
 
 ## What the checks do not see
 
-- **Behaviour.** Runtime behaviour, command output and file formats. Of error codes, a separate check sees only that each code the last release's JavaScript contains is still in the build's (`pnpm api:compat:error-codes`), not which failure raises it.
+- **Behaviour.** Runtime behaviour, command output and file formats.
+- **Which failure raises an error code.** A separate check, `pnpm api:compat:error-codes`, sees only that each code that appears in the last release's published JavaScript still appears in the build's. It finds a code wherever its text is, including places that only compare a code, such as a `case` in the command-line tool. So a code that is no longer raised, but is still compared somewhere, passes.
 - **Undecided comparisons.** A break inside a comparison TypeScript cannot settle is not seen. These are mostly generic builders and clients. The example apps cover their result types, as far as the apps use them.
 - **Result types the example apps do not use.**
 - **Two gaps in the example-app check.** An app that the pull request deletes is skipped. And each app is compiled with the third-party dependencies the pull request installs, not those of the last release.

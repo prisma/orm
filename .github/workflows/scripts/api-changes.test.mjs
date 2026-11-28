@@ -434,17 +434,20 @@ describe('record files', () => {
 
   it('lists a changed record of a removed package under the package, which must be named', () => {
     const gone = { package: '@prisma/orm-gone', lastRelease: '8.1.0', reason: 'merged into orm-x' };
-    assert.deepEqual(apiChanges([{ source: 'removed', before: undefined, after: json([gone]) }]), [
-      {
-        packageName: '@prisma/orm-gone',
-        heading: 'packages/9-public/removed-packages.json: @prisma/orm-gone',
-        added: [
-          '{"package":"@prisma/orm-gone","lastRelease":"8.1.0","reason":"merged into orm-x"}',
-        ],
-        removed: [],
-        exports: ['@prisma/orm-gone'],
-      },
-    ]);
+    assert.deepEqual(
+      apiChanges([{ source: 'removedPackages', before: undefined, after: json([gone]) }]),
+      [
+        {
+          packageName: '@prisma/orm-gone',
+          heading: 'packages/9-public/removed-packages.json: @prisma/orm-gone',
+          added: [
+            '{"package":"@prisma/orm-gone","lastRelease":"8.1.0","reason":"merged into orm-x"}',
+          ],
+          removed: [],
+          exports: ['@prisma/orm-gone'],
+        },
+      ],
+    );
   });
 
   it('lists a changed record of a removed error code under the code, which must be named', () => {
@@ -465,6 +468,7 @@ describe('record files', () => {
             '{"code":"ORM.GONE","lastRelease":"8.1.0","replacedBy":"ORM.NEW","reason":"renamed"}',
           ],
           exports: ['ORM.GONE'],
+          errorCode: true,
         },
       ],
     );
@@ -546,6 +550,29 @@ describe('record files', () => {
     assert.ok(body.includes('- `@prisma/p`:'), body);
   });
 
+  it('calls a changed removed-code record the removal of an error code in the comment', () => {
+    const gone = (code) => ({ code, lastRelease: '8.1.0', replacedBy: null, reason: 'unused' });
+    const one = commentBody(
+      apiChanges([{ source: 'removedCodes', before: undefined, after: json([gone('ORM.A')]) }]),
+    );
+    assert.match(one, /This pull request changes the recorded removal of one error code\./);
+    assert.doesNotMatch(one, /package or app/);
+    const mixed = commentBody(
+      apiChanges([
+        { source: 'breaks', packageName: '@prisma/p', before: undefined, after: json([brk('A')]) },
+        {
+          source: 'removedCodes',
+          before: undefined,
+          after: json([gone('ORM.A'), gone('ORM.B')]),
+        },
+      ]),
+    );
+    assert.match(
+      mixed,
+      /changes the recorded breaks or expected example-app errors of one package or app and the recorded removal of 2 error codes\./,
+    );
+  });
+
   it('fails a pull request that changes only a record file until the description names it', async () => {
     const quiet = {
       repository: 'o/r',
@@ -613,7 +640,7 @@ describe('readChangedFiles', () => {
       { source: 'breaks', packageName: '@prisma/orm-postgres', before: undefined, after: '[]' },
       { source: 'api', packageName: '@prisma/orm-postgres', before: 'before', after: 'after' },
       { source: 'removedCodes', packageName: undefined, before: undefined, after: '[3]' },
-      { source: 'removed', packageName: undefined, before: undefined, after: '[]' },
+      { source: 'removedPackages', packageName: undefined, before: undefined, after: '[]' },
     ]);
     assert.equal(
       calls[0],

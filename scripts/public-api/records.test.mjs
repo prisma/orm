@@ -24,7 +24,7 @@ describe('validateRecords', () => {
   it('accepts the records of each record file', () => {
     deepStrictEqual(validateRecords('breaks', [breakRecord], 'f'), [breakRecord]);
     const removed = { package: '@prisma/orm-x', lastRelease: '8.0.0', reason: 'merged' };
-    deepStrictEqual(validateRecords('removed', [removed], 'f'), [removed]);
+    deepStrictEqual(validateRecords('removedPackages', [removed], 'f'), [removed]);
     const app = {
       app: 'demo',
       file: 'src/a.ts',

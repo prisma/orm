@@ -14,7 +14,7 @@ import {
   reportText,
   selectPackages,
 } from './api-compat.mjs';
-import { REMOVED_FILE, RecordsError } from './records.mjs';
+import { REMOVED_PACKAGES_FILE, RecordsError } from './records.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const work = join(here, '..', '..', 'wip', `api-compat-main-tests-${process.pid}`);
@@ -199,7 +199,7 @@ describe('the report', () => {
       version: '8.0.0',
       results: [
         {
-          name: REMOVED_FILE,
+          name: REMOVED_PACKAGES_FILE,
           recordsFile: true,
           problems: ['@prisma/orm-x: the package is still in the repository'],
         },

@@ -1,4 +1,4 @@
-// The committed records of failures accepted against the last release, in three files:
+// The committed records of failures accepted against the last release, in four files:
 //
 // - api-breaks.json beside a package's api.txt: a break the type tests find, as { "path", "export",
 //   "test", "kind", "lastRelease", "fingerprint", "reason" }. The fingerprint is of the export's
@@ -10,9 +10,10 @@
 // - examples/last-release-errors.json: an error in a last release's example app, as { "app",
 //   "file", "line", "code", "message", "kind", "lastRelease", "reason" }. The tag's files never
 //   change, so its line and message identify the error.
-// - packages/9-public/removed-error-codes.json: an error code the last release raised that the
-//   build no longer does, as { "code", "lastRelease", "replacedBy", "reason" }. `replacedBy` is the
-//   code raised in its place, or null.
+// - packages/9-public/removed-error-codes.json: an error code in the last release's published
+//   code that is not in the build's, as { "code", "lastRelease", "replacedBy", "reason" }.
+//   `replacedBy` is the code that takes its place, or null when none does. A removed code is
+//   always a break.
 //
 // `kind` is `allowed` for a change the compatibility policy allows that a check reports anyway,
 // and `break` for a deliberate break, which the release notes must name. `lastRelease` is the
@@ -25,7 +26,7 @@ import { compareCodeUnits } from './api-lines.mjs';
 import { compareVersions, isVersion } from './release.mjs';
 
 export const BREAKS_FILE = 'api-breaks.json';
-export const REMOVED_FILE = 'packages/9-public/removed-packages.json';
+export const REMOVED_PACKAGES_FILE = 'packages/9-public/removed-packages.json';
 export const EXAMPLES_FILE = 'examples/last-release-errors.json';
 export const REMOVED_CODES_FILE = 'packages/9-public/removed-error-codes.json';
 export const KINDS = ['allowed', 'break'];
@@ -83,7 +84,7 @@ const FIELDS = {
     fingerprint,
     reason,
   },
-  removed: { package: nonEmpty, lastRelease: version, reason },
+  removedPackages: { package: nonEmpty, lastRelease: version, reason },
   examples: {
     app: nonEmpty,
     file: nonEmpty,
@@ -97,7 +98,7 @@ const FIELDS = {
   removedCodes: { code: dottedCode, lastRelease: version, replacedBy: replacement, reason },
 };
 
-// The fields of the records of each record file (`breaks`, `removed` or `examples`), in the order
+// The fields of the records of each record file (`breaks`, `removedPackages`, `examples` or `removedCodes`), in the order
 // they are written.
 export const RECORD_KEYS = Object.fromEntries(
   Object.entries(FIELDS).map(([recordFile, fields]) => [recordFile, Object.keys(fields)]),

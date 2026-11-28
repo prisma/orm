@@ -1,14 +1,15 @@
-// The release rules both checks against the last release share: which release is the last one,
-// how versions are ordered, and which exports are exempt.
+// The release rules the checks against the last release share: which release is the last one,
+// how versions are ordered, which exports are exempt, and how the registry is read.
 //
 // The last release follows docs/oss/versioning.md: the root package.json `version` on a ref is the
 // version published from it, and every package carries it. So the last release is the version at
 // the pull request's base, or, while a release bump has merged and its tag is not yet pushed, the
 // newest release tag below it. Dev builds (`-dev.`) are not releases. The registry is not asked
 // for its `latest`, which a yanked release or a rewritten dist-tag would move; it is asked only
-// whether each package was published at that version.
+// whether each package was published at that version, and for its tarball.
 
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 
 const REGISTRY = 'https://registry.npmjs.org';
 const IDENTIFIERS = '[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*';
@@ -136,33 +137,74 @@ const describeError = (error) =>
     ? `${error.message} (${error.cause.message})`
     : String(error?.message ?? error);
 
-// The registry's abbreviated metadata of a package, or undefined when it has none. A request that
-// fails to reach the registry is tried again; an answer that is an error is not.
-export async function fetchPackument(
-  name,
-  { fetchImpl = fetch, attempts = NETWORK_ATTEMPTS, retryDelayMs = 2000 } = {},
+// A request to the registry, read by `read`, or undefined when the registry has nothing there. It
+// is tried again, after a wait that grows with each attempt, when it does not reach the registry,
+// when the registry answers with a server error, or when the answer breaks off while it is read.
+async function requestRegistry(
+  url,
+  { what = url, read, init, fetchImpl = fetch, attempts = NETWORK_ATTEMPTS, retryDelayMs = 2000 },
 ) {
   let failure;
   for (let attempt = 1; attempt <= attempts; attempt++) {
+    if (attempt > 1) await sleep(retryDelayMs * (attempt - 1));
     let response;
     try {
-      response = await fetchImpl(`${REGISTRY}/${name.replace('/', '%2f')}`, {
-        headers: { accept: 'application/vnd.npm.install-v1+json' },
-      });
+      response = await fetchImpl(url, init);
+      if (response.status === 404) return undefined;
+      if (response.ok) return await read(response);
     } catch (error) {
       failure = describeError(error);
-      if (attempt < attempts) await sleep(retryDelayMs * attempt);
       continue;
     }
-    if (response.status === 404) return undefined;
-    if (response.ok) return await response.json();
-    throw new LastReleaseError(
-      `could not read ${name} from the registry: it answered ${response.status}`,
-    );
+    if (response.status < 500) {
+      throw new LastReleaseError(
+        `could not read ${what} from the registry: it answered ${response.status}`,
+      );
+    }
+    failure = `it answered ${response.status}`;
   }
   throw new LastReleaseError(
-    `could not read ${name} from the registry after ${attempts} attempts: ${failure}`,
+    `could not read ${what} from the registry after ${attempts} attempts: ${failure}`,
   );
+}
+
+// The registry's abbreviated metadata of a package, or undefined when it has none.
+export function fetchPackument(name, options = {}) {
+  return requestRegistry(`${REGISTRY}/${name.replace('/', '%2f')}`, {
+    ...options,
+    what: name,
+    read: (response) => response.json(),
+    init: { headers: { accept: 'application/vnd.npm.install-v1+json' } },
+  });
+}
+
+// The published tarball of a package at a version, checked against the integrity the registry
+// lists, or undefined when the registry has no such version.
+export async function fetchReleaseTarball(
+  name,
+  version,
+  { packument = fetchPackument, ...options } = {},
+) {
+  const dist = (await packument(name))?.versions?.[version]?.dist;
+  if (dist === undefined) return undefined;
+  const tarball = String(dist.tarball);
+  if (!tarball.startsWith(`${REGISTRY}/`)) {
+    throw new LastReleaseError(`${name}@${version}: the tarball ${tarball} is not on the registry`);
+  }
+  const bytes = await requestRegistry(tarball, {
+    ...options,
+    read: async (response) => Buffer.from(await response.arrayBuffer()),
+  });
+  if (bytes === undefined) {
+    throw new LastReleaseError(`${name}@${version}: the registry has no tarball at ${tarball}`);
+  }
+  const integrity = String(dist.integrity);
+  const separator = integrity.indexOf('-');
+  const digest = createHash(integrity.slice(0, separator)).update(bytes).digest('base64');
+  if (digest !== integrity.slice(separator + 1)) {
+    throw new LastReleaseError(`${name}@${version}: the tarball does not match its integrity`);
+  }
+  return bytes;
 }
 
 export async function isReleased(name, version, packument = fetchPackument) {

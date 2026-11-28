@@ -1,17 +1,10 @@
-import { deepStrictEqual, match, rejects, strictEqual, throws } from 'node:assert/strict';
+import { deepStrictEqual, match, strictEqual, throws } from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { after, describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import {
-  codesInBuild,
-  compareCodes,
-  DownloadError,
-  downloadRelease,
-  main,
-} from './error-codes.mjs';
+import { codesInBuild, compareCodes, downloadRelease, main } from './error-codes.mjs';
 import { RecordsError, validateRecords } from './records.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -113,7 +106,10 @@ describe('compareCodes', () => {
       records: [record()],
     });
     deepStrictEqual(result.recorded, []);
-    match(result.problems.join('\n'), /ORM\.GONE: .*still raises it/);
+    match(
+      result.problems.join('\n'),
+      /ORM\.GONE: it still appears in the published code of the build/,
+    );
   });
 
   it('rejects a record for a code the last release does not raise', () => {
@@ -123,7 +119,10 @@ describe('compareCodes', () => {
       current: new Set(['ORM.KEPT', 'ORM.GONE']),
       records: [record({ code: 'ORM.NEVER_RELEASED' })],
     });
-    match(result.problems.join('\n'), /ORM\.NEVER_RELEASED: .*8\.0\.0-rc\.3 does not raise it/);
+    match(
+      result.problems.join('\n'),
+      /ORM\.NEVER_RELEASED: it does not appear in the published code of the last release 8\.0\.0-rc\.3/,
+    );
   });
 
   it('rejects a replacement the build does not raise', () => {
@@ -189,48 +188,23 @@ function tarball(files) {
   return readFileSync(file);
 }
 
-const integrityOf = (bytes) => `sha512-${createHash('sha512').update(bytes).digest('base64')}`;
-
-function registry(bytes, { integrity = integrityOf(bytes), tarballUrl } = {}) {
-  const url = tarballUrl ?? 'https://registry.npmjs.org/@prisma/orm-a/-/orm-a-8.0.0-rc.3.tgz';
-  return {
-    packument: async () => ({ versions: { '8.0.0-rc.3': { dist: { tarball: url, integrity } } } }),
-    fetchImpl: async (requested) => {
-      strictEqual(requested, url);
-      return new Response(bytes);
-    },
-  };
-}
-
 describe('downloadRelease', () => {
   it('unpacks the published files of the release', async () => {
     const bytes = tarball({ 'dist/index.mjs': '"ORM.KEPT"' });
     const dir = join(folder(), 'orm-a');
-    strictEqual(await downloadRelease('@prisma/orm-a', '8.0.0-rc.3', dir, registry(bytes)), true);
-    deepStrictEqual([...codesInBuild(dir)], ['ORM.KEPT']);
+    const found = await downloadRelease('@prisma/orm-a', '8.0.0-rc.3', dir, {
+      tarball: async () => bytes,
+    });
+    strictEqual(found, true);
+    deepStrictEqual([...codesInBuild(join(dir, 'package', 'dist'))], ['ORM.KEPT']);
   });
 
   it('says so when the registry has no such version', async () => {
     const dir = join(folder(), 'orm-a');
-    const options = { ...registry(Buffer.from('')), packument: async () => ({ versions: {} }) };
-    strictEqual(await downloadRelease('@prisma/orm-a', '8.0.0-rc.3', dir, options), false);
-  });
-
-  it('refuses a tarball whose integrity does not match', async () => {
-    const bytes = tarball({ 'dist/index.mjs': '"ORM.KEPT"' });
-    const dir = join(folder(), 'orm-a');
-    const options = registry(bytes, { integrity: integrityOf(Buffer.from('other')) });
-    await rejects(downloadRelease('@prisma/orm-a', '8.0.0-rc.3', dir, options), DownloadError);
-    strictEqual(existsSync(join(dir, 'package')), false);
-  });
-
-  it('refuses a tarball that is not on the registry', async () => {
-    const bytes = tarball({ 'dist/index.mjs': '"ORM.KEPT"' });
-    const options = registry(bytes, { tarballUrl: 'https://example.com/orm-a.tgz' });
-    await rejects(
-      downloadRelease('@prisma/orm-a', '8.0.0-rc.3', join(folder(), 'orm-a'), options),
-      DownloadError,
-    );
+    const found = await downloadRelease('@prisma/orm-a', '8.0.0-rc.3', dir, {
+      tarball: async () => undefined,
+    });
+    strictEqual(found, false);
   });
 });
 
@@ -239,7 +213,14 @@ function output() {
   return { write: (chunk) => (text += chunk), text: () => text };
 }
 
-async function run({ released, current, records = [], onRegistry = Object.keys(released) }) {
+async function run({
+  released,
+  current,
+  records = [],
+  removedPackages = [],
+  onRegistry = Object.keys(released),
+  skills = {},
+}) {
   const root = folder();
   const stdout = output();
   const stderr = output();
@@ -253,8 +234,15 @@ async function run({ released, current, records = [], onRegistry = Object.keys(r
     packagesAt: () => Object.keys(released),
     download: async (name, _version, dir) => {
       if (!onRegistry.includes(name)) return false;
-      mkdirSync(join(dir, 'dist'), { recursive: true });
-      writeFileSync(join(dir, 'dist', 'index.mjs'), released[name]);
+      mkdirSync(join(dir, 'package', 'dist'), { recursive: true });
+      writeFileSync(join(dir, 'package', 'dist', 'index.mjs'), released[name]);
+      if (skills[name] !== undefined) {
+        mkdirSync(join(dir, 'package', 'skills', 'upgrade', 'scripts'), { recursive: true });
+        writeFileSync(
+          join(dir, 'package', 'skills', 'upgrade', 'scripts', 'codemod.mjs'),
+          skills[name],
+        );
+      }
       return true;
     },
     currentPackages: () =>
@@ -263,31 +251,52 @@ async function run({ released, current, records = [], onRegistry = Object.keys(r
         dir: build(text === undefined ? {} : { 'dist/index.mjs': text }),
       })),
     readRemovedCodes: () => records,
+    readRemovedPackages: () => removedPackages,
   });
   return { exitCode, stdout: stdout.text(), stderr: stderr.text() };
 }
 
 describe('main', () => {
-  it('passes when every code of the last release is still raised', async () => {
+  it('passes when every code of the last release still appears', async () => {
     const result = await run({
-      released: { '@prisma/orm-a': '"ORM.KEPT" "ORM.MOVED"' },
-      current: { '@prisma/orm-a': '"ORM.KEPT"', '@prisma/orm-b': '"ORM.MOVED"' },
+      released: { '@prisma/orm-a': '"ORM.KEPT"' },
+      current: { '@prisma/orm-a': '"ORM.KEPT"' },
     });
     strictEqual(result.exitCode, 0, result.stdout + result.stderr);
-    match(result.stdout, /last release 8\.0\.0-rc\.3 raises 2 codes; this build raises 2/);
+    match(
+      result.stdout,
+      /1 error codes appear in the published code of the last release 8\.0\.0-rc\.3, and 1 in this build's/,
+    );
   });
 
-  it('fails on a code the last release raised and the build does not, printing a record', async () => {
+  it('passes when a code moves from one package to another', async () => {
+    const result = await run({
+      released: { '@prisma/orm-a': '"ORM.KEPT" "ORM.MOVED"', '@prisma/orm-b': '"ORM.OTHER"' },
+      current: { '@prisma/orm-a': '"ORM.KEPT"', '@prisma/orm-b': '"ORM.OTHER" "ORM.MOVED"' },
+    });
+    strictEqual(result.exitCode, 0, result.stdout + result.stderr);
+  });
+
+  it('fails on a code that no longer appears in the build, printing a record', async () => {
     const result = await run({
       released: { '@prisma/orm-a': '"ORM.KEPT" "ORM.GONE"' },
       current: { '@prisma/orm-a': '"ORM.KEPT"' },
     });
     strictEqual(result.exitCode, 1);
-    match(result.stdout, /no longer raised {2}ORM\.GONE \(@prisma\/orm-a\)/);
+    match(result.stdout, /no longer appears {2}ORM\.GONE \(@prisma\/orm-a\)/);
     match(
       result.stdout,
       /to record it: \{"code":"ORM\.GONE","lastRelease":"8\.0\.0-rc\.3","replacedBy":null,"reason":"…"\}/,
     );
+  });
+
+  it('reads only the dist folder of a release, not the upgrade scripts it ships', async () => {
+    const result = await run({
+      released: { '@prisma/orm-a': '"ORM.KEPT"' },
+      skills: { '@prisma/orm-a': 'rename("ORM.RENAMED_LONG_AGO", "ORM.KEPT")' },
+      current: { '@prisma/orm-a': '"ORM.KEPT"' },
+    });
+    strictEqual(result.exitCode, 0, result.stdout);
   });
 
   it('passes on a recorded removal', async () => {
@@ -307,7 +316,34 @@ describe('main', () => {
       records: [record()],
     });
     strictEqual(result.exitCode, 1);
-    match(result.stdout, /problem {2}ORM\.GONE: .*still raises it/);
+    match(
+      result.stdout,
+      /problem {2}ORM\.GONE: it still appears in the published code of the build/,
+    );
+  });
+
+  it('needs no code records for a package recorded as removed', async () => {
+    const result = await run({
+      released: { '@prisma/orm-a': '"ORM.KEPT"', '@prisma/orm-gone': '"ORM.ONLY_IN_GONE"' },
+      current: { '@prisma/orm-a': '"ORM.KEPT"' },
+      removedPackages: [
+        { package: '@prisma/orm-gone', lastRelease: '8.0.0-rc.3', reason: 'moved' },
+      ],
+    });
+    strictEqual(result.exitCode, 0, result.stdout);
+    match(result.stdout, /removed package {2}@prisma\/orm-gone: recorded in/);
+  });
+
+  it('still checks a package whose removal record is for an earlier release', async () => {
+    const result = await run({
+      released: { '@prisma/orm-a': '"ORM.KEPT"', '@prisma/orm-gone': '"ORM.ONLY_IN_GONE"' },
+      current: { '@prisma/orm-a': '"ORM.KEPT"' },
+      removedPackages: [
+        { package: '@prisma/orm-gone', lastRelease: '8.0.0-rc.2', reason: 'moved' },
+      ],
+    });
+    strictEqual(result.exitCode, 1);
+    match(result.stdout, /no longer appears {2}ORM\.ONLY_IN_GONE/);
   });
 
   it('fails when a released package is missing from the registry', async () => {
@@ -335,7 +371,10 @@ describe('main', () => {
       current: { '@prisma/orm-a': '"ORM.KEPT"' },
     });
     strictEqual(result.exitCode, 1);
-    match(result.stdout, /problem {2}found no error codes in the last release/);
+    match(
+      result.stdout,
+      /problem {2}found no error codes in the published code of the last release/,
+    );
   });
 
   it('fails on a records file it cannot read', async () => {

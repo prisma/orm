@@ -1,19 +1,21 @@
 #!/usr/bin/env node
 // Usage: node scripts/public-api/error-codes.mjs
 //
-// Fails when an error code the last release could raise is no longer raised by this build, unless
-// packages/9-public/removed-error-codes.json records the removal (records.mjs). Users match on
-// these codes (ADR 239), so a code that disappears silently breaks their handling of it.
+// Fails when an error code that appears in the published code of the last release does not appear
+// in this build's, unless packages/9-public/removed-error-codes.json records the removal
+// (records.mjs). Users match on these codes (ADR 239), so a code that disappears silently breaks
+// their handling of it.
 //
-// Both sides are read the same way: the codes written as string literals in the published
-// JavaScript of each package, the last release's from its tarballs on the registry and this
-// build's from each package's dist folder. Source is not read, because it also holds factories no
-// published bundle keeps. The last release is the one api:compat compares against (release.mjs).
+// Both sides are read the same way: the codes written as string literals in the JavaScript of
+// each package's dist folder, the last release's from its tarball on the registry and this build's
+// from the package folder. Source is not read, because it also holds factories no published bundle
+// keeps. A literal counts wherever it is, so a code that is only compared, not raised, is present.
+// The codes of a package that removed-packages.json records as removed need no records of their
+// own. The last release is the one api:compat compares against (release.mjs).
 //
 // Needs `pnpm build` and network access to origin and to the registry.
 
 import { execFileSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
 import {
   appendFileSync,
   existsSync,
@@ -31,13 +33,14 @@ import { compareCodeUnits } from './api-lines.mjs';
 import {
   byLastRelease,
   REMOVED_CODES_FILE,
+  REMOVED_PACKAGES_FILE,
   RecordsError,
   readRecords,
   recordLine,
 } from './records.mjs';
 import {
-  fetchPackument,
   fetchReleaseTag,
+  fetchReleaseTarball,
   LastReleaseError,
   lastRelease,
   packagesAtTag,
@@ -45,10 +48,6 @@ import {
 
 const here = dirname(fileURLToPath(import.meta.url));
 export const DOWNLOAD_FOLDER = '.api-error-codes';
-const REGISTRY_TARBALLS = 'https://registry.npmjs.org/';
-const DOWNLOAD_ATTEMPTS = 3;
-
-export class DownloadError extends Error {}
 
 export function codesInBuild(dir) {
   const codes = new Set();
@@ -72,13 +71,13 @@ export function compareCodes({ version, baseline, current, records }) {
   const covering = new Map();
   for (const record of sorted.current) {
     const problem = current.has(record.code)
-      ? 'the build still raises it. Remove the record.'
+      ? 'it still appears in the published code of the build. Remove the record.'
       : !baseline.has(record.code)
-        ? `the last release ${version} does not raise it. Remove the record.`
+        ? `it does not appear in the published code of the last release ${version}, outside packages recorded as removed. Remove the record.`
         : covering.has(record.code)
           ? 'it has more than one record. Keep one.'
           : record.replacedBy !== null && !current.has(record.replacedBy)
-            ? `the record says replacedBy ${record.replacedBy}, which the build does not raise.`
+            ? `the record says replacedBy ${record.replacedBy}, which does not appear in the published code of the build.`
             : undefined;
     if (problem === undefined) covering.set(record.code, record);
     else problems.push(`${record.code}: ${problem}`);
@@ -99,45 +98,11 @@ export function compareCodes({ version, baseline, current, records }) {
   };
 }
 
-async function fetchTarball(url, fetchImpl) {
-  let failure;
-  for (let attempt = 1; attempt <= DOWNLOAD_ATTEMPTS; attempt++) {
-    let response;
-    try {
-      response = await fetchImpl(url);
-    } catch (error) {
-      failure = error.message;
-      continue;
-    }
-    if (!response.ok) throw new DownloadError(`${url}: the registry answered ${response.status}`);
-    return Buffer.from(await response.arrayBuffer());
-  }
-  throw new DownloadError(`${url}: no answer after ${DOWNLOAD_ATTEMPTS} attempts: ${failure}`);
-}
-
-// Unpacks the package's published tarball into `dir`, after checking it against the integrity the
-// registry lists. False when the registry has no such version.
-export async function downloadRelease(
-  name,
-  version,
-  dir,
-  { packument = fetchPackument, fetchImpl = fetch } = {},
-) {
-  const dist = (await packument(name))?.versions?.[version]?.dist;
-  if (dist === undefined) return false;
-  if (!String(dist.tarball).startsWith(REGISTRY_TARBALLS)) {
-    throw new DownloadError(
-      `${name}@${version}: the tarball ${dist.tarball} is not on the registry`,
-    );
-  }
-  const bytes = await fetchTarball(dist.tarball, fetchImpl);
-  const separator = String(dist.integrity).indexOf('-');
-  const algorithm = dist.integrity.slice(0, separator);
-  if (
-    createHash(algorithm).update(bytes).digest('base64') !== dist.integrity.slice(separator + 1)
-  ) {
-    throw new DownloadError(`${name}@${version}: the tarball does not match its integrity`);
-  }
+// Unpacks the package's published tarball into `dir`. False when the registry has no such
+// version.
+export async function downloadRelease(name, version, dir, { tarball = fetchReleaseTarball } = {}) {
+  const bytes = await tarball(name, version);
+  if (bytes === undefined) return false;
   rmSync(dir, { recursive: true, force: true });
   mkdirSync(dir, { recursive: true });
   const file = `${dir}.tgz`;
@@ -150,12 +115,17 @@ export async function downloadRelease(
   return true;
 }
 
-export function reportText({ version, baseline, current, comparison, problems }) {
+export function reportText({ version, baseline, current, removedPackages, comparison, problems }) {
   const lines = [
-    `api:compat:error-codes: last release ${version} raises ${baseline.size} codes; this build raises ${current.size}; a code no longer raised fails unless recorded in ${REMOVED_CODES_FILE}`,
+    `api:compat:error-codes: ${baseline.size} error codes appear in the published code of the last release ${version}, and ${current.size} in this build's; a code that no longer appears fails unless recorded in ${REMOVED_CODES_FILE}`,
   ];
+  for (const name of removedPackages) {
+    lines.push(
+      `  removed package  ${name}: recorded in ${REMOVED_PACKAGES_FILE}, so its codes are not checked`,
+    );
+  }
   for (const each of comparison.missing) {
-    lines.push(`  no longer raised  ${each.code} (${each.packages.join(', ')})`);
+    lines.push(`  no longer appears  ${each.code} (${each.packages.join(', ')})`);
     lines.push(`    to record it: ${recordLine(each.record, 'removedCodes')}`);
   }
   for (const each of comparison.recorded) {
@@ -174,6 +144,8 @@ export function reportText({ version, baseline, current, comparison, problems })
 const steps = {
   readRemovedCodes: (root) =>
     readRecords(join(root, REMOVED_CODES_FILE), 'removedCodes', REMOVED_CODES_FILE),
+  readRemovedPackages: (root) =>
+    readRecords(join(root, REMOVED_PACKAGES_FILE), 'removedPackages', REMOVED_PACKAGES_FILE),
   findRelease: (root) => lastRelease({ root }),
   fetchTag: fetchReleaseTag,
   packagesAt: packagesAtTag,
@@ -185,6 +157,47 @@ const steps = {
     })),
 };
 
+function codesOfBuild(packages, problems) {
+  const codes = new Set();
+  for (const { name, dir } of packages) {
+    const dist = join(dir, 'dist');
+    if (!existsSync(dist)) {
+      problems.push(`${name}: the package has no dist folder; run pnpm build`);
+      continue;
+    }
+    for (const code of codesInBuild(dist)) codes.add(code);
+  }
+  return codes;
+}
+
+async function codesOfRelease({ names, version, root, download, problems }) {
+  const codes = new Map();
+  for (const name of names) {
+    const dir = join(root, DOWNLOAD_FOLDER, version, name);
+    let found;
+    try {
+      found = await download(name, version, dir);
+    } catch (error) {
+      if (!(error instanceof LastReleaseError)) throw error;
+      problems.push(`${name}: ${error.message}`);
+      continue;
+    }
+    if (!found) {
+      problems.push(
+        `${name}: the release v${version} has this package, but the registry has no version ${version} of it; if it was published moments ago, the registry may not show it yet`,
+      );
+      continue;
+    }
+    const dist = join(dir, 'package', 'dist');
+    if (!existsSync(dist)) {
+      problems.push(`${name}: the published package has no dist folder`);
+      continue;
+    }
+    for (const code of codesInBuild(dist)) codes.set(code, [...(codes.get(code) ?? []), name]);
+  }
+  return codes;
+}
+
 export async function main({
   root,
   env = process.env,
@@ -192,19 +205,26 @@ export async function main({
   stderr = process.stderr,
   ...replaced
 }) {
-  const { readRemovedCodes, findRelease, fetchTag, packagesAt, download, currentPackages } = {
-    ...steps,
-    ...replaced,
-  };
+  const {
+    readRemovedCodes,
+    readRemovedPackages,
+    findRelease,
+    fetchTag,
+    packagesAt,
+    download,
+    currentPackages,
+  } = { ...steps, ...replaced };
   const fail = (message) => {
     stderr.write(`api:compat:error-codes: ${message}\n`);
     return 1;
   };
   let records;
+  let packageRecords;
   let version;
   let released;
   try {
     records = readRemovedCodes(root);
+    packageRecords = readRemovedPackages(root);
     const release = await findRelease(root);
     version = release.version;
     fetchTag(release.tag, root);
@@ -217,41 +237,30 @@ export async function main({
   }
 
   const problems = [];
-  const baseline = new Map();
-  const downloads = join(root, DOWNLOAD_FOLDER, version);
-  for (const name of released) {
-    const dir = join(downloads, name);
-    let found;
-    try {
-      found = await download(name, version, dir);
-    } catch (error) {
-      if (!(error instanceof DownloadError || error instanceof LastReleaseError)) throw error;
-      problems.push(`${name}: ${error.message}`);
-      continue;
-    }
-    if (!found) {
-      problems.push(
-        `${name}: the release v${version} has this package, but the registry has no version ${version} of it; if it was published moments ago, the registry may not show it yet`,
-      );
-      continue;
-    }
-    for (const code of codesInBuild(dir)) baseline.set(code, [...(baseline.get(code) ?? []), name]);
+  const inBuild = currentPackages(root);
+  const current = codesOfBuild(inBuild, problems);
+  const recordedRemoved = new Set(
+    byLastRelease(packageRecords, version, (record) => record.package).current.map(
+      (record) => record.package,
+    ),
+  );
+  const removedPackages = released.filter(
+    (name) => recordedRemoved.has(name) && !inBuild.some((each) => each.name === name),
+  );
+  const baseline = await codesOfRelease({
+    names: released.filter((name) => !removedPackages.includes(name)),
+    version,
+    root,
+    download,
+    problems,
+  });
+  if (baseline.size === 0) {
+    problems.push(`found no error codes in the published code of the last release ${version}`);
   }
-
-  const current = new Set();
-  for (const { name, dir } of currentPackages(root)) {
-    const dist = join(dir, 'dist');
-    if (!existsSync(dist)) {
-      problems.push(`${name}: the package has no dist folder; run pnpm build`);
-      continue;
-    }
-    for (const code of codesInBuild(dist)) current.add(code);
-  }
-  if (baseline.size === 0) problems.push(`found no error codes in the last release ${version}`);
-  if (current.size === 0) problems.push('found no error codes in this build');
+  if (current.size === 0) problems.push("found no error codes in this build's published code");
 
   const comparison = compareCodes({ version, baseline, current, records });
-  const text = reportText({ version, baseline, current, comparison, problems });
+  const text = reportText({ version, baseline, current, removedPackages, comparison, problems });
   stdout.write(text);
   if (env.GITHUB_STEP_SUMMARY) {
     appendFileSync(

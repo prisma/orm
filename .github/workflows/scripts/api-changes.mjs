@@ -1,7 +1,7 @@
 // Lists the lines a pull request adds to and removes from the packages' api.txt files, and the
 // records it adds to and removes from the four record files (scripts/public-api/records.mjs). Keeps
 // one comment with that list current, and fails until the description names each changed export,
-// and the package or app of each changed record.
+// and the package, app or error code of each changed record.
 
 import { execFileSync } from 'node:child_process';
 import { appendFileSync, readFileSync } from 'node:fs';
@@ -12,7 +12,7 @@ import {
   EXAMPLES_FILE,
   exportLabel,
   REMOVED_CODES_FILE,
-  REMOVED_FILE,
+  REMOVED_PACKAGES_FILE,
   recordLine,
 } from '../../../scripts/public-api/records.mjs';
 
@@ -44,7 +44,8 @@ export function apiChanges(files) {
   for (const file of files) {
     if (file.source === 'breaks') changes.push(...breakChanges(file));
     else if (file.source === 'examples') changes.push(...exampleChanges(file));
-    else if (file.source === 'removed') changes.push(...removedChanges(file, REMOVED_PACKAGES));
+    else if (file.source === 'removedPackages')
+      changes.push(...removedChanges(file, REMOVED_PACKAGES));
     else if (file.source === 'removedCodes') changes.push(...removedChanges(file, REMOVED_CODES));
     else changes.push(...listChanges(file));
   }
@@ -114,12 +115,22 @@ function exampleChanges({ before, after }) {
   });
 }
 
-const REMOVED_PACKAGES = { file: REMOVED_FILE, recordFile: 'removed', key: 'package' };
-const REMOVED_CODES = { file: REMOVED_CODES_FILE, recordFile: 'removedCodes', key: 'code' };
+const REMOVED_PACKAGES = {
+  file: REMOVED_PACKAGES_FILE,
+  recordFile: 'removedPackages',
+  key: 'package',
+  fields: {},
+};
+const REMOVED_CODES = {
+  file: REMOVED_CODES_FILE,
+  recordFile: 'removedCodes',
+  key: 'code',
+  fields: { errorCode: true },
+};
 
 // A record of a removed package is named by the package, and one of a removed error code by the
 // code.
-function removedChanges({ before, after }, { file, recordFile, key }) {
+function removedChanges({ before, after }, { file, recordFile, key, fields }) {
   const byName = (text) => {
     const names = new Map();
     for (const record of recordsOf(text, file)) {
@@ -137,7 +148,16 @@ function removedChanges({ before, after }, { file, recordFile, key }) {
       current.get(name) ?? new Set(),
     );
     if (added.length === 0 && removed.length === 0) return [];
-    return [{ packageName: name, heading: `${file}: ${name}`, added, removed, exports: [name] }];
+    return [
+      {
+        packageName: name,
+        heading: `${file}: ${name}`,
+        added,
+        removed,
+        exports: [name],
+        ...fields,
+      },
+    ];
   });
 }
 
@@ -152,7 +172,7 @@ export function readChangedFiles({ git }) {
     'packages/9-public/@prisma/*/api.txt',
     `packages/9-public/@prisma/*/${BREAKS_FILE}`,
     EXAMPLES_FILE,
-    REMOVED_FILE,
+    REMOVED_PACKAGES_FILE,
     REMOVED_CODES_FILE,
   ]);
   const files = [];
@@ -175,7 +195,7 @@ export function readChangedFiles({ git }) {
 
 function sourceOf(path) {
   if (path === EXAMPLES_FILE) return { source: 'examples', packageName: undefined };
-  if (path === REMOVED_FILE) return { source: 'removed', packageName: undefined };
+  if (path === REMOVED_PACKAGES_FILE) return { source: 'removedPackages', packageName: undefined };
   if (path === REMOVED_CODES_FILE) return { source: 'removedCodes', packageName: undefined };
   const match = PACKAGE_FILE.exec(path);
   if (match === null) return undefined;
@@ -309,11 +329,16 @@ function diffLines({ added, removed }) {
 
 function render(changes, { shown, template, where }) {
   const lists = changes.filter((change) => !isRecord(change)).length;
+  const codes = changes.filter((change) => change.errorCode).length;
   const records = changes.length - lists;
+  const others = records - codes;
   const subject = [
     lists > 0 ? `the \`api.txt\` list of ${plural(lists, 'package')}` : undefined,
-    records > 0
-      ? `the recorded breaks or expected example-app errors of ${records === 1 ? 'one package or app' : `${records} packages or apps`}`
+    others > 0
+      ? `the recorded breaks or expected example-app errors of ${others === 1 ? 'one package or app' : `${others} packages or apps`}`
+      : undefined,
+    codes > 0
+      ? `the recorded removal of ${codes === 1 ? 'one error code' : `${codes} error codes`}`
       : undefined,
   ]
     .filter((part) => part !== undefined)
