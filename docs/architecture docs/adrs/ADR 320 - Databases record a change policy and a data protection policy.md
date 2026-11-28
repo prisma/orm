@@ -77,7 +77,15 @@ A database that records no policy takes the defaults: `change: ["migrate", "reco
 
 ## Where the policies live
 
-**The database records the policies in force.** They are the database's policies, so they govern every contract space a command moves. On PostgreSQL they are the one row of `_prisma.config`, in a `policies` column of the same shape as the ref's `policies` ([ADR 021](ADR%20021%20-%20Contract%20Marker%20Storage.md)). The marker, the record each database keeps of the contract each space is at, is a row per space, so it is the wrong place for something that describes the whole database. SQLite, MySQL and MongoDB still store the policies in the application space's marker under `meta.policies`, until they move to the same tables; an extension space's marker never carries them. A setting the database does not record takes its default.
+**The database records the policies in force.** They are the database's policies, so they govern every contract space a command moves. They are stored in the same shape as a ref's `policies`:
+
+| Target | Where the policies are stored |
+| --- | --- |
+| PostgreSQL | The one row of `_prisma.config`, in its `policies` column ([ADR 021](ADR%20021%20-%20Contract%20Marker%20Storage.md)) |
+| SQLite, MySQL, MariaDB | The application space's marker, under `meta.policies` |
+| MongoDB | The application space's marker document, under `meta.policies` |
+
+The marker, the record each database keeps of the contract each space is at, is a row per space, so it is the wrong place for something that describes the whole database; the other targets move to PostgreSQL's tables later. An extension space's marker never carries the policies. A setting the database does not record takes its default.
 
 **A ref declares the policies its database should have.** A ref is a named pointer at a contract, kept in the repository at `migrations/<space>/refs/<name>.json`. Every key in `policies` is optional, and a ref declares nothing about a key it leaves out. Only a person editing the file changes it; every command that rewrites a ref keeps the fields it does not change.
 
@@ -119,7 +127,10 @@ When a database's marker names a contract that is not in the migration graph, th
 ## Consequences
 
 - A ref file may carry `policies`, and every command that writes a ref keeps the fields it did not change ([ADR 218](ADR%20218%20-%20Refs%20with%20paired%20contract%20snapshots%20and%20universal%20graph-node%20invariant.md)).
-- The framework owns `meta.policies`: its key, its stored form, its parser, the comparison and the defaults. Targets write the value the framework gives them. On SQLite, MySQL and MongoDB every marker write keeps the `meta` keys it does not own. PostgreSQL stores the value in `_prisma.config` and has no `meta`; its adapter hands the stored value to the framework as the application record's `meta.policies`, so the framework reads every target the same way. MongoDB's guarded marker write is built from the framework's key and value lists, so it accepts exactly the stored values the framework would read as the checked policies.
+- The framework owns the policies' stored form: its key, its parser, the comparison and the defaults. Targets write the value the framework gives them.
+- On SQLite, MySQL and MongoDB every marker write keeps the `meta` keys it does not own.
+- PostgreSQL has no `meta`. Its adapter hands the value stored in `_prisma.config` to the framework as the application record's `meta.policies`, so the framework reads every target the same way.
+- MongoDB's guarded marker write is built from the framework's key and value lists, so it accepts exactly the stored values the framework would read as the checked policies.
 - [ADR 287](ADR%20287%20-%20Prisma%208%20has%20no%20db%20push%20to%20production.md)'s rule that production changes only through migrations becomes something a database states about itself and the tools enforce.
 - A refusal happens before the first operation on the user's schema runs. The command has by then brought Prisma's own tables up to date, which is the one thing a refused command may change; the policies are read from those tables, so that step comes first ([ADR 339](ADR%20339%20-%20Each%20target%20has%20a%20contract%20space%20for%20Prisma%27s%20own%20tables.md)). A refusal cannot be answered: under `forbidden`, `--delete` and `--allow` do not permit the change. Only a statement that says the change loses nothing changes the outcome: `--rename`, and in `migration plan` `--convert`. A migration that copies the data elsewhere and then drops the original still drops it, and is still refused; dropping data from such a database takes a change to its policy first.
 - The policies stop mistakes, not deliberate workarounds. Anyone who can write the tables that record them, or who passes `--permit-policy-change` with an edited ref, can change them.
