@@ -328,14 +328,27 @@ function oldHash(contract: ContractSections, section: JsonRecord, hooks: Hooks):
 }
 
 /**
- * The old rule as the earlier release applied it when it wrote a file. It left out each `false`, `[]` and `{}` once, so a value that held only such values, such as an index's `options: { fastupdate: false }`, was hashed and written as `{}`. Read back, the old rule leaves that `{}` out too, which gives another hash; the hash the release stored is the one of the section exactly as written.
+ * The required fields of the PostgreSQL entity kinds that can hold a `false`, `[]` or `{}`: a policy's `roles` and `permissive`, and a native enum's `members`. The earlier release's PostgreSQL serializer kept every required field of an entity kind in the file, and its hash left them out like any other such value.
+ */
+const WRITTEN_BUT_NOT_HASHED: readonly PathPattern[] = [
+  ['storage', 'namespaces', '*', 'entries', 'policy', '*', ['roles', 'permissive']],
+  ['storage', 'namespaces', '*', 'entries', 'native_enum', '*', 'members'],
+];
+
+function isWrittenButNotHashed(path: readonly string[]): boolean {
+  return WRITTEN_BUT_NOT_HASHED.some((pattern) => matchesPath(path, pattern));
+}
+
+/**
+ * The old rule as the earlier release applied it when it wrote a file. It left out each `false`, `[]` and `{}` once, so a value that held only such values, such as an index's `options: { fastupdate: false }`, was hashed and written as `{}`. Read back, the old rule leaves that `{}` out too, which gives another hash; the hash the release stored is the one of the section as written, without the fields it wrote but did not hash.
  */
 function oldHashAsWritten(contract: ContractSections, section: JsonRecord, hooks: Hooks): string {
   const sectionKeys = Object.keys(section);
   return oldHash(contract, section, {
     ...hooks,
     preserveEmpty: (path) =>
-      sectionKeys.includes(path[0] ?? '') || (hooks.preserveEmpty?.(path) ?? false),
+      (sectionKeys.includes(path[0] ?? '') && !isWrittenButNotHashed(path)) ||
+      (hooks.preserveEmpty?.(path) ?? false),
   });
 }
 

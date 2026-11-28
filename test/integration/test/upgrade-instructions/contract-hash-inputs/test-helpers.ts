@@ -40,9 +40,14 @@ export function fixtureTree(side: Side, project = ''): Tree {
 
 /** A copy of the `before` or `after` fixture, or of one of its projects, in a new temporary directory. */
 export function copyFixture(side: Side, project = ''): string {
+  return copyDirectory(join(fixturesDir, side, project));
+}
+
+/** A copy of `dir` in a new temporary directory. */
+export function copyDirectory(dir: string): string {
   const root = mkdtempSync(join(tmpdir(), 'contract-hash-inputs-'));
   workDirs.push(root);
-  cpSync(join(fixturesDir, side, project), root, { recursive: true });
+  cpSync(dir, root, { recursive: true });
   return root;
 }
 
