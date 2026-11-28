@@ -35,7 +35,10 @@ export function dependentsSummary(
     : `${label} cannot run while ${named} ${depend} on what it changes.`;
 }
 
-const TableDependentsMeta = type({ tableDependents: { schema: 'string', table: 'string' } });
+/** What a step's `meta.tableDependents` holds in an `ops.json`: the table whose dependents the runner names when the step fails. */
+export const TableDependentsJson = type({ '+': 'reject', schema: 'string', table: 'string' });
+
+const TableDependentsMeta = type({ tableDependents: TableDependentsJson });
 
 /** The table a step checks has no dependents, from its meta; when the check fails, the runner names them. */
 export function tableDependentsOf(
@@ -46,30 +49,25 @@ export function tableDependentsOf(
 }
 
 /**
- * The objects that keep `DROP TABLE` without `CASCADE` from dropping table `$2` in schema `$1`: those that depend normally on the table or on its row type, outside the table itself, each described as Postgres describes it in a refused drop. A view is named, not its rewrite rule.
+ * The objects that keep `DROP TABLE` without `CASCADE` from dropping table `$2` in schema `$1`: those that depend normally on the table, on its row type or on the array type of its rows, outside the table itself. Each comes back as the kind and the schema-qualified name PostgreSQL's `pg_identify_object` gives it. A view is named, not its rewrite rule.
  */
 export const TABLE_DEPENDENTS_SQL = `WITH "table" AS (
-  SELECT c.oid, c.reltype FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+  SELECT c.oid, c.reltype, t.typarray
+  FROM pg_catalog.pg_class c
+  JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+  JOIN pg_catalog.pg_type t ON t.oid = c.reltype
   WHERE n.nspname = $1 AND c.relname = $2
 )
-SELECT DISTINCT CASE WHEN d.classid = 'pg_catalog.pg_rewrite'::regclass
-    THEN pg_catalog.pg_describe_object('pg_catalog.pg_class'::regclass, r.ev_class, 0)
-    ELSE pg_catalog.pg_describe_object(d.classid, d.objid, d.objsubid)
-  END AS "object"
+SELECT DISTINCT o.type AS "kind", o.identity AS "name"
 FROM pg_catalog.pg_depend d
 JOIN "table" t
   ON (d.refclassid = 'pg_catalog.pg_class'::regclass AND d.refobjid = t.oid)
-  OR (d.refclassid = 'pg_catalog.pg_type'::regclass AND d.refobjid = t.reltype)
+  OR (d.refclassid = 'pg_catalog.pg_type'::regclass AND d.refobjid IN (t.reltype, t.typarray))
 LEFT JOIN pg_catalog.pg_rewrite r ON d.classid = 'pg_catalog.pg_rewrite'::regclass AND r.oid = d.objid
+CROSS JOIN LATERAL pg_catalog.pg_identify_object(
+  CASE WHEN r.oid IS NULL THEN d.classid ELSE 'pg_catalog.pg_class'::regclass END,
+  COALESCE(r.ev_class, d.objid),
+  CASE WHEN r.oid IS NULL THEN d.objsubid ELSE 0 END
+) o
 WHERE d.deptype = 'n' AND NOT (d.classid = 'pg_catalog.pg_class'::regclass AND d.objid = t.oid)
-ORDER BY 1`;
-
-/** The objects {@link TABLE_DEPENDENTS_SQL} found, split into the kind and name Postgres writes. */
-export function describedDependents(
-  rows: ReadonlyArray<{ readonly object: string }>,
-): readonly BlockingObject[] {
-  return rows.map(({ object }) => {
-    const space = object.indexOf(' ');
-    return { kind: object.slice(0, space), name: object.slice(space + 1) };
-  });
-}
+ORDER BY 1, 2`;

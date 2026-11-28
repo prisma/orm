@@ -67,7 +67,6 @@ import {
   DEPENDENT_OBJECTS_STILL_EXIST,
   dependentsOf,
   dependentsSummary,
-  describedDependents,
   TABLE_DEPENDENTS_SQL,
   tableDependentsOf,
 } from './dependent-objects';
@@ -507,14 +506,12 @@ class PostgresMigrationRunner implements SqlMigrationRunner<PostgresPlanTargetDe
         const dependents =
           dependedOn === undefined
             ? []
-            : describedDependents(
-                (
-                  await driver.query<{ readonly object: string }>(TABLE_DEPENDENTS_SQL, [
-                    dependedOn.schema,
-                    dependedOn.table,
-                  ])
-                ).rows,
-              );
+            : (
+                await driver.query<BlockingObject>(TABLE_DEPENDENTS_SQL, [
+                  dependedOn.schema,
+                  dependedOn.table,
+                ])
+              ).rows;
         if (dependedOn !== undefined && dependents.length > 0) {
           const details = {
             schema: dependedOn.schema,

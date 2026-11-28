@@ -287,6 +287,9 @@ describe("applying the Postgres target's _prisma contract space", { concurrent: 
     await driver.query(
       'create function public.latest_marker() returns prisma_contract.marker language sql as $$ select * from prisma_contract.marker limit 1 $$',
     );
+    await driver.query(
+      'create function public.count_markers(markers prisma_contract.marker[]) returns int language sql as $$ select cardinality(markers) $$',
+    );
 
     try {
       const result = await apply();
@@ -303,13 +306,14 @@ describe("applying the Postgres target's _prisma contract space", { concurrent: 
       }).toEqual({
         code: 'MIGRATION.PRECHECK_FAILED',
         summary:
-          'Table "prisma_contract"."marker" cannot be dropped while function latest_marker() and view marker_report depend on it.',
+          'Table "prisma_contract"."marker" cannot be dropped while function public.count_markers(prisma_contract.marker[]), function public.latest_marker() and view public.marker_report depend on it.',
         why: expect.stringContaining(
           'then create them again over "_prisma"."signatures" once the command has run.',
         ),
         dependents: [
-          { kind: 'function', name: 'latest_marker()' },
-          { kind: 'view', name: 'marker_report' },
+          { kind: 'function', name: 'public.count_markers(prisma_contract.marker[])' },
+          { kind: 'function', name: 'public.latest_marker()' },
+          { kind: 'view', name: 'public.marker_report' },
         ],
         schemas: ['prisma_contract'],
         markers: [{ space: 'app' }],
@@ -317,6 +321,36 @@ describe("applying the Postgres target's _prisma contract space", { concurrent: 
     } finally {
       await driver.query('drop view public.marker_report');
       await driver.query('drop function public.latest_marker()');
+      await driver.query('drop function public.count_markers(prisma_contract.marker[])');
+    }
+  });
+
+  it("stops before anything changes when the only dependent takes an array of the release candidate's marker rows", {
+    timeout: testTimeout,
+  }, async () => {
+    await createReleaseCandidateTables();
+    await driver.query(
+      'create function public.count_markers(markers prisma_contract.marker[]) returns int language sql as $$ select cardinality(markers) $$',
+    );
+
+    try {
+      const result = await apply();
+
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect({
+        code: result.failure.code,
+        dependents: result.failure.meta.blockingObjects,
+        databaseUnchanged: result.failure.meta.databaseUnchanged,
+        schemas: await schemas(),
+      }).toEqual({
+        code: 'MIGRATION.PRECHECK_FAILED',
+        dependents: [{ kind: 'function', name: 'public.count_markers(prisma_contract.marker[])' }],
+        databaseUnchanged: true,
+        schemas: ['prisma_contract'],
+      });
+    } finally {
+      await driver.query('drop function public.count_markers(prisma_contract.marker[])');
     }
   });
 
@@ -623,7 +657,9 @@ describe("applying the Postgres target's _prisma contract space", { concurrent: 
     expect(message).toContain(
       'The role that runs this command must have the CREATE privilege on the database',
     );
-    expect(message).toContain('GRANT CREATE ON DATABASE <database> TO <migrating role>');
+    expect(message).toContain(
+      'GRANT CREATE ON DATABASE <database> TO <migrating role>, or run the command once as a role that has it and also owns the schema and its tables.',
+    );
     expect(message).not.toContain('privileges of the role that owns');
     expect(await schemas()).toEqual(['prisma_contract']);
   });

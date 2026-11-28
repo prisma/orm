@@ -159,15 +159,16 @@ const absentOrHasTableOwnerPrivileges = `SELECT ${isSuperuser} OR NOT EXISTS (
   SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
   WHERE n.nspname = $1 AND c.relname = $2 AND NOT pg_has_role(current_user, c.relowner, 'USAGE')
 ) AS "result"`;
-/** `DROP TABLE` without `CASCADE` refuses exactly when an object outside the table depends normally on it or on its row type. Reads only the catalogues, like the checks of ownership. */
+/** `DROP TABLE` without `CASCADE` refuses exactly when an object outside the table depends normally on it, on its row type or on the array type of its rows. Reads only the catalogues, like the checks of ownership. */
 const absentOrNothingDependsOnTable = `WITH "table" AS (
-  SELECT c.oid, c.reltype FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+  SELECT c.oid, c.reltype, t.typarray
+  FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace JOIN pg_type t ON t.oid = c.reltype
   WHERE n.nspname = $1 AND c.relname = $2
 )
 SELECT NOT EXISTS (
   SELECT 1 FROM pg_depend d JOIN "table" t
     ON (d.refclassid = 'pg_class'::regclass AND d.refobjid = t.oid)
-    OR (d.refclassid = 'pg_type'::regclass AND d.refobjid = t.reltype)
+    OR (d.refclassid = 'pg_type'::regclass AND d.refobjid IN (t.reltype, t.typarray))
   WHERE d.deptype = 'n' AND NOT (d.classid = 'pg_class'::regclass AND d.objid = t.oid)
 ) AS "result"`;
 const mayCreateInDatabase = `SELECT ${isSuperuser}
@@ -266,7 +267,7 @@ export default class M extends Migration {
             meta: { tableDependents: { schema: RELEASE_CANDIDATE_SCHEMA, table: 'marker' } },
           },
           {
-            description: `The role that runs this command must have the CREATE privilege on the database, because renaming schema "${RELEASE_CANDIDATE_SCHEMA}" needs it. Grant it with GRANT CREATE ON DATABASE <database> TO <migrating role>, or run the command once as a role that has it.`,
+            description: `The role that runs this command must have the CREATE privilege on the database, because renaming schema "${RELEASE_CANDIDATE_SCHEMA}" needs it. Grant it with GRANT CREATE ON DATABASE <database> TO <migrating role>, or run the command once as a role that has it and also owns the schema and its tables.`,
             sql: mayCreateInDatabase,
             params: [],
           },
