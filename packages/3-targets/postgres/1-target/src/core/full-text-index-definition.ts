@@ -85,6 +85,7 @@ function carriesFullTextTraits(traits: readonly string[] | undefined): boolean {
   return traits !== undefined && FULL_TEXT_COLUMN_TRAITS.every((trait) => traits.includes(trait));
 }
 
+/** Words a problem `fullTextIndexProblems` returned. A user hands back what it gave them, which may be of a kind a later release adds; that kind is worded by its name. */
 export function describeFullTextIndexProblem(
   subject: string,
   problem: FullTextIndexProblem,

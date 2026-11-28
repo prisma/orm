@@ -14,13 +14,9 @@ vi.mock('@internal/sql-contract-ts/contract-builder', async (importOriginal) => 
 });
 
 describe('a shared-table refusal of a kind a later release adds', () => {
-  it('is worded by the variant and the kind', () => {
-    expect(diagnosticsOf([contact, actor, humanWithContact('')].join('\n\n'))).toEqual([
-      expect.objectContaining({
-        code: 'PSL_INVALID_DECLARATION',
-        message:
-          'Model "HumanActor" shares the table of its base model "Actor" (single-table inheritance), and what it declares there is refused for a reason this version does not name ("%future added value").',
-      }),
-    ]);
+  it('is treated as a bug of the release', () => {
+    expect(() => diagnosticsOf([contact, actor, humanWithContact('')].join('\n\n'))).toThrow(
+      /words every shared-table refusal of its own release/,
+    );
   });
 });

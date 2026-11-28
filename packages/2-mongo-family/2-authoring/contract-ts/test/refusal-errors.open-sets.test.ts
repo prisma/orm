@@ -25,41 +25,33 @@ describe('refusalError for a value a later release adds', () => {
     expect(error.message).toContain('with a different type and collation.');
   });
 
-  it('words a refusal of a kind it does not know by the kind', () => {
-    const error = refusalError({ kind: '%future added value', key: undefined });
-    expect(error).toMatchObject({
-      code: 'CONTRACT.ARGUMENT_INVALID',
-      message:
-        'The contract definition is refused for a reason this version does not name ("%future added value").',
-    });
+  it('treats a refusal of a kind its own release cannot produce as a bug', () => {
+    expect(() => refusalError({ kind: '%future added value', key: undefined })).toThrow(
+      /words every refusal of its own release/,
+    );
   });
 
-  it('words a validator refusal of a kind it does not know by the kind', () => {
+  it('places no key for, and treats as a bug, a validator refusal its release cannot produce', () => {
     const refusal = { kind: '%future added value' } as const;
     expect(validatorRefusalKey(refusal)).toBeUndefined();
-    expect(refusalError({ kind: 'validator', key: undefined, refusal })).toMatchObject({
-      code: 'CONTRACT.ARGUMENT_INVALID',
-      message:
-        'The collection validator refuses the contract for a reason this version does not name ("%future added value").',
-    });
+    expect(() => refusalError({ kind: 'validator', key: undefined, refusal })).toThrow(
+      /words every validator refusal of its own release/,
+    );
   });
 
-  it("words a field's codec refusal of a kind it does not know by its reason", () => {
-    const error = refusalError({
-      kind: 'validator',
-      key: undefined,
-      refusal: {
-        kind: 'fieldBsonType',
-        owner: { kind: 'model', name: 'User' },
-        fieldName: 'email',
-        codecId: 'acme/email@1',
-        refusal: { kind: '%future added value', reason: 'has a codec this version cannot read.' },
-      },
-    });
-    expect(error).toMatchObject({
-      code: 'CONTRACT.PACK_CONTRIBUTION_INVALID',
-      message: 'Model "User" field "email" has a codec this version cannot read.',
-      meta: { reason: '%future added value' },
-    });
+  it("treats a field's codec refusal its release cannot produce as a bug", () => {
+    const refuse = () =>
+      refusalError({
+        kind: 'validator',
+        key: undefined,
+        refusal: {
+          kind: 'fieldBsonType',
+          owner: { kind: 'model', name: 'User' },
+          fieldName: 'email',
+          codecId: 'acme/email@1',
+          refusal: { kind: '%future added value', reason: 'has a codec this version cannot read.' },
+        },
+      });
+    expect(refuse).toThrow(/words every codec refusal of its own release/);
   });
 });

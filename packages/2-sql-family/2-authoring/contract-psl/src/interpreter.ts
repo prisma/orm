@@ -2368,11 +2368,9 @@ function stiRefusalDiagnostic(
   }
   if (refusal.kind !== 'unique' && refusal.kind !== 'index') {
     const later: '%future added value' = refusal.kind;
-    return {
-      code: 'PSL_INVALID_DECLARATION',
-      message: `Model "${variant}" shares the table of its base model "${base}" (single-table inheritance), and what it declares there is refused for a reason this version does not name ("${later}").`,
-      ...at,
-    };
+    throw new InternalError(
+      `The PSL interpreter words every shared-table refusal of its own release, not "${later}".`,
+    );
   }
   if (discriminatorColumn === undefined || baseDecl.value === undefined) return undefined;
   const label = site?.label ?? (refusal.kind === 'unique' ? '@@unique' : '@@index');

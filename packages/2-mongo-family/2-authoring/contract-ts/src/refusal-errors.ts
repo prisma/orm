@@ -1,6 +1,7 @@
 import { enumMemberError } from '@internal/contract-authoring';
 import type { AuthoringWarning } from '@internal/framework-components/authoring';
 import type { MongoContractRefusal } from '@internal/mongo-contract';
+import { InternalError } from '@internal/utils/internal-error';
 import { type StructuredError, structuredError } from '@internal/utils/structured-error';
 import type {
   BuildRefusal,
@@ -33,9 +34,9 @@ function codecRefusalError(
     });
   }
   const later: '%future added value' = refusal.kind;
-  return contractError('CONTRACT.PACK_CONTRIBUTION_INVALID', `${subject} ${refusal.reason}`, {
-    meta: { ...meta, codecId, reason: later },
-  });
+  throw new InternalError(
+    `The contract builder words every codec refusal of its own release, not "${later}".`,
+  );
 }
 
 function validatorRefusalError(refusal: MongoContractRefusal): StructuredError {
@@ -113,10 +114,8 @@ function validatorRefusalError(refusal: MongoContractRefusal): StructuredError {
       );
     default: {
       const later: '%future added value' = refusal.kind;
-      return contractError(
-        'CONTRACT.ARGUMENT_INVALID',
-        `The collection validator refuses the contract for a reason this version does not name ("${later}").`,
-        { meta: { reason: later } },
+      throw new InternalError(
+        `The contract builder words every validator refusal of its own release, not "${later}".`,
       );
     }
   }
@@ -666,10 +665,8 @@ export function refusalError(refusal: BuildRefusal): StructuredError {
       return validatorRefusalError(refusal.refusal);
     default: {
       const later: '%future added value' = refusal.kind;
-      return contractError(
-        'CONTRACT.ARGUMENT_INVALID',
-        `The contract definition is refused for a reason this version does not name ("${later}").`,
-        { meta: { reason: later } },
+      throw new InternalError(
+        `The contract builder words every refusal of its own release, not "${later}".`,
       );
     }
   }

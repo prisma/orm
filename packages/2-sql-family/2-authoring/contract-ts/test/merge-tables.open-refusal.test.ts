@@ -15,16 +15,10 @@ vi.mock('../src/shared-table-constraints', async (importOriginal) => {
 });
 
 describe('mergeTables on a shared-table refusal of a kind a later release adds', () => {
-  it('words it by the variant and the kind', () => {
+  it('treats it as a bug of the release', () => {
     const task = table('task', [column('Task', 'id'), column('Task', 'ownerId')]);
     expect(() =>
       mergeTables([ownTable(task), baseTable('Bug', 'task', [column('Bug', 'ownerId')], {})], []),
-    ).toThrow(
-      expect.objectContaining({
-        code: 'CONTRACT.ARGUMENT_INVALID',
-        message:
-          'Model "Bug" shares table "task" with other models (single-table inheritance), and what it declares there is refused for a reason this version does not name ("%future added value").',
-      }),
-    );
+    ).toThrow(/words every shared-table refusal of its own release/);
   });
 });

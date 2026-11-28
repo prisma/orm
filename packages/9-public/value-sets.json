@@ -1465,7 +1465,7 @@
       "package": "@prisma/orm-target-postgres",
       "type": "PostgresVersion",
       "status": "type-parameter",
-      "reason": "The keys of the record of capabilities per PostgreSQL version in server-version.ts; no exported function or option takes it, and a catch-all member would turn the record into an index signature."
+      "reason": "The keys of the record of capabilities per PostgreSQL version in server-version.ts, the only record keyed by it, which our code supplies; no exported function, option or record takes it, so adding a version is our own change, made with that record's entry, and breaks no user."
     },
     {
       "package": "@prisma/orm-target-postgres",

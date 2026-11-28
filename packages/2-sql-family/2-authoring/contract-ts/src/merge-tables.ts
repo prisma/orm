@@ -1,4 +1,5 @@
 import type { ForeignKeyAuthoringInput } from '@internal/sql-contract/foreign-key-materialization';
+import { InternalError } from '@internal/utils/internal-error';
 import type { TableProperties } from './contract-definition';
 import { contractError } from './contract-errors';
 import type { ColumnSite } from './declaration-sites';
@@ -312,10 +313,8 @@ function refusalError(
   }
   if (first.kind !== 'unique' && first.kind !== 'index') {
     const later: '%future added value' = first.kind;
-    return contractError(
-      'CONTRACT.ARGUMENT_INVALID',
-      `Model "${first.variant}" shares table "${tableName}" with other models (single-table inheritance), and what it declares there is refused for a reason this version does not name ("${later}").`,
-      { meta: { modelName: first.variant, namespaceId, tableName, reason: later } },
+    throw new InternalError(
+      `The table merge words every shared-table refusal of its own release, not "${later}".`,
     );
   }
   const unscoped = refusals
