@@ -63,7 +63,41 @@ Run `prisma contract emit` and commit the result with the script's changes. It w
 
 The earlier release left out almost every `false`, `[]` and `{}` in the storage section when it wrote `contract.json`. This release keeps every such value except the defaults each family names as the same as leaving the value out, such as an index's `unique: false`. The values the earlier release left out and this release keeps include a PostgreSQL index's options, a type's parameters, a value set member that is an object (such as `{ "round": false }`), the entries an extension pack adds to storage, a MongoDB index's partial filter expression, a MongoDB collation's `backwards: false` and `normalization: false`, a MongoDB collection's storage engine and clustered index options, and a MongoDB validator's `additionalItems: false`. For example, an index with the options `{ fastupdate: false }` was written with the options `{}`, and its migration created the index without `fastupdate = false`. This release keeps those values. If your contract source holds one, the script gives the stored contract, without the value, its new hash, and `prisma contract emit` then writes the value back and a different storage hash. To tell, compare the emitted contract's `storageHash` with the new hash the script printed for it under "Storage hashes (old -> new)", or, if you ran `prisma contract emit` before the script, read the list of such contracts that the script prints; `git diff` on `contract.json` also shows the value restored. The same happens to a default generator's parameters, but they are in the execution section, not in storage: `prisma contract emit` writes such a value back and gives the contract a new execution hash, which no database or migration checks, so it needs no migration. After `prisma contract emit`, the file may also list a table's foreign keys and a collection's MongoDB indexes in a new order, which changes no hash; only the `storageHash` comparison tells whether the hash changed.
 
-The emitted contract then truly differs from your databases, which were built without the value, so this is the one case where the release that upgrades Prisma carries a migration. Plan it with `prisma migration plan` and review it: it applies the value to the database for the first time. Each database is then at the contract the script's hashes name, which is the `to` of the migration before the new one, not at the emitted contract. So in step 5 sign each database at that migration's directory, `prisma db sign --no-advance-ref <migration directory>` (with `--force` where the change policy permits only migrations), and then `prisma db migrate` applies the new migration. This is the route under "A database that is still behind" in step 5, with the directory of your last migration before the new one.
+The emitted contract then truly differs from your databases, which were built without the value, so this is the one case where the release that upgrades Prisma carries a migration. Plan it with `prisma migration plan` and review it: it applies the value to the database for the first time. The planner cannot plan every such change. For a change to an index's options, such as `fastupdate`, `prisma migration plan` stops with `MIGRATION.PLANNING_FAILED` and advises `migration new`, so write that migration by hand:
+
+1. Run `prisma migration new --name <name>`. It writes a migration from the contract the `db` ref names, which the script rewrote, to the emitted contract. Where there is no `db` ref, add `--from <hash>`, with the new hash the script printed for the `to` of your last migration.
+2. In the new `migration.ts`, import `rawSql` from `@prisma/orm-postgres/migration`, beside `Migration` and `MigrationCLI`, and return one operation that runs the `ALTER INDEX … SET (…)` statement. Name the index as the emitted `contract.json` does, in its `name`. For the `fastupdate` example:
+
+```ts
+import { Migration, MigrationCLI, rawSql } from '@prisma/orm-postgres/migration';
+
+// in the class that `prisma migration new` wrote:
+  override get operations() {
+    return [
+      rawSql({
+        id: 'index.post_meta_gin_3aa57499.fastupdate',
+        label: 'Set fastupdate = off on index "post_meta_gin_3aa57499"',
+        operationClass: 'widening',
+        target: {
+          id: 'postgres',
+          details: { schema: 'public', objectType: 'index', name: 'post_meta_gin_3aa57499' },
+        },
+        precheck: [],
+        execute: [
+          {
+            description: 'Set fastupdate = off',
+            sql: 'ALTER INDEX "public"."post_meta_gin_3aa57499" SET (fastupdate = off)',
+          },
+        ],
+        postcheck: [],
+      }),
+    ];
+  }
+```
+
+3. Run `node <migration directory>/migration.ts`. It writes the migration's `ops.json` and its hash into `migration.json`.
+
+Each database is then at the contract the script's hashes name, which is the `to` of the migration before the new one, not at the emitted contract. So in step 5 sign each database at that migration's directory, `prisma db sign --no-advance-ref <migration directory>` (with `--force` where the change policy permits only migrations), and then `prisma db migrate` applies the new migration. This is the route under "A database that is still behind" in step 5, with the directory of your last migration before the new one.
 
 ### 5. Sign every database in that release's deploy
 

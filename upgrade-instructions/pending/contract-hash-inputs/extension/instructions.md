@@ -30,6 +30,35 @@ Add no migration in this version: publish any new migration in a version for the
 
 The earlier release left out almost every `false`, `[]` and `{}` in the storage section when it wrote `contract.json`. This release keeps every such value except the defaults each family names as the same as leaving the value out, such as an index's `unique: false`. The values the earlier release left out and this release keeps include a PostgreSQL index's options, a type's parameters, a value set member that is an object (such as `{ "round": false }`), the entries an extension pack adds to storage, a MongoDB index's partial filter expression, a MongoDB collation's `backwards: false` and `normalization: false`, a MongoDB collection's storage engine and clustered index options, and a MongoDB validator's `additionalItems: false`. For example, an index with the options `{ fastupdate: false }` was written with the options `{}`, and its migration created the index without `fastupdate = false`. This release keeps those values. If the extension's contract source holds one, the script gives the stored contract, without the value, its new hash, and `prisma contract emit` then writes the value back and a different storage hash. To tell, compare the emitted contract's `storageHash` with the new hash the script printed for it under "Storage hashes (old -> new)", or, if you ran `prisma contract emit` before the script, read the list of such contracts that the script prints; `git diff` on `src/contract.json` also shows the value restored. The same happens to a default generator's parameters, but they are in the execution section, not in storage: `prisma contract emit` writes such a value back and gives the contract a new execution hash, which no database or migration checks, so it needs no migration. After `prisma contract emit`, the file may also list a table's foreign keys and a collection's MongoDB indexes in a new order, which changes no hash; only the `storageHash` comparison tells whether the hash changed.
 
-The databases were built without the value, so the extension now needs a migration, and this version cannot carry one, for the reason above. In this version, change the source so that `prisma contract emit` writes the storage hash the script printed again, and publish that. Restore the value in a later version, with a migration that applies it to the database for the first time.
+The databases were built without the value, so the extension now needs a migration, and this version cannot carry one, for the reason above. In this version, change the source so that `prisma contract emit` writes the storage hash the script printed again, and publish that. Restore the value in a later version, with a migration that applies it to the database for the first time. `prisma migration plan` cannot plan every such change: for a change to an index's options, such as `fastupdate`, it stops with `MIGRATION.PLANNING_FAILED` and advises `migration new`. Then write the migration by hand. Run `prisma migration new --name <name>`, which writes a migration from the contract the `db` ref names to the emitted contract (where there is no `db` ref, add `--from <hash>` with the hash in `migrations/refs/head.json`, which the script rewrote). In its `migration.ts`, import `rawSql` from `@prisma/orm-postgres/migration`, beside `Migration` and `MigrationCLI`, and return one operation that runs the statement, naming the index as the emitted `contract.json` does:
+
+```ts
+import { Migration, MigrationCLI, rawSql } from '@prisma/orm-postgres/migration';
+
+// in the class that `prisma migration new` wrote:
+  override get operations() {
+    return [
+      rawSql({
+        id: 'index.post_meta_gin_3aa57499.fastupdate',
+        label: 'Set fastupdate = off on index "post_meta_gin_3aa57499"',
+        operationClass: 'widening',
+        target: {
+          id: 'postgres',
+          details: { schema: 'public', objectType: 'index', name: 'post_meta_gin_3aa57499' },
+        },
+        precheck: [],
+        execute: [
+          {
+            description: 'Set fastupdate = off',
+            sql: 'ALTER INDEX "public"."post_meta_gin_3aa57499" SET (fastupdate = off)',
+          },
+        ],
+        postcheck: [],
+      }),
+    ];
+  }
+```
+
+Then run `node <migration directory>/migration.ts`, which writes the migration's `ops.json` and its hash into `migration.json`.
 
 A family or target built outside Prisma can check that its own contracts keep their hashes within the major with `assertContractHashes`, from `@prisma/orm-framework/contract/hashing`; its README shows how.
