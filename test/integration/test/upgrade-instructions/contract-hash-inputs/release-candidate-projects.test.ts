@@ -1,5 +1,5 @@
 import { cpSync, existsSync, readdirSync, readFileSync, rmSync } from 'node:fs';
-import { computeStorageHash } from '@internal/contract/hashing';
+import { computeProfileHash, computeStorageHash } from '@internal/contract/hashing';
 import { normalizeSqlStorage } from '@internal/sql-contract/normal-form';
 import { join } from 'pathe';
 import { afterAll, describe, expect, it } from 'vitest';
@@ -37,6 +37,15 @@ function snapshotsOf(root: string): string[] {
 }
 
 const noSnapshot = { snapshots: [], snapshotStorageHash: [] };
+
+function profileLines(stdout: string): string[] {
+  const lines = stdout.split('\n');
+  const start = lines.indexOf('Profile hashes (old -> new):');
+  if (start === -1) return [];
+  const block = lines.slice(start + 1);
+  const end = block.findIndex((line) => !line.startsWith('  '));
+  return block.slice(0, end === -1 ? undefined : end).map((line) => line.trim());
+}
 
 function migrationOf(root: string): string {
   const [migration] = readdirSync(join(root, MIGRATIONS)).filter((name) => name !== 'refs');
@@ -148,6 +157,12 @@ describe.each([
 
       it('lists the emitted contract with both hashes', () => {
         expect(run.stdout).toContain(listing);
+      });
+
+      it('reports only the profile hashes it replaced in a file', () => {
+        const snapshot = readJson(releaseCandidate, CONTRACT);
+        const replaced = `${snapshot.profileHash} -> ${computeProfileHash(snapshot)}`;
+        expect(profileLines(run.stdout)).toEqual(keepSnapshot ? [replaced] : []);
       });
 
       it('changes nothing on a second run, and lists the emitted contract again', () => {

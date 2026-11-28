@@ -1285,14 +1285,14 @@ function main(args: readonly string[]): number {
   }
   const hashes = new HashMap();
   const kept: string[] = [];
-  const emittedFirst: { plan: ContractPlan; kind: HashKind; from: string; to: string }[] = [];
+  const emittedFirst: { plan: ContractPlan; from: string; to: string }[] = [];
   for (const plan of contracts) {
     for (const kind of ['storage', 'profile', 'execution'] as const) {
       const from = plan.oldHashes[kind];
       const to = plan.newHashes[kind];
       if (from === undefined || to === undefined) continue;
-      if (isEmittedByThisRelease(plan, kind)) emittedFirst.push({ plan, kind, from, to });
-      else hashes.add(kind, from, to, stops);
+      if (!isEmittedByThisRelease(plan, kind)) hashes.add(kind, from, to, stops);
+      else if (kind === 'storage') emittedFirst.push({ plan, from, to });
     }
     const to = plan.newHashes.storage;
     if (plan.keptStorageHash === undefined || to === undefined) continue;
@@ -1300,14 +1300,10 @@ function main(args: readonly string[]): number {
     kept.push(`${shown(plan.file.path)} (${plan.keptStorageHash} -> ${to})`);
   }
   const emitted: string[] = [];
-  for (const { plan, kind, from, to } of emittedFirst) {
+  for (const { plan, from, to } of emittedFirst) {
     const known = hashes.all.get(from);
-    if (kind !== 'storage') {
-      if (known === undefined || known === to) hashes.add(kind, from, to, stops);
-      continue;
-    }
     const databases = known ?? plan.earlierReleaseStorageHash;
-    if (known === undefined) hashes.add(kind, from, databases, stops);
+    if (known === undefined) hashes.add('storage', from, databases, stops);
     hashes.newValues.add(to);
     if (databases !== to)
       emitted.push(`${shown(plan.file.path)} (${to}; without the value, ${databases})`);
