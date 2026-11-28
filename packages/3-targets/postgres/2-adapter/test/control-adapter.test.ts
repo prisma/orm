@@ -2324,6 +2324,56 @@ describe('PostgresControlAdapter', () => {
   });
 
   describe("the Prisma space's own row", () => {
+    const signatureColumns = ['space', 'core_hash', 'profile_hash', 'invariants'];
+
+    function recordingDriver(configColumns: readonly string[]) {
+      const statements: string[] = [];
+      const driver: SqlControlDriverInstance<'postgres'> = {
+        familyId: 'sql',
+        targetId: 'postgres',
+        query: async <Row = Record<string, unknown>>(sql: string, params?: readonly unknown[]) => {
+          statements.push(sql);
+          if (sql.includes('pg_catalog.pg_attribute')) {
+            const columns = params?.[1] === 'config' ? configColumns : signatureColumns;
+            return { rows: columns.map((column_name) => ({ column_name })) as unknown as Row[] };
+          }
+          if (sql.includes('pg_catalog.row_security_active')) {
+            return { rows: [{ readable: true, filtered: false }] as unknown as Row[] };
+          }
+          if (sql.includes('"information_schema"')) {
+            return { rows: [{ table_schema: '_prisma' }] as unknown as Row[] };
+          }
+          return {
+            rows: [
+              { space: '_prisma', core_hash: 'abc', profile_hash: 'def', invariants: '{}' },
+            ] as unknown as Row[],
+          };
+        },
+        close: async () => {},
+      };
+      return { driver, statements };
+    }
+
+    it('is read among every signature, when config has its policies column, through those columns and the policies alone', async () => {
+      const { driver, statements } = recordingDriver(['id', 'policies']);
+      const adapter = createTestPostgresControlAdapter(
+        createPostgresBuiltinCodecLookup(),
+        createPostgresBuiltinDataTypeLookup(),
+      );
+
+      const all = await adapter.readAllMarkers(driver);
+
+      expect({ all: all.get('_prisma')?.storageHash, statements }).toEqual({
+        all: 'abc',
+        statements: [
+          expect.stringContaining('"information_schema"."tables"'),
+          expect.stringContaining('pg_catalog.pg_attribute'),
+          expect.stringContaining('pg_catalog.row_security_active'),
+          'SELECT "signatures"."space" AS "space", "signatures"."core_hash" AS "core_hash", "signatures"."profile_hash" AS "profile_hash", "signatures"."invariants" AS "invariants", "config"."policies" AS "policies", "config"."policies" IS NOT NULL AS "config_row" FROM "_prisma"."signatures" LEFT JOIN "_prisma"."config" ON true',
+        ],
+      });
+    });
+
     it('is read through the columns every release of Prisma 8 reads it through, and no others', async () => {
       const statements: Array<{ sql: string; params: readonly unknown[] | undefined }> = [];
       const driver: SqlControlDriverInstance<'postgres'> = {
@@ -2333,7 +2383,7 @@ describe('PostgresControlAdapter', () => {
           statements.push({ sql, params });
           if (sql.includes('pg_catalog.pg_attribute')) {
             return {
-              rows: ['space', 'core_hash', 'profile_hash', 'invariants'].map((column_name) => ({
+              rows: signatureColumns.map((column_name) => ({
                 column_name,
               })) as unknown as Row[],
             };
