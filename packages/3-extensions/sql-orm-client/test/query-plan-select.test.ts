@@ -30,7 +30,8 @@ import {
 import { codecRefForStorageColumn } from '@internal/sql-relational-core/codec-descriptor-registry';
 import { InternalError } from '@internal/utils/internal-error';
 import { describe, expect, it } from 'vitest';
-import { createCollectionTables } from '../src/collection-tables';
+import { resolveIncludeRelation } from '../src/collection-contract';
+import { createCollectionTables, createIncludeTables } from '../src/collection-tables';
 import { compileSelect, compileSelectWithIncludes } from '../src/query-plan-select';
 import type { CollectionState } from '../src/types';
 import { bindWhereExpr } from '../src/where-binding';
@@ -44,6 +45,7 @@ import {
   isSelectAst,
   publicTables,
   relationInclude,
+  type StateSpec,
   specState,
   tableState,
 } from './helpers';
@@ -83,6 +85,47 @@ function expectSubqueryExpr(expr: unknown): asserts expr is SubqueryExpr {
 
 function expectDerivedTableSource(source: unknown): asserts source is DerivedTableSource {
   expect(source).toBeInstanceOf(DerivedTableSource);
+}
+
+/**
+ * `relationInclude` for a variant-owned relation: the variant read narrows
+ * the parent model, so the relation resolves against the variant's relations
+ * and the include correlates through the variant table.
+ */
+function variantRelationInclude(
+  contract: Contract<SqlStorage>,
+  parentModel: string,
+  relationName: string,
+  variantValue: string,
+  nested: StateSpec = {},
+): IncludeSpec {
+  const relation = resolveIncludeRelation(
+    contract,
+    'public',
+    parentModel,
+    relationName,
+    variantValue,
+  );
+  return (parent) => {
+    const child = createIncludeTables(contract, parent, relation);
+    return {
+      relationName,
+      relatedModelName: relation.relatedModelName,
+      relatedTableName: relation.relatedTableName,
+      relatedNamespaceId: relation.relatedNamespaceId,
+      ...(relation.localVariantValue === undefined
+        ? {}
+        : { localVariantValue: relation.localVariantValue }),
+      targetColumns: relation.targetColumns,
+      localColumns: relation.localColumns,
+      cardinality: relation.cardinality,
+      ...(relation.through === undefined ? {} : { through: relation.through }),
+      ...(child.junction === undefined ? {} : { junction: child.junction }),
+      nested: specState(child.tables, nested),
+      scalar: undefined,
+      combine: undefined,
+    };
+  };
 }
 
 describe('compileSelectWithIncludes', () => {
@@ -358,6 +401,250 @@ describe('compileSelectWithIncludes', () => {
     expect(childRows.distinctOn).toEqual([ColumnRef.of('posts', 'title')]);
     expect(childRows.offset).toBe(1);
     expect(childRows.limit).toBe(2);
+  });
+
+  it('moves includes outside DISTINCT ON so they run once per kept row', () => {
+    const { collection } = createCollection();
+    const orderBy = collection.orderBy((user) => user.email.asc()).state.orderBy;
+    const state = collection
+      .orderBy((user) => user.email.asc())
+      .distinctOn('email')
+      .include('posts', (posts) => posts.select('id', 'title')).state;
+
+    const plan = compileSelectWithIncludes(baseContract, getTestAggregates(), 'User', state);
+    expectSelectAst(plan.ast);
+
+    const postsProjection = plan.ast.projection.find((item) => item.alias === 'posts');
+    expectSubqueryExpr(postsProjection?.expr);
+
+    // Postgres computes a select list before the sort and the DISTINCT ON step
+    // when the statement has no LIMIT, so the include subqueries would run for
+    // every candidate row. The dedup sits in a derived table aliased back to
+    // the root alias, and the includes run outside it, once per kept row.
+    expectDerivedTableSource(plan.ast.from);
+    expect(plan.ast.from.query.distinctOn).toEqual([ColumnRef.of('users', 'email')]);
+    expect(plan.ast.from.query.orderBy).toEqual(orderBy);
+    expect(plan.ast.distinctOn).toBeUndefined();
+    expect(plan.ast.orderBy).toEqual(orderBy);
+  });
+
+  it('moves nested includes outside the child DISTINCT ON', () => {
+    const { collection } = createCollection();
+    const state = collection.include('posts', (posts) =>
+      posts
+        .orderBy((post) => post.title.asc())
+        .distinctOn('title')
+        .include('author', (author) => author.select('name')),
+    ).state;
+
+    const plan = compileSelectWithIncludes(baseContract, getTestAggregates(), 'User', state);
+    expectSelectAst(plan.ast);
+
+    const postsProjection = plan.ast.projection.find((item) => item.alias === 'posts');
+    expectSubqueryExpr(postsProjection?.expr);
+
+    const aggregateQuery = postsProjection.expr.query;
+    expectDerivedTableSource(aggregateQuery.from);
+    const childRows = aggregateQuery.from.query;
+
+    // Same shape one level down: the nested author subquery is in the select
+    // list of the row read, so the DISTINCT ON dedup moves into a derived
+    // table and the nested include runs outside it.
+    expect(childRows.distinctOn).toBeUndefined();
+    expectDerivedTableSource(childRows.from);
+    expect(childRows.from.query.distinctOn).toEqual([ColumnRef.of('posts', 'title')]);
+    const authorProjection = childRows.projection.find((item) => item.alias === 'author');
+    expectSubqueryExpr(authorProjection?.expr);
+  });
+
+  it('builds the nested include once and keeps it out of the child DISTINCT ON dedup query', () => {
+    const { collection } = createCollection();
+    const state = collection.include('posts', (posts) =>
+      posts
+        .orderBy((post) => post.title.asc())
+        .distinctOn('title')
+        .include('author', (author) => author.select('name')),
+    ).state;
+
+    const plan = compileSelectWithIncludes(baseContract, getTestAggregates(), 'User', state);
+    expectSelectAst(plan.ast);
+
+    const postsProjection = plan.ast.projection.find((item) => item.alias === 'posts');
+    expectSubqueryExpr(postsProjection?.expr);
+
+    const aggregateQuery = postsProjection.expr.query;
+    expectDerivedTableSource(aggregateQuery.from);
+    const childRows = aggregateQuery.from.query;
+    expectDerivedTableSource(childRows.from);
+    // The dedup query projects the child's own columns only: a nested include
+    // in its select list would run for every candidate row before the
+    // DISTINCT ON step, and the row read outside never references it.
+    expect(childRows.from.query.projection.map((item) => item.alias)).not.toContain('author');
+    expectSubqueryExpr(childRows.projection.find((item) => item.alias === 'author')?.expr);
+  });
+
+  it('keeps every outer reference resolvable across the child distinctOn derived table', () => {
+    const { collection } = createCollection();
+    const state = collection.include('posts', (posts) =>
+      posts
+        .select('views')
+        .orderBy((post) => post.title.asc())
+        .distinctOn('title')
+        .include('comments', (comments) => comments.select('body')),
+    ).state;
+
+    const plan = compileSelectWithIncludes(baseContract, getTestAggregates(), 'User', state);
+    expectSelectAst(plan.ast);
+
+    const postsProjection = plan.ast.projection.find((item) => item.alias === 'posts');
+    expectSubqueryExpr(postsProjection?.expr);
+
+    const aggregateQuery = postsProjection.expr.query;
+    expectDerivedTableSource(aggregateQuery.from);
+    const childRows = aggregateQuery.from.query;
+    expect(childRows.distinctOn).toBeUndefined();
+    expectDerivedTableSource(childRows.from);
+    const deduped = childRows.from.query;
+    expect(deduped.distinctOn).toEqual([ColumnRef.of('posts', 'title')]);
+
+    // The user selected only `views`, but outside the derived table the
+    // nested comments subquery still correlates through `posts.id`, and
+    // the outer read still orders by the child's `title` ordering. Every
+    // `posts.*` column reference in the outer read must resolve to a
+    // column the derived table exposes, or Postgres rejects the read.
+    const derivedAliases = new Set(deduped.projection.map((item) => item.alias));
+    const outerRefs = [
+      ...childRows.projection.flatMap((item) => item.expr.collectColumnRefs()),
+      ...(childRows.orderBy ?? []).flatMap((item) => item.expr.collectColumnRefs()),
+    ].filter((ref) => ref.table === 'posts');
+    expect(outerRefs).not.toHaveLength(0);
+    for (const ref of outerRefs) {
+      expect(
+        derivedAliases.has(ref.column),
+        `derived table does not expose posts.${ref.column}`,
+      ).toBe(true);
+    }
+    // the forced join column stays hidden: it never enters the row shape
+    expect(childRows.projection.map((item) => item.alias)).toEqual([
+      'views',
+      'comments',
+      'posts__order_0',
+    ]);
+  });
+
+  it('rebinds MTI child variant columns to the derived alias in the outer select', () => {
+    const contract = buildMixedPolyContract();
+    const state = specState(createCollectionTables(contract, 'public', 'Project'), {
+      includes: [
+        relationInclude(contract, 'Project', 'tasks', {
+          orderBy: [OrderByItem.asc(ColumnRef.of('tasks', 'title'))],
+          distinctOn: ['title'],
+          includes: [relationInclude(contract, 'Task', 'subtasks', { selectedFields: ['title'] })],
+        }),
+      ],
+    });
+
+    const plan = compileSelectWithIncludes(contract, getTestAggregates(), 'Project', state);
+    expectSelectAst(plan.ast);
+
+    const tasksProjection = plan.ast.projection.find((item) => item.alias === 'tasks');
+    expectSubqueryExpr(tasksProjection?.expr);
+
+    const aggregateQuery = tasksProjection.expr.query;
+    expectDerivedTableSource(aggregateQuery.from);
+    const childRows = aggregateQuery.from.query;
+    expect(childRows.distinctOn).toBeUndefined();
+    expectDerivedTableSource(childRows.from);
+    const deduped = childRows.from.query;
+    expect(deduped.distinctOn).toEqual([ColumnRef.of('tasks', 'title')]);
+
+    // `buildMtiJoins` joins the variant tables only inside the dedup
+    // query, so outside it the variant columns must be read back through
+    // the derived `tasks` alias — the variant aliases are out of scope.
+    const outerTopLevelRefs = childRows.projection.flatMap((item) =>
+      item.expr.kind === 'column-ref' ? [item.expr] : [],
+    );
+    expect(outerTopLevelRefs).not.toHaveLength(0);
+    for (const ref of outerTopLevelRefs) {
+      expect(ref.table, `outer projection references out-of-scope table ${ref.table}`).toBe(
+        'tasks',
+      );
+    }
+    // the variant columns keep their labels and codecs through the rebinding
+    const priority = childRows.projection.find((item) => item.alias === 'features__priority');
+    expect(priority?.expr).toEqual(ColumnRef.of('tasks', 'features__priority'));
+    expect(priority?.codec).toEqual(
+      codecRefForStorageColumn(contract.storage, 'public', 'features', 'priority'),
+    );
+
+    // the outer references against `tasks` itself still resolve too
+    const derivedAliases = new Set(deduped.projection.map((item) => item.alias));
+    const outerRefs = [
+      ...childRows.projection.flatMap((item) => item.expr.collectColumnRefs()),
+      ...(childRows.orderBy ?? []).flatMap((item) => item.expr.collectColumnRefs()),
+    ].filter((ref) => ref.table === 'tasks');
+    expect(outerRefs).not.toHaveLength(0);
+    for (const ref of outerRefs) {
+      expect(
+        derivedAliases.has(ref.column),
+        `derived table does not expose tasks.${ref.column}`,
+      ).toBe(true);
+    }
+  });
+
+  it('forwards MTI variant columns through the root distinctOn derived table', () => {
+    const contract = buildMixedPolyContract();
+    const state = specState(createCollectionTables(contract, 'public', 'Task'), {
+      variantValue: 'feature',
+      orderBy: [OrderByItem.asc(ColumnRef.of('tasks', 'title'))],
+      distinctOn: ['title'],
+      includes: [
+        variantRelationInclude(contract, 'Task', 'assignee', 'feature', {
+          selectedFields: ['name'],
+        }),
+      ],
+    });
+
+    const plan = compileSelectWithIncludes(contract, getTestAggregates(), 'Task', state);
+    expectSelectAst(plan.ast);
+
+    // The dedup sits in a derived table aliased back to the root alias and
+    // the include runs outside it.
+    expectDerivedTableSource(plan.ast.from);
+    expect(plan.ast.from.query.distinctOn).toEqual([ColumnRef.of('tasks', 'title')]);
+    expect(plan.ast.distinctOn).toBeUndefined();
+
+    // The variant columns are projected inside the dedup query...
+    const derivedAliases = new Set(plan.ast.from.query.projection.map((item) => item.alias));
+    expect(derivedAliases.has('features__priority')).toBe(true);
+    expect(derivedAliases.has('features__assignee_id')).toBe(true);
+
+    // ...and the outer query reads them back through the root alias, keeping codecs.
+    const priority = plan.ast.projection.find((item) => item.alias === 'features__priority');
+    expect(priority?.expr).toEqual(ColumnRef.of('tasks', 'features__priority'));
+    expect(priority?.codec).toEqual(
+      codecRefForStorageColumn(contract.storage, 'public', 'features', 'priority'),
+    );
+
+    // The variant-owned `assignee` correlation reads the variant join key
+    // through the root alias as well: nothing in the outer read may
+    // reference the variant table alias, and every `tasks.*` reference
+    // must resolve to a column the derived table exposes.
+    const outerRefs = [
+      ...plan.ast.projection.flatMap((item) => item.expr.collectColumnRefs()),
+      ...(plan.ast.orderBy ?? []).flatMap((item) => item.expr.collectColumnRefs()),
+    ];
+    expect(outerRefs).not.toHaveLength(0);
+    expect(
+      outerRefs.filter((ref) => ref.table === 'features'),
+      'outer query still references the variant table alias',
+    ).toEqual([]);
+    for (const ref of outerRefs.filter((ref) => ref.table === 'tasks')) {
+      expect(
+        derivedAliases.has(ref.column),
+        `derived table does not expose tasks.${ref.column}`,
+      ).toBe(true);
+    }
   });
 
   it('preserves complete codec metadata through row-number dedup', () => {

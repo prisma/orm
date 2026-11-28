@@ -21,6 +21,7 @@ import {
   ProjectionItem,
   SelectAst,
   SubqueryExpr,
+  type TableSource,
   WindowFuncExpr,
 } from '@internal/sql-relational-core/ast';
 import { codecRefForStorageColumn } from '@internal/sql-relational-core/codec-descriptor-registry';
@@ -406,17 +407,59 @@ function buildChildPolymorphismJoinsAndProjection(
   };
 }
 
+/**
+ * The child-level join columns the nested include subqueries correlate
+ * through. A `distinctOn` dedup table exposes only what it projects, so when
+ * an explicit `select()` omits a join column it must be force-included under
+ * its own name for the outer correlation to resolve — and it stays hidden,
+ * because the outer read never projects it into the row shape. Variant-owned
+ * join keys are carried separately by `buildRequiredMtiJoinKeyProjection`.
+ */
+function buildRequiredChildJoinColumnProjection(
+  contract: Contract<SqlStorage>,
+  childState: CollectionState,
+): ReadonlyArray<ProjectionItem> {
+  const child = childState.tables.root;
+  const aliases = new Set<string>();
+  const projection: ProjectionItem[] = [];
+  for (const nested of childState.includes) {
+    if (nested.localVariantValue !== undefined) {
+      continue;
+    }
+    for (const column of localColumnsForRowInclude(nested)) {
+      if (aliases.has(column)) {
+        continue;
+      }
+      aliases.add(column);
+      projection.push(
+        ProjectionItem.of(
+          column,
+          child.column(column),
+          codecRefForStorageColumn(
+            contract.storage,
+            child.storage.namespaceId,
+            child.storage.tableName,
+            column,
+          ),
+        ),
+      );
+    }
+  }
+  return projection;
+}
+
 function buildRequiredMtiJoinKeyProjection(
   contract: Contract<SqlStorage>,
-  include: IncludeExpr,
+  tables: CollectionTables,
+  includes: readonly IncludeExpr[],
 ): ReadonlyArray<ProjectionItem> {
   const aliases = new Set<string>();
   const projection: ProjectionItem[] = [];
-  for (const nested of include.nested.includes) {
+  for (const nested of includes) {
     if (nested.localVariantValue === undefined) {
       continue;
     }
-    const variantTable = requireVariantTable(include.nested.tables, nested.localVariantValue);
+    const variantTable = requireVariantTable(tables, nested.localVariantValue);
     for (const column of localColumnsForRowInclude(nested)) {
       const alias = variantColumnLabel(variantTable, column);
       if (aliases.has(alias)) {
@@ -623,13 +666,23 @@ function buildIncludeChildRowsSelect(
 
   // Recurse: each nested include produces a correlated subquery
   // projection. The nested aggregates are attached to *this* child
-  // SELECT, so they correlate against the child's own aliased tables.
+  // SELECT, so they correlate against the child's own aliased tables — or,
+  // under the `distinctOn` derived-table wrap below, against the deduped
+  // rows, which the child alias denotes there. They are built once either
+  // way: one projection item per nested include.
+  const dedupesNestedIncludes =
+    childState.distinctOn !== undefined &&
+    childState.distinctOn.length > 0 &&
+    tied.nestsIncludes &&
+    childState.includes.length > 0;
   const nestedProjections = tied.nestsIncludes
     ? buildNestedIncludeProjections(
         contract,
         aggregates,
         scope,
-        { tables: childState.tables },
+        dedupesNestedIncludes
+          ? { tables: childState.tables, projectedThrough: child.alias }
+          : { tables: childState.tables },
         childState.includes,
       )
     : [];
@@ -638,12 +691,18 @@ function buildIncludeChildRowsSelect(
   // model-field mapping, so it disappears before the row reaches the caller.
   // Hidden order-by projections stay separate because they must not enter the
   // JSON object at all.
-  const childProjection: ReadonlyArray<ProjectionItem> = [
+  // The child's own columns. The nested include subqueries join them only in
+  // a row read straight from the child tables; the `distinctOn` derived-table
+  // wrap attaches them outside the dedup query instead.
+  const ownChildProjection: ReadonlyArray<ProjectionItem> = [
     ...tied.parentKey,
     ...scalarProjection,
     ...polyJoinsAndProjection.projection,
     ...polyJoinsAndProjection.hiddenProjection,
-    ...nestedProjections,
+  ];
+  const childProjection: ReadonlyArray<ProjectionItem> = [
+    ...ownChildProjection,
+    ...(dedupesNestedIncludes ? [] : nestedProjections),
   ];
 
   let childRows = SelectAst.from(child.tableSource(contract))
@@ -655,13 +714,87 @@ function buildIncludeChildRowsSelect(
   }
 
   const partitionByParent = tied.parentKey.map((key) => key.expr);
+  // The `distinctOn` derived-table wrap re-binds the outer projection to the
+  // deduped rows; `childProjection` is the projection of a row read straight
+  // from the child tables, and the wrap builds its own inner and outer ones.
+  let outerChildProjection: ReadonlyArray<ProjectionItem> = childProjection;
   if (childState.distinctOn && childState.distinctOn.length > 0) {
-    childRows = childRows.withDistinctOn([
-      ...partitionByParent,
-      ...childState.distinctOn.map((column) => child.column(column)),
-    ]);
-    if (childOrderBy) {
-      childRows = childRows.withOrderBy(childOrderBy);
+    let distinctOnOrderBy = childOrderBy;
+    if (nestedProjections.length > 0) {
+      // Postgres computes the select list before the sort and the DISTINCT ON
+      // step when the statement has no LIMIT, so the nested include subqueries
+      // would run for every candidate row. Dedupe in a derived table aliased
+      // back to the child alias and run the nested includes outside it, once
+      // per kept row: the dedup query projects none of them.
+      //
+      // The derived table exposes only what it projects, but the outer read
+      // still references child columns an explicit `select()` may omit: the
+      // nested include subqueries correlate through the child's join columns,
+      // and the outer read reuses the child ordering expressions. Force those
+      // join columns into the dedup projection under their own names, rebind
+      // the polymorphism projection (whose joins stay inside), the nested
+      // correlations, and the ordering to the derived table's own columns —
+      // the same force-include + rebind shape the non-leaf `distinct()` path
+      // uses, with the forced columns stripped from the row shape.
+      const derivedAlias = child.alias;
+      let deduped = SelectAst.from(child.tableSource(contract))
+        .withProjection(
+          mergeProjectionByAlias(
+            [...ownChildProjection, ...hiddenOrderProjection],
+            [
+              ...buildRequiredChildJoinColumnProjection(contract, childState),
+              ...buildRequiredMtiJoinKeyProjection(
+                contract,
+                childState.tables,
+                childState.includes,
+              ),
+            ],
+          ),
+        )
+        .withDistinctOn([
+          ...partitionByParent,
+          ...childState.distinctOn.map((column) => child.column(column)),
+        ]);
+      if (whereExpr !== undefined) {
+        deduped = deduped.withWhere(whereExpr);
+      }
+      if (joins.length > 0) {
+        deduped = deduped.withJoins(joins);
+      }
+      if (childOrderBy) {
+        deduped = deduped.withOrderBy(childOrderBy);
+      }
+      // At this level the child alias denotes the deduped rows, so every
+      // remaining child-level reference is re-bound to the derived table's
+      // own columns: the variant columns (their joins are gone here), the
+      // nested include correlations, and the ordering, which survives only
+      // as the forwarded hidden order columns.
+      const derivedChildProjection: ProjectionItem[] = [
+        ...scalarProjection,
+        ...[...polyJoinsAndProjection.projection, ...polyJoinsAndProjection.hiddenProjection].map(
+          (item) =>
+            ProjectionItem.of(item.alias, ColumnRef.of(derivedAlias, item.alias), item.codec),
+        ),
+        ...nestedProjections,
+      ];
+      childRows = SelectAst.from(DerivedTableSource.as(child.alias, deduped)).withProjection([
+        ...derivedChildProjection,
+        ...hiddenOrderProjection.map((item) =>
+          ProjectionItem.of(item.alias, ColumnRef.of(derivedAlias, item.alias), item.codec),
+        ),
+      ]);
+      distinctOnOrderBy = childOrderBy?.map((item, index) =>
+        item.withExpr(ColumnRef.of(derivedAlias, `${include.relationName}__order_${index}`)),
+      );
+      outerChildProjection = derivedChildProjection;
+    } else {
+      childRows = childRows.withDistinctOn([
+        ...partitionByParent,
+        ...childState.distinctOn.map((column) => child.column(column)),
+      ]);
+    }
+    if (distinctOnOrderBy) {
+      childRows = childRows.withOrderBy(distinctOnOrderBy);
     }
   } else if (childState.distinct && childState.distinct.length > 0) {
     // Prisma-style `.distinct(cols)`: keep one representative row per
@@ -701,7 +834,7 @@ function buildIncludeChildRowsSelect(
 
   return {
     childRows,
-    childProjection,
+    childProjection: outerChildProjection,
     documentAliases: documentAliasesOf(nestedProjections),
     rowsAlias,
     aggregateOrderBy,
@@ -1011,7 +1144,7 @@ function buildDistinctNonLeafChildRowsSelect(options: {
   );
   const innerMtiProjection = mergeProjectionByAlias(
     queryPolyProjection.projection,
-    buildRequiredMtiJoinKeyProjection(contract, include),
+    buildRequiredMtiJoinKeyProjection(contract, childState.tables, childState.includes),
   );
   let baseInner = SelectAst.from(child.tableSource(contract))
     .withProjection([
@@ -1625,7 +1758,18 @@ function buildSelectAst(
   options: {
     readonly joins?: ReadonlyArray<JoinAst>;
     readonly includeProjection?: ReadonlyArray<ProjectionItem>;
+    /** The polymorphism projection (`buildRootPolymorphism`), kept separate so the `distinctOn` derived table can forward and re-bind it. */
+    readonly polymorphismProjection?: ReadonlyArray<ProjectionItem>;
+    /**
+     * Columns forced into the `distinctOn` dedup query only, never projected
+     * outside it: the variant join keys its include correlations reference.
+     * The callers compute these from the read's actual includes — the state
+     * this builder sees carries none.
+     */
+    readonly distinctOnHiddenProjection?: ReadonlyArray<ProjectionItem>;
     readonly where?: AnyExpression;
+    /** Whether the read carries `include` subqueries in its select list. */
+    readonly hasIncludes?: boolean;
   },
 ): SelectAst {
   const { root } = state.tables;
@@ -1636,7 +1780,7 @@ function buildSelectAst(
   }
   const addressed = addressedModel(contract, namespaceId, modelName, state.variantValue);
   const scalarProjection = buildProjection(contract, addressed, root, state.selectedFields);
-  const projection = [...scalarProjection, ...(options.includeProjection ?? [])];
+  const polyProjection = options.polymorphismProjection ?? [];
   const where = options.where ?? buildStateWhere(contract, state);
 
   // `buildDedupedTableSource` wraps for `.distinct(cols)`, aliased back to the root alias.
@@ -1644,15 +1788,48 @@ function buildSelectAst(
   const modelColumnsProjection = modelColumns.map((column) =>
     ProjectionItem.of(column, root.column(column)),
   );
-  const { source: fromSource, where: effectiveWhere } = buildDedupedTableSource(
+  const { source: dedupedSource, where: effectiveWhere } = buildDedupedTableSource(
     contract,
     state,
     where,
     modelColumnsProjection,
   );
+  // With includes, `distinctOn` dedupes in a derived table instead, so the
+  // include subqueries in the select list run once per kept row. The dedup
+  // query inherits the polymorphism joins, so it must forward the values the
+  // outer query still reads through them: the variant columns under their
+  // table-qualified labels, plus the variant join keys the variant-owned
+  // include correlations reference.
+  const distinctOnSource =
+    options.hasIncludes === true
+      ? buildDistinctOnTableSource(
+          state,
+          dedupedSource,
+          effectiveWhere,
+          mergeProjectionByAlias(modelColumnsProjection, [
+            ...polyProjection,
+            ...(options.distinctOnHiddenProjection ?? []),
+          ]),
+          options.joins,
+        )
+      : undefined;
+  const fromSource = distinctOnSource ?? dedupedSource;
 
-  let ast = SelectAst.from(fromSource).withProjection(projection);
-  if (effectiveWhere) {
+  // Inside the `distinctOn` derived table the variant joins are gone, so the
+  // polymorphism projection is read back through the root alias (which now
+  // denotes the deduped rows) instead of the variant table aliases.
+  const outerPolyProjection =
+    distinctOnSource === undefined
+      ? polyProjection
+      : polyProjection.map((item) =>
+          ProjectionItem.of(item.alias, ColumnRef.of(root.alias, item.alias), item.codec),
+        );
+  let ast = SelectAst.from(fromSource).withProjection([
+    ...scalarProjection,
+    ...outerPolyProjection,
+    ...(options.includeProjection ?? []),
+  ]);
+  if (distinctOnSource === undefined && effectiveWhere) {
     ast = ast.withWhere(effectiveWhere);
   }
   if (state.orderBy) {
@@ -1661,7 +1838,7 @@ function buildSelectAst(
   if (state.selectedFields === undefined) {
     ast = ast.withSelectAllIntent({ table: tableName });
   }
-  if (state.distinctOn && state.distinctOn.length > 0) {
+  if (distinctOnSource === undefined && state.distinctOn && state.distinctOn.length > 0) {
     ast = ast.withDistinctOn(state.distinctOn.map((column) => root.column(column)));
   }
   // `state.distinct` is handled via the `usesRowNumberDistinct` wrap
@@ -1672,7 +1849,7 @@ function buildSelectAst(
   if (state.offset !== undefined) {
     ast = ast.withOffset(state.offset);
   }
-  if (options.joins && options.joins.length > 0) {
+  if (distinctOnSource === undefined && options.joins && options.joins.length > 0) {
     ast = ast.withJoins(options.joins);
   }
   if (state.locking !== undefined) {
@@ -1680,6 +1857,41 @@ function buildSelectAst(
   }
 
   return ast;
+}
+
+/**
+ * The FROM source for a `distinctOn` read that carries include subqueries:
+ * Postgres computes the select list before the sort and the DISTINCT ON step
+ * when the statement has no LIMIT, so each include subquery would run for
+ * every candidate row and all but one row per group would then be thrown
+ * away. `SELECT DISTINCT ON` in a derived table aliased back to the root
+ * alias keeps the includes outside the dedup, so they run once per kept row —
+ * the same shape `distinct()` gets from `buildDedupedTableSource`.
+ */
+function buildDistinctOnTableSource(
+  state: CollectionState,
+  fromSource: TableSource | DerivedTableSource,
+  where: AnyExpression | undefined,
+  projection: ReadonlyArray<ProjectionItem>,
+  joins: ReadonlyArray<JoinAst> | undefined,
+): DerivedTableSource | undefined {
+  if (state.distinctOn === undefined || state.distinctOn.length === 0) {
+    return undefined;
+  }
+  const { root } = state.tables;
+  let inner = SelectAst.from(fromSource)
+    .withProjection(projection)
+    .withDistinctOn(state.distinctOn.map((column) => root.column(column)));
+  if (where !== undefined) {
+    inner = inner.withWhere(where);
+  }
+  if (joins !== undefined && joins.length > 0) {
+    inner = inner.withJoins(joins);
+  }
+  if (state.orderBy !== undefined && state.orderBy.length > 0) {
+    inner = inner.withOrderBy(state.orderBy);
+  }
+  return DerivedTableSource.as(root.alias, inner);
 }
 
 function buildRootPolymorphism(
@@ -1744,7 +1956,7 @@ export function collectionSelectAst(
     contract,
     modelName,
     { ...polymorphism.projectionState, includes: [] },
-    { joins: polymorphism.joins, includeProjection: polymorphism.projection },
+    { joins: polymorphism.joins, polymorphismProjection: polymorphism.projection },
   );
 }
 
@@ -1767,10 +1979,19 @@ export function collectionSelectWithIncludesAst(
   assertLockCompatible(state);
   const topLevelWhere = buildStateWhere(contract, state);
   const polymorphism = buildRootPolymorphism(contract, state, modelName);
-  const includeProjection: ProjectionItem[] = [...polymorphism.projection];
+  const includeProjection: ProjectionItem[] = [];
 
+  // When `distinctOn` dedupes in a derived table, the polymorphism joins
+  // stay inside it, so the include subqueries must correlate against the
+  // derived table aliased back to the root alias — including the
+  // variant-owned correlations, which read the forwarded variant join-key
+  // columns through their table-qualified labels.
+  const dedupesDistinctOnInDerivedTable =
+    state.includes.length > 0 && state.distinctOn !== undefined && state.distinctOn.length > 0;
   const scope = state.tables.scope.copy();
-  const parent: IncludeParent = { tables: state.tables };
+  const parent: IncludeParent = dedupesDistinctOnInDerivedTable
+    ? { tables: state.tables, projectedThrough: state.tables.root.alias }
+    : { tables: state.tables };
   for (const include of state.includes) {
     const artifact = buildCorrelatedIncludeProjection(contract, aggregates, scope, parent, include);
     includeProjection.push(artifact.projection);
@@ -1782,7 +2003,14 @@ export function collectionSelectWithIncludesAst(
     { ...polymorphism.projectionState, includes: [] },
     {
       joins: polymorphism.joins,
+      polymorphismProjection: polymorphism.projection,
       includeProjection,
+      distinctOnHiddenProjection: buildRequiredMtiJoinKeyProjection(
+        contract,
+        state.tables,
+        state.includes,
+      ),
+      hasIncludes: state.includes.length > 0,
       ...ifDefined('where', topLevelWhere),
     },
   );
