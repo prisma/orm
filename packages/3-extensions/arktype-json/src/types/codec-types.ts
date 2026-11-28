@@ -15,10 +15,13 @@
  * fallback for sites without a column descriptor in scope.
  */
 
+import type { JsonValue } from '@internal/contract/types';
+
 export type CodecTypes = {
   readonly 'arktype/json@1': {
     readonly input: unknown;
     readonly output: unknown;
+    readonly json: JsonValue;
     readonly traits: 'equality';
   };
 };

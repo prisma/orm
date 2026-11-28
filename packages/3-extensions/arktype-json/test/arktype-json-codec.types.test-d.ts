@@ -32,6 +32,11 @@ import {
   arktypeJsonColumn,
   arktypeJsonDescriptor,
 } from '../src/core/arktype-json-codec';
+import type { CodecTypes } from '../src/exports/codec-types';
+
+test('CodecTypes exposes the JSON shape used by emitted column defaults', () => {
+  expectTypeOf<CodecTypes['arktype/json@1']['json']>().toEqualTypeOf<JsonValue>();
+});
 
 test('arktypeJsonColumn: typeParams shape is ArktypeJsonTypeParams', () => {
   const ProductSchema = type({ name: 'string', price: 'number' });
