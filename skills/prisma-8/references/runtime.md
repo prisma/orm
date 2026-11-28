@@ -322,7 +322,7 @@ postgres({
     // max: 10,                // optional: the most connections the pool opens
   },
   // cursor: { batchSize: 100 },  // optional — stream reads in batches instead of buffering
-  // log: console,                // optional — receive marker and lints() warnings
+  // log: logger,                 // optional — where marker and lints() warnings go; the console by default
 });
 
 // BYO pool — pass a pg.Pool you already created.
